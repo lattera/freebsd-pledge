@@ -81,17 +81,6 @@ static sysfil_t pledge2fflags[PLEDGE_COUNT] = {
 	[PLEDGE_DNS] = SYF_PLEDGE_DNS,
 };
 
-static sysfil_t
-pflags_to_fflags(pledge_flags_t pflags) {
-	sysfil_t fflags;
-	unsigned i;
-	fflags = SYF_PLEDGE_ALWAYS;
-	for (i = 0; i != PLEDGE_COUNT; i++)
-		if (pflags & ((pledge_flags_t)1 << i))
-			fflags |= pledge2fflags[i];
-	return fflags;
-}
-
 static int
 parse_promises(char *promises, sysfil_t *fflags, pledge_flags_t *pflags) {
 	/* NOTE: destroys the passed string */
