@@ -18,10 +18,25 @@
  *   open(2), wait4(2), fchdir(2), access(2), readlink(2), adjtime(2),
  *   eaccess(2), posix_fadvise(2)
  *
- * As it is, Capsicum allows quite a few syscalls that pledge("stdio") does not
- * and it should be safe to enable any of them under pledge("stdio"), but this
- * defeats one goal of pledge() which is to limit the kernel's exposed attack
- * surface.
+ * Both Capsicum and pledge("stdio") allow ioctl(2), but Capsicum applications
+ * probably tend to be more careful about not carrying too many potentially
+ * insecure FDs after entering capability mode (and hopefully they'll restrict
+ * the rights(4) on those that they keep).  ioctl(2) will need good filtering
+ * to be safe for pledged applications.  This could also be useful as an extra
+ * filtering layer for Capsicum applications.
+ *
+ * pledge("stdio") allows a few filesystem access syscalls to support a
+ * whitelist of paths that can be accessed (even without pledge("rpath")).
+ * This works differently than unveil(2) and it only works if absolute paths
+ * are passed to syscalls (it does do some canonicalization though).  This will
+ * have to be done very carefully.
+ *
+ * As it is, it is also the case that Capsicum allows some syscalls that
+ * pledge("stdio") does not.  It should be safe to enable most (if not all) of
+ * them under pledge("stdio"), but this defeats one goal of pledge() which is
+ * to limit the kernel's exposed attack surface.  For now, let's at least allow
+ * a minimal set of less risky syscalls that most Capsicum applications
+ * absolutely need.
  *
  */
 
