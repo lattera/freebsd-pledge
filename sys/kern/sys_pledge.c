@@ -106,7 +106,7 @@ apply_promises(struct ucred *cred, char *promises) {
 	error = parse_promises(promises, &wanted_fflags, &wanted_pflags);
 	if (error)
 		return error;
-	if (cred->cr_pledge.pflags & (1 << PLEDGE_ERROR)) {
+	if (cred->cr_pledge.pflags & ((pledge_flags_t)1 << PLEDGE_ERROR)) {
 		/* Silently ignore attempts to add promises.  Only if the
 		 * PLEDGE_ERROR promise is already in effect, not if it's just
 		 * being asked for. */
