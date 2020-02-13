@@ -50,8 +50,9 @@ static inline int
 pledge_check(struct thread *td, enum pledge_promise pr) {
 	/* XXX: OpenBSD generally returns EPERM for this, and ECAPMODE's error
 	 * string is "Not permitted in capability mode", which is confusing
-	 * because "capability mode" is a Capsicum term.  Still using ECAPMODE
-	 * for now because it sometimes helps in debugging. */
+	 * because "capability mode" is a Capsicum term.  syscallret()
+	 * currently relies on these error codes being used to detect pledge
+	 * violations and send a signal if needed. */
 #ifdef PLEDGE
 	return (pledge_set_test(&td->td_ucred->cr_pledge, pr) ? 0 : ECAPMODE);
 #else

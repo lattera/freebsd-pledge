@@ -25,6 +25,7 @@ enum pledge_promise {
 	 * it may work better with Capsicum.
 	 */
 	PLEDGE_CAPSICUM,
+	PLEDGE_ERROR,
 	PLEDGE_STDIO,
 	PLEDGE_UNVEIL,
 	PLEDGE_RPATH,

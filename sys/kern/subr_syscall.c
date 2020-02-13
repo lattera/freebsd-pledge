@@ -49,6 +49,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/ktr.h>
 #include <sys/vmmeter.h>
 #include <sys/sysfil.h>
+#include <sys/pledge.h>
 #ifdef KTRACE
 #include <sys/uio.h>
 #include <sys/ktrace.h>
@@ -134,7 +135,7 @@ syscallenter(struct thread *td)
 	 */
 	if (((sa->callp->sy_fflags | SYF_DEFAULT) &
 	     td->td_ucred->cr_fflags) == 0) {
-		td->td_errno = error = ECAPMODE;
+		td->td_errno = error = ECAPMODE; /* XXX OpenBSD uses ENOSYS */
 		goto retval;
 	}
 
@@ -202,9 +203,11 @@ syscallret(struct thread *td)
 
 	p = td->td_proc;
 	sa = &td->td_sa;
-	if ((trap_enotcap || (p->p_flag2 & P2_TRAPCAP) != 0) &&
-	    IN_CAPABILITY_MODE(td)) {
+	if (IN_CAPABILITY_MODE(td) ?
+	    (trap_enotcap || (p->p_flag2 & P2_TRAPCAP) != 0) :
+	    pledge_check(td, PLEDGE_ERROR) != 0) {
 		if (td->td_errno == ENOTCAPABLE || td->td_errno == ECAPMODE) {
+			/* XXX: OpenBSD uses an "uncatchable" SIGABRT */
 			ksiginfo_init_trap(&ksi);
 			ksi.ksi_signo = SIGTRAP;
 			ksi.ksi_errno = td->td_errno;

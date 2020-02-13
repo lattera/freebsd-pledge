@@ -32,6 +32,7 @@ static const struct promise_name {
 	enum pledge_promise promise;
 } promise_names[] = {
 	{ "capsicum",	PLEDGE_CAPSICUM },
+	{ "error",	PLEDGE_ERROR },
 	{ "stdio",	PLEDGE_STDIO },
 	{ "unveil",	PLEDGE_UNVEIL },
 	{ "rpath",	PLEDGE_RPATH },
