@@ -15,6 +15,7 @@
 ;		COMPAT7, COMPAT11, COMPAT12, NODEF, NOARGS, NOPROTO, NOSTD
 ;		The COMPAT* options may be combined with one or more NO*
 ;		options separated by '|' with no spaces (e.g. COMPAT|NOARGS)
+;		pledge(2) filters may be specified as PLEDGE_* options.
 ;	name	pseudo-prototype of syscall routine
 ;		If one of the following alts is different, then all appear:
 ;	altname	name of system call if different
@@ -88,29 +89,29 @@
 0	AUE_NULL	STD {
 		int nosys(void);
 	} syscall nosys_args int
-1	AUE_EXIT	STD {
+1	AUE_EXIT	STD|PLEDGE_ALWAYS {
 		void sys_exit(
 		    int rval
 		);
 	} exit sys_exit_args void
-2	AUE_FORK	STD {
+2	AUE_FORK	STD|PLEDGE_PROC {
 		int fork(void);
 	}
-3	AUE_READ	STD {
+3	AUE_READ	STD|PLEDGE_STDIO {
 		ssize_t read(
 		    int fd,
 		    _Out_writes_bytes_(nbyte) void *buf,
 		    size_t nbyte
 		);
 	}
-4	AUE_WRITE	STD {
+4	AUE_WRITE	STD|PLEDGE_STDIO {
 		ssize_t write(
 		    int fd,
 		    _In_reads_bytes_(nbyte) const void *buf,
 		    size_t nbyte
 		);
 	}
-5	AUE_OPEN_RWTC	STD {
+5	AUE_OPEN_RWTC	STD|PLEDGE_STDIO {
 		int open(
 		    _In_z_ const char *path,
 		    int flags,
@@ -119,12 +120,12 @@
 	}
 ; XXX should be		{ int open(const char *path, int flags, ...); }
 ; but we're not ready for varargs.
-6	AUE_CLOSE	STD {
+6	AUE_CLOSE	STD|PLEDGE_STDIO {
 		int close(
 		    int fd
 		);
 	}
-7	AUE_WAIT4	STD {
+7	AUE_WAIT4	STD|PLEDGE_STDIO {
 		int wait4(
 		    int pid,
 		    _Out_opt_ int *status,
@@ -138,24 +139,24 @@
 		    int mode
 		);
 	}
-9	AUE_LINK	STD {
+9	AUE_LINK	STD|PLEDGE_CPATH {
 		int link(
 		    _In_z_ const char *path,
 		    _In_z_ const char *link
 		);
 	}
-10	AUE_UNLINK	STD {
+10	AUE_UNLINK	STD|PLEDGE_CPATH {
 		int unlink(
 		    _In_z_ const char *path
 		);
 	}
 11	AUE_NULL	OBSOL	execv
-12	AUE_CHDIR	STD {
+12	AUE_CHDIR	STD|PLEDGE_RPATH {
 		int chdir(
 		    _In_z_ const char *path
 		);
 	}
-13	AUE_FCHDIR	STD {
+13	AUE_FCHDIR	STD|PLEDGE_STDIO {
 		int fchdir(
 		    int fd
 		);
@@ -173,14 +174,14 @@
 		    mode_t mode
 		);
 	}
-16	AUE_CHOWN	STD {
+16	AUE_CHOWN	STD|PLEDGE_CHOWN {
 		int chown(
 		    _In_z_ const char *path,
 		    int uid,
 		    int gid
 		);
 	}
-17	AUE_NULL	STD {
+17	AUE_NULL	STD|PLEDGE_STDIO {
 		void *break(
 		    _In_ char *nsize
 		);
@@ -199,7 +200,7 @@
 		    int whence
 		);
 	}
-20	AUE_GETPID	STD {
+20	AUE_GETPID	STD|PLEDGE_STDIO {
 		pid_t getpid(void);
 	}
 21	AUE_MOUNT	STD {
@@ -216,15 +217,15 @@
 		    int flags
 		);
 	}
-23	AUE_SETUID	STD {
+23	AUE_SETUID	STD|PLEDGE_ID {
 		int setuid(
 		    uid_t uid
 		);
 	}
-24	AUE_GETUID	STD {
+24	AUE_GETUID	STD|PLEDGE_STDIO {
 		uid_t getuid(void);
 	}
-25	AUE_GETEUID	STD {
+25	AUE_GETEUID	STD|PLEDGE_STDIO {
 		uid_t geteuid(void);
 	}
 26	AUE_PTRACE	STD {
@@ -235,21 +236,21 @@
 		    int data
 		);
 	}
-27	AUE_RECVMSG	STD {
+27	AUE_RECVMSG	STD|PLEDGE_STDIO {
 		int recvmsg(
 		    int s,
 		    _Inout_ struct msghdr *msg,
 		    int flags
 		);
 	}
-28	AUE_SENDMSG	STD {
+28	AUE_SENDMSG	STD|PLEDGE_STDIO {
 		int sendmsg(
 		    int s,
 		    _In_ struct msghdr *msg,
 		    int flags
 		);
 	}
-29	AUE_RECVFROM	STD {
+29	AUE_RECVFROM	STD|PLEDGE_STDIO|PLEDGE_YPACTIVE {
 		int recvfrom(
 		    int s,
 		    _Out_writes_bytes_(len) void *buf,
@@ -259,40 +260,40 @@
 		    _Inout_opt_ __socklen_t *fromlenaddr
 		);
 	}
-30	AUE_ACCEPT	STD {
+30	AUE_ACCEPT	STD|PLEDGE_INET|PLEDGE_UNIX {
 		int accept(
 		    int s,
 		    _Out_writes_bytes_opt_(*anamelen) struct sockaddr *name,
 		    _Inout_opt_ __socklen_t *anamelen
 		);
 	}
-31	AUE_GETPEERNAME	STD {
+31	AUE_GETPEERNAME	STD|PLEDGE_INET|PLEDGE_UNIX {
 		int getpeername(
 		    int fdes,
 		    _Out_writes_bytes_(*alen) struct sockaddr *asa,
 		    _Inout_opt_ __socklen_t *alen
 		);
 	}
-32	AUE_GETSOCKNAME	STD {
+32	AUE_GETSOCKNAME	STD|PLEDGE_INET|PLEDGE_UNIX|PLEDGE_DNS|PLEDGE_YPACTIVE {
 		int getsockname(
 		    int fdes,
 		    _Out_writes_bytes_(*alen) struct sockaddr *asa,
 		    _Inout_ __socklen_t *alen
 		);
 	}
-33	AUE_ACCESS	STD {
+33	AUE_ACCESS	STD|PLEDGE_STDIO {
 		int access(
 		    _In_z_ const char *path,
 		    int amode
 		);
 	}
-34	AUE_CHFLAGS	STD {
+34	AUE_CHFLAGS	STD|PLEDGE_FATTR {
 		int chflags(
 		    _In_z_ const char *path,
 		    u_long flags
 		);
 	}
-35	AUE_FCHFLAGS	STD {
+35	AUE_FCHFLAGS	STD|PLEDGE_FATTR {
 		int fchflags(
 		    int fd,
 		    u_long flags
@@ -301,7 +302,7 @@
 36	AUE_SYNC	STD {
 		int sync(void);
 	}
-37	AUE_KILL	STD {
+37	AUE_KILL	STD|PLEDGE_STDIO {
 		int kill(
 		    int pid,
 		    int signum
@@ -313,7 +314,7 @@
 		    _Out_ struct ostat *ub
 		);
 	}
-39	AUE_GETPPID	STD {
+39	AUE_GETPPID	STD|PLEDGE_STDIO {
 		pid_t getppid(void);
 	}
 40	AUE_LSTAT	COMPAT {
@@ -322,7 +323,7 @@
 		    _Out_ struct ostat *ub
 		);
 	}
-41	AUE_DUP		STD {
+41	AUE_DUP		STD|PLEDGE_STDIO {
 		int dup(
 		    u_int fd
 		);
@@ -330,7 +331,7 @@
 42	AUE_PIPE	COMPAT10 {
 		int pipe(void);
 	}
-43	AUE_GETEGID	STD {
+43	AUE_GETEGID	STD|PLEDGE_STDIO {
 		gid_t getegid(void);
 	}
 44	AUE_PROFILE	STD {
@@ -356,7 +357,7 @@
 		    _Out_opt_ struct osigaction *osa
 		);
 	}
-47	AUE_GETGID	STD {
+47	AUE_GETGID	STD|PLEDGE_STDIO {
 		gid_t getgid(void);
 	}
 48	AUE_SIGPROCMASK	COMPAT {
@@ -368,13 +369,13 @@
 ; XXX note nonstandard (bogus) calling convention - the libc stub passes
 ; us the mask, not a pointer to it, and we return the old mask as the
 ; (int) return value.
-49	AUE_GETLOGIN	STD {
+49	AUE_GETLOGIN	STD|PLEDGE_STDIO {
 		int getlogin(
 		    _Out_writes_z_(namelen) char *namebuf,
 		    u_int namelen
 		);
 	}
-50	AUE_SETLOGIN	STD {
+50	AUE_SETLOGIN	STD|PLEDGE_ID {
 		int setlogin(
 		    _In_z_ const char *namebuf
 		);
@@ -387,13 +388,13 @@
 52	AUE_SIGPENDING	COMPAT {
 		int sigpending(void);
 	}
-53	AUE_SIGALTSTACK	STD {
+53	AUE_SIGALTSTACK	STD|PLEDGE_STDIO {
 		int sigaltstack(
 		    _In_opt_ stack_t *ss,
 		    _Out_opt_ stack_t *oss
 		);
 	}
-54	AUE_IOCTL	STD {
+54	AUE_IOCTL	STD|PLEDGE_STDIO {
 		int ioctl(
 		    int fd,
 		    u_long com,
@@ -405,32 +406,32 @@
 		    int opt
 		);
 	}
-56	AUE_REVOKE	STD {
+56	AUE_REVOKE	STD|PLEDGE_TTY {
 		int revoke(
 		    _In_z_ const char *path
 		);
 	}
-57	AUE_SYMLINK	STD {
+57	AUE_SYMLINK	STD|PLEDGE_CPATH {
 		int symlink(
 		    _In_z_ const char *path,
 		    _In_z_ const char *link
 		);
 	}
-58	AUE_READLINK	STD {
+58	AUE_READLINK	STD|PLEDGE_STDIO {
 		ssize_t readlink(
 		    _In_z_ const char *path,
 		    _Out_writes_z_(count) char *buf,
 		    size_t count
 		);
 	}
-59	AUE_EXECVE	STD {
+59	AUE_EXECVE	STD|PLEDGE_EXEC {
 		int execve(
 		    _In_z_ const char *fname,
 		    _In_z_ char **argv,
 		    _In_z_ char **envv
 		);
 	}
-60	AUE_UMASK	STD {
+60	AUE_UMASK	STD|PLEDGE_STDIO {
 		int umask(
 		    mode_t newmask
 		);
@@ -458,14 +459,14 @@
 64	AUE_NULL	COMPAT {
 		int getpagesize(void);
 	}
-65	AUE_MSYNC	STD {
+65	AUE_MSYNC	STD|PLEDGE_STDIO {
 		int msync(
 		    _In_ void *addr,
 		    size_t len,
 		    int flags
 		);
 	}
-66	AUE_VFORK	STD {
+66	AUE_VFORK	STD|PLEDGE_PROC {
 		int vfork(void);
 	}
 67	AUE_NULL	OBSOL	vread
@@ -495,20 +496,20 @@
 		    int anom
 		);
 	}
-73	AUE_MUNMAP	STD {
+73	AUE_MUNMAP	STD|PLEDGE_STDIO {
 		int munmap(
 		    _In_ void *addr,
 		    size_t len
 		);
 	}
-74	AUE_MPROTECT	STD {
+74	AUE_MPROTECT	STD|PLEDGE_STDIO {
 		int mprotect(
 		    _In_ void *addr,
 		    size_t len,
 		    int prot
 		);
 	}
-75	AUE_MADVISE	STD {
+75	AUE_MADVISE	STD|PLEDGE_STDIO {
 		int madvise(
 		    _In_ void *addr,
 		    size_t len,
@@ -517,35 +518,35 @@
 	}
 76	AUE_NULL	OBSOL	vhangup
 77	AUE_NULL	OBSOL	vlimit
-78	AUE_MINCORE	STD {
+78	AUE_MINCORE	STD|PLEDGE_STDIO {
 		int mincore(
 		    _In_ const void *addr,
 		    size_t len,
 		    _Out_writes_bytes_(len/PAGE_SIZE) char *vec
 		);
 	}
-79	AUE_GETGROUPS	STD {
+79	AUE_GETGROUPS	STD|PLEDGE_STDIO {
 		int getgroups(
 		    u_int gidsetsize,
 		    _Out_writes_opt_(gidsetsize) gid_t *gidset
 		);
 	}
-80	AUE_SETGROUPS	STD {
+80	AUE_SETGROUPS	STD|PLEDGE_ID {
 		int setgroups(
 		    u_int gidsetsize,
 		    _In_reads_(gidsetsize) gid_t *gidset
 		);
 	}
-81	AUE_GETPGRP	STD {
+81	AUE_GETPGRP	STD|PLEDGE_STDIO {
 		int getpgrp(void);
 	}
-82	AUE_SETPGRP	STD {
+82	AUE_SETPGRP	STD|PLEDGE_PROC {
 		int setpgid(
 		    int pid,
 		    int pgid
 		);
 	}
-83	AUE_SETITIMER	STD {
+83	AUE_SETITIMER	STD|PLEDGE_STDIO {
 		int setitimer(
 		    u_int which,
 		    _In_ struct itimerval *itv,
@@ -560,7 +561,7 @@
 		    _In_z_ const char *name
 		);
 	}
-86	AUE_GETITIMER	STD {
+86	AUE_GETITIMER	STD|PLEDGE_STDIO {
 		int getitimer(
 		    u_int which,
 		    _Out_ struct itimerval *itv
@@ -578,17 +579,17 @@
 		    u_int len
 		);
 	}
-89	AUE_GETDTABLESIZE	STD {
+89	AUE_GETDTABLESIZE	STD|PLEDGE_STDIO {
 		int getdtablesize(void);
 	}
-90	AUE_DUP2	STD {
+90	AUE_DUP2	STD|PLEDGE_STDIO {
 		int dup2(
 		    u_int from,
 		    u_int to
 		);
 	}
 91	AUE_NULL	UNIMPL	getdopt
-92	AUE_FCNTL	STD {
+92	AUE_FCNTL	STD|PLEDGE_STDIO {
 		int fcntl(
 		    int fd,
 		    int cmd,
@@ -597,7 +598,7 @@
 	}
 ; XXX should be { int fcntl(int fd, int cmd, ...); }
 ; but we're not ready for varargs.
-93	AUE_SELECT	STD {
+93	AUE_SELECT	STD|PLEDGE_STDIO {
 		int select(
 		    int nd,
 		    _Inout_opt_ fd_set *in,
@@ -607,26 +608,26 @@
 		);
 	}
 94	AUE_NULL	UNIMPL	setdopt
-95	AUE_FSYNC	STD {
+95	AUE_FSYNC	STD|PLEDGE_STDIO {
 		int fsync(
 		    int fd
 		);
 	}
-96	AUE_SETPRIORITY	STD {
+96	AUE_SETPRIORITY	STD|PLEDGE_PROC|PLEDGE_ID {
 		int setpriority(
 		    int which,
 		    int who,
 		    int prio
 		);
 	}
-97	AUE_SOCKET	STD {
+97	AUE_SOCKET	STD|PLEDGE_INET|PLEDGE_UNIX|PLEDGE_DNS|PLEDGE_YPACTIVE {
 		int socket(
 		    int domain,
 		    int type,
 		    int protocol
 		);
 	}
-98	AUE_CONNECT	STD {
+98	AUE_CONNECT	STD|PLEDGE_INET|PLEDGE_UNIX|PLEDGE_DNS|PLEDGE_YPACTIVE {
 		int connect(
 		    int s,
 		    _In_reads_bytes_(namelen) const struct sockaddr *name,
@@ -640,7 +641,7 @@
 		    int *anamelen
 		);
 	}
-100	AUE_GETPRIORITY	STD {
+100	AUE_GETPRIORITY	STD|PLEDGE_PROC|PLEDGE_ID {
 		int getpriority(
 		    int which,
 		    int who
@@ -667,14 +668,14 @@
 		    _In_ struct osigcontext *sigcntxp
 		);
 	}
-104	AUE_BIND	STD {
+104	AUE_BIND	STD|PLEDGE_INET|PLEDGE_UNIX|PLEDGE_DNS|PLEDGE_YPACTIVE {
 		int bind(
 		    int s,
 		    _In_reads_bytes_(namelen) const struct sockaddr *name,
 		    int namelen
 		);
 	}
-105	AUE_SETSOCKOPT	STD {
+105	AUE_SETSOCKOPT	STD|PLEDGE_STDIO {
 		int setsockopt(
 		    int s,
 		    int level,
@@ -683,7 +684,7 @@
 		    int valsize
 		);
 	}
-106	AUE_LISTEN	STD {
+106	AUE_LISTEN	STD|PLEDGE_INET|PLEDGE_UNIX {
 		int listen(
 		    int s,
 		    int backlog
@@ -735,19 +736,19 @@
 		);
 	}
 115	AUE_NULL	OBSOL	vtrace
-116	AUE_GETTIMEOFDAY	STD {
+116	AUE_GETTIMEOFDAY	STD|PLEDGE_STDIO {
 		int gettimeofday(
 		    _Out_ struct timeval *tp,
 		    _Out_opt_ struct timezone *tzp
 		);
 	}
-117	AUE_GETRUSAGE	STD {
+117	AUE_GETRUSAGE	STD|PLEDGE_STDIO {
 		int getrusage(
 		    int who,
 		    _Out_ struct rusage *rusage
 		);
 	}
-118	AUE_GETSOCKOPT	STD {
+118	AUE_GETSOCKOPT	STD|PLEDGE_STDIO {
 		int getsockopt(
 		    int s,
 		    int level,
@@ -757,34 +758,34 @@
 		);
 	}
 119	AUE_NULL	UNIMPL	resuba (BSD/OS 2.x)
-120	AUE_READV	STD {
+120	AUE_READV	STD|PLEDGE_STDIO {
 		int readv(
 		    int fd,
 		    _Inout_updates_(iovcnt) struct iovec *iovp,
 		    u_int iovcnt
 		);
 	}
-121	AUE_WRITEV	STD {
+121	AUE_WRITEV	STD|PLEDGE_STDIO {
 		int writev(
 		    int fd,
 		    _In_reads_opt_(iovcnt) struct iovec *iovp,
 		    u_int iovcnt
 		);
 	}
-122	AUE_SETTIMEOFDAY	STD {
+122	AUE_SETTIMEOFDAY	STD|PLEDGE_SETTIME {
 		int settimeofday(
 		    _In_ struct timeval *tv,
 		    _In_opt_ struct timezone *tzp
 		);
 	}
-123	AUE_FCHOWN	STD {
+123	AUE_FCHOWN	STD|PLEDGE_CHOWN {
 		int fchown(
 		    int fd,
 		    int uid,
 		    int gid
 		);
 	}
-124	AUE_FCHMOD	STD {
+124	AUE_FCHMOD	STD|PLEDGE_FATTR {
 		int fchmod(
 		    int fd,
 		    mode_t mode
@@ -800,19 +801,19 @@
 		    _Inout_ int *fromlenaddr
 		);
 	} recvfrom recvfrom_args int
-126	AUE_SETREUID	STD {
+126	AUE_SETREUID	STD|PLEDGE_ID {
 		int setreuid(
 		    int ruid,
 		    int euid
 		);
 	}
-127	AUE_SETREGID	STD {
+127	AUE_SETREGID	STD|PLEDGE_ID {
 		int setregid(
 		    int rgid,
 		    int egid
 		);
 	}
-128	AUE_RENAME	STD {
+128	AUE_RENAME	STD|PLEDGE_RPATH|PLEDGE_CPATH {
 		int rename(
 		    _In_z_ const char *from,
 		    _In_z_ const char *to
@@ -830,19 +831,19 @@
 		    long length
 		);
 	}
-131	AUE_FLOCK	STD {
+131	AUE_FLOCK	STD|PLEDGE_FLOCK|PLEDGE_YPACTIVE {
 		int flock(
 		    int fd,
 		    int how
 		);
 	}
-132	AUE_MKFIFO	STD {
+132	AUE_MKFIFO	STD|PLEDGE_DPATH {
 		int mkfifo(
 		    _In_z_ const char *path,
 		    mode_t mode
 		);
 	}
-133	AUE_SENDTO	STD {
+133	AUE_SENDTO	STD|PLEDGE_STDIO|PLEDGE_YPACTIVE {
 		int sendto(
 		    int s,
 		    _In_reads_bytes_(len) const void *buf,
@@ -852,13 +853,13 @@
 		    int tolen
 		);
 	}
-134	AUE_SHUTDOWN	STD {
+134	AUE_SHUTDOWN	STD|PLEDGE_STDIO {
 		int shutdown(
 		    int s,
 		    int how
 		);
 	}
-135	AUE_SOCKETPAIR	STD {
+135	AUE_SOCKETPAIR	STD|PLEDGE_STDIO {
 		int socketpair(
 		    int domain,
 		    int type,
@@ -866,25 +867,25 @@
 		    _Out_writes_(2) int *rsv
 		);
 	}
-136	AUE_MKDIR	STD {
+136	AUE_MKDIR	STD|PLEDGE_CPATH {
 		int mkdir(
 		    _In_z_ const char *path,
 		    mode_t mode
 		);
 	}
-137	AUE_RMDIR	STD {
+137	AUE_RMDIR	STD|PLEDGE_CPATH {
 		int rmdir(
 		    _In_z_ const char *path
 		);
 	}
-138	AUE_UTIMES	STD {
+138	AUE_UTIMES	STD|PLEDGE_FATTR {
 		int utimes(
 		    _In_z_ const char *path,
 		    _In_ struct timeval *tptr
 		);
 	}
 139	AUE_NULL	OBSOL	4.2 sigreturn
-140	AUE_ADJTIME	STD {
+140	AUE_ADJTIME	STD|PLEDGE_STDIO {
 		int adjtime(
 		    _In_ struct timeval *delta,
 		    _Out_opt_ struct timeval *olddelta
@@ -923,7 +924,7 @@
 		    int signum
 		);
 	}
-147	AUE_SETSID	STD {
+147	AUE_SETSID	STD|PLEDGE_PROC {
 		int setsid(void);
 	}
 148	AUE_QUOTACTL	STD {
@@ -1087,7 +1088,7 @@
 		    int fibnum
 		);
 	}
-176	AUE_NTP_ADJTIME	STD {
+176	AUE_NTP_ADJTIME	STD|PLEDGE_SETTIME {
 		int ntp_adjtime(
 		    _Inout_ struct timex *tp
 		);
@@ -1098,17 +1099,17 @@
 180	AUE_NULL	UNIMPL	nosys
 
 ; Syscalls 181-199 are used by/reserved for BSD
-181	AUE_SETGID	STD {
+181	AUE_SETGID	STD|PLEDGE_ID {
 		int setgid(
 		    gid_t gid
 		);
 	}
-182	AUE_SETEGID	STD {
+182	AUE_SETEGID	STD|PLEDGE_ID {
 		int setegid(
 		    gid_t egid
 		);
 	}
-183	AUE_SETEUID	STD {
+183	AUE_SETEUID	STD|PLEDGE_ID {
 		int seteuid(
 		    uid_t euid
 		);
@@ -1135,26 +1136,26 @@
 		    _Out_ struct freebsd11_stat *ub
 		);
 	}
-191	AUE_PATHCONF	STD {
+191	AUE_PATHCONF	STD|PLEDGE_RPATH {
 		int pathconf(
 		    _In_z_ const char *path,
 		    int name
 		);
 	}
-192	AUE_FPATHCONF	STD {
+192	AUE_FPATHCONF	STD|PLEDGE_STDIO {
 		int fpathconf(
 		    int fd,
 		    int name
 		);
 	}
 193	AUE_NULL	UNIMPL	nosys
-194	AUE_GETRLIMIT	STD {
+194	AUE_GETRLIMIT	STD|PLEDGE_STDIO {
 		int getrlimit(
 		    u_int which,
 		    _Out_ struct rlimit *rlp
 		);
 	} getrlimit __getrlimit_args int
-195	AUE_SETRLIMIT	STD {
+195	AUE_SETRLIMIT	STD|PLEDGE_PROC|PLEDGE_ID {
 		int setrlimit(
 		    u_int which,
 		    _In_ struct rlimit *rlp
@@ -1204,7 +1205,7 @@
 		    off_t length
 		);
 	}
-202	AUE_SYSCTL	STD {
+202	AUE_SYSCTL	STD|PLEDGE_ALWAYS {
 		int __sysctl(
 		    _In_reads_(namelen) int *name,
 		    u_int namelen,
@@ -1231,19 +1232,19 @@
 		    _In_z_ const char *path
 		);
 	}
-206	AUE_FUTIMES	STD {
+206	AUE_FUTIMES	STD|PLEDGE_FATTR {
 		int futimes(
 		    int fd,
 		    _In_reads_(2) struct timeval *tptr
 		);
 	}
-207	AUE_GETPGID	STD {
+207	AUE_GETPGID	STD|PLEDGE_STDIO {
 		int getpgid(
 		    pid_t pid
 		);
 	}
 208	AUE_NULL	UNIMPL	nosys
-209	AUE_POLL	STD {
+209	AUE_POLL	STD|PLEDGE_STDIO {
 		int poll(
 		    _Inout_updates_(nfds) struct pollfd *fds,
 		    u_int nfds,
@@ -1343,19 +1344,19 @@
 		    int shmflg
 		);
 	}
-232	AUE_NULL	STD {
+232	AUE_NULL	STD|PLEDGE_STDIO {
 		int clock_gettime(
 		    clockid_t clock_id,
 		    _Out_ struct timespec *tp
 		);
 	}
-233	AUE_CLOCK_SETTIME	STD {
+233	AUE_CLOCK_SETTIME	STD|PLEDGE_SETTIME {
 		int clock_settime(
 		    clockid_t clock_id,
 		    _In_ const struct timespec *tp
 		);
 	}
-234	AUE_NULL	STD {
+234	AUE_NULL	STD|PLEDGE_STDIO {
 		int clock_getres(
 		    clockid_t clock_id,
 		    _Out_ struct timespec *tp
@@ -1392,7 +1393,7 @@
 		    int timerid
 		);
 	}
-240	AUE_NULL	STD {
+240	AUE_NULL	STD|PLEDGE_STDIO {
 		int nanosleep(
 		    _In_ const struct timespec *rqtp,
 		    _Out_opt_ struct timespec *rmtp
@@ -1429,30 +1430,30 @@
 		    _Out_ clockid_t *clock_id
 		);
 	}
-248	AUE_NULL	STD {
+248	AUE_NULL	STD|PLEDGE_SETTIME {
 		int ntp_gettime(
 		    _Out_ struct ntptimeval *ntvp
 		);
 	}
 249	AUE_NULL	UNIMPL	nosys
 ; syscall numbers initially used in OpenBSD
-250	AUE_MINHERIT	STD {
+250	AUE_MINHERIT	STD|PLEDGE_STDIO {
 		int minherit(
 		    _In_ void *addr,
 		    size_t len,
 		    int inherit
 		);
 	}
-251	AUE_RFORK	STD {
+251	AUE_RFORK	STD|PLEDGE_PROC {
 		int rfork(
 		    int flags
 		);
 	}
 252	AUE_POLL	OBSOL	openbsd_poll
-253	AUE_ISSETUGID	STD {
+253	AUE_ISSETUGID	STD|PLEDGE_STDIO {
 		int issetugid(void);
 	}
-254	AUE_LCHOWN	STD {
+254	AUE_LCHOWN	STD|PLEDGE_CHOWN {
 		int lchown(
 		    _In_z_ const char *path,
 		    int uid,
@@ -1486,14 +1487,14 @@
 		);
 	}
 273	AUE_NULL	UNIMPL	nosys
-274	AUE_LCHMOD	STD {
+274	AUE_LCHMOD	STD|PLEDGE_FATTR {
 		int lchmod(
 		    _In_z_ const char *path,
 		    mode_t mode
 		);
 	}
 275	AUE_NULL	OBSOL	netbsd_lchown
-276	AUE_LUTIMES	STD {
+276	AUE_LUTIMES	STD|PLEDGE_FATTR {
 		int lutimes(
 		    _In_z_ const char *path,
 		    _In_ struct timeval *tptr
@@ -1519,7 +1520,7 @@
 		);
 	}
 281-288	AUE_NULL	UNIMPL	nosys
-289	AUE_PREADV	STD {
+289	AUE_PREADV	STD|PLEDGE_STDIO {
 		ssize_t preadv(
 		    int fd,
 		    _In_reads_(iovcnt) struct iovec *iovp,
@@ -1527,7 +1528,7 @@
 		    off_t offset
 		);
 	}
-290	AUE_PWRITEV	STD {
+290	AUE_PWRITEV	STD|PLEDGE_STDIO {
 		ssize_t pwritev(
 		    int fd,
 		    _In_reads_(iovcnt) struct iovec *iovp,
@@ -1606,19 +1607,19 @@
 		    int fileid
 		);
 	}
-310	AUE_GETSID	STD {
+310	AUE_GETSID	STD|PLEDGE_STDIO {
 		int getsid(
 		    pid_t pid
 		);
 	}
-311	AUE_SETRESUID	STD {
+311	AUE_SETRESUID	STD|PLEDGE_ID {
 		int setresuid(
 		    uid_t ruid,
 		    uid_t euid,
 		    uid_t suid
 		);
 	}
-312	AUE_SETRESGID	STD {
+312	AUE_SETRESGID	STD|PLEDGE_ID {
 		int setresgid(
 		    gid_t rgid,
 		    gid_t egid,
@@ -1667,7 +1668,7 @@
 		    _In_opt_ struct osigevent *sig
 		);
 	}
-321	AUE_NULL	STD {
+321	AUE_NULL	STD|PLEDGE_STDIO {
 		int yield(void);
 	}
 322	AUE_NULL	OBSOL	thr_sleep
@@ -1679,7 +1680,7 @@
 	}
 325	AUE_MUNLOCKALL	STD {
 		int munlockall(void); }
-326	AUE_GETCWD	STD {
+326	AUE_GETCWD	STD|PLEDGE_RPATH|PLEDGE_WPATH {
 		int __getcwd(
 		    _Out_writes_z_(buflen) char *buf,
 		    size_t buflen
@@ -1709,7 +1710,7 @@
 		    pid_t pid
 		);
 	}
-331	AUE_NULL	STD {
+331	AUE_NULL	STD|PLEDGE_STDIO {
 		int sched_yield(void);
 	}
 332	AUE_NULL	STD {
@@ -1728,7 +1729,7 @@
 		    _Out_ struct timespec *interval
 		);
 	}
-335	AUE_NULL	STD {
+335	AUE_NULL	STD|PLEDGE_ALWAYS {
 		int utrace(
 		   _In_reads_bytes_(len) const void *addr,
 		    size_t len
@@ -1766,14 +1767,14 @@
 		    int a_followSymlinks
 		);
 	}
-340	AUE_SIGPROCMASK	STD {
+340	AUE_SIGPROCMASK	STD|PLEDGE_STDIO {
 		int sigprocmask(
 		    int how,
 		    _In_opt_ const sigset_t *set,
 		    _Out_opt_ sigset_t *oset
 		);
 	}
-341	AUE_SIGSUSPEND	STD {
+341	AUE_SIGSUSPEND	STD|PLEDGE_STDIO {
 		int sigsuspend(
 		    _In_ const sigset_t *sigmask
 		);
@@ -1785,7 +1786,7 @@
 		    _Out_opt_ struct sigaction *oact
 		);
 	}
-343	AUE_SIGPENDING	STD {
+343	AUE_SIGPENDING	STD|PLEDGE_STDIO {
 		int sigpending(
 		    _In_ sigset_t *set
 		);
@@ -1795,14 +1796,14 @@
 		    _In_ const struct ucontext4 *sigcntxp
 		);
 	}
-345	AUE_SIGWAIT	STD {
+345	AUE_SIGWAIT	STD|PLEDGE_STDIO {
 		int sigtimedwait(
 		    _In_ const sigset_t *set,
 		    _Out_opt_ siginfo_t *info,
 		    _In_opt_ const struct timespec *timeout
 		);
 	}
-346	AUE_NULL	STD {
+346	AUE_NULL	STD|PLEDGE_STDIO {
 		int sigwaitinfo(
 		    _In_ const sigset_t *set,
 		    _Out_opt_ siginfo_t *info
@@ -1902,21 +1903,21 @@
 		    _In_opt_ struct timespec *timeout
 		);
 	}
-360	AUE_GETRESUID	STD {
+360	AUE_GETRESUID	STD|PLEDGE_STDIO {
 		int getresuid(
 		    _Out_opt_ uid_t *ruid,
 		    _Out_opt_ uid_t *euid,
 		    _Out_opt_ uid_t *suid
 		);
 	}
-361	AUE_GETRESGID	STD {
+361	AUE_GETRESGID	STD|PLEDGE_STDIO {
 		int getresgid(
 		    _Out_opt_ gid_t *rgid,
 		    _Out_opt_ gid_t *egid,
 		    _Out_opt_ gid_t *sgid
 		);
 	}
-362	AUE_KQUEUE	STD {
+362	AUE_KQUEUE	STD|PLEDGE_STDIO {
 		int kqueue(void);
 	}
 363	AUE_KEVENT	COMPAT11 {
@@ -1961,13 +1962,13 @@
 		    _In_z_ const char *attrname
 		);
 	}
-374	AUE_SETUGID	STD {
+374	AUE_SETUGID	STD|PLEDGE_ID {
 		int __setugid(
 		    int flag
 		);
 	}
 375	AUE_NULL	OBSOL	nfsclnt
-376	AUE_EACCESS	STD {
+376	AUE_EACCESS	STD|PLEDGE_STDIO {
 		int eaccess(
 		    _In_z_ const char *path,
 		    int amode
@@ -2038,19 +2039,19 @@
 		    int len
 		);
 	}
-391	AUE_LCHFLAGS	STD {
+391	AUE_LCHFLAGS	STD|PLEDGE_FATTR {
 		int lchflags(
 		    _In_z_ const char *path,
 		    u_long flags
 		);
 	}
-392	AUE_NULL	STD {
+392	AUE_NULL	STD|PLEDGE_STDIO {
 		int uuidgen(
 		    _Out_writes_(count) struct uuid *store,
 		    int count
 		);
 	}
-393	AUE_SENDFILE	STD {
+393	AUE_SENDFILE	STD|PLEDGE_INET|PLEDGE_UNIX {
 		int sendfile(
 		    int fd,
 		    int s,
@@ -2196,14 +2197,14 @@
 		    _In_ struct mac *mac_p
 		);
 	}
-416	AUE_SIGACTION	STD {
+416	AUE_SIGACTION	STD|PLEDGE_STDIO {
 		int sigaction(
 		    int sig,
 		    _In_opt_ const struct sigaction *act,
 		    _Out_opt_ struct sigaction *oact
 		);
 	}
-417	AUE_SIGRETURN	STD {
+417	AUE_SIGRETURN	STD|PLEDGE_STDIO {
 		int sigreturn(
 		    _In_ const struct __ucontext *sigcntxp
 		);
@@ -2259,30 +2260,30 @@
 		    _In_ struct acl *aclp
 		);
 	}
-429	AUE_SIGWAIT	STD {
+429	AUE_SIGWAIT	STD|PLEDGE_STDIO {
 		int sigwait(
 		    _In_ const sigset_t *set,
 		    _Out_ int *sig
 		);
 	}
-430	AUE_THR_CREATE	STD {
+430	AUE_THR_CREATE	STD|PLEDGE_STDIO {
 		int thr_create(
 		    _In_ ucontext_t *ctx,
 		    _Out_ long *id,
 		    int flags
 		);
 	}
-431	AUE_THR_EXIT	STD {
+431	AUE_THR_EXIT	STD|PLEDGE_STDIO {
 		void thr_exit(
 		    _Out_opt_ long *state
 		);
 	}
-432	AUE_NULL	STD {
+432	AUE_NULL	STD|PLEDGE_ALWAYS {
 		int thr_self(
 		    _Out_ long *id
 		);
 	}
-433	AUE_THR_KILL	STD {
+433	AUE_THR_KILL	STD|PLEDGE_ALWAYS {
 		int thr_kill(
 		    long id,
 		    int sig
@@ -2326,12 +2327,12 @@
 		    _In_opt_ const struct timespec *abstime
 		);
 	}
-442	AUE_NULL	STD {
+442	AUE_NULL	STD|PLEDGE_STDIO {
 		int thr_suspend(
 		    _In_opt_ const struct timespec *timeout
 		);
 	}
-443	AUE_NULL	STD {
+443	AUE_NULL	STD|PLEDGE_STDIO {
 		int thr_wake(
 		    long id
 		);
@@ -2392,7 +2393,7 @@
 		    _In_z_ const char *path
 		);
 	}
-454	AUE_NULL	STD {
+454	AUE_NULL	STD|PLEDGE_STDIO {
 		int _umtx_op(
 		    _Inout_ void *obj,
 		    int op,
@@ -2401,13 +2402,13 @@
 		    _In_ void *uaddr2
 		);
 	}
-455	AUE_THR_NEW	STD {
+455	AUE_THR_NEW	STD|PLEDGE_STDIO {
 		int thr_new(
 		    _In_ struct thr_param *param,
 		    int param_size
 		);
 	}
-456	AUE_NULL	STD {
+456	AUE_NULL	STD|PLEDGE_STDIO {
 		int sigqueue(
 		    pid_t pid,
 		    int signum,
@@ -2459,14 +2460,14 @@
 		    _In_z_ const char *path
 		);
 	}
-463	AUE_NULL	STD {
+463	AUE_NULL	STD|PLEDGE_ALWAYS {
 		int abort2(
 		    _In_z_ const char *why,
 		    int nargs,
 		    _In_reads_(nargs) void **args
 		);
 	}
-464	AUE_NULL	STD {
+464	AUE_NULL	STD|PLEDGE_STDIO {
 		int thr_set_name(
 		    long id,
 		    _In_z_ const char *name
@@ -2527,7 +2528,7 @@
 		    _Out_opt_ int *msg_flags
 		);
 	}
-475	AUE_PREAD	STD {
+475	AUE_PREAD	STD|PLEDGE_STDIO {
 		ssize_t pread(
 		    int fd,
 		    _Out_writes_bytes_(nbyte) void *buf,
@@ -2535,7 +2536,7 @@
 		    off_t offset
 		);
 	}
-476	AUE_PWRITE	STD {
+476	AUE_PWRITE	STD|PLEDGE_STDIO {
 		ssize_t pwrite(
 		    int fd,
 		    _In_reads_bytes_(nbyte) const void *buf,
@@ -2543,7 +2544,7 @@
 		    off_t offset
 		);
 	}
-477	AUE_MMAP	STD {
+477	AUE_MMAP	STD|PLEDGE_STDIO {
 		void *mmap(
 		    _In_ void *addr,
 		    size_t len,
@@ -2553,20 +2554,20 @@
 		    off_t pos
 		);
 	}
-478	AUE_LSEEK	STD {
+478	AUE_LSEEK	STD|PLEDGE_STDIO {
 		off_t lseek(
 		    int fd,
 		    off_t offset,
 		    int whence
 		);
 	}
-479	AUE_TRUNCATE	STD {
+479	AUE_TRUNCATE	STD|PLEDGE_WPATH {
 		int truncate(
 		    _In_z_ const char *path,
 		    off_t length
 		);
 	}
-480	AUE_FTRUNCATE	STD {
+480	AUE_FTRUNCATE	STD|PLEDGE_STDIO {
 		int ftruncate(
 		    int fd,
 		    off_t length
@@ -2629,7 +2630,7 @@
 		    _Out_ const cpuset_t *mask
 		);
 	}
-489	AUE_FACCESSAT	STD {
+489	AUE_FACCESSAT	STD|PLEDGE_RPATH|PLEDGE_WPATH {
 		int faccessat(
 		    int fd,
 		    _In_z_ const char *path,
@@ -2637,7 +2638,7 @@
 		    int flag
 		);
 	}
-490	AUE_FCHMODAT	STD {
+490	AUE_FCHMODAT	STD|PLEDGE_FATTR {
 		int fchmodat(
 		    int fd,
 		    _In_z_ const char *path,
@@ -2645,7 +2646,7 @@
 		    int flag
 		);
 	}
-491	AUE_FCHOWNAT	STD {
+491	AUE_FCHOWNAT	STD|PLEDGE_CHOWN {
 		int fchownat(
 		    int fd,
 		    _In_z_ const char *path,
@@ -2654,7 +2655,7 @@
 		    int flag
 		);
 	}
-492	AUE_FEXECVE	STD {
+492	AUE_FEXECVE	STD|PLEDGE_EXEC {
 		int fexecve(
 		    int fd,
 		    _In_ char **argv,
@@ -2669,14 +2670,14 @@
 		    int flag
 		);
 	}
-494	AUE_FUTIMESAT	STD {
+494	AUE_FUTIMESAT	STD|PLEDGE_FATTR {
 		int futimesat(
 		    int fd,
 		    _In_z_ const char *path,
 		    _In_reads_(2) struct timeval *times
 		);
 	}
-495	AUE_LINKAT	STD {
+495	AUE_LINKAT	STD|PLEDGE_CPATH {
 		int linkat(
 		    int fd1,
 		    _In_z_ const char *path1,
@@ -2685,14 +2686,14 @@
 		    int flag
 		);
 	}
-496	AUE_MKDIRAT	STD {
+496	AUE_MKDIRAT	STD|PLEDGE_CPATH {
 		int mkdirat(
 		    int fd,
 		    _In_z_ const char *path,
 		    mode_t mode
 		);
 	}
-497	AUE_MKFIFOAT	STD {
+497	AUE_MKFIFOAT	STD|PLEDGE_DPATH {
 		int mkfifoat(
 		    int fd,
 		    _In_z_ const char *path,
@@ -2708,7 +2709,7 @@
 		);
 	}
 ; XXX: see the comment for open
-499	AUE_OPENAT_RWTC	STD {
+499	AUE_OPENAT_RWTC	STD|PLEDGE_RPATH|PLEDGE_WPATH {
 		int openat(
 		    int fd,
 		    _In_z_ const char *path,
@@ -2716,7 +2717,7 @@
 		    mode_t mode
 		);
 	}
-500	AUE_READLINKAT	STD {
+500	AUE_READLINKAT	STD|PLEDGE_RPATH|PLEDGE_WPATH {
 		ssize_t readlinkat(
 		    int fd,
 		    _In_z_ const char *path,
@@ -2724,7 +2725,7 @@
 		    size_t bufsize
 		);
 	}
-501	AUE_RENAMEAT	STD {
+501	AUE_RENAMEAT	STD|PLEDGE_CPATH {
 		int renameat(
 		    int oldfd,
 		    _In_z_ const char *old,
@@ -2732,21 +2733,21 @@
 		    _In_z_ const char *new
 		);
 	}
-502	AUE_SYMLINKAT	STD {
+502	AUE_SYMLINKAT	STD|PLEDGE_CPATH {
 		int symlinkat(
 		    _In_z_ const char *path1,
 		    int fd,
 		    _In_z_ const char *path2
 		);
 	}
-503	AUE_UNLINKAT	STD {
+503	AUE_UNLINKAT	STD|PLEDGE_CPATH {
 		int unlinkat(
 		    int fd,
 		    _In_z_ const char *path,
 		    int flag
 		);
 	}
-504	AUE_POSIX_OPENPT	STD {
+504	AUE_POSIX_OPENPT	STD|PLEDGE_TTY {
 		int posix_openpt(
 		    int flags
 		);
@@ -2776,7 +2777,7 @@
 		    int jid
 		);
 	}
-509	AUE_CLOSEFROM	STD {
+509	AUE_CLOSEFROM	STD|PLEDGE_STDIO {
 		int closefrom(
 		    int lowfd
 		);
@@ -2803,7 +2804,7 @@
 		    _Inout_opt_ struct shmid_ds *buf
 		);
 	}
-513	AUE_LPATHCONF	STD {
+513	AUE_LPATHCONF	STD|PLEDGE_RPATH {
 		int lpathconf(
 		    _In_z_ const char *path,
 		    int name
@@ -2817,7 +2818,7 @@
 		    _Out_ cap_rights_t *rightsp
 		);
 	}
-516	AUE_CAP_ENTER	STD {
+516	AUE_CAP_ENTER	STD|PLEDGE_ALWAYS {
 		int cap_enter(void);
 	}
 517	AUE_CAP_GETMODE	STD {
@@ -2837,14 +2838,14 @@
 		    int signum
 		);
 	}
-520	AUE_PDGETPID	STD {
+520	AUE_PDGETPID	STD|PLEDGE_STDIO {
 		int pdgetpid(
 		    int fd,
 		    _Out_ pid_t *pidp
 		);
 	}
 521	AUE_PDWAIT	UNIMPL	pdwait4
-522	AUE_SELECT	STD {
+522	AUE_SELECT	STD|PLEDGE_STDIO {
 		int pselect(
 		    int nd,
 		    _Inout_opt_ fd_set *in,
@@ -2854,13 +2855,13 @@
 		    _In_opt_ const sigset_t *sm
 		);
 	}
-523	AUE_GETLOGINCLASS	STD {
+523	AUE_GETLOGINCLASS	STD|PLEDGE_STDIO {
 		int getloginclass(
 		    _Out_writes_z_(namelen) char *namebuf,
 		    size_t namelen
 		);
 	}
-524	AUE_SETLOGINCLASS	STD {
+524	AUE_SETLOGINCLASS	STD|PLEDGE_ID {
 		int setloginclass(
 		    _In_z_ const char *namebuf
 		);
@@ -2905,14 +2906,14 @@
 		    size_t outbuflen
 		);
 	}
-530	AUE_POSIX_FALLOCATE	STD {
+530	AUE_POSIX_FALLOCATE	STD|PLEDGE_STDIO {
 		int posix_fallocate(
 		    int fd,
 		    off_t offset,
 		    off_t len
 		);
 	}
-531	AUE_POSIX_FADVISE	STD {
+531	AUE_POSIX_FADVISE	STD|PLEDGE_STDIO {
 		int posix_fadvise(
 		    int fd,
 		    off_t offset,
@@ -2962,7 +2963,7 @@
 		    _Out_ uint32_t *fcntlrightsp
 		);
 	}
-538	AUE_BINDAT	STD {
+538	AUE_BINDAT	STD|PLEDGE_INET|PLEDGE_UNIX|PLEDGE_DNS|PLEDGE_YPACTIVE {
 		int bindat(
 		    int fd,
 		    int s,
@@ -2970,7 +2971,7 @@
 		    int namelen
 		);
 	}
-539	AUE_CONNECTAT	STD {
+539	AUE_CONNECTAT	STD|PLEDGE_INET|PLEDGE_UNIX|PLEDGE_DNS|PLEDGE_YPACTIVE {
 		int connectat(
 		    int fd,
 		    int s,
@@ -2978,7 +2979,7 @@
 		    int namelen
 		);
 	}
-540	AUE_CHFLAGSAT	STD {
+540	AUE_CHFLAGSAT	STD|PLEDGE_FATTR {
 		int chflagsat(
 		    int fd,
 		    _In_z_ const char *path,
@@ -2986,7 +2987,7 @@
 		    int atflag
 		);
 	}
-541	AUE_ACCEPT	STD {
+541	AUE_ACCEPT	STD|PLEDGE_INET|PLEDGE_UNIX {
 		int accept4(
 		    int s,
 		    _Out_writes_bytes_opt_(*anamelen) struct sockaddr *name,
@@ -2994,7 +2995,7 @@
 		    int flags
 		);
 	}
-542	AUE_PIPE	STD {
+542	AUE_PIPE	STD|PLEDGE_STDIO {
 		int pipe2(
 		    _Out_writes_(2) int *fildes,
 		    int flags
@@ -3013,7 +3014,7 @@
 		    _In_opt_ void *data
 		);
 	}
-545	AUE_POLL	STD {
+545	AUE_POLL	STD|PLEDGE_STDIO {
 		int ppoll(
 		    _Inout_updates_(nfds) struct pollfd *fds,
 		    u_int nfds,
@@ -3021,13 +3022,13 @@
 		    _In_opt_ const sigset_t *set
 		);
 	}
-546	AUE_FUTIMES	STD {
+546	AUE_FUTIMES	STD|PLEDGE_FATTR {
 		int futimens(
 		    int fd,
 		    _In_reads_(2) struct timespec *times
 		);
 	}
-547	AUE_FUTIMESAT	STD {
+547	AUE_FUTIMESAT	STD|PLEDGE_FATTR {
 		int utimensat(
 		    int fd,
 		    _In_z_ const char *path,
@@ -3037,18 +3038,18 @@
 	}
 548	AUE_NULL	OBSOL	numa_getaffinity
 549	AUE_NULL	OBSOL	numa_setaffinity
-550	AUE_FSYNC	STD {
+550	AUE_FSYNC	STD|PLEDGE_STDIO {
 		int fdatasync(
 		    int fd
 		);
 	}
-551	AUE_FSTAT	STD {
+551	AUE_FSTAT	STD|PLEDGE_STDIO {
 		int fstat(
 		    int fd,
 		    _Out_ struct stat *sb
 		);
 	}
-552	AUE_FSTATAT	STD {
+552	AUE_FSTATAT	STD|PLEDGE_STDIO|PLEDGE_RPATH|PLEDGE_WPATH|PLEDGE_TMPPATH {
 		int fstatat(
 		    int fd,
 		    _In_z_ const char *path,
@@ -3062,7 +3063,7 @@
 		    _Out_ struct stat *sb
 		);
 	}
-554	AUE_GETDIRENTRIES STD {
+554	AUE_GETDIRENTRIES STD|PLEDGE_RPATH {
 		ssize_t getdirentries(
 		    int fd,
 		    _Out_writes_bytes_(count) char *buf,
@@ -3070,19 +3071,19 @@
 		    _Out_ off_t *basep
 		);
 	}
-555	AUE_STATFS	STD {
+555	AUE_STATFS	STD|PLEDGE_RPATH {
 		int statfs(
 		    _In_z_ const char *path,
 		    _Out_ struct statfs *buf
 		);
 	}
-556	AUE_FSTATFS	STD {
+556	AUE_FSTATFS	STD|PLEDGE_RPATH {
 		int fstatfs(
 		    int fd,
 		    _Out_ struct statfs *buf
 		);
 	}
-557	AUE_GETFSSTAT	STD {
+557	AUE_GETFSSTAT	STD|PLEDGE_RPATH {
 		int getfsstat(
 		    _Out_writes_bytes_opt_(bufsize) struct statfs *buf,
 		    long bufsize,
@@ -3095,7 +3096,7 @@
 		    _Out_ struct statfs *buf
 		);
 	}
-559	AUE_MKNODAT	STD {
+559	AUE_MKNODAT	STD|PLEDGE_DPATH {
 		int mknodat(
 		    int fd,
 		    _In_z_ const char *path,
@@ -3103,7 +3104,7 @@
 		    dev_t dev
 		);
 	}
-560	AUE_KEVENT	STD {
+560	AUE_KEVENT	STD|PLEDGE_STDIO {
 		int kevent(
 		    int fd,
 		    _In_reads_opt_(nchanges) struct kevent *changelist,
@@ -3133,7 +3134,7 @@
 		    int policy
 		);
 	}
-563	AUE_NULL	STD {
+563	AUE_NULL	STD|PLEDGE_STDIO {
 		int getrandom(
 		    _Out_writes_bytes_(buflen) void *buf,
 		    size_t buflen,
@@ -3168,7 +3169,7 @@
 		    size_t bufsize
 		);
 	}
-568	AUE_UNLINKAT	STD {
+568	AUE_UNLINKAT	STD|PLEDGE_CPATH {
 		int funlinkat(
 		    int dfd,
 		    _In_z_ const char *path,
@@ -3176,7 +3177,7 @@
 		    int flag
 		);
 	}
-569	AUE_NULL	STD {
+569	AUE_NULL	STD|PLEDGE_STDIO {
 		ssize_t copy_file_range(
 		    int infd,
 		    _Inout_opt_ off_t *inoffp,
@@ -3186,7 +3187,7 @@
 		    unsigned int flags
 		);
 	}
-570	AUE_SYSCTL	STD {
+570	AUE_SYSCTL	STD|PLEDGE_ALWAYS {
 		int __sysctlbyname(
 		    _In_reads_(namelen) const char *name,
 		    size_t namelen,
@@ -3212,10 +3213,16 @@
 		    int flags
 		);
 	}
-573	AUE_NULL	STD {
+573	AUE_NULL	STD|PLEDGE_STDIO {
 		int sigfastblock(
 		    int cmd,
 		    _Inout_opt_ uint32_t *ptr
+		);
+	}
+574	AUE_PLEDGE	STD|PLEDGE_ALWAYS {
+		int pledge(
+		    _In_z_ const char *promises,
+		    _In_z_ const char *execpromises
 		);
 	}
 

@@ -77,6 +77,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/syslog.h>
 #include <sys/unistd.h>
 #include <sys/user.h>
+#include <sys/pledge.h>
 
 #include <security/audit/audit.h>
 #include <security/mac/mac_framework.h>
@@ -356,10 +357,17 @@ vn_open_vnode(struct vnode *vp, int fmode, struct ucred *cred,
 	if (fmode & (FWRITE | O_TRUNC)) {
 		if (vp->v_type == VDIR)
 			return (EISDIR);
+		error = pledge_check(td, PLEDGE_CPATH);
+		if (error)
+			return (error);
 		accmode |= VWRITE;
 	}
-	if (fmode & FREAD)
+	if (fmode & FREAD) {
+		error = pledge_check(td, PLEDGE_RPATH);
+		if (error)
+			return (error);
 		accmode |= VREAD;
+	}
 	if (fmode & FEXEC)
 		accmode |= VEXEC;
 	if ((fmode & O_APPEND) && (fmode & FWRITE))

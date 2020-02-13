@@ -896,6 +896,7 @@ process_syscall_def = function(line)
 	local sysstart, sysend, flags, funcname, sysflags
 	local thr_flag, syscallret
 	local orig = line
+	local sysflags_list = {}
 	flags = 0
 	thr_flag = "SY_THR_STATIC"
 
@@ -920,10 +921,14 @@ process_syscall_def = function(line)
 
 	-- Split flags
 	for flag in allflags:gmatch("([^|]+)") do
-		if known_flags[flag] == nil then
-			abort(1, "Unknown flag " .. flag .. " for " ..  sysnum)
+		if flag:match("^PLEDGE_") then
+			sysflags_list[#sysflags_list + 1] = "SYF_" .. flag
+		else
+			if known_flags[flag] == nil then
+				abort(1, "Unknown flag " .. flag .. " for " ..  sysnum)
+			end
+			flags = flags | known_flags[flag]
 		end
-		flags = flags | known_flags[flag]
 	end
 
 	if (flags & known_flags["UNIMPL"]) == 0 and sysnum == nil then
@@ -1021,8 +1026,6 @@ process_syscall_def = function(line)
 
 	funcname = trim(funcname)
 
-	sysflags = "0"
-
 	-- NODEF events do not get audited
 	if flags & known_flags['NODEF'] ~= 0 then
 		auditev = 'AUE_NULL'
@@ -1033,7 +1036,13 @@ process_syscall_def = function(line)
 
 	if config["capenabled"][funcname] ~= nil or
 	    config["capenabled"][stripped_name] ~= nil then
-		sysflags = "SYF_CAPENABLED"
+		sysflags_list[#sysflags_list + 1] = "SYF_CAPENABLED"
+	end
+
+	local sysflags
+	sysflags = table.concat(sysflags_list, " | ")
+	if sysflags == '' then
+		sysflags = "0"
 	end
 
 	local funcargs = {}

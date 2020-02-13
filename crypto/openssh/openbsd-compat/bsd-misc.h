@@ -115,7 +115,7 @@ pid_t getpgid(pid_t);
 #endif
 
 #ifndef HAVE_PLEDGE
-int pledge(const char *promises, const char *paths[]);
+int pledge(const char *promises, const char *execpromises);
 #endif
 
 /* bsd-err.h */

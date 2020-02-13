@@ -58,6 +58,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/sdt.h>
 #include <sys/syscallsubr.h>
 #include <sys/sysctl.h>
+#include <sys/pledge.h>
 #ifdef KTRACE
 #include <sys/ktrace.h>
 #endif
@@ -320,6 +321,11 @@ namei(struct nameidata *ndp)
 	td = cnp->cn_thread;
 	p = td->td_proc;
 	ndp->ni_cnd.cn_cred = ndp->ni_cnd.cn_thread->td_ucred;
+
+	if (cnp->cn_nameiop != LOOKUP &&
+	    (error = pledge_check(td, PLEDGE_CPATH)))
+		return (error);
+
 	KASSERT(cnp->cn_cred && p, ("namei: bad cred/proc"));
 	KASSERT((cnp->cn_nameiop & (~OPMASK)) == 0,
 	    ("namei: nameiop contaminated with flags"));

@@ -79,6 +79,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/ucred.h>
 #include <sys/uio.h>
 #include <sys/ktrace.h>
+#include <sys/pledge.h>
 
 #include <security/audit/audit.h>
 
@@ -111,7 +112,11 @@ sys_cap_enter(struct thread *td, struct cap_enter_args *uap)
 	p = td->td_proc;
 	PROC_LOCK(p);
 	oldcred = crcopysafe(p, newcred);
-	newcred->cr_flags |= CRED_FLAG_CAPMODE;
+	newcred->cr_flags |= CRED_FLAG_CAPMODE | CRED_FLAG_SANDBOX;
+	KASSERT(CRED_IN_CAPABILITY_MODE(newcred),
+	    ("CRED_IN_CAPABILITY_MODE() inconsistent"));
+	KASSERT(CRED_IN_SANDBOX_MODE(newcred),
+	    ("CRED_IN_SANDBOX_MODE() inconsistent"));
 	proc_set_cred(p, newcred);
 	PROC_UNLOCK(p);
 	crfree(oldcred);

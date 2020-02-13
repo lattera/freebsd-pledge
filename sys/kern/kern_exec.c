@@ -38,6 +38,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/systm.h>
 #include <sys/acct.h>
 #include <sys/capsicum.h>
+#include <sys/pledge.h>
 #include <sys/eventhandler.h>
 #include <sys/exec.h>
 #include <sys/fcntl.h>
@@ -443,6 +444,9 @@ interpret:
 			goto exec_fail;
 		}
 #endif
+		error = pledge_check(td, PLEDGE_EXEC);
+		if (error)
+			goto exec_fail;
 		error = namei(&nd);
 		if (error)
 			goto exec_fail;
@@ -518,7 +522,7 @@ interpret:
 
 	if (credential_changing &&
 #ifdef CAPABILITY_MODE
-	    ((oldcred->cr_flags & CRED_FLAG_CAPMODE) == 0) &&
+	    !CRED_IN_CAPABILITY_MODE(oldcred) &&
 #endif
 	    (imgp->vp->v_mount->mnt_flag & MNT_NOSUID) == 0 &&
 	    (p->p_flag & P_TRACED) == 0) {

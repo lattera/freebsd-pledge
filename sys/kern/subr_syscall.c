@@ -48,6 +48,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/capsicum.h>
 #include <sys/ktr.h>
 #include <sys/vmmeter.h>
+#include <sys/sysfil.h>
 #ifdef KTRACE
 #include <sys/uio.h>
 #include <sys/ktrace.h>
@@ -119,11 +120,23 @@ syscallenter(struct thread *td)
 	 * flagged with SYF_CAPENABLED.
 	 */
 	if (IN_CAPABILITY_MODE(td) &&
-	    !(sa->callp->sy_flags & SYF_CAPENABLED)) {
+	    !(sa->callp->sy_fflags & SYF_CAPENABLED)) {
 		td->td_errno = error = ECAPMODE;
 		goto retval;
 	}
 #endif
+
+	/*
+	 * Only allow access to system calls marked with at least one filter
+	 * bit that is also enabled in the process's credentials filter bits.
+	 * This is checked on top of the above check so that restrictions
+	 * imposed by Capsicum and pledge(2) can stack.
+	 */
+	if (((sa->callp->sy_fflags | SYF_DEFAULT) &
+	     td->td_ucred->cr_fflags) == 0) {
+		td->td_errno = error = ECAPMODE;
+		goto retval;
+	}
 
 	error = syscall_thread_enter(td, sa->callp);
 	if (error != 0) {

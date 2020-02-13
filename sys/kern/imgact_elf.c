@@ -71,6 +71,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/syslog.h>
 #include <sys/eventhandler.h>
 #include <sys/user.h>
+#include <sys/pledge.h>
 
 #include <vm/vm.h>
 #include <vm/vm_kern.h>
@@ -757,6 +758,10 @@ __elfN(load_file)(struct proc *p, const char *file, u_long *addr,
 	if (IN_CAPABILITY_MODE(curthread))
 		return (ECAPMODE);
 #endif
+
+	error = pledge_check(curthread, PLEDGE_EXEC);
+	if (error)
+		return (error);
 
 	tempdata = malloc(sizeof(*tempdata), M_TEMP, M_WAITOK | M_ZERO);
 	nd = &tempdata->nd;

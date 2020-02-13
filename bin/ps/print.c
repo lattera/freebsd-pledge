@@ -277,8 +277,17 @@ state(KINFO *k, VARENT *ve __unused)
 		*cp++ = 'V';
 	if ((flag & P_SYSTEM) || k->ki_p->ki_lock > 0)
 		*cp++ = 'L';
-	if ((k->ki_p->ki_cr_flags & CRED_FLAG_CAPMODE) != 0)
+	if ((k->ki_p->ki_cr_flags & KI_CRF_CAPABILITY_MODE) != 0)
 		*cp++ = 'C';
+	else if ((k->ki_p->ki_cr_flags & KI_CRF_SANDBOX_MODE) != 0)
+		/*
+		 * This matches the flag shown in procstat(1) for "sandbox
+		 * mode".  Unfortunately the "S" character is already used by
+		 * ps(1) for the process' sleeping state.  It is only used for
+		 * this as the first character, making this unambiguous if you
+		 * know about it, but it can still be confusing.
+		 */
+		*cp++ = 'S';
 	if (k->ki_p->ki_kiflag & KI_SLEADER)
 		*cp++ = 's';
 	if ((flag & P_CONTROLT) && k->ki_p->ki_pgid == k->ki_p->ki_tpgid)
