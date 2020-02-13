@@ -97,7 +97,15 @@ apply_promises(struct ucred *cred, char *promises) {
 	error = parse_promises(promises, &wanted_fflags, &wanted_pflags);
 	if (error)
 		return error;
-	if ((wanted_pflags & ~cred->cr_pledge.pflags) != 0)
+	if (cred->cr_pledge.pflags & (1 << PLEDGE_ERROR)) {
+		/* Silently ignore attempts to add promises.  Only if the
+		 * PLEDGE_ERROR promise is already in effect, not if it's just
+		 * being asked for. */
+		wanted_pflags &= cred->cr_pledge.pflags;
+		wanted_fflags &= cred->cr_fflags;
+	}
+	if ((wanted_pflags & ~cred->cr_pledge.pflags) != 0 ||
+	    (wanted_fflags & ~cred->cr_fflags) != 0)
 		return EPERM; /* asked to elevate permissions */
 	cred->cr_fflags = wanted_fflags;
 	cred->cr_pledge.pflags = wanted_pflags;
