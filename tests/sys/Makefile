@@ -25,6 +25,7 @@ TESTS_SUBDIRS+=		netipsec
 TESTS_SUBDIRS+=		netmap
 TESTS_SUBDIRS+=		netpfil
 TESTS_SUBDIRS+=		opencrypto
+TESTS_SUBDIRS+=		pledge
 TESTS_SUBDIRS+=		posixshm
 TESTS_SUBDIRS+=		sys
 TESTS_SUBDIRS+=		vfs
