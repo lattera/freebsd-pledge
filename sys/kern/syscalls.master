@@ -2821,7 +2821,7 @@
 516	AUE_CAP_ENTER	STD|PLEDGE_ALWAYS {
 		int cap_enter(void);
 	}
-517	AUE_CAP_GETMODE	STD {
+517	AUE_CAP_GETMODE	STD|PLEDGE_ALWAYS {
 		int cap_getmode(
 		    _Out_ u_int *modep
 		);
