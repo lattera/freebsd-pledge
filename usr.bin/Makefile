@@ -35,6 +35,7 @@ SUBDIR=	alias \
 	enigma \
 	env \
 	etdump \
+	execpledge \
 	expand \
 	false \
 	fetch \
