@@ -39,10 +39,29 @@
 
 static inline void
 pledge_cred_init(struct ucred *cr) {
-	cr->cr_fflags = -1; /* allow all syscalls */
+	cr->cr_fflags = cr->cr_execfflags = -1; /* allow all syscalls */
 #ifdef PLEDGE
 	pledge_set_init(&cr->cr_pledge);
 	pledge_set_init(&cr->cr_execpledge);
+#endif
+}
+
+static inline int
+pledge_cred_needs_exec_tweak(struct ucred *cr) {
+	if (cr->cr_fflags != cr->cr_execfflags)
+		return (1);
+#ifdef PLEDGE
+	if (cr->cr_pledge.pflags != cr->cr_execpledge.pflags)
+		return (1);
+#endif
+	return (0);
+}
+
+static inline void
+pledge_cred_exec_tweak(struct ucred *cr) {
+	cr->cr_fflags = cr->cr_execfflags;
+#ifdef PLEDGE
+	cr->cr_pledge.pflags = cr->cr_execpledge.pflags;
 #endif
 }
 

@@ -522,7 +522,7 @@ interpret:
 
 	if (credential_changing &&
 #ifdef CAPABILITY_MODE
-	    !CRED_IN_CAPABILITY_MODE(oldcred) &&
+	    !CRED_IN_SANDBOX_MODE(oldcred) &&
 #endif
 	    (imgp->vp->v_mount->mnt_flag & MNT_NOSUID) == 0 &&
 	    (p->p_flag & P_TRACED) == 0) {
@@ -567,6 +567,12 @@ interpret:
 			change_svgid(imgp->newcred, imgp->newcred->cr_gid);
 		}
 	}
+
+	if (pledge_cred_needs_exec_tweak(oldcred)) {
+		imgp->newcred = crdup(oldcred);
+		pledge_cred_exec_tweak(imgp->newcred);
+	}
+
 	/* The new credentials are installed into the process later. */
 
 	/*

@@ -54,7 +54,10 @@ static const struct promise_name {
 	{ "",		PLEDGE_NULL },
 };
 
-/* map promises to syscall filter flags */
+/* Map promises to syscall filter flags.  Syscall filters were added as a more
+ * general mechanism that could be used by other things.  Thus they use
+ * different bit values than pledge promises.  There may also be many more
+ * pledges than there are syscall filters. */
 
 static sysfil_t pledge2fflags[PLEDGE_COUNT] = {
 	[PLEDGE_CAPSICUM] = SYF_CAPENABLED,
@@ -78,6 +81,17 @@ static sysfil_t pledge2fflags[PLEDGE_COUNT] = {
 	[PLEDGE_DNS] = SYF_PLEDGE_DNS,
 };
 
+static sysfil_t
+pflags_to_fflags(pledge_flags_t pflags) {
+	sysfil_t fflags;
+	unsigned i;
+	fflags = SYF_PLEDGE_ALWAYS;
+	for (i = 0; i != PLEDGE_COUNT; i++)
+		if (pflags & ((pledge_flags_t)1 << i))
+			fflags |= pledge2fflags[i];
+	return fflags;
+}
+
 static int
 parse_promises(char *promises, sysfil_t *fflags, pledge_flags_t *pflags) {
 	/* NOTE: destroys the passed string */
@@ -97,36 +111,56 @@ parse_promises(char *promises, sysfil_t *fflags, pledge_flags_t *pflags) {
 }
 
 static int
-apply_promises(struct ucred *cred, char *promises) {
-	sysfil_t wanted_fflags;
-	pledge_flags_t wanted_pflags;
+apply_promises(struct ucred *cred, char *promises, char *execpromises) {
+	sysfil_t wanted_fflags, wanted_execfflags;
+	pledge_flags_t wanted_pflags, wanted_execpflags;
 	int error;
-	wanted_fflags = SYF_PLEDGE_ALWAYS;
-	wanted_pflags = 0;
-	error = parse_promises(promises, &wanted_fflags, &wanted_pflags);
-	if (error)
-		return error;
+	wanted_fflags = wanted_execfflags = SYF_PLEDGE_ALWAYS;
+	wanted_pflags = wanted_execpflags = 0;
+	if (promises) {
+		error = parse_promises(promises,
+		    &wanted_fflags, &wanted_pflags);
+		if (error)
+			return error;
+	}
+	if (execpromises) {
+		error = parse_promises(execpromises,
+		    &wanted_execfflags, &wanted_execpflags);
+		if (error)
+			return error;
+	}
 	if (cred->cr_pledge.pflags & ((pledge_flags_t)1 << PLEDGE_ERROR)) {
 		/* Silently ignore attempts to add promises.  Only if the
 		 * PLEDGE_ERROR promise is already in effect, not if it's just
 		 * being asked for. */
 		wanted_pflags &= cred->cr_pledge.pflags;
 		wanted_fflags &= cred->cr_fflags;
+		wanted_execpflags &= cred->cr_execpledge.pflags;
+		wanted_execfflags &= cred->cr_execfflags;
 	}
-	if ((wanted_pflags & ~cred->cr_pledge.pflags) != 0 ||
-	    (wanted_fflags & ~cred->cr_fflags) != 0)
-		return EPERM; /* asked to elevate permissions */
-	cred->cr_fflags = wanted_fflags;
-	cred->cr_pledge.pflags = wanted_pflags;
-	cred->cr_flags |= CRED_FLAG_SANDBOX;
-	KASSERT(CRED_IN_SANDBOX_MODE(cred),
-	    ("CRED_IN_SANDBOX_MODE() inconsistent"));
+	if (promises) {
+		if ((wanted_pflags & ~cred->cr_pledge.pflags) != 0 ||
+		    (wanted_fflags & ~cred->cr_fflags) != 0)
+			return EPERM; /* asked to elevate permissions */
+		cred->cr_fflags &= wanted_fflags;
+		cred->cr_pledge.pflags &= wanted_pflags;
+		cred->cr_flags |= CRED_FLAG_SANDBOX;
+		KASSERT(CRED_IN_SANDBOX_MODE(cred),
+		    ("CRED_IN_SANDBOX_MODE() inconsistent"));
+	}
+	if (execpromises) {
+		if ((wanted_execpflags & ~cred->cr_execpledge.pflags) != 0 ||
+		    (wanted_execfflags & ~cred->cr_execfflags) != 0)
+			return EPERM; /* also cannot be elevated */
+		cred->cr_execfflags &= wanted_execfflags;
+		cred->cr_execpledge.pflags &= wanted_execpflags;
+	}
 	return (0);
 }
 
 static int
-do_pledge(struct thread *td, char *promises) {
-	/* NOTE: destroys the passed string */
+do_pledge(struct thread *td, char *promises, char *execpromises) {
+	/* NOTE: destroys the passed promise strings */
 	struct ucred *newcred, *oldcred;
 	struct proc *p;
 	int error;
@@ -136,7 +170,7 @@ do_pledge(struct thread *td, char *promises) {
 	PROC_LOCK(p);
 
 	oldcred = crcopysafe(p, newcred);
-	error = apply_promises(newcred, promises);
+	error = apply_promises(newcred, promises, execpromises);
 	proc_set_cred(p, newcred);
 
 	if (error == 0) /* XXX */
@@ -156,20 +190,31 @@ do_pledge(struct thread *td, char *promises) {
 int
 sys_pledge(struct thread *td, struct pledge_args *uap)
 {
-	char *promises;
+	size_t size = MAXPATHLEN;
+	char *promises = NULL, *execpromises = NULL;
 	int error;
-	promises = malloc(MAXPATHLEN, M_TEMP, M_WAITOK);
-	error = copyinstr(uap->promises, promises, MAXPATHLEN, NULL);
-	if (error) {
-		free(promises, M_TEMP);
-		return (error);
+	if (uap->promises) {
+		promises = malloc(size, M_TEMP, M_WAITOK);
+		error = copyinstr(uap->promises, promises, size, NULL);
+		if (error)
+			goto error;
 	}
-	error = do_pledge(td, promises);
+	if (uap->execpromises) {
+		execpromises = malloc(size, M_TEMP, M_WAITOK);
+		error = copyinstr(uap->execpromises, execpromises, size, NULL);
+		if (error)
+			goto error;
+	}
+	error = do_pledge(td, promises, execpromises);
 	/* NOTE: The new pledges and syscall filters are not immediately
 	 * effective for the process' threads because the thread credential
 	 * pointers have a copy-on-write optimization.  They are updated on the
 	 * next syscall or trap. */
-	free(promises, M_TEMP);
+error:
+	if (promises)
+		free(promises, M_TEMP);
+	if (execpromises)
+		free(execpromises, M_TEMP);
 	return (error);
 }
 

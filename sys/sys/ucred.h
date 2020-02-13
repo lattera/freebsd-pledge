@@ -65,6 +65,7 @@ struct ucred {
 	struct loginclass	*cr_loginclass; /* login class */
 	u_int		cr_flags;	/* credential flags */
 	sysfil_t	cr_fflags;	/* syscall filter flags */
+	sysfil_t	cr_execfflags;	/* filter flags after execve(2) */
 #ifdef PLEDGE
 	pledge_set_t	cr_pledge;
 	pledge_set_t	cr_execpledge;
