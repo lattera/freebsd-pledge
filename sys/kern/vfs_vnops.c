@@ -357,7 +357,7 @@ vn_open_vnode(struct vnode *vp, int fmode, struct ucred *cred,
 	if (fmode & (FWRITE | O_TRUNC)) {
 		if (vp->v_type == VDIR)
 			return (EISDIR);
-		error = pledge_check(td, PLEDGE_CPATH);
+		error = pledge_check(td, PLEDGE_WPATH);
 		if (error)
 			return (error);
 		accmode |= VWRITE;
