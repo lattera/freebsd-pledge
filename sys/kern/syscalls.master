@@ -1205,7 +1205,7 @@
 		    off_t length
 		);
 	}
-202	AUE_SYSCTL	STD|PLEDGE_ALWAYS {
+202	AUE_SYSCTL	STD|PLEDGE_STDIO {
 		int __sysctl(
 		    _In_reads_(namelen) int *name,
 		    u_int namelen,
@@ -2811,7 +2811,7 @@
 		);
 	}
 514	AUE_NULL	OBSOL	cap_new
-515	AUE_CAP_RIGHTS_GET	STD {
+515	AUE_CAP_RIGHTS_GET	STD|PLEDGE_CAPCOMPAT {
 		int __cap_rights_get(
 		    int version,
 		    int fd,
@@ -2821,18 +2821,18 @@
 516	AUE_CAP_ENTER	STD|PLEDGE_ALWAYS {
 		int cap_enter(void);
 	}
-517	AUE_CAP_GETMODE	STD|PLEDGE_ALWAYS {
+517	AUE_CAP_GETMODE	STD|PLEDGE_CAPCOMPAT {
 		int cap_getmode(
 		    _Out_ u_int *modep
 		);
 	}
-518	AUE_PDFORK	STD {
+518	AUE_PDFORK	STD|PLEDGE_PROC {
 		int pdfork(
 		    _Out_ int *fdp,
 		    int flags
 		);
 	}
-519	AUE_PDKILL	STD {
+519	AUE_PDKILL	STD|PLEDGE_PROC {
 		int pdkill(
 		    int fd,
 		    int signum
@@ -2931,33 +2931,33 @@
 		    _Out_opt_ siginfo_t *info
 		);
 	}
-533	AUE_CAP_RIGHTS_LIMIT	STD {
+533	AUE_CAP_RIGHTS_LIMIT	STD|PLEDGE_CAPCOMPAT {
 		int cap_rights_limit(
 		    int fd,
 		    _In_ cap_rights_t *rightsp
 		);
 	}
-534	AUE_CAP_IOCTLS_LIMIT	STD {
+534	AUE_CAP_IOCTLS_LIMIT	STD|PLEDGE_CAPCOMPAT {
 		int cap_ioctls_limit(
 		    int fd,
 		    _In_reads_(ncmds) const u_long *cmds,
 		    size_t ncmds
 		);
 	}
-535	AUE_CAP_IOCTLS_GET	STD {
+535	AUE_CAP_IOCTLS_GET	STD|PLEDGE_CAPCOMPAT {
 		ssize_t cap_ioctls_get(
 		    int fd,
 		    _Out_writes_(maxcmds) u_long *cmds,
 		    size_t maxcmds
 		);
 	}
-536	AUE_CAP_FCNTLS_LIMIT	STD {
+536	AUE_CAP_FCNTLS_LIMIT	STD|PLEDGE_CAPCOMPAT {
 		int cap_fcntls_limit(
 		    int fd,
 		    uint32_t fcntlrights
 		);
 	}
-537	AUE_CAP_FCNTLS_GET	STD {
+537	AUE_CAP_FCNTLS_GET	STD|PLEDGE_CAPCOMPAT {
 		int cap_fcntls_get(
 		    int fd,
 		    _Out_ uint32_t *fcntlrightsp
@@ -3187,7 +3187,7 @@
 		    unsigned int flags
 		);
 	}
-570	AUE_SYSCTL	STD|PLEDGE_ALWAYS {
+570	AUE_SYSCTL	STD|PLEDGE_STDIO {
 		int __sysctlbyname(
 		    _In_reads_(namelen) const char *name,
 		    size_t namelen,

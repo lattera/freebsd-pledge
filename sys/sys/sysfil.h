@@ -25,6 +25,14 @@ typedef u_int32_t sysfil_t;
  */
 #define	SYF_PLEDGE_ALWAYS	0x00000004
 #define	SYF_PLEDGE_STDIO	0x00000008
+/*
+ * SYF_PLEDGE_CAPCOMPAT defined to have the same value as SYF_PLEDGE_STDIO.  It
+ * includes a subset of syscalls that are allowed under Capsicum but not under
+ * pledge("stdio") on OpenBSD.  This is to get at least basic compatibility
+ * between pledge(2) and Capsicum.  Use a different macro for now just to help
+ * keep track of them.
+ */
+#define SYF_PLEDGE_CAPCOMPAT	SYF_PLEDGE_STDIO
 #define	SYF_PLEDGE_SETTIME	0x00000010
 #define	SYF_PLEDGE_PROC		0x00000020
 #define	SYF_PLEDGE_ID		0x00000040
