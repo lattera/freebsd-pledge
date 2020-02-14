@@ -224,10 +224,14 @@ __read_mostly cap_rights_t cap_cpath;
 #endif
 
 int
-pledge_check_path_rights(struct thread *td, const cap_rights_t *rights) {
+pledge_check_path_rights(struct thread *td, const cap_rights_t *rights,
+    int modifying) {
 #ifdef PLEDGE
 	int error;
-	if (cap_rights_overlaps(rights, &cap_cpath)) {
+	/* The modifying parameter means that the caller has other indications
+	 * that the operation will try to modify the filesystem.  In namei()'s
+	 * case, it means an operation other than LOOKUP. */
+	if (cap_rights_overlaps(rights, &cap_cpath) || modifying) {
 		error = pledge_check(td, PLEDGE_CPATH);
 		if (error)
 			return (error);
@@ -241,6 +245,15 @@ pledge_check_path_rights(struct thread *td, const cap_rights_t *rights) {
 		error = pledge_check(td, PLEDGE_RPATH);
 		if (error)
 			return (error);
+	} else {
+		/* An operation on a path not specifying any rights that we
+		 * recognize.  If path operations aren't to be allowed at all,
+		 * reject it. */
+		if (!(pledge_probe(td, PLEDGE_RPATH) ||
+		      pledge_probe(td, PLEDGE_WPATH) ||
+		      pledge_probe(td, PLEDGE_CPATH) ||
+		      pledge_probe(td, PLEDGE_DPATH)))
+			return pledge_check(td, PLEDGE_RPATH);
 	}
 #endif
 	return (0);

@@ -322,7 +322,8 @@ namei(struct nameidata *ndp)
 	p = td->td_proc;
 	ndp->ni_cnd.cn_cred = ndp->ni_cnd.cn_thread->td_ucred;
 
-	error = pledge_check_path_rights(td, &ndp->ni_rightsneeded);
+	error = pledge_check_path_rights(td, &ndp->ni_rightsneeded,
+	    cnp->cn_nameiop != LOOKUP);
 	if (error)
 		return (error);
 
