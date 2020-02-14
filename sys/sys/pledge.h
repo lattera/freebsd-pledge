@@ -38,6 +38,9 @@
  * a minimal set of less risky syscalls that most Capsicum applications
  * absolutely need.
  *
+ * freebsd32 compat syscalls will need pledge annotations too.  While Linux
+ * binaries can't use pledge(), they could still be run by a pledged
+ * application with execpromises.
  */
 
 #include <sys/types.h>
@@ -81,17 +84,22 @@ pledge_cred_exec_tweak(struct ucred *cr) {
 }
 
 static inline int
-pledge_check(struct thread *td, enum pledge_promise pr) {
+pledge_check_failed(struct thread *td) {
 	/* XXX: OpenBSD generally returns EPERM for this, and ECAPMODE's error
 	 * string is "Not permitted in capability mode", which is confusing
 	 * because "capability mode" is a Capsicum term.  syscallret()
 	 * currently relies on these error codes being used to detect pledge
 	 * violations and send a signal if needed. */
+	return (ECAPMODE);
+}
+
+static inline int
+pledge_check(struct thread *td, enum pledge_promise pr) {
 #ifdef PLEDGE
-	return (pledge_set_test(&td->td_ucred->cr_pledge, pr) ? 0 : ECAPMODE);
-#else
-	return (0); /* no restrictions */
+	if (!pledge_set_test(&td->td_ucred->cr_pledge, pr))
+		return pledge_check_failed(td);
 #endif
+	return (0); /* success */
 }
 
 #define	CRED_PLEDGED(cr, pr)		(pledge_set_test(&(cr)->cr_pledge, (pr)))
