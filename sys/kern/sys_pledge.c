@@ -284,9 +284,10 @@ pledge_sysinit(void *dummy) {
 	    CAP_CREATE, CAP_UNLINKAT);
 	cap_rights_init(&cap_dpath,
 	    CAP_MKFIFOAT, CAP_MKNODAT);
-	cap_rights_clear(&cap_wpath, CAP_LOOKUP);
-	cap_rights_clear(&cap_cpath, CAP_LOOKUP);
-	cap_rights_clear(&cap_dpath, CAP_LOOKUP);
+	cap_rights_clear(&cap_rpath, CAP_LOOKUP, CAP_SEEK);
+	cap_rights_clear(&cap_wpath, CAP_LOOKUP, CAP_SEEK);
+	cap_rights_clear(&cap_cpath, CAP_LOOKUP, CAP_SEEK);
+	cap_rights_clear(&cap_dpath, CAP_LOOKUP, CAP_SEEK);
 #endif
 }
 
