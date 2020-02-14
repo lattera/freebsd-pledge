@@ -383,6 +383,7 @@ do_execve(struct thread *td, struct image_args *args, struct mac *mac_p)
 	int error, i, orig_osrel;
 	uint32_t orig_fctl0;
 	static const char fexecv_proc_title[] = "(fexecv)";
+	cap_rights_t execat_rights;
 
 	imgp = &image_params;
 
@@ -424,8 +425,10 @@ do_execve(struct thread *td, struct image_args *args, struct mac *mac_p)
 	 * interpreter if this is an interpreted binary.
 	 */
 	if (args->fname != NULL) {
-		NDINIT(&nd, LOOKUP, ISOPEN | LOCKLEAF | LOCKSHARED | FOLLOW |
-		    SAVENAME | AUDITVNODE1, UIO_SYSSPACE, args->fname, td);
+		NDINIT_ATRIGHTS(&nd,
+		    LOOKUP, ISOPEN | LOCKLEAF | LOCKSHARED | FOLLOW |
+		    SAVENAME | AUDITVNODE1, UIO_SYSSPACE, args->fname,
+		    AT_FDCWD, cap_rights_init(&execat_rights, CAP_EXECAT), td);
 	}
 
 	SDT_PROBE1(proc, , , exec, args->fname);
@@ -654,8 +657,10 @@ interpret:
 		free(imgp->freepath, M_TEMP);
 		imgp->freepath = NULL;
 		/* set new name to that of the interpreter */
-		NDINIT(&nd, LOOKUP, ISOPEN | LOCKLEAF | FOLLOW | SAVENAME,
-		    UIO_SYSSPACE, imgp->interpreter_name, td);
+		NDINIT_ATRIGHTS(&nd,
+		    LOOKUP, ISOPEN | LOCKLEAF | FOLLOW | SAVENAME,
+		    UIO_SYSSPACE, imgp->interpreter_name,
+		    AT_FDCWD, cap_rights_init(&execat_rights, CAP_EXECAT), td);
 		args->fname = imgp->interpreter_name;
 		goto interpret;
 	}

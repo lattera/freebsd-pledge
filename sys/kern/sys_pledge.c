@@ -222,6 +222,7 @@ __read_mostly cap_rights_t cap_rpath;
 __read_mostly cap_rights_t cap_wpath;
 __read_mostly cap_rights_t cap_cpath;
 __read_mostly cap_rights_t cap_dpath;
+__read_mostly cap_rights_t cap_exec;
 #endif
 
 int
@@ -258,6 +259,12 @@ pledge_check_path_rights(struct thread *td, const cap_rights_t *rights,
 		if (error)
 			return (error);
 	}
+	if (cap_rights_overlaps(rights, &cap_exec)) {
+		match++;
+		error = pledge_check(td, PLEDGE_EXEC);
+		if (error)
+			return (error);
+	}
 	if (!match) {
 		/* An operation on a path not specifying any rights that we
 		 * recognize.  If path operations aren't to be allowed at all,
@@ -265,6 +272,7 @@ pledge_check_path_rights(struct thread *td, const cap_rights_t *rights,
 		if (pledge_probe(td, PLEDGE_RPATH) != 0 &&
 		    pledge_probe(td, PLEDGE_WPATH) != 0 &&
 		    pledge_probe(td, PLEDGE_CPATH) != 0 &&
+		    pledge_probe(td, PLEDGE_EXEC)  != 0 &&
 		    pledge_probe(td, PLEDGE_DPATH) != 0)
 			return pledge_check(td, PLEDGE_RPATH);
 	}
@@ -284,10 +292,13 @@ pledge_sysinit(void *dummy) {
 	    CAP_CREATE, CAP_UNLINKAT);
 	cap_rights_init(&cap_dpath,
 	    CAP_MKFIFOAT, CAP_MKNODAT);
+	cap_rights_init(&cap_exec,
+	    CAP_EXECAT);
 	cap_rights_clear(&cap_rpath, CAP_LOOKUP, CAP_SEEK);
 	cap_rights_clear(&cap_wpath, CAP_LOOKUP, CAP_SEEK);
 	cap_rights_clear(&cap_cpath, CAP_LOOKUP, CAP_SEEK);
 	cap_rights_clear(&cap_dpath, CAP_LOOKUP, CAP_SEEK);
+	cap_rights_clear(&cap_exec, CAP_LOOKUP, CAP_SEEK);
 #endif
 }
 
