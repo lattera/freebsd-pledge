@@ -8,6 +8,7 @@ PLAIN_TESTS_C+= pledge_basic_sandboxing
 PLAIN_TESTS_C+= pledge_violation_signal
 PLAIN_TESTS_C+= pledge_capsicum_stack
 PLAIN_TESTS_C+= pledge_simple_wpath
+PLAIN_TESTS_C+= pledge_simple_exec
 
 WARNS?=		3
 
