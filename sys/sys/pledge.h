@@ -46,8 +46,9 @@
 #include <sys/types.h>
 #include <sys/errno.h>
 #include <sys/pledge_set.h>
-#include <sys/ucred.h>
 #include <sys/proc.h>
+#include <sys/ucred.h>
+#include <sys/capsicum.h>
 
 /*
  * If pledge support isn't compiled in, pledge promises aren't actually stored
@@ -101,6 +102,8 @@ pledge_check(struct thread *td, enum pledge_promise pr) {
 #endif
 	return (0); /* success */
 }
+
+int pledge_check_path_rights(struct thread *, const cap_rights_t *);
 
 #define	CRED_PLEDGED(cr, pr)		(pledge_set_test(&(cr)->cr_pledge, (pr)))
 

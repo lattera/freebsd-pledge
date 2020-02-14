@@ -370,6 +370,21 @@ cap_rights_contains_transient(const cap_rights_t *big, const cap_rights_t *littl
 
 #define cap_rights_contains cap_rights_contains_transient
 
+#define	CAP_MASK0	(~CAPRIGHT(0, 0ULL))
+#define	CAP_MASK1	(~CAPRIGHT(1, 0ULL))
+
+static inline bool
+cap_rights_overlaps_transient(const cap_rights_t *a, const cap_rights_t *b)
+{
+        /* This is only good for CAP_RIGHTS_VERSION_00! */
+        if ((CAP_MASK0 & a->cr_rights[0] & b->cr_rights[0]) |
+            (CAP_MASK1 & a->cr_rights[1] & b->cr_rights[1]))
+                return (true);
+        return (false);
+}
+
+#define cap_rights_overlaps cap_rights_overlaps_transient
+
 int cap_check_failed_notcapable(const cap_rights_t *havep,
     const cap_rights_t *needp);
 

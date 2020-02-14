@@ -322,8 +322,8 @@ namei(struct nameidata *ndp)
 	p = td->td_proc;
 	ndp->ni_cnd.cn_cred = ndp->ni_cnd.cn_thread->td_ucred;
 
-	if (cnp->cn_nameiop != LOOKUP &&
-	    (error = pledge_check(td, PLEDGE_CPATH)))
+	error = pledge_check_path_rights(td, &ndp->ni_rightsneeded);
+	if (error)
 		return (error);
 
 	KASSERT(cnp->cn_cred && p, ("namei: bad cred/proc"));

@@ -216,3 +216,49 @@ sys_pledge(struct thread *td, struct pledge_args *uap)
 }
 
 #endif /* PLEDGE */
+
+#ifdef PLEDGE
+__read_mostly cap_rights_t cap_rpath;
+__read_mostly cap_rights_t cap_wpath;
+__read_mostly cap_rights_t cap_cpath;
+#endif
+
+int
+pledge_check_path_rights(struct thread *td, const cap_rights_t *rights) {
+#ifdef PLEDGE
+	int error;
+	if (cap_rights_overlaps(rights, &cap_cpath)) {
+		error = pledge_check(td, PLEDGE_CPATH);
+		if (error)
+			return (error);
+	}
+	if (cap_rights_overlaps(rights, &cap_wpath)) {
+		error = pledge_check(td, PLEDGE_WPATH);
+		if (error)
+			return (error);
+	}
+	if (cap_rights_overlaps(rights, &cap_rpath)) {
+		error = pledge_check(td, PLEDGE_RPATH);
+		if (error)
+			return (error);
+	}
+#endif
+	return (0);
+}
+
+static void
+pledge_sysinit(void *dummy) {
+#ifdef PLEDGE
+	/* XXX need to test more rights */
+	cap_rights_init(&cap_rpath,
+	    CAP_READ, CAP_PREAD);
+	cap_rights_init(&cap_wpath,
+	    CAP_WRITE, CAP_PWRITE);
+	cap_rights_clear(&cap_wpath, CAP_LOOKUP);
+	cap_rights_init(&cap_cpath,
+	    CAP_CREATE, CAP_UNLINKAT);
+	cap_rights_clear(&cap_cpath, CAP_LOOKUP);
+#endif
+}
+
+SYSINIT(pledge, SI_SUB_COPYRIGHT, SI_ORDER_ANY, pledge_sysinit, NULL);

@@ -357,15 +357,19 @@ vn_open_vnode(struct vnode *vp, int fmode, struct ucred *cred,
 	if (fmode & (FWRITE | O_TRUNC)) {
 		if (vp->v_type == VDIR)
 			return (EISDIR);
+#if 0
 		error = pledge_check(td, PLEDGE_WPATH);
 		if (error)
 			return (error);
+#endif
 		accmode |= VWRITE;
 	}
 	if (fmode & FREAD) {
+#if 0
 		error = pledge_check(td, PLEDGE_RPATH);
 		if (error)
 			return (error);
+#endif
 		accmode |= VREAD;
 	}
 	if (fmode & FEXEC)
