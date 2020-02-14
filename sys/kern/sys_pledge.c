@@ -262,10 +262,10 @@ pledge_check_path_rights(struct thread *td, const cap_rights_t *rights,
 		/* An operation on a path not specifying any rights that we
 		 * recognize.  If path operations aren't to be allowed at all,
 		 * reject it. */
-		if (!(pledge_probe(td, PLEDGE_RPATH) ||
-		      pledge_probe(td, PLEDGE_WPATH) ||
-		      pledge_probe(td, PLEDGE_CPATH) ||
-		      pledge_probe(td, PLEDGE_DPATH)))
+		if (pledge_probe(td, PLEDGE_RPATH) != 0 &&
+		    pledge_probe(td, PLEDGE_WPATH) != 0 &&
+		    pledge_probe(td, PLEDGE_CPATH) != 0 &&
+		    pledge_probe(td, PLEDGE_DPATH) != 0)
 			return pledge_check(td, PLEDGE_RPATH);
 	}
 #endif
