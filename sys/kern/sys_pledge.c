@@ -221,6 +221,7 @@ sys_pledge(struct thread *td, struct pledge_args *uap)
 __read_mostly cap_rights_t cap_rpath;
 __read_mostly cap_rights_t cap_wpath;
 __read_mostly cap_rights_t cap_cpath;
+__read_mostly cap_rights_t cap_dpath;
 #endif
 
 int
@@ -228,6 +229,11 @@ pledge_check_path_rights(struct thread *td, const cap_rights_t *rights,
     int modifying) {
 #ifdef PLEDGE
 	int error;
+	if (cap_rights_overlaps(rights, &cap_dpath)) {
+		error = pledge_check(td, PLEDGE_DPATH);
+		if (error)
+			return (error);
+	}
 	/* The modifying parameter means that the caller has other indications
 	 * that the operation will try to modify the filesystem.  In namei()'s
 	 * case, it means an operation other than LOOKUP. */
@@ -267,10 +273,13 @@ pledge_sysinit(void *dummy) {
 	    CAP_READ, CAP_PREAD);
 	cap_rights_init(&cap_wpath,
 	    CAP_WRITE, CAP_PWRITE);
-	cap_rights_clear(&cap_wpath, CAP_LOOKUP);
 	cap_rights_init(&cap_cpath,
 	    CAP_CREATE, CAP_UNLINKAT);
+	cap_rights_init(&cap_dpath,
+	    CAP_MKFIFOAT, CAP_MKNODAT);
+	cap_rights_clear(&cap_wpath, CAP_LOOKUP);
 	cap_rights_clear(&cap_cpath, CAP_LOOKUP);
+	cap_rights_clear(&cap_dpath, CAP_LOOKUP);
 #endif
 }
 
