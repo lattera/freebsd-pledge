@@ -281,6 +281,8 @@ namei_handle_root(struct nameidata *ndp, struct vnode **dpp, u_int n)
 	return (0);
 }
 
+static int pledge_check_namei(struct thread *, struct nameidata *);
+
 /*
  * Convert a pathname into a pointer to a locked vnode.
  *
@@ -322,11 +324,6 @@ namei(struct nameidata *ndp)
 	p = td->td_proc;
 	ndp->ni_cnd.cn_cred = ndp->ni_cnd.cn_thread->td_ucred;
 
-	error = pledge_check_path_rights(td, &ndp->ni_rightsneeded,
-	    cnp->cn_nameiop != LOOKUP);
-	if (error)
-		return (error);
-
 	KASSERT(cnp->cn_cred && p, ("namei: bad cred/proc"));
 	KASSERT((cnp->cn_nameiop & (~OPMASK)) == 0,
 	    ("namei: nameiop contaminated with flags"));
@@ -359,6 +356,11 @@ namei(struct nameidata *ndp)
 	 */
 	if (error == 0 && *cnp->cn_pnbuf == '\0')
 		error = ENOENT;
+
+#ifdef PLEDGE
+	if (error == 0)
+		error = pledge_check_namei(td, ndp);
+#endif
 
 #ifdef CAPABILITY_MODE
 	/*
@@ -1520,3 +1522,14 @@ keeporig:
 		bcopy(ptr, buf, len);
 	return (error);
 }
+
+#ifdef PLEDGE
+static int
+pledge_check_namei(struct thread *td, struct nameidata *ndp) {
+	struct componentname *cnp = &ndp->ni_cnd;
+	int error;
+	error = pledge_check_path_rights(td, &ndp->ni_rightsneeded,
+	    cnp->cn_nameiop != LOOKUP);
+	return error;
+}
+#endif
