@@ -225,12 +225,25 @@ __read_mostly cap_rights_t cap_dpath;
 __read_mostly cap_rights_t cap_exec;
 #endif
 
+static bool
+search_path_whitelist(struct thread *td, const cap_rights_t *rights,
+    const char *path) {
+	if (pledge_probe(td, PLEDGE_STDIO) != 0)
+		return (false);
+	/* XXX check rights */
+	if (strcmp(path, "/etc/malloc.conf") == 0)
+		return (true);
+	return (false);
+}
+
 int
 pledge_check_path_rights(struct thread *td, const cap_rights_t *rights,
     int modifying, const char *path) {
 #ifdef PLEDGE
 	int error;
 	unsigned match;
+	if (search_path_whitelist(td, rights, path))
+		return (0);
 	match = 0;
 	if (cap_rights_overlaps(rights, &cap_dpath)) {
 		match++;
