@@ -1529,7 +1529,7 @@ pledge_check_namei(struct thread *td, struct nameidata *ndp) {
 	struct componentname *cnp = &ndp->ni_cnd;
 	int error;
 	error = pledge_check_path_rights(td, &ndp->ni_rightsneeded,
-	    cnp->cn_nameiop != LOOKUP);
+	    cnp->cn_nameiop != LOOKUP, cnp->cn_pnbuf);
 	return error;
 }
 #endif

@@ -226,7 +226,7 @@ __read_mostly cap_rights_t cap_dpath;
 
 int
 pledge_check_path_rights(struct thread *td, const cap_rights_t *rights,
-    int modifying) {
+    int modifying, const char *path) {
 #ifdef PLEDGE
 	int error;
 	unsigned match;
