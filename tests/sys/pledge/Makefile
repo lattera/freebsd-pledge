@@ -1,6 +1,10 @@
 # $FreeBSD$
 
+PACKAGE=        tests
+
 TESTSDIR=	${TESTSBASE}/sys/pledge
+
+ATF_TESTS_SH+=		execpledge_various
 
 PLAIN_TESTS_C+= pledge_super_basic_test
 PLAIN_TESTS_C+= pledge_elevation
@@ -15,6 +19,7 @@ PLAIN_TESTS_C+= pledge_netdb
 PLAIN_TESTS_C+= pledge_localtime
 PLAIN_TESTS_C+= pledge_tmppath
 PLAIN_TESTS_C+= pledge_fcntl
+PLAIN_TESTS_C+= pledge_getaddrinfo
 
 WARNS?=		3
 
