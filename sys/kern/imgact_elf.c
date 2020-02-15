@@ -777,7 +777,7 @@ __elfN(load_file)(struct proc *p, const char *file, u_long *addr,
 
 	NDINIT_ATRIGHTS(nd,
 	    LOOKUP, ISOPEN | FOLLOW | LOCKSHARED | LOCKLEAF, UIO_SYSSPACE,
-	    file, AT_FDCWD, cap_rights_init(&execat_rights, CAP_EXECAT),
+	    file, AT_FDCWD, cap_rights_init_one(&execat_rights, CAP_EXECAT),
 	    curthread);
 	if ((error = namei(nd)) != 0) {
 		nd->ni_vp = NULL;

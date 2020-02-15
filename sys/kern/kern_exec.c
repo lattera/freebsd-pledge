@@ -428,7 +428,7 @@ do_execve(struct thread *td, struct image_args *args, struct mac *mac_p)
 		NDINIT_ATRIGHTS(&nd,
 		    LOOKUP, ISOPEN | LOCKLEAF | LOCKSHARED | FOLLOW |
 		    SAVENAME | AUDITVNODE1, UIO_SYSSPACE, args->fname,
-		    AT_FDCWD, cap_rights_init(&execat_rights, CAP_EXECAT), td);
+		    AT_FDCWD, cap_rights_init_one(&execat_rights, CAP_EXECAT), td);
 	}
 
 	SDT_PROBE1(proc, , , exec, args->fname);
@@ -660,7 +660,7 @@ interpret:
 		NDINIT_ATRIGHTS(&nd,
 		    LOOKUP, ISOPEN | LOCKLEAF | FOLLOW | SAVENAME,
 		    UIO_SYSSPACE, imgp->interpreter_name,
-		    AT_FDCWD, cap_rights_init(&execat_rights, CAP_EXECAT), td);
+		    AT_FDCWD, cap_rights_init_one(&execat_rights, CAP_EXECAT), td);
 		args->fname = imgp->interpreter_name;
 		goto interpret;
 	}
