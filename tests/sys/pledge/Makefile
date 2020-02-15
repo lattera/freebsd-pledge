@@ -12,6 +12,7 @@ PLAIN_TESTS_C+= pledge_simple_exec
 PLAIN_TESTS_C+= pledge_stdio_whitelist
 PLAIN_TESTS_C+= pledge_resolv
 PLAIN_TESTS_C+= pledge_netdb
+PLAIN_TESTS_C+= pledge_localtime
 
 WARNS?=		3
 
