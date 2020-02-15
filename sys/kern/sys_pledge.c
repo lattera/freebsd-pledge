@@ -218,32 +218,86 @@ sys_pledge(struct thread *td, struct pledge_args *uap)
 #endif /* PLEDGE */
 
 #ifdef PLEDGE
+
 __read_mostly cap_rights_t cap_rpath;
 __read_mostly cap_rights_t cap_wpath;
 __read_mostly cap_rights_t cap_cpath;
 __read_mostly cap_rights_t cap_dpath;
 __read_mostly cap_rights_t cap_exec;
-#endif
+
+struct pwl_entry {
+	const char *path;
+	enum pledge_promise promise;
+};
+
+static const struct pwl_entry pwl_rpath[] = {
+	{ "/etc/malloc.conf", PLEDGE_STDIO },
+	{ "/etc/localtime", PLEDGE_STDIO },
+	/* TODO: Directory matches.  Would need to check/canonicalize paths to
+	 * avoid trivial ".." escapes. */
+	{ "/usr/share/zoneinfo/", PLEDGE_STDIO },
+	{ "/dev/null", PLEDGE_STDIO },
+	{ "/etc/nsswitch.conf", PLEDGE_DNS },
+	{ "/etc/resolv.conf", PLEDGE_DNS },
+	{ "/etc/hosts", PLEDGE_DNS },
+	{ "/etc/services", PLEDGE_DNS },
+	{ "/var/db/services.db", PLEDGE_DNS },
+	{ "/etc/protocols", PLEDGE_DNS },
+	{ "/dev/tty", PLEDGE_TTY },
+	{ "/etc/nsswitch.conf", PLEDGE_GETPW }, /* repeating path is OK */
+	{ "/etc/pwd.db", PLEDGE_GETPW },
+	{ "/etc/group", PLEDGE_GETPW },
+	{ "/tmp/", PLEDGE_TMPPATH },
+	{ NULL, 0 }
+};
+
+static const struct pwl_entry pwl_wpath[] = {
+	{ "/dev/null", PLEDGE_STDIO },
+	{ "/dev/tty", PLEDGE_TTY },
+	{ "/tmp/", PLEDGE_TMPPATH },
+	{ NULL, 0 }
+};
+
+static const struct pwl_entry pwl_error[] = {
+	/* paths that shouldn't send a violation signal when access fails */
+	{ "/etc/spwd.db", PLEDGE_GETPW },
+	{ NULL, 0 }
+};
 
 static bool
-search_path_whitelist(struct thread *td, const cap_rights_t *rights,
-    const char *path) {
-	if (pledge_probe(td, PLEDGE_STDIO) != 0)
-		return (false);
-	/* XXX check rights */
-	if (strcmp(path, "/etc/malloc.conf") == 0)
-		return (true);
+search_pwl(struct thread *td, const struct pwl_entry *list, const char *path) {
+	const struct pwl_entry *ent;
+	for (ent = list; ent->path; ent++)
+		if (strcmp(ent->path, path) == 0 &&
+		    pledge_probe(td, ent->promise) == 0)
+			return (true);
 	return (false);
 }
+
+static int
+pledge_check_pwl(struct thread *td, enum pledge_promise pr,
+    const struct pwl_entry *list, const char *path) {
+	int error;
+	error = pledge_probe(td, pr); /* don't send signals yet */
+	if (error == 0)
+		return (0);
+	if (search_pwl(td, list, path))
+		return (0);
+	if (search_pwl(td, pwl_error, path))
+		return (error); /* fail without signal */
+	return (pledge_check(td, pr)); /* possibly send signal */
+}
+
+#endif
 
 int
 pledge_check_path_rights(struct thread *td, const cap_rights_t *rights,
     int modifying, const char *path) {
 #ifdef PLEDGE
-	int error;
-	unsigned match;
-	if (search_path_whitelist(td, rights, path))
-		return (0);
+	/* TODO: Bypass everything if not pledged.
+	 * Better done in the caller? */
+	/* XXX: Core dumps get rejected. */
+	int error, match;
 	match = 0;
 	if (cap_rights_overlaps(rights, &cap_dpath)) {
 		match++;
@@ -262,13 +316,13 @@ pledge_check_path_rights(struct thread *td, const cap_rights_t *rights,
 	}
 	if (cap_rights_overlaps(rights, &cap_wpath)) {
 		match++;
-		error = pledge_check(td, PLEDGE_WPATH);
+		error = pledge_check_pwl(td, PLEDGE_WPATH, pwl_wpath, path);
 		if (error)
 			return (error);
 	}
 	if (cap_rights_overlaps(rights, &cap_rpath)) {
 		match++;
-		error = pledge_check(td, PLEDGE_RPATH);
+		error = pledge_check_pwl(td, PLEDGE_RPATH, pwl_rpath, path);
 		if (error)
 			return (error);
 	}

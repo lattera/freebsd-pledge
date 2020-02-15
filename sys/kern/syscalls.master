@@ -111,7 +111,7 @@
 		    size_t nbyte
 		);
 	}
-5	AUE_OPEN_RWTC	STD|PLEDGE_STDIO {
+5	AUE_OPEN_RWTC	STD|PLEDGE_STDIO|PLEDGE_RPATH|PLEDGE_WPATH {
 		int open(
 		    _In_z_ const char *path,
 		    int flags,
@@ -281,7 +281,7 @@
 		    _Inout_ __socklen_t *alen
 		);
 	}
-33	AUE_ACCESS	STD|PLEDGE_STDIO {
+33	AUE_ACCESS	STD|PLEDGE_STDIO|PLEDGE_RPATH|PLEDGE_WPATH {
 		int access(
 		    _In_z_ const char *path,
 		    int amode
@@ -417,7 +417,7 @@
 		    _In_z_ const char *link
 		);
 	}
-58	AUE_READLINK	STD|PLEDGE_STDIO {
+58	AUE_READLINK	STD|PLEDGE_STDIO|PLEDGE_RPATH|PLEDGE_WPATH {
 		ssize_t readlink(
 		    _In_z_ const char *path,
 		    _Out_writes_z_(count) char *buf,
@@ -2709,7 +2709,7 @@
 		);
 	}
 ; XXX: see the comment for open
-499	AUE_OPENAT_RWTC	STD|PLEDGE_RPATH|PLEDGE_WPATH {
+499	AUE_OPENAT_RWTC	STD|PLEDGE_STDIO|PLEDGE_RPATH|PLEDGE_WPATH {
 		int openat(
 		    int fd,
 		    _In_z_ const char *path,
@@ -2717,7 +2717,7 @@
 		    mode_t mode
 		);
 	}
-500	AUE_READLINKAT	STD|PLEDGE_RPATH|PLEDGE_WPATH {
+500	AUE_READLINKAT	STD|PLEDGE_STDIO|PLEDGE_RPATH|PLEDGE_WPATH {
 		ssize_t readlinkat(
 		    int fd,
 		    _In_z_ const char *path,
@@ -3169,7 +3169,7 @@
 		    size_t bufsize
 		);
 	}
-568	AUE_UNLINKAT	STD|PLEDGE_CPATH {
+568	AUE_UNLINKAT	STD|PLEDGE_CPATH|PLEDGE_TMPPATH {
 		int funlinkat(
 		    int dfd,
 		    _In_z_ const char *path,

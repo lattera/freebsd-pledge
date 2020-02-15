@@ -44,6 +44,7 @@ enum pledge_promise {
 	PLEDGE_INET,
 	PLEDGE_UNIX,
 	PLEDGE_DNS,
+	PLEDGE_GETPW,
 	PLEDGE_COUNT /* must come last */
 };
 
