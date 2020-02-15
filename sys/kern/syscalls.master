@@ -145,7 +145,7 @@
 		    _In_z_ const char *link
 		);
 	}
-10	AUE_UNLINK	STD|PLEDGE_CPATH {
+10	AUE_UNLINK	STD|PLEDGE_CPATH|PLEDGE_TMPPATH {
 		int unlink(
 		    _In_z_ const char *path
 		);

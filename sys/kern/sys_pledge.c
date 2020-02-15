@@ -245,6 +245,9 @@ static const struct pwl_entry pwl_rpath[] = {
 	{ "/etc/nsswitch.conf", PLEDGE_GETPW }, /* repeating path is OK */
 	{ "/etc/pwd.db", PLEDGE_GETPW },
 	{ "/etc/group", PLEDGE_GETPW },
+	/* TODO: Ideally we wouldn't allow to read the directory itself (so
+	 * that a pledged process can't find the names of the temporary files
+	 * of other processes). */
 	{ "/tmp/", PLEDGE_TMPPATH },
 	{ NULL, 0 }
 };
@@ -252,6 +255,11 @@ static const struct pwl_entry pwl_rpath[] = {
 static const struct pwl_entry pwl_wpath[] = {
 	{ "/dev/null", PLEDGE_STDIO },
 	{ "/dev/tty", PLEDGE_TTY },
+	{ "/tmp/", PLEDGE_TMPPATH },
+	{ NULL, 0 }
+};
+
+static const struct pwl_entry pwl_cpath[] = {
 	{ "/tmp/", PLEDGE_TMPPATH },
 	{ NULL, 0 }
 };
@@ -324,7 +332,7 @@ pledge_check_path_rights(struct thread *td, const cap_rights_t *rights,
 	 * case, it means an operation other than LOOKUP. */
 	if (cap_rights_overlaps(rights, &cap_cpath) || modifying) {
 		match++;
-		error = pledge_check(td, PLEDGE_CPATH);
+		error = pledge_check_pwl(td, PLEDGE_CPATH, pwl_cpath, path);
 		if (error)
 			return (error);
 	}
