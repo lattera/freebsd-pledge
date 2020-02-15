@@ -2098,13 +2098,25 @@ sysctl_root(SYSCTL_HANDLER_ARGS)
 
 #ifdef CAPABILITY_MODE
 	/*
-	 * If the process is in capability mode or otherwise sandboxed, then
-	 * don't permit reading or writing unless specifically granted for the
-	 * node.
+	 * If the process is in capability mode, then don't permit reading or
+	 * writing unless specifically granted for the node.
 	 */
-	if (IN_SANDBOX_MODE(req->td)) {
+	if (IN_CAPABILITY_MODE(req->td)) {
 		if ((req->oldptr && !(oid->oid_kind & CTLFLAG_CAPRD)) ||
 		    (req->newptr && !(oid->oid_kind & CTLFLAG_CAPWR))) {
+			error = EPERM;
+			goto out;
+		}
+	}
+	/*
+	 * Under general "sandbox mode", allow some extra sysctls.  If Capsicum
+	 * mode is enabled on top of it, they will not be allowed.
+	 */
+	if (IN_SANDBOX_MODE(req->td)) {
+		if ((req->oldptr && !(oid->oid_kind &
+		    (CTLFLAG_CAPRD|CTLFLAG_PLEDRD))) ||
+		    (req->newptr && !(oid->oid_kind &
+		    (CTLFLAG_CAPWR|CTLFLAG_PLEDWR)))) {
 			error = EPERM;
 			goto out;
 		}

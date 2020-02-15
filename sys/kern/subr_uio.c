@@ -66,7 +66,8 @@ __FBSDID("$FreeBSD$");
 
 #include <machine/bus.h>
 
-SYSCTL_INT(_kern, KERN_IOV_MAX, iov_max, CTLFLAG_RD, SYSCTL_NULL_INT_PTR, UIO_MAXIOV,
+SYSCTL_INT(_kern, KERN_IOV_MAX, iov_max, CTLFLAG_RD|CTLFLAG_PLEDRD,
+	SYSCTL_NULL_INT_PTR, UIO_MAXIOV,
 	"Maximum number of elements in an I/O vector; sysconf(_SC_IOV_MAX)");
 
 static int uiomove_faultflag(void *cp, int n, struct uio *uio, int nofault);

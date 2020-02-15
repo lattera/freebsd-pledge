@@ -217,7 +217,7 @@ SYSCTL_PROC(_hw, HW_USERMEM, usermem, CTLTYPE_ULONG | CTLFLAG_RD,
     0, 0, sysctl_hw_usermem, "LU",
     "Amount of memory (in bytes) which is not wired");
 
-SYSCTL_LONG(_hw, OID_AUTO, availpages, CTLFLAG_RD, &physmem, 0,
+SYSCTL_LONG(_hw, OID_AUTO, availpages, CTLFLAG_RD|CTLFLAG_PLEDRD, &physmem, 0,
     "Amount of physical memory (in pages)");
 
 u_long pagesizes[MAXPAGESIZES] = { PAGE_SIZE };

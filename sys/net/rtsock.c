@@ -53,6 +53,7 @@
 #include <sys/socketvar.h>
 #include <sys/sysctl.h>
 #include <sys/systm.h>
+#include <sys/pledge.h>
 
 #ifdef DDB
 #include <ddb/ddb.h>
@@ -2019,6 +2020,10 @@ sysctl_rtsock(SYSCTL_HANDLER_ARGS)
 	u_char	af;
 	struct	walkarg w;
 
+	error = pledge_check(req->td, PLEDGE_INET);
+	if (error)
+		return (error);
+
 	name ++;
 	namelen--;
 	if (req->newptr)
@@ -2106,7 +2111,8 @@ sysctl_rtsock(SYSCTL_HANDLER_ARGS)
 	return (error);
 }
 
-static SYSCTL_NODE(_net, PF_ROUTE, routetable, CTLFLAG_RD | CTLFLAG_MPSAFE,
+static SYSCTL_NODE(_net, PF_ROUTE, routetable,
+    CTLFLAG_RD | CTLFLAG_PLEDRD | CTLFLAG_MPSAFE,
     sysctl_rtsock, "Return route tables and interface/address lists");
 
 /*
