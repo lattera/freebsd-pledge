@@ -233,9 +233,7 @@ struct pwl_entry {
 static const struct pwl_entry pwl_rpath[] = {
 	{ "/etc/malloc.conf", PLEDGE_STDIO },
 	{ "/etc/localtime", PLEDGE_STDIO },
-	/* TODO: Directory matches.  Would need to check/canonicalize paths to
-	 * avoid trivial ".." escapes. */
-	{ "/usr/share/zoneinfo/", PLEDGE_STDIO },
+	{ "/usr/share/zoneinfo/", PLEDGE_STDIO }, /* subhierarchy match */
 	{ "/dev/null", PLEDGE_STDIO },
 	{ "/etc/nsswitch.conf", PLEDGE_DNS },
 	{ "/etc/resolv.conf", PLEDGE_DNS },
@@ -265,10 +263,26 @@ static const struct pwl_entry pwl_error[] = {
 };
 
 static bool
+match_path(const char *p, const char *q) {
+	bool s = false;
+	/* check if beginning of path matches the entry exactly */
+	for (; *p && *p == *q; s = *p++ == '/', q++);
+	/* only allow prefix matches if the entry's path ends with '/' */
+	if (*p || (!s && *q))
+		return (false);
+	/* check rest of queried path for ".." components */
+	for (; *q; s = *q++ == '/')
+		if (s && q[0] == '.' && q[1] == '.' &&
+		    (q[2] == '/' || q[2] == '\0'))
+			return (false);
+	return (true);
+}
+
+static bool
 search_pwl(struct thread *td, const struct pwl_entry *list, const char *path) {
 	const struct pwl_entry *ent;
 	for (ent = list; ent->path; ent++)
-		if (strcmp(ent->path, path) == 0 &&
+		if (match_path(ent->path, path) &&
 		    pledge_probe(td, ent->promise) == 0)
 			return (true);
 	return (false);
