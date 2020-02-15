@@ -1530,6 +1530,16 @@ pledge_check_namei(struct thread *td, struct nameidata *ndp) {
 	int error;
 	error = pledge_check_path_rights(td, &ndp->ni_rightsneeded,
 	    cnp->cn_nameiop != LOOKUP, cnp->cn_pnbuf);
+#if 1
+	if (error) {
+		printf("pledge_check_namei rejected operation: %lu %#jx:%#jx: %s\n",
+		    cnp->cn_nameiop,
+		    (uintmax_t)ndp->ni_rightsneeded.cr_rights[0],
+		    (uintmax_t)ndp->ni_rightsneeded.cr_rights[1],
+		    cnp->cn_pnbuf
+		);
+	}
+#endif
 	return error;
 }
 #endif

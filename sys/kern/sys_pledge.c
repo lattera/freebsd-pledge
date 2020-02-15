@@ -28,7 +28,7 @@ __FBSDID("$FreeBSD$");
 #ifdef PLEDGE
 
 static const struct promise_name {
-	const char name[12];
+	char name[12];
 	enum pledge_promise promise;
 } promise_names[] = {
 	{ "capsicum",	PLEDGE_CAPSICUM },
@@ -279,13 +279,17 @@ pledge_check_path_rights(struct thread *td, const cap_rights_t *rights,
 			return (error);
 	}
 	if (!match) {
-		/* An operation on a path not specifying any rights that we
-		 * recognize.  If path operations aren't to be allowed at all,
-		 * reject it. */
+		/*
+		 * Got an operation on a path not specifying any rights that we
+		 * recognize.  If there are no current pledge promises for path
+		 * operations, reject it.  Not considering PLEDGE_EXEC because
+		 * CAP_EXECAT is always being set in do_execve(), and thus if
+		 * the request was for an execve(2) it would have matched the
+		 * above checks.
+		 */
 		if (pledge_probe(td, PLEDGE_RPATH) != 0 &&
 		    pledge_probe(td, PLEDGE_WPATH) != 0 &&
 		    pledge_probe(td, PLEDGE_CPATH) != 0 &&
-		    pledge_probe(td, PLEDGE_EXEC)  != 0 &&
 		    pledge_probe(td, PLEDGE_DPATH) != 0)
 			return pledge_check(td, PLEDGE_RPATH);
 	}
@@ -298,7 +302,7 @@ pledge_sysinit(void *dummy) {
 #ifdef PLEDGE
 	/* XXX need to test more rights */
 	cap_rights_init(&cap_rpath,
-	    CAP_READ, CAP_PREAD);
+	    CAP_READ, CAP_PREAD, CAP_FSTAT);
 	cap_rights_init(&cap_wpath,
 	    CAP_WRITE, CAP_PWRITE);
 	cap_rights_init(&cap_cpath,
