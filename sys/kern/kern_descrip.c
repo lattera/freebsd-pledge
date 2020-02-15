@@ -77,6 +77,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/unistd.h>
 #include <sys/user.h>
 #include <sys/vnode.h>
+#include <sys/pledge.h>
 #ifdef KTRACE
 #include <sys/ktrace.h>
 #endif
@@ -619,6 +620,9 @@ kern_fcntl(struct thread *td, int fd, int cmd, intptr_t arg)
 			break;
 		}
 
+		error = pledge_check(td, PLEDGE_FLOCK);
+		if (error != 0)
+			break;
 		error = fget_unlocked(fdp, fd, &cap_flock_rights, &fp);
 		if (error != 0)
 			break;
@@ -724,6 +728,9 @@ kern_fcntl(struct thread *td, int fd, int cmd, intptr_t arg)
 		break;
 
 	case F_GETLK:
+		error = pledge_check(td, PLEDGE_FLOCK);
+		if (error != 0)
+			break;
 		error = fget_unlocked(fdp, fd, &cap_flock_rights, &fp);
 		if (error != 0)
 			break;
@@ -758,6 +765,9 @@ kern_fcntl(struct thread *td, int fd, int cmd, intptr_t arg)
 		break;
 
 	case F_ADD_SEALS:
+		error = pledge_check(td, PLEDGE_FLOCK);
+		if (error != 0)
+			break;
 		error = fget_unlocked(fdp, fd, &cap_no_rights, &fp);
 		if (error != 0)
 			break;
@@ -766,6 +776,9 @@ kern_fcntl(struct thread *td, int fd, int cmd, intptr_t arg)
 		break;
 
 	case F_GET_SEALS:
+		error = pledge_check(td, PLEDGE_FLOCK);
+		if (error != 0)
+			break;
 		error = fget_unlocked(fdp, fd, &cap_no_rights, &fp);
 		if (error != 0)
 			break;
@@ -1126,6 +1139,10 @@ fsetown(pid_t pgid, struct sigio **sigiop)
 	struct pgrp *pgrp;
 	struct sigio *sigio;
 	int ret;
+
+	ret = pledge_check(curthread, PLEDGE_PROC);
+	if (ret)
+		return (ret);
 
 	if (pgid == 0) {
 		funsetown(sigiop);
