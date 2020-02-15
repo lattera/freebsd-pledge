@@ -235,6 +235,8 @@ static const struct pwl_entry pwl_rpath[] = {
 	{ "/etc/malloc.conf", PLEDGE_STDIO },
 	{ "/etc/localtime", PLEDGE_STDIO },
 	{ "/usr/share/zoneinfo/", PLEDGE_STDIO }, /* subhierarchy match */
+	{ "/usr/share/nls/", PLEDGE_STDIO },
+	{ "/usr/local/share/nls/", PLEDGE_STDIO },
 	{ "/dev/null", PLEDGE_STDIO },
 	{ "/etc/nsswitch.conf", PLEDGE_DNS },
 	{ "/etc/resolv.conf", PLEDGE_DNS },
