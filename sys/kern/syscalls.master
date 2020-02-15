@@ -1019,13 +1019,13 @@
 		    _Out_ struct utsname *name
 		);
 	}
-165	AUE_SYSARCH	STD {
+165	AUE_SYSARCH	STD|PLEDGE_STDIO {
 		int sysarch(
 		    int op,
 		    _In_z_ char *parms
 		);
 	}
-166	AUE_RTPRIO	STD {
+166	AUE_RTPRIO	STD|PLEDGE_PROC {
 		int rtprio(
 		    int function,
 		    pid_t pid,
@@ -2212,17 +2212,17 @@
 418	AUE_NULL	UNIMPL	__xstat
 419	AUE_NULL	UNIMPL	__xfstat
 420	AUE_NULL	UNIMPL	__xlstat
-421	AUE_NULL	STD {
+421	AUE_NULL	STD|PLEDGE_THREAD {
 		int getcontext(
 		    _Out_ struct __ucontext *ucp
 		);
 	}
-422	AUE_NULL	STD {
+422	AUE_NULL	STD|PLEDGE_THREAD {
 		int setcontext(
 		    _In_ const struct __ucontext *ucp
 		);
 	}
-423	AUE_NULL	STD {
+423	AUE_NULL	STD|PLEDGE_THREAD {
 		int swapcontext(
 		    _Out_ struct __ucontext *oucp,
 		    _In_ const struct __ucontext *ucp
@@ -2266,14 +2266,14 @@
 		    _Out_ int *sig
 		);
 	}
-430	AUE_THR_CREATE	STD|PLEDGE_STDIO {
+430	AUE_THR_CREATE	STD|PLEDGE_THREAD {
 		int thr_create(
 		    _In_ ucontext_t *ctx,
 		    _Out_ long *id,
 		    int flags
 		);
 	}
-431	AUE_THR_EXIT	STD|PLEDGE_STDIO {
+431	AUE_THR_EXIT	STD|PLEDGE_THREAD {
 		void thr_exit(
 		    _Out_opt_ long *state
 		);
@@ -2327,12 +2327,12 @@
 		    _In_opt_ const struct timespec *abstime
 		);
 	}
-442	AUE_NULL	STD|PLEDGE_STDIO {
+442	AUE_NULL	STD|PLEDGE_THREAD {
 		int thr_suspend(
 		    _In_opt_ const struct timespec *timeout
 		);
 	}
-443	AUE_NULL	STD|PLEDGE_STDIO {
+443	AUE_NULL	STD|PLEDGE_THREAD {
 		int thr_wake(
 		    long id
 		);
@@ -2402,7 +2402,7 @@
 		    _In_ void *uaddr2
 		);
 	}
-455	AUE_THR_NEW	STD|PLEDGE_STDIO {
+455	AUE_THR_NEW	STD|PLEDGE_THREAD {
 		int thr_new(
 		    _In_ struct thr_param *param,
 		    int param_size
@@ -2467,7 +2467,7 @@
 		    _In_reads_(nargs) void **args
 		);
 	}
-464	AUE_NULL	STD|PLEDGE_STDIO {
+464	AUE_NULL	STD|PLEDGE_THREAD {
 		int thr_set_name(
 		    long id,
 		    _In_z_ const char *name
@@ -2479,7 +2479,7 @@
 		    _In_ struct aiocb *aiocbp
 		);
 	}
-466	AUE_RTPRIO	STD {
+466	AUE_RTPRIO	STD|PLEDGE_THREAD {
 		int rtprio_thread(
 		    int function,
 		    lwpid_t lwpid,
@@ -2573,7 +2573,7 @@
 		    off_t length
 		);
 	}
-481	AUE_THR_KILL2	STD {
+481	AUE_THR_KILL2	STD|PLEDGE_THREAD {
 		int thr_kill2(
 		    pid_t pid,
 		    long id,

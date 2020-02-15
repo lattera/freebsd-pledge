@@ -16,7 +16,7 @@
  * (on top of the general VFS access checks).
  *
  *   open(2), wait4(2), fchdir(2), access(2), readlink(2), adjtime(2),
- *   eaccess(2), posix_fadvise(2)
+ *   eaccess(2), posix_fadvise(2), rtprio(2), rtprio_thread(2)
  *
  * Both Capsicum and pledge("stdio") allow ioctl(2), but Capsicum applications
  * probably tend to be more careful about not carrying too many potentially

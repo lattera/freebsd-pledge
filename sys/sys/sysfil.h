@@ -51,5 +51,6 @@ typedef u_int32_t sysfil_t;
 #define	SYF_PLEDGE_DNS		0x00080000
 #define	SYF_PLEDGE_FLOCK	0x00100000
 #define	SYF_PLEDGE_YPACTIVE	0x00200000
+#define	SYF_PLEDGE_THREAD	0x00400000
 
 #endif
