@@ -67,6 +67,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/ttycom.h>
 #include <sys/uio.h>
 #include <sys/user.h>
+#include <sys/pledge.h>
 
 #include <machine/stdarg.h>
 
@@ -264,6 +265,10 @@ ptsdev_ioctl(struct file *fp, u_long cmd, void *data,
 	struct tty *tp = fp->f_data;
 	struct pts_softc *psc = tty_softc(tp);
 	int error = 0, sig;
+
+	error = pledge_check_ioctl(td, PLEDGE_TTY, cmd);
+	if (error)
+		return (error);
 
 	switch (cmd) {
 	case FIODTYPE:

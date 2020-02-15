@@ -24,6 +24,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysfil.h>
 #include <sys/jail.h>
 #include <sys/pledge.h>
+#include <sys/filio.h>
 
 #ifdef PLEDGE
 
@@ -371,6 +372,30 @@ pledge_check_path_rights(struct thread *td, const cap_rights_t *rights,
 	}
 #endif
 	return (0);
+}
+
+int
+pledge_check_ioctl(struct thread *td, enum pledge_promise pr, u_long cmd) {
+	switch (cmd) {
+#ifdef PLEDGE
+	case FIOCLEX:
+	case FIONCLEX:
+	case FIONREAD:
+	case FIONBIO:
+	case FIOASYNC:
+	case FIOGETOWN:
+	case FIODTYPE:
+#if 0
+	case FIOGETLBA:
+#endif
+		return (0);
+	case FIOSETOWN:
+		/* also checked in setown() */
+		return (pledge_check(td, PLEDGE_PROC));
+#endif
+	default:
+		return (pledge_check(td, pr));
+	}
 }
 
 static void

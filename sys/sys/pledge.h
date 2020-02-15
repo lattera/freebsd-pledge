@@ -114,6 +114,9 @@ pledge_check(struct thread *td, enum pledge_promise pr) {
 int pledge_check_path_rights(struct thread *, const cap_rights_t *,
     int modifying, const char *path);
 
+int
+pledge_check_ioctl(struct thread *, enum pledge_promise, u_long cmd);
+
 #define	CRED_PLEDGED(cr, pr)		(pledge_set_test(&(cr)->cr_pledge, (pr)))
 
 #endif
