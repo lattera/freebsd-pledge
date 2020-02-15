@@ -239,6 +239,11 @@ static const struct pwl_entry pwl_rpath[] = {
 	{ "/usr/share/zoneinfo/", PLEDGE_STDIO }, /* subhierarchy match */
 	{ "/usr/share/nls/", PLEDGE_STDIO },
 	{ "/usr/local/share/nls/", PLEDGE_STDIO },
+	/* XXX: Some programs try to open /dev/null with O_CREAT.  This
+	 * triggers a PLEDGE_CPATH check and fails.  /dev/null shouldn't be
+	 * added to the cpath whitelist because pledge() can be used to
+	 * restrict root processes and that would allow them to replace
+	 * /dev/null with something else. */
 	{ "/dev/null", PLEDGE_STDIO },
 	{ "/etc/nsswitch.conf", PLEDGE_DNS },
 	{ "/etc/resolv.conf", PLEDGE_DNS },
@@ -260,6 +265,8 @@ static const struct pwl_entry pwl_rpath[] = {
 static const struct pwl_entry pwl_wpath[] = {
 	{ "/dev/null", PLEDGE_STDIO },
 	{ "/dev/tty", PLEDGE_TTY },
+	/* XXX: Review for safety. */
+	{ "/dev/crypto", PLEDGE_STDIO },
 	{ "/tmp/", PLEDGE_TMPPATH },
 	{ NULL, 0 }
 };
