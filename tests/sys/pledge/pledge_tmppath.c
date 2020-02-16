@@ -9,7 +9,9 @@
 #include <assert.h>
 
 static char *cleanup_path = NULL;
-static void cleanup(void) {
+static void
+cleanup(void)
+{
 	int r;
 	if (cleanup_path) {
 		r = unlink(cleanup_path);
@@ -23,8 +25,9 @@ static void cleanup(void) {
 		err(1, "%s", #expr); \
 } while (0)
 
-
-int main() {
+int
+main()
+{
 	int r, fd;
 	char *p, buf[128];
 	struct stat s;

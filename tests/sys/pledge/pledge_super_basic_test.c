@@ -2,7 +2,9 @@
 #include <unistd.h>
 #include <err.h>
 
-int main() {
+int
+main()
+{
 	int r;
 	r = pledge("stdio", "");
 	if (r < 0)

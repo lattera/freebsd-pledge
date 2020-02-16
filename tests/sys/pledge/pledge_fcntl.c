@@ -16,7 +16,9 @@
 } while (0)
 
 
-int main() {
+int
+main()
+{
 	int fds[2], fd;
 	EXPECT(pledge("error stdio proc", NULL));
 	EXPECT(pipe(fds));

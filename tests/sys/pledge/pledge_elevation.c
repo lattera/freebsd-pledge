@@ -4,7 +4,8 @@
 #include <stdbool.h>
 
 static void
-try(const char *promises, bool should_work) {
+try(const char *promises, bool should_work)
+{
 	int r;
 	r = pledge(promises, NULL);
 	if (r < 0) {
@@ -16,7 +17,9 @@ try(const char *promises, bool should_work) {
 	}
 }
 
-int main() {
+int
+main()
+{
 	try("error stdio proc", true);
 	try("error stdio proc", true);
 	try("error stdio proc id", true);

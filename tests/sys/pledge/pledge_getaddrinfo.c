@@ -6,7 +6,9 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 
-int main() {
+int
+main()
+{
 	int e, r;
 	struct addrinfo* ai;
 

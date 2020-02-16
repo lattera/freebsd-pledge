@@ -19,7 +19,9 @@
 #define REJECT(expr) TRY(expr, false)
 
 
-int main() {
+int
+main()
+{
 	const char *p;
 	int fd;
 	EXPECT(pledge("error stdio", ""));

@@ -57,7 +57,8 @@
  */
 
 static inline void
-pledge_cred_init(struct ucred *cr) {
+pledge_cred_init(struct ucred *cr)
+{
 	cr->cr_fflags = cr->cr_execfflags = -1; /* allow all syscalls */
 #ifdef PLEDGE
 	pledge_set_init(&cr->cr_pledge);
@@ -66,7 +67,8 @@ pledge_cred_init(struct ucred *cr) {
 }
 
 static inline int
-pledge_cred_needs_exec_tweak(struct ucred *cr) {
+pledge_cred_needs_exec_tweak(struct ucred *cr)
+{
 	if (cr->cr_fflags != cr->cr_execfflags)
 		return (1);
 #ifdef PLEDGE
@@ -77,7 +79,8 @@ pledge_cred_needs_exec_tweak(struct ucred *cr) {
 }
 
 static inline void
-pledge_cred_exec_tweak(struct ucred *cr) {
+pledge_cred_exec_tweak(struct ucred *cr)
+{
 	cr->cr_fflags = cr->cr_execfflags;
 #ifdef PLEDGE
 	cr->cr_pledge.pflags = cr->cr_execpledge.pflags;
@@ -85,7 +88,8 @@ pledge_cred_exec_tweak(struct ucred *cr) {
 }
 
 static inline int
-pledge_probe(struct thread *td, enum pledge_promise pr) {
+pledge_probe(struct thread *td, enum pledge_promise pr)
+{
 #ifdef PLEDGE
 	/* XXX: OpenBSD generally returns EPERM for this, and ECAPMODE's error
 	 * string is "Not permitted in capability mode", which is confusing
@@ -98,7 +102,8 @@ pledge_probe(struct thread *td, enum pledge_promise pr) {
 }
 
 static inline void
-pledge_check_failed(struct thread *td) {
+pledge_check_failed(struct thread *td)
+{
 	/* Could send the pledge violation signal directly from here. */
 }
 

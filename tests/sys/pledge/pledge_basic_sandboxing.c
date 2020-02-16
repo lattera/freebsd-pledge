@@ -18,7 +18,9 @@
 #define EXPECT(expr) TRY(expr, true)
 #define REJECT(expr) TRY(expr, false)
 
-int main() {
+int
+main()
+{
 	EXPECT(pledge("error stdio rpath flock", NULL));
 	EXPECT(getpid());
 	int fd;

@@ -6,7 +6,9 @@
 #include <fcntl.h>
 
 static char *cleanup_path = NULL;
-static void cleanup(void) {
+static void
+cleanup(void)
+{
 	int r;
 	if (cleanup_path) {
 		r = unlink(cleanup_path);
@@ -15,7 +17,9 @@ static void cleanup(void) {
 	}
 }
 
-int main() {
+int
+main()
+{
 	int r, fd;
 	char *p;
 	r = pledge("error stdio rpath wpath cpath", NULL);

@@ -6,7 +6,9 @@
 #include <sys/wait.h>
 #include <sys/signal.h>
 
-int main() {
+int
+main()
+{
 	int r, status;
 	pid_t pid;
 	pid = fork();

@@ -7,7 +7,9 @@
 #include <arpa/nameser.h>
 #include <resolv.h>
 
-int main() {
+int
+main()
+{
 	int r;
 	r = pledge("stdio dns", "");
 	if (r < 0)

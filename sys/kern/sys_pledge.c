@@ -85,7 +85,8 @@ static sysfil_t pledge2fflags[PLEDGE_COUNT] = {
 };
 
 static int
-parse_promises(char *promises, sysfil_t *fflags, pledge_flags_t *pflags) {
+parse_promises(char *promises, sysfil_t *fflags, pledge_flags_t *pflags)
+{
 	/* NOTE: destroys the passed string */
 	char *promise;
 	while ((promise = strsep(&promises, " ")))
@@ -103,7 +104,8 @@ parse_promises(char *promises, sysfil_t *fflags, pledge_flags_t *pflags) {
 }
 
 static int
-apply_promises(struct ucred *cred, char *promises, char *execpromises) {
+apply_promises(struct ucred *cred, char *promises, char *execpromises)
+{
 	sysfil_t wanted_fflags, wanted_execfflags;
 	pledge_flags_t wanted_pflags, wanted_execpflags;
 	int error;
@@ -151,7 +153,8 @@ apply_promises(struct ucred *cred, char *promises, char *execpromises) {
 }
 
 static int
-do_pledge(struct thread *td, char *promises, char *execpromises) {
+do_pledge(struct thread *td, char *promises, char *execpromises)
+{
 	/* NOTE: destroys the passed promise strings */
 	struct ucred *newcred, *oldcred;
 	struct proc *p;
@@ -283,7 +286,8 @@ static const struct pwl_entry pwl_error[] = {
 };
 
 static bool
-match_path(const char *p, const char *q) {
+match_path(const char *p, const char *q)
+{
 	bool s = false;
 	/* check if beginning of path matches the entry exactly */
 	for (; *p && *p == *q; s = *p++ == '/', q++);
@@ -299,7 +303,8 @@ match_path(const char *p, const char *q) {
 }
 
 static bool
-search_pwl(struct thread *td, const struct pwl_entry *list, const char *path) {
+search_pwl(struct thread *td, const struct pwl_entry *list, const char *path)
+{
 	const struct pwl_entry *ent;
 	for (ent = list; ent->path; ent++)
 		if (match_path(ent->path, path) &&
@@ -310,7 +315,8 @@ search_pwl(struct thread *td, const struct pwl_entry *list, const char *path) {
 
 static int
 pledge_check_pwl(struct thread *td, enum pledge_promise pr,
-    const struct pwl_entry *list, const char *path) {
+    const struct pwl_entry *list, const char *path)
+{
 	int error;
 	error = pledge_probe(td, pr); /* don't send signals yet */
 	if (error == 0)
@@ -326,7 +332,8 @@ pledge_check_pwl(struct thread *td, enum pledge_promise pr,
 
 int
 pledge_check_path_rights(struct thread *td, const cap_rights_t *rights,
-    int modifying, const char *path) {
+    int modifying, const char *path)
+{
 #ifdef PLEDGE
 	/* TODO: Bypass everything if not pledged.
 	 * Better done in the caller? */
@@ -386,7 +393,8 @@ pledge_check_path_rights(struct thread *td, const cap_rights_t *rights,
 }
 
 int
-pledge_check_ioctl(struct thread *td, enum pledge_promise pr, u_long cmd) {
+pledge_check_ioctl(struct thread *td, enum pledge_promise pr, u_long cmd)
+{
 	switch (cmd) {
 #ifdef PLEDGE
 	case FIOCLEX:
@@ -410,7 +418,8 @@ pledge_check_ioctl(struct thread *td, enum pledge_promise pr, u_long cmd) {
 }
 
 static void
-pledge_sysinit(void *dummy) {
+pledge_sysinit(void *dummy)
+{
 #ifdef PLEDGE
 	/* XXX need to test more rights */
 	cap_rights_init(&cap_rpath,

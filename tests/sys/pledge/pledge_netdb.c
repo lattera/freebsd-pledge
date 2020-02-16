@@ -6,12 +6,15 @@
 #include <netdb.h>
 
 static void
-herr(int eval, const char *str) {
+herr(int eval, const char *str)
+{
 	herror(str);
 	exit(eval);
 }
 
-int main() {
+int
+main()
+{
 	int r;
 	r = pledge("stdio dns", "");
 	if (r < 0)

@@ -58,12 +58,14 @@ typedef struct {
 } pledge_set_t;
 
 static inline void
-pledge_set_init(pledge_set_t *pl) {
+pledge_set_init(pledge_set_t *pl)
+{
 	pl->pflags = ~(pledge_flags_t)0;
 }
 
 static inline int
-pledge_set_test(const pledge_set_t *pl, enum pledge_promise pr) {
+pledge_set_test(const pledge_set_t *pl, enum pledge_promise pr)
+{
 	return pl->pflags & ((pledge_flags_t)1 << pr);
 }
 

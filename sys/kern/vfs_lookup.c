@@ -1525,7 +1525,8 @@ keeporig:
 
 #ifdef PLEDGE
 static int
-pledge_check_namei(struct thread *td, struct nameidata *ndp) {
+pledge_check_namei(struct thread *td, struct nameidata *ndp)
+{
 	struct componentname *cnp = &ndp->ni_cnd;
 	int error;
 	error = pledge_check_path_rights(td, &ndp->ni_rightsneeded,

@@ -5,7 +5,9 @@
 #include <fcntl.h>
 #include <sys/capsicum.h>
 
-int main() {
+int
+main()
+{
 	int r;
 	r = pledge("error stdio flock", "");
 	if (r < 0)
