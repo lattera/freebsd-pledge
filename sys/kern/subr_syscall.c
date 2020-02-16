@@ -133,8 +133,8 @@ syscallenter(struct thread *td)
 	 * This is checked on top of the above check so that restrictions
 	 * imposed by Capsicum and pledge(2) can stack.
 	 */
-	if (((sa->callp->sy_fflags | SYF_DEFAULT) &
-	     td->td_ucred->cr_fflags) == 0) {
+	if (__predict_false(((sa->callp->sy_fflags | SYF_DEFAULT) &
+	     td->td_ucred->cr_fflags) == 0)) {
 		td->td_errno = error = ECAPMODE; /* XXX OpenBSD uses ENOSYS */
 		goto retval;
 	}
