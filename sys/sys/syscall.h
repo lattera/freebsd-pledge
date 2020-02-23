@@ -511,4 +511,5 @@
 #define	SYS_sigfastblock	573
 #define	SYS___realpathat	574
 #define	SYS_pledge	575
-#define	SYS_MAXSYSCALL	576
+#define	SYS_unveil	576
+#define	SYS_MAXSYSCALL	577

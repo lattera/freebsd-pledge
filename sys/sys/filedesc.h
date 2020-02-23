@@ -42,6 +42,7 @@
 #include <sys/priority.h>
 #include <sys/seqc.h>
 #include <sys/sx.h>
+#include <sys/unveil.h>
 
 #include <machine/_limits.h>
 
@@ -56,6 +57,9 @@ struct filedescent {
 	struct file	*fde_file;	/* file structure for open file */
 	struct filecaps	 fde_caps;	/* per-descriptor rights */
 	uint8_t		 fde_flags;	/* per-process open file flags */
+#ifdef PLEDGE
+	struct veil_tie fde_tie;
+#endif
 	seqc_t		 fde_seqc;	/* keep file and caps in sync */
 };
 #define	fde_rights	fde_caps.fc_rights
@@ -91,6 +95,11 @@ struct filedesc {
 	struct	kqlist fd_kqlist;	/* list of kqueues on this filedesc */
 	int	fd_holdleaderscount;	/* block fdfree() for shared close() */
 	int	fd_holdleaderswakeup;	/* fdfree() needs wakeup */
+#ifdef PLEDGE
+	struct	veil fd_veil;
+	struct	veil_tie fd_cdir_tie;
+	struct	veil_tie fd_rdir_tie;
+#endif
 };
 
 /*

@@ -416,4 +416,5 @@ MIASM =  \
 	shm_rename.o \
 	sigfastblock.o \
 	__realpathat.o \
-	pledge.o
+	pledge.o \
+	unveil.o

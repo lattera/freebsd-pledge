@@ -3234,6 +3234,12 @@
 		    _In_z_ const char *execpromises
 		);
 	}
+576	AUE_UNVEIL	STD|PLEDGE_UNVEIL {
+		int unveil(
+		    _In_z_ const char *path,
+		    _In_z_ const char *permissions
+		);
+	}
 
 ; Please copy any additions and changes to the following compatability tables:
 ; sys/compat/freebsd32/syscalls.master

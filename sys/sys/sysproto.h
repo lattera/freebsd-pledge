@@ -1834,6 +1834,10 @@ struct pledge_args {
 	char promises_l_[PADL_(const char *)]; const char * promises; char promises_r_[PADR_(const char *)];
 	char execpromises_l_[PADL_(const char *)]; const char * execpromises; char execpromises_r_[PADR_(const char *)];
 };
+struct unveil_args {
+	char path_l_[PADL_(const char *)]; const char * path; char path_r_[PADR_(const char *)];
+	char permissions_l_[PADL_(const char *)]; const char * permissions; char permissions_r_[PADR_(const char *)];
+};
 int	nosys(struct thread *, struct nosys_args *);
 void	sys_sys_exit(struct thread *, struct sys_exit_args *);
 int	sys_fork(struct thread *, struct fork_args *);
@@ -2225,6 +2229,7 @@ int	sys_shm_rename(struct thread *, struct shm_rename_args *);
 int	sys_sigfastblock(struct thread *, struct sigfastblock_args *);
 int	sys___realpathat(struct thread *, struct __realpathat_args *);
 int	sys_pledge(struct thread *, struct pledge_args *);
+int	sys_unveil(struct thread *, struct unveil_args *);
 
 #ifdef COMPAT_43
 
@@ -3151,6 +3156,7 @@ int	freebsd12_shm_open(struct thread *, struct freebsd12_shm_open_args *);
 #define	SYS_AUE_sigfastblock	AUE_NULL
 #define	SYS_AUE___realpathat	AUE_REALPATHAT
 #define	SYS_AUE_pledge	AUE_PLEDGE
+#define	SYS_AUE_unveil	AUE_UNVEIL
 
 #undef PAD_
 #undef PADL_

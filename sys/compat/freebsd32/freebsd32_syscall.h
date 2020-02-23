@@ -502,4 +502,5 @@
 #define	FREEBSD32_SYS_sigfastblock	573
 #define	FREEBSD32_SYS___realpathat	574
 #define	FREEBSD32_SYS_pledge	575
-#define	FREEBSD32_SYS_MAXSYSCALL	576
+#define	FREEBSD32_SYS_unveil	576
+#define	FREEBSD32_SYS_MAXSYSCALL	577

@@ -612,4 +612,5 @@ const char *freebsd32_syscallnames[] = {
 	"sigfastblock",			/* 573 = sigfastblock */
 	"__realpathat",			/* 574 = __realpathat */
 	"pledge",			/* 575 = pledge */
+	"unveil",			/* 576 = unveil */
 };

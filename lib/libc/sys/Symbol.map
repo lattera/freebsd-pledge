@@ -412,6 +412,7 @@ FBSD_1.6 {
 	memfd_create;
 	shm_rename;
 	pledge;
+	unveil;
 };
 
 FBSDprivate_1.0 {

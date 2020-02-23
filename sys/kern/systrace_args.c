@@ -3374,6 +3374,14 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		*n_args = 2;
 		break;
 	}
+	/* unveil */
+	case 576: {
+		struct unveil_args *p = params;
+		uarg[0] = (intptr_t) p->path; /* const char * */
+		uarg[1] = (intptr_t) p->permissions; /* const char * */
+		*n_args = 2;
+		break;
+	}
 	default:
 		*n_args = 0;
 		break;
@@ -9021,6 +9029,19 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
+	/* unveil */
+	case 576:
+		switch(ndx) {
+		case 0:
+			p = "userland const char *";
+			break;
+		case 1:
+			p = "userland const char *";
+			break;
+		default:
+			break;
+		};
+		break;
 	default:
 		break;
 	};
@@ -10949,6 +10970,11 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		break;
 	/* pledge */
 	case 575:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* unveil */
+	case 576:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;

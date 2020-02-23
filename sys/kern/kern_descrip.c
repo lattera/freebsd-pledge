@@ -2034,6 +2034,12 @@ fdinit(struct filedesc *fdp, bool prepfiles)
 	if (fdp == NULL)
 		return (newfdp);
 
+#ifdef PLEDGE
+	veil_copy(&newfdp->fd_veil, &fdp->fd_veil);
+	newfdp->fd_cdir_tie = fdp->fd_cdir_tie;
+	newfdp->fd_rdir_tie = fdp->fd_rdir_tie;
+#endif
+
 	if (prepfiles && fdp->fd_lastfile >= newfdp->fd_nfiles)
 		fdgrowtable(newfdp, fdp->fd_lastfile + 1);
 
@@ -2380,6 +2386,10 @@ fdescfree(struct thread *td)
 		vrele(rdir);
 	if (jdir != NULL)
 		vrele(jdir);
+
+#ifdef PLEDGE
+	veil_free(&fdp->fd_veil);
+#endif
 
 	fdescfree_fds(td, fdp, 1);
 }
