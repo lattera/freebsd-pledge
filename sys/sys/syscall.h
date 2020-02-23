@@ -509,5 +509,6 @@
 #define	SYS_shm_open2	571
 #define	SYS_shm_rename	572
 #define	SYS_sigfastblock	573
-#define	SYS_pledge	574
-#define	SYS_MAXSYSCALL	575
+#define	SYS___realpathat	574
+#define	SYS_pledge	575
+#define	SYS_MAXSYSCALL	576

@@ -3219,7 +3219,16 @@
 		    _Inout_opt_ uint32_t *ptr
 		);
 	}
-574	AUE_PLEDGE	STD|PLEDGE_ALWAYS {
+574	AUE_REALPATHAT	STD|PLEDGE_STDIO {
+		int __realpathat(
+		    int fd,
+		    _In_z_ const char *path,
+		    _Out_writes_z_(size) char *buf,
+		    size_t size,
+		    int flags
+		);
+	}
+575	AUE_PLEDGE	STD|PLEDGE_ALWAYS {
 		int pledge(
 		    _In_z_ const char *promises,
 		    _In_z_ const char *execpromises

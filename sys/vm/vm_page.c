@@ -202,7 +202,7 @@ vm_page_init(void *dummy)
 {
 
 	fakepg_zone = uma_zcreate("fakepg", sizeof(struct vm_page), NULL, NULL,
-	    NULL, NULL, UMA_ALIGN_PTR, UMA_ZONE_NOFREE | UMA_ZONE_VM);
+	    NULL, NULL, UMA_ALIGN_PTR, UMA_ZONE_NOFREE);
 	bogus_page = vm_page_alloc(NULL, 0, VM_ALLOC_NOOBJ |
 	    VM_ALLOC_NORMAL | VM_ALLOC_WIRED);
 }
@@ -451,13 +451,14 @@ vm_page_domain_init(int domain)
 
 	vmd = VM_DOMAIN(domain);
 	bzero(vmd, sizeof(*vmd));
-	*__DECONST(char **, &vmd->vmd_pagequeues[PQ_INACTIVE].pq_name) =
+	*__DECONST(const char **, &vmd->vmd_pagequeues[PQ_INACTIVE].pq_name) =
 	    "vm inactive pagequeue";
-	*__DECONST(char **, &vmd->vmd_pagequeues[PQ_ACTIVE].pq_name) =
+	*__DECONST(const char **, &vmd->vmd_pagequeues[PQ_ACTIVE].pq_name) =
 	    "vm active pagequeue";
-	*__DECONST(char **, &vmd->vmd_pagequeues[PQ_LAUNDRY].pq_name) =
+	*__DECONST(const char **, &vmd->vmd_pagequeues[PQ_LAUNDRY].pq_name) =
 	    "vm laundry pagequeue";
-	*__DECONST(char **, &vmd->vmd_pagequeues[PQ_UNSWAPPABLE].pq_name) =
+	*__DECONST(const char **,
+	    &vmd->vmd_pagequeues[PQ_UNSWAPPABLE].pq_name) =
 	    "vm unswappable pagequeue";
 	vmd->vmd_domain = domain;
 	vmd->vmd_page_count = 0;
@@ -2022,7 +2023,7 @@ again:
 #endif
 	vmd = VM_DOMAIN(domain);
 	if (vmd->vmd_pgcache[pool].zone != NULL) {
-		m = uma_zalloc(vmd->vmd_pgcache[pool].zone, M_NOWAIT);
+		m = uma_zalloc(vmd->vmd_pgcache[pool].zone, M_NOWAIT | M_NOVM);
 		if (m != NULL) {
 			flags |= PG_PCPU_CACHE;
 			goto found;

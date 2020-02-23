@@ -671,7 +671,7 @@ vntblinit(void *dummy __unused)
 	 */
 	buf_trie_zone = uma_zcreate("BUF TRIE", pctrie_node_size(),
 	    NULL, NULL, pctrie_zone_init, NULL, UMA_ALIGN_PTR, 
-	    UMA_ZONE_NOFREE | UMA_ZONE_VM);
+	    UMA_ZONE_NOFREE);
 	uma_prealloc(buf_trie_zone, nbuf);
 
 	vnodes_created = counter_u64_alloc(M_WAITOK);
@@ -4040,7 +4040,7 @@ vcount(struct vnode *vp)
 /*
  * Print out a description of a vnode.
  */
-static char *typename[] =
+static const char * const typename[] =
 {"VNON", "VREG", "VDIR", "VBLK", "VCHR", "VLNK", "VSOCK", "VFIFO", "VBAD",
  "VMARKER"};
 
