@@ -45,7 +45,7 @@
 #include <sys/_lock.h>
 #include <sys/_mutex.h>
 #include <vm/vm.h>
-#include <sys/unveil.h>
+#include <sys/_unveil.h>
 
 struct filedesc;
 struct stat;

@@ -36,7 +36,7 @@
 #define	_SYS_UCRED_H_
 
 #include <bsm/audit.h>
-#include <sys/pledge_set.h>
+#include <sys/_pledge.h>
 #include <sys/sysfil.h>
 
 struct loginclass;

@@ -45,10 +45,10 @@
 
 #include <sys/types.h>
 #include <sys/errno.h>
-#include <sys/pledge_set.h>
 #include <sys/proc.h>
 #include <sys/ucred.h>
 #include <sys/capsicum.h>
+#include <sys/_pledge.h>
 
 /*
  * If pledge support isn't compiled in, pledge promises aren't actually stored

@@ -1,5 +1,5 @@
-#ifndef	_SYS_PLEDGE_SET_H
-#define	_SYS_PLEDGE_SET_H
+#ifndef	_SYS__PLEDGE_SET_H
+#define	_SYS__PLEDGE_SET_H
 
 #include <sys/types.h>
 #include <sys/stdint.h>
