@@ -143,6 +143,21 @@ veil_insert(struct veil *veil, const char *path)
 	return (*link);
 }
 
+static int
+veil_parse_perms(veil_perms_t *perms, const char *s)
+{
+	while (*s)
+		switch (*s++) {
+		case 'r': *perms |= VEIL_PERM_RPATH; break;
+		case 'w': *perms |= VEIL_PERM_WPATH; break;
+		case 'c': *perms |= VEIL_PERM_CPATH; break;
+		case 'x': *perms |= VEIL_PERM_EXEC;  break;
+		default:
+			  return (EINVAL);
+		}
+	return (0);
+}
+
 void
 veil_copy(struct veil *dst, const struct veil *src)
 {
@@ -167,21 +182,28 @@ sys_unveil(struct thread *td, struct unveil_args *uap)
 #ifdef PLEDGE
 	struct veil *veil = &td->td_proc->p_fd->fd_veil;
 	struct veil_node *node;
-	char *path = NULL;
+	char *path = NULL, *perms = NULL;
 	int error;
 	if (veil->node_count >= veil_max_nodes)
 		return (ENFILE);
 	path = malloc(MAXPATHLEN, M_TEMP, M_WAITOK);
 	error = copyinstr(uap->path, path, MAXPATHLEN, NULL);
 	if (error)
-		goto error;
+		goto out;
+	perms = malloc(MAXPATHLEN, M_TEMP, M_WAITOK);
+	error = copyinstr(uap->permissions, perms, MAXPATHLEN, NULL);
+	if (error)
+		goto out;
 	node = veil_insert(veil, path);
 	printf("pid %d (%s) unveil \"%s\"\n",
 	    td->td_proc->p_pid, td->td_proc->p_comm,
 	    path);
-error:
+	error = veil_parse_perms(&node->perms, perms);
+out:
 	if (path)
 		free(path, M_TEMP);
+	if (perms)
+		free(perms, M_TEMP);
 	return (error);
 #else
 	return (ENOSYS);

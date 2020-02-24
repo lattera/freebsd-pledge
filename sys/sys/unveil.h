@@ -24,6 +24,15 @@ struct veil {
 	size_t node_count;
 };
 
+typedef uint8_t veil_perms_t;
+
+enum {
+	VEIL_PERM_RPATH = 0x01,
+	VEIL_PERM_WPATH = 0x02,
+	VEIL_PERM_CPATH = 0x04,
+	VEIL_PERM_EXEC  = 0x08,
+};
+
 /*
  * A node always represents a single path component.  As it is, veils are not
  * designed to store a large number of nodes; lookups within a node are linear
@@ -32,6 +41,7 @@ struct veil {
 
 struct veil_node {
 	struct veil_node *parent, *sibling, *children, *next;
+	veil_perms_t perms;
 	char name[]; /* should never contain any '/' */
 };
 
