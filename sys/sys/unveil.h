@@ -43,7 +43,7 @@ struct veil_node {
 
 struct veil_tie {
 	struct veil_node *node;
-	size_t depth;
+	size_t depth; /* XXX must handle overflows */
 };
 
 static inline void

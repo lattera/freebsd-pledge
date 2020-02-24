@@ -57,9 +57,6 @@ struct filedescent {
 	struct file	*fde_file;	/* file structure for open file */
 	struct filecaps	 fde_caps;	/* per-descriptor rights */
 	uint8_t		 fde_flags;	/* per-process open file flags */
-#ifdef PLEDGE
-	struct veil_tie fde_tie;
-#endif
 	seqc_t		 fde_seqc;	/* keep file and caps in sync */
 };
 #define	fde_rights	fde_caps.fc_rights

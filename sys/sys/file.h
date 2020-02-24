@@ -45,6 +45,7 @@
 #include <sys/_lock.h>
 #include <sys/_mutex.h>
 #include <vm/vm.h>
+#include <sys/unveil.h>
 
 struct filedesc;
 struct stat;
@@ -196,6 +197,9 @@ struct file {
 					/* (d) Private data for the cdev. */
 		struct fadvise_info *fvn_advice;
 	} f_vnun;
+#ifdef PLEDGE
+	struct veil_tie f_tie;
+#endif
 	/*
 	 *  DFLAG_SEEKABLE specific fields
 	 */
