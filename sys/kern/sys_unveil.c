@@ -109,6 +109,7 @@ veil_insert(struct veil *veil, const char *path)
 			memcpy(node->name, path, n);
 			node->name[n] = '\0';
 			veil->list = node;
+			veil->node_count++;
 			*link = node;
 		}
 		while (*path_next == '/')
@@ -141,7 +142,6 @@ veil_insert(struct veil *veil, const char *path)
 			}
 		}
 	}
-	veil->node_count++;
 	return (*link);
 }
 
@@ -182,9 +182,14 @@ veil_destroy(struct veil *veil)
 	struct veil_node *node, *next;
 	KASSERT(veil->refcnt == 0, ("destroying still referenced veil"));
 	for (node = veil->list; node; node = next) {
+#ifdef INVARIANTS
+		veil->node_count--;
+#endif
 		next = node->next;
-		free(node, M_TEMP);
+		free(node, M_VEIL);
 	}
+	KASSERT(veil->node_count == 0, ("veil node leak"));
+	free(veil, M_VEIL);
 }
 
 static struct veil *
