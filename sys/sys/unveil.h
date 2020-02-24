@@ -21,7 +21,7 @@ struct veil {
 	 */
 	struct veil_node *root;
 	struct veil_node *list;
-	size_t node_count;
+	u_int node_count;
 };
 
 typedef uint8_t veil_perms_t;
@@ -34,9 +34,10 @@ enum {
 };
 
 /*
- * A node always represents a single path component.  As it is, veils are not
- * designed to store a large number of nodes; lookups within a node are linear
- * searches.
+ * A node always represents a single path component.
+ *
+ * As it is, veils are not designed to store a large number of nodes; lookups
+ * within a node are linear searches.
  */
 
 struct veil_node {

@@ -25,7 +25,7 @@ __FBSDID("$FreeBSD$");
 
 MALLOC_DEFINE(M_VEIL, "veil", "Veil path filter nodes");
 
-static size_t veil_max_nodes = 100; /* TODO: sysctl? */
+static u_int veil_max_nodes = 100; /* TODO: sysctl? */
 
 static void
 veil_check(struct veil *veil)
@@ -34,6 +34,8 @@ veil_check(struct veil *veil)
 	if ((node = veil->root)) {
 		KASSERT(!node->parent, ("veil root node parent set"));
 		KASSERT(!node->sibling, ("veil root node sibling set"));
+		/* Might need to drop this depending on how chroot() is
+		 * handled. */
 		KASSERT(!node->name[0], ("veil root node name set"));
 	}
 }
