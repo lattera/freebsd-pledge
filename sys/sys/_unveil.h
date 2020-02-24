@@ -14,6 +14,7 @@ struct veil {
 	struct veil_node *root;
 	struct veil_node *list;
 	u_int node_count;
+	u_int refcnt;
 };
 
 typedef uint8_t veil_perms_t;

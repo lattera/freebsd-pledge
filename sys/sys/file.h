@@ -39,6 +39,7 @@
 #include <sys/types.h> /* XXX */
 #include <sys/fcntl.h>
 #include <sys/unistd.h>
+#include <sys/_unveil.h>
 #else
 #include <sys/queue.h>
 #include <sys/refcount.h>

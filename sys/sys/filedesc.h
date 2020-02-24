@@ -42,7 +42,7 @@
 #include <sys/priority.h>
 #include <sys/seqc.h>
 #include <sys/sx.h>
-#include <sys/unveil.h>
+#include <sys/_unveil.h>
 
 #include <machine/_limits.h>
 
@@ -93,7 +93,7 @@ struct filedesc {
 	int	fd_holdleaderscount;	/* block fdfree() for shared close() */
 	int	fd_holdleaderswakeup;	/* fdfree() needs wakeup */
 #ifdef PLEDGE
-	struct	veil fd_veil;
+	struct	veil *fd_veil;
 	struct	veil_tie fd_cdir_tie;
 	struct	veil_tie fd_rdir_tie;
 #endif

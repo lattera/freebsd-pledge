@@ -160,20 +160,54 @@ veil_parse_perms(veil_perms_t *perms, const char *s)
 	return (0);
 }
 
-void
-veil_copy(struct veil *dst, const struct veil *src)
+struct veil *
+veil_create(void)
 {
-	veil_init(dst); /* XXX */
+	struct veil *veil;
+	veil = malloc(sizeof *veil, M_VEIL, M_WAITOK | M_ZERO);
+	veil_hold(veil);
+	return (veil);
+}
+
+struct veil *
+veil_copy(struct veil *src)
+{
+	veil_hold(src);
+	return (src);
 }
 
 void
-veil_free(struct veil *veil)
+veil_destroy(struct veil *veil)
 {
 	struct veil_node *node, *next;
+	KASSERT(veil->refcnt == 0, ("destroying still referenced veil"));
 	for (node = veil->list; node; node = next) {
 		next = node->next;
 		free(node, M_TEMP);
 	}
+}
+
+static struct veil *
+veil_get(struct thread *td)
+{
+	struct filedesc *fdp = td->td_proc->p_fd;
+	struct veil *veil;
+	FILEDESC_SLOCK(fdp);
+	veil = fdp->fd_veil;
+	if (veil)
+		veil_hold(veil);
+	FILEDESC_SUNLOCK(fdp);
+	if (!veil) {
+		FILEDESC_XLOCK(fdp);
+		veil = fdp->fd_veil;
+		if (!veil) {
+			veil = veil_create();
+			fdp->fd_veil = veil;
+		}
+		veil_hold(veil);
+		FILEDESC_XUNLOCK(fdp);
+	}
+	return (veil);
 }
 
 #endif /* PLEDGE */
@@ -182,30 +216,40 @@ int
 sys_unveil(struct thread *td, struct unveil_args *uap)
 {
 #ifdef PLEDGE
-	struct veil *veil = &td->td_proc->p_fd->fd_veil;
+	struct veil *veil = NULL;
+	char *path = NULL, *permissions = NULL;
 	struct veil_node *node;
-	char *path = NULL, *perms = NULL;
+	veil_perms_t perms;
 	int error;
-	if (veil->node_count >= veil_max_nodes)
-		return (ENFILE);
 	path = malloc(MAXPATHLEN, M_TEMP, M_WAITOK);
 	error = copyinstr(uap->path, path, MAXPATHLEN, NULL);
 	if (error)
 		goto out;
-	perms = malloc(MAXPATHLEN, M_TEMP, M_WAITOK);
-	error = copyinstr(uap->permissions, perms, MAXPATHLEN, NULL);
+	permissions = malloc(MAXPATHLEN, M_TEMP, M_WAITOK);
+	error = copyinstr(uap->permissions, permissions, MAXPATHLEN, NULL);
 	if (error)
 		goto out;
+	perms = 0;
+	error = veil_parse_perms(&perms, permissions);
+	if (error)
+		goto out;
+	veil = veil_get(td);
+	if (veil->node_count >= veil_max_nodes) {
+		error = E2BIG;
+		goto out;
+	}
 	node = veil_insert(veil, path);
+	node->perms = perms;
 	printf("pid %d (%s) unveil \"%s\"\n",
 	    td->td_proc->p_pid, td->td_proc->p_comm,
 	    path);
-	error = veil_parse_perms(&node->perms, perms);
 out:
+	if (veil)
+		veil_free(veil);
 	if (path)
 		free(path, M_TEMP);
-	if (perms)
-		free(perms, M_TEMP);
+	if (permissions)
+		free(permissions, M_TEMP);
 	return (error);
 #else
 	return (ENOSYS);

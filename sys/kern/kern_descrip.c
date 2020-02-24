@@ -78,6 +78,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/user.h>
 #include <sys/vnode.h>
 #include <sys/pledge.h>
+#include <sys/unveil.h>
 #ifdef KTRACE
 #include <sys/ktrace.h>
 #endif
@@ -2034,12 +2035,6 @@ fdinit(struct filedesc *fdp, bool prepfiles)
 	if (fdp == NULL)
 		return (newfdp);
 
-#ifdef PLEDGE
-	veil_copy(&newfdp->fd_veil, &fdp->fd_veil);
-	newfdp->fd_cdir_tie = fdp->fd_cdir_tie;
-	newfdp->fd_rdir_tie = fdp->fd_rdir_tie;
-#endif
-
 	if (prepfiles && fdp->fd_lastfile >= newfdp->fd_nfiles)
 		fdgrowtable(newfdp, fdp->fd_lastfile + 1);
 
@@ -2053,6 +2048,13 @@ fdinit(struct filedesc *fdp, bool prepfiles)
 	newfdp->fd_jdir = fdp->fd_jdir;
 	if (newfdp->fd_jdir)
 		vrefact(newfdp->fd_jdir);
+#ifdef PLEDGE
+	if (fdp->fd_veil) {
+		newfdp->fd_veil = veil_copy(fdp->fd_veil);
+		newfdp->fd_cdir_tie = fdp->fd_cdir_tie;
+		newfdp->fd_rdir_tie = fdp->fd_rdir_tie;
+	}
+#endif
 
 	if (!prepfiles) {
 		FILEDESC_SUNLOCK(fdp);
@@ -2351,6 +2353,7 @@ fdescfree(struct thread *td)
 	struct proc *p;
 	struct filedesc *fdp;
 	struct vnode *cdir, *jdir, *rdir;
+	struct veil *veil;
 
 	p = td->td_proc;
 	fdp = p->p_fd;
@@ -2378,6 +2381,10 @@ fdescfree(struct thread *td)
 	fdp->fd_rdir = NULL;
 	jdir = fdp->fd_jdir;
 	fdp->fd_jdir = NULL;
+#ifdef PLEDGE
+	veil = fdp->fd_veil;
+	fdp->fd_veil = NULL;
+#endif
 	FILEDESC_XUNLOCK(fdp);
 
 	if (cdir != NULL)
@@ -2386,9 +2393,9 @@ fdescfree(struct thread *td)
 		vrele(rdir);
 	if (jdir != NULL)
 		vrele(jdir);
-
 #ifdef PLEDGE
-	veil_free(&fdp->fd_veil);
+	if (veil)
+		veil_free(veil);
 #endif
 
 	fdescfree_fds(td, fdp, 1);
