@@ -72,9 +72,9 @@ veil_lookup(struct veil *veil, const char **path_ret)
 			const char *p, *q;
 			KASSERT(node->parent == parent_node,
 			        ("veil node parent mismatch"));
-			for (p = node->name, q = p; *p && *p == *q; p++, q++);
-			if (!*q || *q == '/') {
-				path = q;
+			for (p = path, q = node->name; *p && *p == *q; p++, q++);
+			if (!*p || *p == '/') {
+				path = p;
 				matched_node = node;
 				matched_path = path;
 				break;
