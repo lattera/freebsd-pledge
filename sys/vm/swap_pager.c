@@ -156,7 +156,8 @@ static u_long swap_reserved;
 static u_long swap_total;
 static int sysctl_page_shift(SYSCTL_HANDLER_ARGS);
 
-static SYSCTL_NODE(_vm_stats, OID_AUTO, swap, CTLFLAG_RD, 0, "VM swap stats");
+static SYSCTL_NODE(_vm_stats, OID_AUTO, swap, CTLFLAG_RD | CTLFLAG_MPSAFE, 0,
+    "VM swap stats");
 
 SYSCTL_PROC(_vm, OID_AUTO, swap_reserved, CTLTYPE_U64 | CTLFLAG_RD | CTLFLAG_MPSAFE,
     &swap_reserved, 0, sysctl_page_shift, "A", 
@@ -176,12 +177,12 @@ static unsigned long swap_maxpages;
 SYSCTL_ULONG(_vm, OID_AUTO, swap_maxpages, CTLFLAG_RD, &swap_maxpages, 0,
     "Maximum amount of swap supported");
 
-static counter_u64_t swap_free_deferred;
+static COUNTER_U64_DEFINE_EARLY(swap_free_deferred);
 SYSCTL_COUNTER_U64(_vm_stats_swap, OID_AUTO, free_deferred,
     CTLFLAG_RD, &swap_free_deferred,
     "Number of pages that deferred freeing swap space");
 
-static counter_u64_t swap_free_completed;
+static COUNTER_U64_DEFINE_EARLY(swap_free_completed);
 SYSCTL_COUNTER_U64(_vm_stats_swap, OID_AUTO, free_completed,
     CTLFLAG_RD, &swap_free_completed,
     "Number of deferred frees completed");
@@ -427,7 +428,7 @@ static int	swapoff_one(struct swdevt *sp, struct ucred *cred);
  * Swap bitmap functions
  */
 static void	swp_pager_freeswapspace(daddr_t blk, daddr_t npages);
-static daddr_t	swp_pager_getswapspace(int *npages, int limit);
+static daddr_t	swp_pager_getswapspace(int *npages);
 
 /*
  * Metadata functions
@@ -525,15 +526,6 @@ swap_pager_init(void)
 	sx_init(&sw_alloc_sx, "swspsx");
 	sx_init(&swdev_syscall_lock, "swsysc");
 }
-
-static void
-swap_pager_counters(void)
-{
-
-	swap_free_deferred = counter_u64_alloc(M_WAITOK);
-	swap_free_completed = counter_u64_alloc(M_WAITOK);
-}
-SYSINIT(swap_counters, SI_SUB_CPU, SI_ORDER_ANY, swap_pager_counters, NULL);
 
 /*
  * SWAP_PAGER_SWAP_INIT() - swap pager initialization from pageout process
@@ -741,10 +733,9 @@ swap_pager_dealloc(vm_object_t object)
 /*
  * SWP_PAGER_GETSWAPSPACE() -	allocate raw swap space
  *
- *	Allocate swap for up to the requested number of pages, and at
- *	least a minimum number of pages.  The starting swap block number
- *	(a page index) is returned or SWAPBLK_NONE if the allocation
- *	failed.
+ *	Allocate swap for up to the requested number of pages.  The
+ *	starting swap block number (a page index) is returned or
+ *	SWAPBLK_NONE if the allocation failed.
  *
  *	Also has the side effect of advising that somebody made a mistake
  *	when they configured swap and didn't configure enough.
@@ -754,12 +745,14 @@ swap_pager_dealloc(vm_object_t object)
  *	We allocate in round-robin fashion from the configured devices.
  */
 static daddr_t
-swp_pager_getswapspace(int *io_npages, int limit)
+swp_pager_getswapspace(int *io_npages)
 {
 	daddr_t blk;
 	struct swdevt *sp;
 	int mpages, npages;
 
+	KASSERT(*io_npages >= 1,
+	    ("%s: npages not positive", __func__));
 	blk = SWAPBLK_NONE;
 	mpages = *io_npages;
 	npages = imin(BLIST_MAX_ALLOC, mpages);
@@ -774,7 +767,7 @@ swp_pager_getswapspace(int *io_npages, int limit)
 			break;
 		sp = TAILQ_NEXT(sp, sw_list);
 		if (swdevhd == sp) {
-			if (npages <= limit)
+			if (npages == 1)
 				break;
 			mpages = npages - 1;
 			npages >>= 1;
@@ -937,7 +930,7 @@ swap_pager_reserve(vm_object_t object, vm_pindex_t start, vm_size_t size)
 	VM_OBJECT_WLOCK(object);
 	for (i = 0; i < size; i += n) {
 		n = size - i;
-		blk = swp_pager_getswapspace(&n, 1);
+		blk = swp_pager_getswapspace(&n);
 		if (blk == SWAPBLK_NONE) {
 			swp_pager_meta_free(object, start, i);
 			VM_OBJECT_WUNLOCK(object);
@@ -1464,7 +1457,7 @@ swap_pager_putpages(vm_object_t object, vm_page_t *ma, int count,
 
 		/* Get a block of swap of size up to size n. */
 		VM_OBJECT_WLOCK(object);
-		blk = swp_pager_getswapspace(&n, 4);
+		blk = swp_pager_getswapspace(&n);
 		if (blk == SWAPBLK_NONE) {
 			VM_OBJECT_WUNLOCK(object);
 			mtx_lock(&swbuf_mtx);

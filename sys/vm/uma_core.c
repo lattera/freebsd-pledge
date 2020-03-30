@@ -117,6 +117,16 @@ static uma_zone_t kegs;
 static uma_zone_t zones;
 
 /*
+ * On INVARIANTS builds, the slab contains a second bitset of the same size,
+ * "dbg_bits", which is laid out immediately after us_free.
+ */
+#ifdef INVARIANTS
+#define	SLAB_BITSETS	2
+#else
+#define	SLAB_BITSETS	1
+#endif
+
+/*
  * These are the two zones from which all offpage uma_slab_ts are allocated.
  *
  * One zone is for slab headers that can represent a larger number of items,
@@ -325,7 +335,7 @@ static int sysctl_handle_uma_zone_items(SYSCTL_HANDLER_ARGS);
 
 static uint64_t uma_zone_get_allocs(uma_zone_t zone);
 
-static SYSCTL_NODE(_vm, OID_AUTO, debug, CTLFLAG_RD, 0,
+static SYSCTL_NODE(_vm, OID_AUTO, debug, CTLFLAG_RD | CTLFLAG_MPSAFE, 0,
     "Memory allocation debugging");
 
 #ifdef INVARIANTS
@@ -352,7 +362,8 @@ SYSCTL_COUNTER_U64(_vm_debug, OID_AUTO, skipped, CTLFLAG_RD,
 
 SYSINIT(uma_startup3, SI_SUB_VM_CONF, SI_ORDER_SECOND, uma_startup3, NULL);
 
-SYSCTL_NODE(_vm, OID_AUTO, uma, CTLFLAG_RW, 0, "Universal Memory Allocator");
+SYSCTL_NODE(_vm, OID_AUTO, uma, CTLFLAG_RW | CTLFLAG_MPSAFE, 0,
+    "Universal Memory Allocator");
 
 SYSCTL_PROC(_vm, OID_AUTO, zone_count, CTLFLAG_RD|CTLFLAG_MPSAFE|CTLTYPE_INT,
     0, 0, sysctl_vm_zone_count, "I", "Number of UMA zones");
@@ -563,26 +574,29 @@ zone_domain_lock(uma_zone_t zone, int domain)
 }
 
 /*
- * Search for the domain with the least cached items and return it, breaking
- * ties with a preferred domain by returning it.
+ * Search for the domain with the least cached items and return it if it
+ * is out of balance with the preferred domain.
  */
 static __noinline int
 zone_domain_lowest(uma_zone_t zone, int pref)
 {
-	long least, nitems;
+	long least, nitems, prefitems;
 	int domain;
 	int i;
 
-	least = LONG_MAX;
+	prefitems = least = LONG_MAX;
 	domain = 0;
 	for (i = 0; i < vm_ndomains; i++) {
 		nitems = ZDOM_GET(zone, i)->uzd_nitems;
 		if (nitems < least) {
 			domain = i;
 			least = nitems;
-		} else if (nitems == least && (i == pref || domain == pref))
-			domain = pref;
+		}
+		if (domain == pref)
+			prefitems = nitems;
 	}
+	if (prefitems < least * 2)
+		return (pref);
 
 	return (domain);
 }
@@ -711,9 +725,6 @@ zone_put_bucket(uma_zone_t zone, int domain, uma_bucket_t bucket, void *udata,
 	if (bucket->ub_cnt == 0)
 		goto out;
 	zdom = zone_domain_lock(zone, domain);
-
-	KASSERT(!ws || zdom->uzd_nitems < zone->uz_bucket_max,
-	    ("%s: zone %p overflow", __func__, zone));
 
 	/*
 	 * Conditionally set the maximum number of items.
@@ -1897,7 +1908,7 @@ zero_init(void *mem, int size, int flags)
 }
 
 #ifdef INVARIANTS
-struct noslabbits *
+static struct noslabbits *
 slab_dbg_bits(uma_slab_t slab, uma_keg_t keg)
 {
 
@@ -1908,22 +1919,13 @@ slab_dbg_bits(uma_slab_t slab, uma_keg_t keg)
 /*
  * Actual size of embedded struct slab (!OFFPAGE).
  */
-size_t
+static size_t
 slab_sizeof(int nitems)
 {
 	size_t s;
 
 	s = sizeof(struct uma_slab) + BITSET_SIZE(nitems) * SLAB_BITSETS;
 	return (roundup(s, UMA_ALIGN_PTR + 1));
-}
-
-/*
- * Size of memory for embedded slabs (!OFFPAGE).
- */
-size_t
-slab_space(int nitems)
-{
-	return (UMA_SLAB_SIZE - slab_sizeof(nitems));
 }
 
 #define	UMA_FIXPT_SHIFT	31
@@ -1964,18 +1966,6 @@ slab_ipers_hdr(u_int size, u_int rsize, u_int slabsize, bool hdr)
 	}
 
 	return (ipers);
-}
-
-/*
- * Compute the number of items that will fit in a slab for a startup zone.
- */
-int
-slab_ipers(size_t size, int align)
-{
-	int rsize;
-
-	rsize = roundup(size, align + 1); /* Assume no CACHESPREAD */
-	return (slab_ipers_hdr(size, rsize, UMA_SLAB_SIZE, true));
 }
 
 struct keg_layout_result {
@@ -2373,7 +2363,7 @@ zone_alloc_sysctl(uma_zone_t zone, void *unused)
 	 * Basic parameters at the root.
 	 */
 	zone->uz_oid = SYSCTL_ADD_NODE(NULL, SYSCTL_STATIC_CHILDREN(_vm_uma),
-	    OID_AUTO, zone->uz_ctlname, CTLFLAG_RD, NULL, "");
+	    OID_AUTO, zone->uz_ctlname, CTLFLAG_RD | CTLFLAG_MPSAFE, NULL, "");
 	oid = zone->uz_oid;
 	SYSCTL_ADD_U32(NULL, SYSCTL_CHILDREN(oid), OID_AUTO,
 	    "size", CTLFLAG_RD, &zone->uz_size, 0, "Allocation size");
@@ -2396,7 +2386,7 @@ zone_alloc_sysctl(uma_zone_t zone, void *unused)
 	else
 		domains = 1;
 	oid = SYSCTL_ADD_NODE(NULL, SYSCTL_CHILDREN(zone->uz_oid), OID_AUTO,
-	    "keg", CTLFLAG_RD, NULL, "");
+	    "keg", CTLFLAG_RD | CTLFLAG_MPSAFE, NULL, "");
 	keg = zone->uz_keg;
 	if ((zone->uz_flags & UMA_ZFLAG_CACHE) == 0) {
 		SYSCTL_ADD_CONST_STRING(NULL, SYSCTL_CHILDREN(oid), OID_AUTO,
@@ -2418,12 +2408,12 @@ zone_alloc_sysctl(uma_zone_t zone, void *unused)
 		    keg, 0, sysctl_handle_uma_slab_efficiency, "I",
 		    "Slab utilization (100 - internal fragmentation %)");
 		domainoid = SYSCTL_ADD_NODE(NULL, SYSCTL_CHILDREN(oid),
-		    OID_AUTO, "domain", CTLFLAG_RD, NULL, "");
+		    OID_AUTO, "domain", CTLFLAG_RD | CTLFLAG_MPSAFE, NULL, "");
 		for (i = 0; i < domains; i++) {
 			dom = &keg->uk_domain[i];
 			oid = SYSCTL_ADD_NODE(NULL, SYSCTL_CHILDREN(domainoid),
-			    OID_AUTO, VM_DOMAIN(i)->vmd_name, CTLFLAG_RD,
-			    NULL, "");
+			    OID_AUTO, VM_DOMAIN(i)->vmd_name,
+			    CTLFLAG_RD | CTLFLAG_MPSAFE, NULL, "");
 			SYSCTL_ADD_U32(NULL, SYSCTL_CHILDREN(oid), OID_AUTO,
 			    "pages", CTLFLAG_RD, &dom->ud_pages, 0,
 			    "Total pages currently allocated from VM");
@@ -2439,7 +2429,7 @@ zone_alloc_sysctl(uma_zone_t zone, void *unused)
 	 * Information about zone limits.
 	 */
 	oid = SYSCTL_ADD_NODE(NULL, SYSCTL_CHILDREN(zone->uz_oid), OID_AUTO,
-	    "limit", CTLFLAG_RD, NULL, "");
+	    "limit", CTLFLAG_RD | CTLFLAG_MPSAFE, NULL, "");
 	SYSCTL_ADD_PROC(NULL, SYSCTL_CHILDREN(oid), OID_AUTO,
 	    "items", CTLFLAG_RD | CTLTYPE_U64 | CTLFLAG_MPSAFE,
 	    zone, 0, sysctl_handle_uma_zone_items, "QU",
@@ -2461,11 +2451,12 @@ zone_alloc_sysctl(uma_zone_t zone, void *unused)
 	 * Per-domain zone information.
 	 */
 	domainoid = SYSCTL_ADD_NODE(NULL, SYSCTL_CHILDREN(zone->uz_oid),
-	    OID_AUTO, "domain", CTLFLAG_RD, NULL, "");
+	    OID_AUTO, "domain", CTLFLAG_RD | CTLFLAG_MPSAFE, NULL, "");
 	for (i = 0; i < domains; i++) {
 		zdom = ZDOM_GET(zone, i);
 		oid = SYSCTL_ADD_NODE(NULL, SYSCTL_CHILDREN(domainoid),
-		    OID_AUTO, VM_DOMAIN(i)->vmd_name, CTLFLAG_RD, NULL, "");
+		    OID_AUTO, VM_DOMAIN(i)->vmd_name,
+		    CTLFLAG_RD | CTLFLAG_MPSAFE, NULL, "");
 		SYSCTL_ADD_LONG(NULL, SYSCTL_CHILDREN(oid), OID_AUTO,
 		    "nitems", CTLFLAG_RD, &zdom->uzd_nitems,
 		    "number of items in this domain");
@@ -2484,7 +2475,7 @@ zone_alloc_sysctl(uma_zone_t zone, void *unused)
 	 * General statistics.
 	 */
 	oid = SYSCTL_ADD_NODE(NULL, SYSCTL_CHILDREN(zone->uz_oid), OID_AUTO,
-	    "stats", CTLFLAG_RD, NULL, "");
+	    "stats", CTLFLAG_RD | CTLFLAG_MPSAFE, NULL, "");
 	SYSCTL_ADD_PROC(NULL, SYSCTL_CHILDREN(oid), OID_AUTO,
 	    "current", CTLFLAG_RD | CTLTYPE_INT | CTLFLAG_MPSAFE,
 	    zone, 1, sysctl_handle_uma_zone_cur, "I",
@@ -4100,8 +4091,11 @@ uma_zfree_arg(uma_zone_t zone, void *item, void *udata)
 			bucket = &cache->uc_crossbucket;
 		} else
 #endif
-		if (bucket->ucb_cnt >= bucket->ucb_entries)
-			bucket = &cache->uc_freebucket;
+		if (bucket->ucb_cnt == bucket->ucb_entries &&
+		   cache->uc_freebucket.ucb_cnt <
+		   cache->uc_freebucket.ucb_entries)
+			cache_bucket_swap(&cache->uc_freebucket,
+			    &cache->uc_allocbucket);
 		if (__predict_true(bucket->ucb_cnt < bucket->ucb_entries)) {
 			cache_bucket_push(cache, bucket, item);
 			critical_exit();
@@ -4651,6 +4645,9 @@ uma_zone_set_smr(uma_zone_t zone, smr_t smr)
 
 	ZONE_ASSERT_COLD(zone);
 
+	KASSERT(smr != NULL, ("Got NULL smr"));
+	KASSERT((zone->uz_flags & UMA_ZONE_SMR) == 0,
+	    ("zone %p (%s) already uses SMR", zone, zone->uz_name));
 	zone->uz_flags |= UMA_ZONE_SMR;
 	zone->uz_smr = smr;
 	zone_update_caches(zone);

@@ -2063,6 +2063,22 @@ linker_hwpmc_list_objects(void)
 }
 #endif
 
+/* check if root file system is not mounted */
+static bool
+linker_root_mounted(void)
+{
+	struct pwd *pwd;
+	bool ret;
+
+	if (rootvnode == NULL)
+		return (false);
+
+	pwd = pwd_hold(curthread);
+	ret = pwd->pwd_rdir != NULL;
+	pwd_drop(pwd);
+	return (ret);
+}
+
 /*
  * Find a file which contains given module and load it, if "parent" is not
  * NULL, register a reference to it.
@@ -2084,15 +2100,13 @@ linker_load_module(const char *kldname, const char *modname,
  		 */
 		KASSERT(verinfo == NULL, ("linker_load_module: verinfo"
 		    " is not NULL"));
-		/* check if root file system is not mounted */
-		if (rootvnode == NULL || curproc->p_fd->fd_rdir == NULL)
+		if (!linker_root_mounted())
 			return (ENXIO);
 		pathname = linker_search_kld(kldname);
 	} else {
 		if (modlist_lookup2(modname, verinfo) != NULL)
 			return (EEXIST);
-		/* check if root file system is not mounted */
-		if (rootvnode == NULL || curproc->p_fd->fd_rdir == NULL)
+		if (!linker_root_mounted())
 			return (ENXIO);
 		if (kldname != NULL)
 			pathname = strdup(kldname, M_LINKER);
@@ -2260,5 +2274,7 @@ sysctl_kern_function_list(SYSCTL_HANDLER_ARGS)
 	return (SYSCTL_OUT(req, "", 1));
 }
 
-SYSCTL_PROC(_kern, OID_AUTO, function_list, CTLTYPE_OPAQUE | CTLFLAG_RD,
-    NULL, 0, sysctl_kern_function_list, "", "kernel function list");
+SYSCTL_PROC(_kern, OID_AUTO, function_list,
+    CTLTYPE_OPAQUE | CTLFLAG_RD | CTLFLAG_MPSAFE, NULL, 0,
+    sysctl_kern_function_list, "",
+    "kernel function list");

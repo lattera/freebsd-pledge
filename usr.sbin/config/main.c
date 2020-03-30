@@ -72,6 +72,17 @@ static const char rcsid[] =
 
 #define	CDIR	"../compile/"
 
+char	*machinename;
+char	*machinearch;
+
+struct cfgfile_head	cfgfiles;
+struct cputype_head	cputype;
+struct opt_head		opt, mkopt, rmopts;
+struct opt_list_head	otab;
+struct envvar_head	envvars;
+struct hint_head	hints;
+struct includepath_head	includepath;
+
 char *	PREFIX;
 char 	destdir[MAXPATHLEN];
 char 	srcdir[MAXPATHLEN];
@@ -116,6 +127,7 @@ main(int argc, char **argv)
 	char *kernfile;
 	struct includepath* ipath;
 	int printmachine;
+	bool cust_dest = false;
 
 	printmachine = 0;
 	kernfile = NULL;
@@ -140,6 +152,7 @@ main(int argc, char **argv)
 				strlcpy(destdir, optarg, sizeof(destdir));
 			else
 				errx(EXIT_FAILURE, "directory already set");
+			cust_dest = true;
 			break;
 		case 'g':
 			debugging++;
@@ -232,7 +245,14 @@ main(int argc, char **argv)
 		exit(0);
 	}
 
-	/* Make compile directory */
+	/*
+	 * Make CDIR directory, if doing a default destination. Some version
+	 * control systems delete empty directories and this seemlessly copes.
+	 */
+	if (!cust_dest && stat(CDIR, &buf))
+		if (mkdir(CDIR, 0777))
+			err(2, "%s", CDIR);
+	/* Create the compile directory */
 	p = path((char *)NULL);
 	if (stat(p, &buf)) {
 		if (mkdir(p, 0777))

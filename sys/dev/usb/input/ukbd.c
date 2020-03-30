@@ -522,15 +522,9 @@ ukbd_interrupt(struct ukbd_softc *sc)
 				if (ukbd_is_modifier_key(key))
 					continue;
 
-				/*
-				 * Check for first new key and set
-				 * initial delay and [re]start timer:
-				 */
-				if (sc->sc_repeat_key == 0) {
-					sc->sc_co_basetime = sbinuptime();
-					sc->sc_delay = sc->sc_kbd.kb_delay1;
-					ukbd_start_timer(sc);
-				}
+				sc->sc_co_basetime = sbinuptime();
+				sc->sc_delay = sc->sc_kbd.kb_delay1;
+				ukbd_start_timer(sc);
 
 				/* set repeat time for last key */
 				sc->sc_repeat_time = now + sc->sc_kbd.kb_delay1;
@@ -702,13 +696,15 @@ ukbd_intr_callback(struct usb_xfer *xfer, usb_error_t error)
 			} else if (id != sc->sc_id_loc_key[i]) {
 				continue;	/* invalid HID ID */
 			} else if (i == 0) {
-				offset = sc->sc_loc_key[0].count;
-				if (offset < 0 || offset > len)
-					offset = len;
-				while (offset--) {
+				struct hid_location tmp_loc = sc->sc_loc_key[0];
+				/* range check array size */
+				if (tmp_loc.count > UKBD_NKEYCODE)
+					tmp_loc.count = UKBD_NKEYCODE;
+				while (tmp_loc.count--) {
 					uint32_t key =
-					    hid_get_data(sc->sc_buffer + offset, len - offset,
-					    &sc->sc_loc_key[i]);
+					    hid_get_data_unsigned(sc->sc_buffer, len, &tmp_loc);
+					/* advance to next location */
+					tmp_loc.pos += tmp_loc.size;
 					if (modifiers & MOD_FN)
 						key = ukbd_apple_fn(key);
 					if (sc->sc_flags & UKBD_FLAG_APPLE_SWAP)

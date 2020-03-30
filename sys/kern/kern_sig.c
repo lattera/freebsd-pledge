@@ -109,6 +109,7 @@ static int	coredump(struct thread *);
 static int	killpg1(struct thread *td, int sig, int pgid, int all,
 		    ksiginfo_t *ksi);
 static int	issignal(struct thread *td);
+static void	reschedule_signals(struct proc *p, sigset_t block, int flags);
 static int	sigprop(int sig);
 static void	tdsigwakeup(struct thread *, int, sig_t, int);
 static int	sig_suspend_threads(struct thread *, struct proc *, int);
@@ -135,7 +136,7 @@ static int	kern_forcesigexit = 1;
 SYSCTL_INT(_kern, OID_AUTO, forcesigexit, CTLFLAG_RW,
     &kern_forcesigexit, 0, "Force trap signal to be handled");
 
-static SYSCTL_NODE(_kern, OID_AUTO, sigqueue, CTLFLAG_RW, 0,
+static SYSCTL_NODE(_kern, OID_AUTO, sigqueue, CTLFLAG_RW | CTLFLAG_MPSAFE, 0,
     "POSIX real time signal");
 
 static int	max_pending_per_proc = 128;
@@ -2692,7 +2693,7 @@ stopme:
 	return (td->td_xsig);
 }
 
-void
+static void
 reschedule_signals(struct proc *p, sigset_t block, int flags)
 {
 	struct sigacts *ps;
@@ -3360,9 +3361,10 @@ sysctl_debug_num_cores_check (SYSCTL_HANDLER_ARGS)
 	num_cores = new_val;
 	return (0);
 }
-SYSCTL_PROC(_debug, OID_AUTO, ncores, CTLTYPE_INT|CTLFLAG_RW,
-	    0, sizeof(int), sysctl_debug_num_cores_check, "I",
-	    "Maximum number of generated process corefiles while using index format");
+SYSCTL_PROC(_debug, OID_AUTO, ncores,
+    CTLTYPE_INT | CTLFLAG_RW | CTLFLAG_NEEDGIANT, 0, sizeof(int),
+    sysctl_debug_num_cores_check, "I",
+    "Maximum number of generated process corefiles while using index format");
 
 #define	GZIP_SUFFIX	".gz"
 #define	ZSTD_SUFFIX	".zst"
@@ -3383,8 +3385,9 @@ sysctl_compress_user_cores(SYSCTL_HANDLER_ARGS)
 	compress_user_cores = val;
 	return (error);
 }
-SYSCTL_PROC(_kern, OID_AUTO, compress_user_cores, CTLTYPE_INT | CTLFLAG_RWTUN,
-    0, sizeof(int), sysctl_compress_user_cores, "I",
+SYSCTL_PROC(_kern, OID_AUTO, compress_user_cores,
+    CTLTYPE_INT | CTLFLAG_RWTUN | CTLFLAG_NEEDGIANT, 0, sizeof(int),
+    sysctl_compress_user_cores, "I",
     "Enable compression of user corefiles ("
     __XSTRING(COMPRESS_GZIP) " = gzip, "
     __XSTRING(COMPRESS_ZSTD) " = zstd)");
@@ -4113,7 +4116,8 @@ sigfastblock_clear(struct thread *td)
 	if ((td->td_pflags & TDP_SIGFASTBLOCK) == 0)
 		return;
 	td->td_sigblock_val = 0;
-	resched = (td->td_pflags & TDP_SIGFASTPENDING) != 0;
+	resched = (td->td_pflags & TDP_SIGFASTPENDING) != 0 ||
+	    SIGPENDING(td);
 	td->td_pflags &= ~(TDP_SIGFASTBLOCK | TDP_SIGFASTPENDING);
 	if (resched) {
 		p = td->td_proc;
@@ -4131,8 +4135,8 @@ sigfastblock_fetch(struct thread *td)
 	(void)sigfastblock_fetch_sig(td, true, &val);
 }
 
-void
-sigfastblock_setpend(struct thread *td)
+static void
+sigfastblock_setpend1(struct thread *td)
 {
 	int res;
 	uint32_t oldval;
@@ -4159,5 +4163,19 @@ sigfastblock_setpend(struct thread *td)
 		MPASS(res == 1);
 		if (thread_check_susp(td, false) != 0)
 			break;
+	}
+}
+
+void
+sigfastblock_setpend(struct thread *td, bool resched)
+{
+	struct proc *p;
+
+	sigfastblock_setpend1(td);
+	if (resched) {
+		p = td->td_proc;
+		PROC_LOCK(p);
+		reschedule_signals(p, fastblock_mask, SIGPROCMASK_FASTBLK);
+		PROC_UNLOCK(p);
 	}
 }
