@@ -25,6 +25,7 @@ PLAIN_TESTS_C+= unveil_simple0
 PLAIN_TESTS_C+= unveil_simple1
 PLAIN_TESTS_C+= unveil_subdir
 PLAIN_TESTS_C+= unveil_chdir
+PLAIN_TESTS_C+= unveil_escape
 
 WARNS?=		3
 

@@ -283,7 +283,8 @@ namei_handle_root(struct nameidata *ndp, struct vnode **dpp)
 }
 
 static int pledge_check_namei(struct thread *, struct nameidata *);
-static void lookup_unveil_update(struct nameidata *, struct vnode *, bool);
+static void lookup_unveil_update(struct nameidata *, struct vnode *);
+static void lookup_unveil_update_dotdot(struct nameidata *, struct vnode *);
 static int lookup_unveil_check(struct nameidata *);
 
 /*
@@ -750,6 +751,9 @@ lookup(struct nameidata *ndp)
 	vn_lock(dp,
 	    compute_cn_lkflags(dp->v_mount, cnp->cn_lkflags | LK_RETRY,
 	    cnp->cn_flags));
+#ifdef PLEDGE
+	lookup_unveil_update(ndp, dp);
+#endif
 
 dirloop:
 	/*
@@ -818,9 +822,6 @@ dirloop:
 	}
 
 	nameicap_tracker_add(ndp, dp);
-#ifdef PLEDGE
-	lookup_unveil_update(ndp, dp, true);
-#endif
 
 	/*
 	 * Check for degenerate name (e.g. / or "")
@@ -886,6 +887,9 @@ dirloop:
 			error = ENOTCAPABLE;
 			goto bad;
 		}
+#ifdef PLEDGE
+		lookup_unveil_update_dotdot(ndp, dp);
+#endif
 		if ((cnp->cn_flags & ISLASTCN) != 0 &&
 		    (cnp->cn_nameiop == DELETE || cnp->cn_nameiop == RENAME)) {
 			error = EINVAL;
@@ -1060,6 +1064,10 @@ good:
 		ndp->ni_vp = dp = tdp;
 	}
 
+#ifdef PLEDGE
+	lookup_unveil_update(ndp, dp);
+#endif
+
 	/*
 	 * Check for symbolic link
 	 */
@@ -1116,9 +1124,6 @@ nextname:
 			goto bad2;
 		}
 	}
-#ifdef PLEDGE
-	lookup_unveil_update(ndp, ndp->ni_vp, false);
-#endif
 	if (*ndp->ni_next == '/') {
 		cnp->cn_nameptr = ndp->ni_next;
 		while (*cnp->cn_nameptr == '/') {
@@ -1355,6 +1360,7 @@ NDINIT_ALL(struct nameidata *ndp, u_long op, u_long flags, enum uio_seg segflg,
 	filecaps_init(&ndp->ni_filecaps);
 #ifdef PLEDGE
 	ndp->ni_unveil = NULL;
+	ndp->ni_uperms = 0;
 #endif
 	ndp->ni_cnd.cn_thread = td;
 	if (rightsp != NULL)
@@ -1552,7 +1558,7 @@ pledge_check_namei(struct thread *td, struct nameidata *ndp)
 }
 
 static void
-lookup_unveil_update(struct nameidata *ndp, struct vnode *vp, bool initial)
+lookup_unveil_update(struct nameidata *ndp, struct vnode *vp)
 {
 	struct componentname *cnp = &ndp->ni_cnd;
 	struct filedesc *fdp = cnp->cn_thread->td_proc->p_fd;
@@ -1560,12 +1566,42 @@ lookup_unveil_update(struct nameidata *ndp, struct vnode *vp, bool initial)
 	FILEDESC_SLOCK(fdp);
 	unveil = unveil_lookup(&fdp->fd_unveil, vp);
 	FILEDESC_SUNLOCK(fdp);
-	if (!unveil && !initial && cnp->cn_flags & ISDOTDOT &&
-	    ndp->ni_unveil && ndp->ni_unveil->vp == vp)
-		unveil = ndp->ni_unveil->cover;
 	if (unveil) {
+		printf("lookup_unveil_update: unveil found %#x %p for %p (\"%s\" \"%s\")\n",
+		    unveil->perms, unveil, vp, cnp->cn_pnbuf, cnp->cn_nameptr);
 		ndp->ni_unveil = unveil;
 		ndp->ni_uperms = unveil->perms;
+	} else {
+		unveil = ndp->ni_unveil;
+		if (unveil)
+			printf("lookup_unveil_update: unveil carry down %#x %p for %p (\"%s\" \"%s\")\n",
+			    unveil->perms, unveil, vp, cnp->cn_pnbuf, cnp->cn_nameptr);
+	}
+}
+
+static void
+lookup_unveil_update_dotdot(struct nameidata *ndp, struct vnode *vp)
+{
+	struct componentname *cnp = &ndp->ni_cnd;
+	struct unveil_node *unveil;
+	if ((unveil = ndp->ni_unveil) && ndp->ni_unveil->vp == vp) {
+		unveil = unveil->cover;
+		if (unveil) {
+			printf("lookup_unveil_update_dotdot: unveil cover %#x %p for %p (\"%s\" \"%s\")\n",
+			    unveil->perms, unveil, vp, cnp->cn_pnbuf, cnp->cn_nameptr);
+			ndp->ni_unveil = unveil;
+			ndp->ni_uperms = unveil->perms;
+		} else {
+			printf("lookup_unveil_update_dotdot: unveil drop for %p (\"%s\" \"%s\")\n",
+			    vp, cnp->cn_pnbuf, cnp->cn_nameptr);
+			ndp->ni_unveil = NULL;
+			ndp->ni_uperms = 0;
+		}
+	} else {
+		unveil = ndp->ni_unveil;
+		if (unveil)
+			printf("lookup_unveil_update_dotdot: unveil carry up %#x %p for %p (\"%s\" \"%s\")\n",
+			    unveil->perms, unveil, vp, cnp->cn_pnbuf, cnp->cn_nameptr);
 	}
 }
 
