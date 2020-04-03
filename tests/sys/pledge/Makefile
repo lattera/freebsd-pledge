@@ -23,6 +23,8 @@ PLAIN_TESTS_C+= pledge_getaddrinfo
 
 PLAIN_TESTS_C+= unveil_simple0
 PLAIN_TESTS_C+= unveil_simple1
+PLAIN_TESTS_C+= unveil_subdir
+PLAIN_TESTS_C+= unveil_chdir
 
 WARNS?=		3
 
