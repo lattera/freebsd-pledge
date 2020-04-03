@@ -3,40 +3,42 @@
 
 #include <sys/types.h>
 #include <sys/malloc.h>
-#include <sys/_unveil.h>
+#include <sys/vnode.h>
 #include <sys/refcount.h>
+#include <sys/_unveil.h>
 
 #ifdef PLEDGE
-MALLOC_DECLARE(M_VEIL);
+MALLOC_DECLARE(M_UNVEIL);
 #endif
 
 enum {
-	VEIL_PERM_RPATH = 0x01,
-	VEIL_PERM_WPATH = 0x02,
-	VEIL_PERM_CPATH = 0x04,
-	VEIL_PERM_EXEC  = 0x08,
+	UNVEIL_PERM_RPATH = 1 << 0,
+	UNVEIL_PERM_WPATH = 1 << 1,
+	UNVEIL_PERM_CPATH = 1 << 2,
+	UNVEIL_PERM_EXEC  = 1 << 3,
+};
+
+struct unveil_node {
+	struct unveil_node *cover;
+	RB_ENTRY(unveil_node) entry;
+	struct vnode *vp;
+	unveil_perms_t perms;
 };
 
 static inline void
-veil_init(struct veil *veil)
+unveil_init(struct unveil_base *base)
 {
-	*veil = (struct veil){ NULL, 0 };
+	*base = (struct unveil_base){
+		.dir_root = RB_INITIALIZER(&base->dir_root),
+	};
 }
 
-struct veil *veil_copy(struct veil *src);
-void veil_destroy(struct veil *);
+void unveil_merge(struct unveil_base *dst, struct unveil_base *src);
+void unveil_destroy(struct unveil_base *);
 
-struct veil *veil_create(void);
+struct unveil_node *unveil_lookup(struct unveil_base *, struct vnode *);
 
-static inline void
-veil_hold(struct veil *veil) {
-	refcount_acquire(&veil->refcnt);
-}
-
-static inline void
-veil_free(struct veil *veil) {
-	if (refcount_release(&veil->refcnt))
-		veil_destroy(veil);
-}
+struct unveil_node *unveil_insert(struct unveil_base *,
+    struct unveil_node *, struct vnode *);
 
 #endif

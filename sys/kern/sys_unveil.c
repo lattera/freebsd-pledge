@@ -18,201 +18,129 @@ __FBSDID("$FreeBSD$");
 #include <sys/ucred.h>
 #include <sys/syslog.h>
 #include <sys/jail.h>
+#include <sys/namei.h>
 #include <sys/pledge.h>
 #include <sys/unveil.h>
 
 #ifdef PLEDGE
 
-MALLOC_DEFINE(M_VEIL, "veil", "Veil path filter nodes");
+MALLOC_DEFINE(M_UNVEIL, "unveil", "unveil");
 
-static u_int veil_max_nodes = 100; /* TODO: sysctl? */
+static u_int unveil_max_nodes = 100; /* TODO: sysctl? */
 
-static void
-veil_check(struct veil *veil)
+static int
+unveil_dir_node_cmp(struct unveil_node *a, struct unveil_node *b)
 {
-	struct veil_node *node;
-	if ((node = veil->root)) {
-		KASSERT(!node->parent, ("veil root node parent set"));
-		KASSERT(!node->sibling, ("veil root node sibling set"));
-		/* Might need to drop this depending on how chroot() is
-		 * handled. */
-		KASSERT(!node->name[0], ("veil root node name set"));
-	}
+	uintptr_t ak = (uintptr_t)a->vp, bk = (uintptr_t)b->vp;
+	return (ak > bk ? 1 : ak < bk ? -1 : 0);
 }
 
-static struct veil_node *
-veil_lookup(struct veil *veil, const char **path_ret)
-{
-	struct veil_node *matched_node, *node, *parent_node;
-	const char *matched_path, *path;
-	veil_check(veil);
-	node = matched_node = veil->root;
-	path = matched_path = *path_ret;
-	while (node) {
-		while (*path == '/')
-			path++;
-		if (!*path)
-			break;
-		if (path[0] == '.') {
-			if (!path[1] || path[1] == '/') {
-				path++;
-				continue;
-			} else if (path[2] == '.') {
-				if (!path[3] || path[3] == '/') {
-					path += 2;
-					node = node->parent;
-					matched_node = node;
-					matched_path = path;
-					continue;
-				}
-			}
-		}
-		parent_node = node;
-		for (node = node->children; node; node = node->sibling) {
-			const char *p, *q;
-			KASSERT(node->parent == parent_node,
-			        ("veil node parent mismatch"));
-			for (p = path, q = node->name; *p && *p == *q; p++, q++);
-			if (!*p || *p == '/') {
-				path = p;
-				matched_node = node;
-				matched_path = path;
-				break;
-			}
-		}
-	}
-	if (matched_path)
-		*path_ret = matched_path;
-	return (matched_node);
+RB_GENERATE_STATIC(unveil_dir_tree, unveil_node, entry, unveil_dir_node_cmp);
 
+void
+unveil_merge(struct unveil_base *dst, struct unveil_base *src)
+{
+	/* TODO */
 }
 
-static struct veil_node *
-veil_insert(struct veil *veil, const char *path)
+void
+unveil_destroy(struct unveil_base *base)
 {
-	struct veil_node **link, *parent;
-	const char *path_next;
-	veil_check(veil);
-	parent = NULL;
-	link = &veil->root;
-	path_next = path;
-	while (true) {
-		KASSERT(path_next >= path, ("path_next got behind path"));
-		if (!*link) {
-			struct veil_node *node;
-			size_t n = path_next - path;
-			node = malloc(sizeof *node + n + 1, M_VEIL, M_WAITOK);
-			*node = (struct veil_node){
-				.parent = parent,
-				.next = veil->list,
-			};
-			memcpy(node->name, path, n);
-			node->name[n] = '\0';
-			veil->list = node;
-			veil->node_count++;
-			*link = node;
-		}
-		while (*path_next == '/')
-			path_next++;
-		if (!*path_next)
-			break;
-		path = path_next;
-		/* TODO: handle "." and ".." here too */
-		parent = *link;
-		link = &(*link)->children;
-		while (true) {
-			if (*link) {
-				KASSERT((*link)->parent == parent,
-					("veil node parent mismatch"));
-				const char *p, *q;
-				for (p = path, q = (*link)->name;
-				    *p && *p == *q;
-				    p++, q++);
-				if (!*p || *p == '/') {
-					path_next = p;
-					parent = *link;
-					link = &(*link)->children;
-					break;
-				}
-				link = &(*link)->sibling;
-			} else {
-				while (*path_next && *path_next != '/')
-					path_next++;
-				break;
-			}
-		}
+	struct unveil_node *node, *node_tmp;
+	RB_FOREACH_SAFE(node, unveil_dir_tree, &base->dir_root, node_tmp) {
+		vrele(node->vp);
+		RB_REMOVE(unveil_dir_tree, &base->dir_root, node);
+		base->dir_count--;
+		free(node, M_UNVEIL);
 	}
-	return (*link);
+	MPASS(base->dir_count == 0);
+}
+
+struct unveil_node *
+unveil_insert(struct unveil_base *base,
+    struct unveil_node *cover, struct vnode *vp)
+{
+	struct unveil_node *new, *old;
+	new = malloc(sizeof *new, M_UNVEIL, M_WAITOK);
+	*new = (struct unveil_node){
+		.cover = cover,
+		.vp = vp,
+	};
+	old = RB_INSERT(unveil_dir_tree, &base->dir_root, new);
+	if (old) {
+		free(new, M_UNVEIL);
+		return (old);
+	}
+	vref(vp);
+	base->dir_count++;
+	return (new);
+}
+
+struct unveil_node *
+unveil_lookup(struct unveil_base *base, struct vnode *vp)
+{
+	struct unveil_node key = { .vp = vp };
+	return (RB_FIND(unveil_dir_tree, &base->dir_root, &key));
 }
 
 static int
-veil_parse_perms(veil_perms_t *perms, const char *s)
+do_unveil(struct thread *td, const char *path, unveil_perms_t perms)
+{
+	struct filedesc *fdp = td->td_proc->p_fd;
+	struct unveil_base *base = &fdp->fd_unveil;
+	struct unveil_node *node;
+	struct nameidata nd;
+	int error;
+
+	FILEDESC_SLOCK(fdp);
+	if (base->finished)
+		error = EPERM;
+	else if (base->dir_count >= unveil_max_nodes)
+		error = E2BIG;
+	else
+		error = 0;
+	FILEDESC_SUNLOCK(fdp);
+	if (error)
+		return (error);
+
+	NDINIT(&nd, LOOKUP, FOLLOW | LOCKLEAF, UIO_SYSSPACE, path, td);
+	error = namei(&nd);
+	if (error)
+		return (error);
+
+	FILEDESC_XLOCK(fdp);
+	node = unveil_insert(base, nd.ni_unveil, nd.ni_vp);
+	node->perms = perms; /* TODO: check previous permissions */
+	FILEDESC_XUNLOCK(fdp);
+
+	NDFREE(&nd, 0);
+	printf("pid %d (%s) unveil \"%s\" %#x: %p cover %p\n",
+	    td->td_proc->p_pid, td->td_proc->p_comm, path, perms, node, node->cover);
+	return (error);
+}
+
+static void
+do_unveil_finished(struct thread *td)
+{
+	struct filedesc *fdp = td->td_proc->p_fd;
+	FILEDESC_XLOCK(fdp);
+	fdp->fd_unveil.finished = true;
+	FILEDESC_XUNLOCK(fdp);
+}
+
+static int
+unveil_parse_perms(unveil_perms_t *perms, const char *s)
 {
 	while (*s)
 		switch (*s++) {
-		case 'r': *perms |= VEIL_PERM_RPATH; break;
-		case 'w': *perms |= VEIL_PERM_WPATH; break;
-		case 'c': *perms |= VEIL_PERM_CPATH; break;
-		case 'x': *perms |= VEIL_PERM_EXEC;  break;
+		case 'r': *perms |= UNVEIL_PERM_RPATH; break;
+		case 'w': *perms |= UNVEIL_PERM_WPATH; break;
+		case 'c': *perms |= UNVEIL_PERM_CPATH; break;
+		case 'x': *perms |= UNVEIL_PERM_EXEC;  break;
 		default:
 			  return (EINVAL);
 		}
 	return (0);
-}
-
-struct veil *
-veil_create(void)
-{
-	struct veil *veil;
-	veil = malloc(sizeof *veil, M_VEIL, M_WAITOK | M_ZERO);
-	veil_hold(veil);
-	return (veil);
-}
-
-struct veil *
-veil_copy(struct veil *src)
-{
-	veil_hold(src);
-	return (src);
-}
-
-void
-veil_destroy(struct veil *veil)
-{
-	struct veil_node *node, *next;
-	KASSERT(veil->refcnt == 0, ("destroying still referenced veil"));
-	for (node = veil->list; node; node = next) {
-#ifdef INVARIANTS
-		veil->node_count--;
-#endif
-		next = node->next;
-		free(node, M_VEIL);
-	}
-	KASSERT(veil->node_count == 0, ("veil node leak"));
-	free(veil, M_VEIL);
-}
-
-static struct veil *
-veil_get(struct thread *td)
-{
-	struct filedesc *fdp = td->td_proc->p_fd;
-	struct veil *veil;
-	FILEDESC_SLOCK(fdp);
-	veil = fdp->fd_veil;
-	if (veil)
-		veil_hold(veil);
-	FILEDESC_SUNLOCK(fdp);
-	if (!veil) {
-		FILEDESC_XLOCK(fdp);
-		veil = fdp->fd_veil;
-		if (!veil) {
-			veil = veil_create();
-			fdp->fd_veil = veil;
-		}
-		veil_hold(veil);
-		FILEDESC_XUNLOCK(fdp);
-	}
-	return (veil);
 }
 
 #endif /* PLEDGE */
@@ -221,40 +149,35 @@ int
 sys_unveil(struct thread *td, struct unveil_args *uap)
 {
 #ifdef PLEDGE
-	struct veil *veil = NULL;
-	char *path = NULL, *permissions = NULL;
-	struct veil_node *node;
-	veil_perms_t perms;
+	char *path, *permissions;
+	unveil_perms_t perms;
 	int error;
-	path = malloc(MAXPATHLEN, M_TEMP, M_WAITOK);
-	error = copyinstr(uap->path, path, MAXPATHLEN, NULL);
-	if (error)
-		goto out;
+
+	if (!uap->path && !uap->permissions) {
+		do_unveil_finished(td);
+		return (0);
+	}
+
 	permissions = malloc(MAXPATHLEN, M_TEMP, M_WAITOK);
 	error = copyinstr(uap->permissions, permissions, MAXPATHLEN, NULL);
-	if (error)
-		goto out;
-	perms = 0;
-	error = veil_parse_perms(&perms, permissions);
-	if (error)
-		goto out;
-	veil = veil_get(td);
-	if (veil->node_count >= veil_max_nodes) {
-		error = E2BIG;
-		goto out;
-	}
-	node = veil_insert(veil, path);
-	node->perms = perms;
-	printf("pid %d (%s) unveil \"%s\"\n",
-	    td->td_proc->p_pid, td->td_proc->p_comm,
-	    path);
-out:
-	if (veil)
-		veil_free(veil);
-	if (path)
-		free(path, M_TEMP);
-	if (permissions)
+	if (error) {
 		free(permissions, M_TEMP);
+		return (error);
+	}
+	perms = 0;
+	error = unveil_parse_perms(&perms, permissions);
+	free(permissions, M_TEMP);
+	if (error)
+		return (error);
+
+	path = malloc(MAXPATHLEN, M_TEMP, M_WAITOK);
+	error = copyinstr(uap->path, path, MAXPATHLEN, NULL);
+	if (error) {
+		free(path, M_TEMP);
+		return (error);
+	}
+	error = do_unveil(td, path, perms);
+	free(path, M_TEMP);
 	return (error);
 #else
 	return (ENOSYS);

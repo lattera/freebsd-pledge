@@ -892,8 +892,12 @@ kern_chdir(struct thread *td, const char *path, enum uio_seg pathseg)
 		return (error);
 	}
 	VOP_UNLOCK(nd.ni_vp);
-	NDFREE(&nd, NDF_ONLY_PNBUF);
+#ifdef PLEDGE
+	pwd_chdir_uperms(td, nd.ni_vp, nd.ni_uperms);
+#else
 	pwd_chdir(td, nd.ni_vp);
+#endif
+	NDFREE(&nd, NDF_ONLY_PNBUF);
 	return (0);
 }
 

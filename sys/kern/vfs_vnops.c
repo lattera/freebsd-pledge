@@ -286,6 +286,12 @@ restart:
 			ndp->ni_cnd.cn_flags |= AUDITVNODE1;
 		if (vn_open_flags & VN_OPEN_NOCAPCHECK)
 			ndp->ni_cnd.cn_flags |= NOCAPCHECK;
+#ifdef PLEDGE
+		if (fmode & FREAD)
+			ndp->ni_cnd.cn_flags2 |= FORREADING;
+		if (fmode & FWRITE)
+			ndp->ni_cnd.cn_flags2 |= FORWRITING;
+#endif
 		if ((error = namei(ndp)) != 0)
 			return (error);
 		vp = ndp->ni_vp;

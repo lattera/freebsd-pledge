@@ -2020,6 +2020,9 @@ fdinit(struct filedesc *fdp, bool prepfiles)
 	newfdp->fd_lastfile = -1;
 	newfdp->fd_files = (struct fdescenttbl *)&newfdp0->fd_dfiles;
 	newfdp->fd_files->fdt_nfiles = NDFILE;
+#ifdef PLEDGE
+	unveil_init(&newfdp->fd_unveil);
+#endif
 
 	if (fdp == NULL) {
 		newpwd = pwd_alloc();
@@ -2032,8 +2035,7 @@ fdinit(struct filedesc *fdp, bool prepfiles)
 
 	FILEDESC_SLOCK(fdp);
 #ifdef PLEDGE
-	if (fdp->fd_veil)
-		newfdp->fd_veil = veil_copy(fdp->fd_veil);
+	unveil_merge(&newfdp->fd_unveil, &fdp->fd_unveil);
 #endif
 	newpwd = pwd_hold_filedesc(fdp);
 	smr_serialized_store(&newfdp->fd_pwd, newpwd, true);
@@ -2356,18 +2358,15 @@ fdescfree(struct thread *td)
 		return;
 
 	FILEDESC_XLOCK(fdp);
-#ifdef PLEDGE
-	if (fdp->fd_veil) {
-		veil_free(fdp->fd_veil);
-		fdp->fd_veil = NULL;
-	}
-#endif
 	pwd = FILEDESC_XLOCKED_LOAD_PWD(fdp);
 	pwd_set(fdp, NULL);
 	FILEDESC_XUNLOCK(fdp);
 
 	pwd_drop(pwd);
 
+#ifdef PLEDGE
+	unveil_destroy(&fdp->fd_unveil);
+#endif
 	fdescfree_fds(td, fdp, 1);
 }
 
@@ -3404,7 +3403,7 @@ pwd_chroot(struct thread *td, struct vnode *vp)
 }
 
 void
-pwd_chdir(struct thread *td, struct vnode *vp)
+pwd_chdir_uperms(struct thread *td, struct vnode *vp, unveil_perms_t uperms)
 {
 	struct filedesc *fdp;
 	struct pwd *newpwd, *oldpwd;
@@ -3416,10 +3415,19 @@ pwd_chdir(struct thread *td, struct vnode *vp)
 	FILEDESC_XLOCK(fdp);
 	oldpwd = FILEDESC_XLOCKED_LOAD_PWD(fdp);
 	newpwd->pwd_cdir = vp;
+#ifdef PLEDGE
+	newpwd->pwd_cdir_uperms = uperms;
+#endif
 	pwd_fill(oldpwd, newpwd);
 	pwd_set(fdp, newpwd);
 	FILEDESC_XUNLOCK(fdp);
 	pwd_drop(oldpwd);
+}
+
+void
+pwd_chdir(struct thread *td, struct vnode *vp)
+{
+	pwd_chdir_uperms(td, vp, 0);
 }
 
 void

@@ -38,6 +38,7 @@
 #include <sys/caprights.h>
 #include <sys/filedesc.h>
 #include <sys/queue.h>
+#include <sys/_unveil.h>
 #include <sys/_uio.h>
 
 struct componentname {
@@ -46,6 +47,7 @@ struct componentname {
 	 */
 	u_long	cn_nameiop;	/* namei operation */
 	u_int64_t cn_flags;	/* flags to namei */
+	u_int	cn_flags2;
 	struct	thread *cn_thread;/* thread requesting lookup */
 	struct	ucred *cn_cred;	/* credentials */
 	int	cn_lkflags;	/* Lock flags LK_EXCLUSIVE or LK_SHARED */
@@ -82,6 +84,10 @@ struct nameidata {
 	 * Results: returned from namei
 	 */
 	struct filecaps ni_filecaps;	/* rights the *at base has */
+#ifdef PLEDGE
+	struct unveil_node *ni_unveil;	/* last unveil encountered */
+	unveil_perms_t ni_uperms;	/* covering unveil permissions */
+#endif
 	/*
 	 * Results: returned from/manipulated by lookup
 	 */
@@ -163,6 +169,9 @@ struct nameidata {
 #define	NOCAPCHECK	0x20000000 /* do not perform capability checks */
 #define	NOEXECCHECK	0x40000000 /* do not perform exec check on dir */
 #define	PARAMASK	0x7ffffe00 /* mask of parameter descriptors */
+
+#define	FORREADING	0x00000001 /* looked up file is to be read */
+#define	FORWRITING	0x00000002 /* looked up file is to be written */
 
 /*
  * Namei results flags

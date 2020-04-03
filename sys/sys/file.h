@@ -39,14 +39,12 @@
 #include <sys/types.h> /* XXX */
 #include <sys/fcntl.h>
 #include <sys/unistd.h>
-#include <sys/_unveil.h>
 #else
 #include <sys/queue.h>
 #include <sys/refcount.h>
 #include <sys/_lock.h>
 #include <sys/_mutex.h>
 #include <vm/vm.h>
-#include <sys/_unveil.h>
 
 struct filedesc;
 struct stat;
@@ -198,9 +196,6 @@ struct file {
 					/* (d) Private data for the cdev. */
 		struct fadvise_info *fvn_advice;
 	} f_vnun;
-#ifdef PLEDGE
-	struct veil_tie f_tie;
-#endif
 	/*
 	 *  DFLAG_SEEKABLE specific fields
 	 */
