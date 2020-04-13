@@ -581,6 +581,6 @@ const char *syscallnames[] = {
 	"shm_rename",			/* 572 = shm_rename */
 	"sigfastblock",			/* 573 = sigfastblock */
 	"__realpathat",			/* 574 = __realpathat */
-	"old_pledge",			/* 575 = old_pledge */
+	"close_range",			/* 575 = close_range */
 	"unveilctl",			/* 576 = unveilctl */
 };

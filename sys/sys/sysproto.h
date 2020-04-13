@@ -16,7 +16,6 @@
 #include <sys/_semaphore.h>
 #include <sys/ucontext.h>
 #include <sys/wait.h>
-#include <sys/_unveil.h>
 
 #include <bsm/audit_kevents.h>
 
@@ -1831,15 +1830,16 @@ struct __realpathat_args {
 	char size_l_[PADL_(size_t)]; size_t size; char size_r_[PADR_(size_t)];
 	char flags_l_[PADL_(int)]; int flags; char flags_r_[PADR_(int)];
 };
-struct old_pledge_args {
-	char promises_l_[PADL_(const char *)]; const char * promises; char promises_r_[PADR_(const char *)];
-	char execpromises_l_[PADL_(const char *)]; const char * execpromises; char execpromises_r_[PADR_(const char *)];
+struct close_range_args {
+	char lowfd_l_[PADL_(u_int)]; u_int lowfd; char lowfd_r_[PADR_(u_int)];
+	char highfd_l_[PADL_(u_int)]; u_int highfd; char highfd_r_[PADR_(u_int)];
+	char flags_l_[PADL_(int)]; int flags; char flags_r_[PADR_(int)];
 };
 struct unveilctl_args {
 	char atfd_l_[PADL_(int)]; int atfd; char atfd_r_[PADR_(int)];
 	char path_l_[PADL_(const char *)]; const char * path; char path_r_[PADR_(const char *)];
 	char flags_l_[PADL_(int)]; int flags; char flags_r_[PADR_(int)];
-	char perms_l_[PADL_(unveil_perms_t)]; unveil_perms_t perms; char perms_r_[PADR_(unveil_perms_t)];
+	char perms_l_[PADL_(int)]; int perms; char perms_r_[PADR_(int)];
 };
 int	nosys(struct thread *, struct nosys_args *);
 void	sys_sys_exit(struct thread *, struct sys_exit_args *);
@@ -2231,7 +2231,7 @@ int	sys_shm_open2(struct thread *, struct shm_open2_args *);
 int	sys_shm_rename(struct thread *, struct shm_rename_args *);
 int	sys_sigfastblock(struct thread *, struct sigfastblock_args *);
 int	sys___realpathat(struct thread *, struct __realpathat_args *);
-int	sys_old_pledge(struct thread *, struct old_pledge_args *);
+int	sys_close_range(struct thread *, struct close_range_args *);
 int	sys_unveilctl(struct thread *, struct unveilctl_args *);
 
 #ifdef COMPAT_43
@@ -3158,7 +3158,7 @@ int	freebsd12_shm_open(struct thread *, struct freebsd12_shm_open_args *);
 #define	SYS_AUE_shm_rename	AUE_SHMRENAME
 #define	SYS_AUE_sigfastblock	AUE_NULL
 #define	SYS_AUE___realpathat	AUE_REALPATHAT
-#define	SYS_AUE_old_pledge	AUE_PLEDGE
+#define	SYS_AUE_close_range	AUE_NULL
 #define	SYS_AUE_unveilctl	AUE_UNVEILCTL
 
 #undef PAD_

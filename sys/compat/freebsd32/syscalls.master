@@ -1162,8 +1162,8 @@
 573	AUE_NULL	NOPROTO	{ int sigfastblock(int cmd, uint32_t *ptr); }
 574	AUE_REALPATHAT	NOPROTO { int __realpathat(int fd, const char *path, \
 				    char *buf, size_t size, int flags); }
-575	AUE_PLEDGE	NOPROTO { int old_pledge(const char *promises, \
-				    const char *execpromises); }
+575	AUE_NULL	NOPROTO	{ int close_range(u_int lowfd, u_int highfd, \
+				    int flags); }
 576	AUE_UNVEILCTL	NOPROTO { int unveilctl(int atfd, const char *path, \
 				    int flags, unveil_perms_t perms); }
 

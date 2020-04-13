@@ -3228,10 +3228,11 @@
 		    int flags
 		);
 	}
-575	AUE_PLEDGE	STD|PLEDGE_ALWAYS {
-		int old_pledge(
-		    _In_z_ const char *promises,
-		    _In_z_ const char *execpromises
+575	AUE_NULL	STD {
+		int close_range(
+		    u_int lowfd,
+		    u_int highfd,
+		    int flags
 		);
 	}
 576	AUE_UNVEILCTL	STD|PLEDGE_UNVEIL {
@@ -3239,7 +3240,7 @@
 		    int atfd,
 		    _In_z_ const char *path,
 		    int flags,
-		    unveil_perms_t perms
+		    int perms
 		);
 	}
 

@@ -16,7 +16,7 @@ enum {
 	UNVEIL_PERM_ALL   = -1
 };
 
-int unveilctl(int atfd, const char *path, int flags, unveil_perms_t perms);
+int unveilctl(int atfd, const char *path, int flags, int perms);
 
 #ifdef _KERNEL
 
