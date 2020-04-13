@@ -53,7 +53,7 @@
 #include <sys/socketvar.h>
 #include <sys/sysctl.h>
 #include <sys/systm.h>
-#include <sys/pledge.h>
+#include <sys/sysfil.h>
 
 #ifdef DDB
 #include <ddb/ddb.h>
@@ -2024,7 +2024,7 @@ sysctl_rtsock(SYSCTL_HANDLER_ARGS)
 	u_char	af;
 	struct	walkarg w;
 
-	error = pledge_check(req->td, PLEDGE_INET);
+	error = sysfil_check(req->td, SYF_PLEDGE_INET);
 	if (error)
 		return (error);
 

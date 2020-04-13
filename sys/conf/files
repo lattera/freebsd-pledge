@@ -3841,6 +3841,7 @@ kern/subr_smp.c			standard
 kern/subr_smr.c			standard
 kern/subr_stack.c		optional ddb | stack | ktr
 kern/subr_stats.c		optional stats
+kern/subr_sysfil.c		standard
 kern/subr_taskqueue.c		standard
 kern/subr_terminal.c		optional vt
 kern/subr_trap.c		standard
@@ -3852,12 +3853,12 @@ kern/subr_witness.c		optional witness
 kern/sys_capability.c		standard
 kern/sys_generic.c		standard
 kern/sys_getrandom.c		standard
-kern/sys_pledge.c		standard
-kern/sys_unveil.c		standard
 kern/sys_pipe.c			standard
+kern/sys_pledge.c		standard
 kern/sys_procdesc.c		standard
 kern/sys_process.c		standard
 kern/sys_socket.c		standard
+kern/sys_unveil.c		standard
 kern/syscalls.c			standard
 kern/sysv_ipc.c			standard
 kern/sysv_msg.c			optional sysvmsg

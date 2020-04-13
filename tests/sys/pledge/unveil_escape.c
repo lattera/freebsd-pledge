@@ -15,6 +15,11 @@ main()
 	EXPECT(fd = open("/etc/defaults/rc.conf", O_RDONLY));
 	EXPECT(close(fd));
 	REJECT(open("/COPYRIGHT", O_RDONLY));
+	REJECT(open("/./COPYRIGHT", O_RDONLY));
+	REJECT(open("/../COPYRIGHT", O_RDONLY));
 	REJECT(open("/etc/../COPYRIGHT", O_RDONLY));
+	REJECT(open("/etc/.././COPYRIGHT", O_RDONLY));
+	REJECT(open("/etc/./../COPYRIGHT", O_RDONLY));
+	REJECT(open("/etc/./.././COPYRIGHT", O_RDONLY));
 	return (0);
 }

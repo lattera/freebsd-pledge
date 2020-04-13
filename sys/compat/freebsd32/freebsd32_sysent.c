@@ -626,9 +626,9 @@ struct sysent freebsd32_sysent[] = {
 	{ AS(pipe2_args), (sy_call_t *)sys_pipe2, AUE_PIPE, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 542 = pipe2 */
 	{ AS(freebsd32_aio_mlock_args), (sy_call_t *)freebsd32_aio_mlock, AUE_AIO_MLOCK, NULL, 0, 0, 0, SY_THR_STATIC },	/* 543 = freebsd32_aio_mlock */
 #ifdef PAD64_REQUIRED
-	{ AS(freebsd32_procctl_args), (sy_call_t *)freebsd32_procctl, AUE_PROCCTL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 544 = freebsd32_procctl */
+	{ AS(freebsd32_procctl_args), (sy_call_t *)freebsd32_procctl, AUE_PROCCTL, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 544 = freebsd32_procctl */
 #else
-	{ AS(freebsd32_procctl_args), (sy_call_t *)freebsd32_procctl, AUE_PROCCTL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 544 = freebsd32_procctl */
+	{ AS(freebsd32_procctl_args), (sy_call_t *)freebsd32_procctl, AUE_PROCCTL, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 544 = freebsd32_procctl */
 #endif
 	{ AS(freebsd32_ppoll_args), (sy_call_t *)freebsd32_ppoll, AUE_POLL, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 545 = freebsd32_ppoll */
 	{ AS(freebsd32_futimens_args), (sy_call_t *)freebsd32_futimens, AUE_FUTIMES, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 546 = freebsd32_futimens */
@@ -664,6 +664,6 @@ struct sysent freebsd32_sysent[] = {
 	{ AS(shm_rename_args), (sy_call_t *)sys_shm_rename, AUE_SHMRENAME, NULL, 0, 0, 0, SY_THR_STATIC },	/* 572 = shm_rename */
 	{ AS(sigfastblock_args), (sy_call_t *)sys_sigfastblock, AUE_NULL, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 573 = sigfastblock */
 	{ AS(__realpathat_args), (sy_call_t *)sys___realpathat, AUE_REALPATHAT, NULL, 0, 0, 0, SY_THR_STATIC },	/* 574 = __realpathat */
-	{ AS(pledge_args), (sy_call_t *)sys_pledge, AUE_PLEDGE, NULL, 0, 0, SYF_CAPENABLED, SY_THR_STATIC },	/* 575 = pledge */
-	{ AS(unveil_args), (sy_call_t *)sys_unveil, AUE_UNVEIL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 576 = unveil */
+	{ AS(old_pledge_args), (sy_call_t *)sys_old_pledge, AUE_PLEDGE, NULL, 0, 0, 0, SY_THR_STATIC },	/* 575 = old_pledge */
+	{ AS(unveilctl_args), (sy_call_t *)sys_unveilctl, AUE_UNVEILCTL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 576 = unveilctl */
 };

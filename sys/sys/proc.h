@@ -69,6 +69,7 @@
 #endif
 #include <sys/ucontext.h>
 #include <sys/ucred.h>
+#include <sys/_sysfil.h>
 #include <sys/types.h>
 #include <sys/_domainset.h>
 
@@ -676,6 +677,10 @@ struct proc {
 					       our subtree. */
 	uint16_t	p_elf_machine;	/* (x) ELF machine type */
 	uint64_t	p_elf_flags;	/* (x) ELF flags */
+#ifdef PLEDGE
+	sysfil_t	p_sysfil;	/* syscall filter flags */
+	sysfil_t	p_sysfilexec;	/* filter flags after execve(2) */
+#endif
 /* End area that is copied on creation. */
 #define	p_endcopy	p_xexit
 
@@ -789,6 +794,23 @@ struct proc {
 #define	P_TREE_FIRST_ORPHAN	0x00000002	/* First element of orphan
 						   list */
 #define	P_TREE_REAPER		0x00000004	/* Reaper of subtree */
+
+/*
+ * A process is considered "sandboxed" when its sysfil doesn't have all bits
+ * enabled.
+ *
+ * The general notion of a process being sandboxed is used for checks that
+ * should be done for both Capsicum and pledge().
+ */
+#define	PROC_SET_SANDBOX_MODE(p) \
+	do { (p)->p_sysfil &= ~SYF_DEFAULT; } while (0)
+
+#define	PROC_INIT_SANDBOX_BITS(p) \
+	do { (p)->p_sysfil = (p)->p_sysfilexec = -1; } while (0)
+
+#define	PROC_IN_SANDBOX_MODE(p) ((p)->p_sysfil != -1)
+
+#define	IN_SANDBOX_MODE(td) PROC_IN_SANDBOX_MODE((td)->td_proc)
 
 /*
  * These were process status values (p_stat), now they are only used in

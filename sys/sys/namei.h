@@ -47,7 +47,6 @@ struct componentname {
 	 */
 	u_long	cn_nameiop;	/* namei operation */
 	u_int64_t cn_flags;	/* flags to namei */
-	u_int	cn_flags2;
 	struct	thread *cn_thread;/* thread requesting lookup */
 	struct	ucred *cn_cred;	/* credentials */
 	int	cn_lkflags;	/* Lock flags LK_EXCLUSIVE or LK_SHARED */
@@ -86,7 +85,9 @@ struct nameidata {
 	struct filecaps ni_filecaps;	/* rights the *at base has */
 #ifdef PLEDGE
 	struct unveil_node *ni_unveil;	/* last unveil encountered */
+	struct unveil_node *ni_funveil;	/* last frozen unveil encountered */
 	unveil_perms_t ni_uperms;	/* covering unveil permissions */
+	u_int	ni_uflags;		/* flags related to unveil handling */
 #endif
 	/*
 	 * Results: returned from/manipulated by lookup
@@ -170,8 +171,13 @@ struct nameidata {
 #define	NOEXECCHECK	0x40000000 /* do not perform exec check on dir */
 #define	PARAMASK	0x7ffffe00 /* mask of parameter descriptors */
 
-#define	FORREADING	0x00000001 /* looked up file is to be read */
-#define	FORWRITING	0x00000002 /* looked up file is to be written */
+/*
+ * unveil flags
+ */
+
+#define	NIUNV_DISABLED	0x00000001 /* unveil restrictions not enforced */
+#define	NIUNV_FORREAD	0x00000002 /* looked up file is to be read */
+#define	NIUNV_FORWRITE	0x00000004 /* looked up file is to be written */
 
 /*
  * Namei results flags

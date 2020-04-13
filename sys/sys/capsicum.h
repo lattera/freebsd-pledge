@@ -483,6 +483,8 @@ extern cap_rights_t cap_symlinkat_rights;
 extern cap_rights_t cap_unlinkat_rights;
 extern cap_rights_t cap_write_rights;
 
+#define IN_CAPABILITY_MODE(td) (((td)->td_ucred->cr_flags & CRED_FLAG_CAPMODE) != 0)
+
 struct filedesc;
 struct filedescent;
 

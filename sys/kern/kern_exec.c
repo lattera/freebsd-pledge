@@ -38,7 +38,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/systm.h>
 #include <sys/acct.h>
 #include <sys/capsicum.h>
-#include <sys/pledge.h>
+#include <sys/sysfil.h>
 #include <sys/eventhandler.h>
 #include <sys/exec.h>
 #include <sys/fcntl.h>
@@ -450,7 +450,7 @@ interpret:
 			goto exec_fail;
 		}
 #endif
-		error = pledge_check(td, PLEDGE_EXEC);
+		error = sysfil_check(td, SYF_PLEDGE_EXEC);
 		if (error)
 			goto exec_fail;
 		error = namei(&nd);
@@ -528,7 +528,7 @@ interpret:
 
 	if (credential_changing &&
 #ifdef CAPABILITY_MODE
-	    !CRED_IN_SANDBOX_MODE(oldcred) &&
+	    ((oldcred->cr_flags & CRED_FLAG_CAPMODE) == 0) &&
 #endif
 	    (imgp->vp->v_mount->mnt_flag & MNT_NOSUID) == 0 &&
 	    (p->p_flag & P_TRACED) == 0) {
@@ -572,11 +572,6 @@ interpret:
 			change_svuid(imgp->newcred, imgp->newcred->cr_uid);
 			change_svgid(imgp->newcred, imgp->newcred->cr_gid);
 		}
-	}
-
-	if (pledge_cred_needs_exec_tweak(oldcred)) {
-		imgp->newcred = crdup(oldcred);
-		pledge_cred_exec_tweak(imgp->newcred);
 	}
 
 	/* The new credentials are installed into the process later. */
@@ -832,6 +827,13 @@ interpret:
 		crfree(oldcred);
 		oldcred = NULL;
 	}
+	/*
+	 * Switch sysfil to the process' on-execute sysfil.
+	 */
+#ifdef PLEDGE
+	p->p_sysfil = p->p_sysfilexec;
+#endif
+
 
 	/*
 	 * Store the vp for use in procfs.  This vnode was referenced by namei

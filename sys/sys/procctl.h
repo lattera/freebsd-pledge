@@ -63,6 +63,8 @@
 #define	PROC_PROTMAX_STATUS	16	/* query implicit PROT_MAX status */
 #define	PROC_STACKGAP_CTL	17	/* en/dis stack gap on MAP_STACK */
 #define	PROC_STACKGAP_STATUS	18	/* query stack gap */
+#define	PROC_SYSFIL		19	/* set pledge(2)-like sysfil */
+#define	PROC_SYSFIL_EXEC	20	/* sysfil after exec */
 
 /* Operations for PROC_SPROTECT (passed in integer arg). */
 #define	PPROT_OP(x)	((x) & 0xf)

@@ -154,11 +154,8 @@ kvm_proclist(kvm_t *kd, int what, int arg, struct proc *p,
 			kp->ki_svuid = ucred.cr_svuid;
 			kp->ki_rgid = ucred.cr_rgid;
 			kp->ki_svgid = ucred.cr_svgid;
-			kp->ki_cr_flags = 0;
-			if (CRED_IN_CAPABILITY_MODE(&ucred))
-				kp->ki_cr_flags |= KI_CRF_CAPABILITY_MODE;
-			if (CRED_IN_SANDBOX_MODE(&ucred))
-				kp->ki_cr_flags |= KI_CRF_SANDBOX_MODE;
+			/* XXX should probably use the KI_CRF_* flags instead */
+			kp->ki_cr_flags = ucred.cr_flags;
 			if (ucred.cr_ngroups > KI_NGROUPS) {
 				kp->ki_ngroups = KI_NGROUPS;
 				kp->ki_cr_flags |= KI_CRF_GRP_OVERFLOW;

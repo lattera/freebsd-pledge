@@ -3006,7 +3006,7 @@
 		    _In_ struct aiocb *aiocbp
 		);
 	}
-544	AUE_PROCCTL	STD {
+544	AUE_PROCCTL	STD|PLEDGE_ALWAYS {
 		int procctl(
 		    idtype_t idtype,
 		    id_t id,
@@ -3229,15 +3229,17 @@
 		);
 	}
 575	AUE_PLEDGE	STD|PLEDGE_ALWAYS {
-		int pledge(
+		int old_pledge(
 		    _In_z_ const char *promises,
 		    _In_z_ const char *execpromises
 		);
 	}
-576	AUE_UNVEIL	STD|PLEDGE_UNVEIL {
-		int unveil(
+576	AUE_UNVEILCTL	STD|PLEDGE_UNVEIL {
+		int unveilctl(
+		    int atfd,
 		    _In_z_ const char *path,
-		    _In_z_ const char *permissions
+		    int flags,
+		    unveil_perms_t perms
 		);
 	}
 

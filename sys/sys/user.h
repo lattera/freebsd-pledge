@@ -112,7 +112,6 @@
 
 /* Flags for the process credential. */
 #define	KI_CRF_CAPABILITY_MODE	0x00000001
-#define	KI_CRF_SANDBOX_MODE	0x00000002
 /*
  * Steal a bit from ki_cr_flags to indicate that the cred had more than
  * KI_NGROUPS groups.

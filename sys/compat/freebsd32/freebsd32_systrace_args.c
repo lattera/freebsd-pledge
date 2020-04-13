@@ -3374,20 +3374,22 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		*n_args = 5;
 		break;
 	}
-	/* pledge */
+	/* old_pledge */
 	case 575: {
-		struct pledge_args *p = params;
+		struct old_pledge_args *p = params;
 		uarg[0] = (intptr_t) p->promises; /* const char * */
 		uarg[1] = (intptr_t) p->execpromises; /* const char * */
 		*n_args = 2;
 		break;
 	}
-	/* unveil */
+	/* unveilctl */
 	case 576: {
-		struct unveil_args *p = params;
-		uarg[0] = (intptr_t) p->path; /* const char * */
-		uarg[1] = (intptr_t) p->permissions; /* const char * */
-		*n_args = 2;
+		struct unveilctl_args *p = params;
+		iarg[0] = p->atfd; /* int */
+		uarg[1] = (intptr_t) p->path; /* const char * */
+		iarg[2] = p->flags; /* int */
+		uarg[3] = p->perms; /* unveil_perms_t */
+		*n_args = 4;
 		break;
 	}
 	default:
@@ -9111,7 +9113,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
-	/* pledge */
+	/* old_pledge */
 	case 575:
 		switch(ndx) {
 		case 0:
@@ -9124,14 +9126,20 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
-	/* unveil */
+	/* unveilctl */
 	case 576:
 		switch(ndx) {
 		case 0:
-			p = "userland const char *";
+			p = "int";
 			break;
 		case 1:
 			p = "userland const char *";
+			break;
+		case 2:
+			p = "int";
+			break;
+		case 3:
+			p = "unveil_perms_t";
 			break;
 		default:
 			break;
@@ -11036,12 +11044,12 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
-	/* pledge */
+	/* old_pledge */
 	case 575:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
-	/* unveil */
+	/* unveilctl */
 	case 576:
 		if (ndx == 0 || ndx == 1)
 			p = "int";

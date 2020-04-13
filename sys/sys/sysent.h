@@ -35,7 +35,7 @@
 #define	_SYS_SYSENT_H_
 
 #include <bsm/audit.h>
-#include <sys/sysfil.h>
+#include <sys/_sysfil.h>
 
 struct rlimit;
 struct sysent;

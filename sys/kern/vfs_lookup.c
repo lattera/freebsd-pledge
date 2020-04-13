@@ -58,7 +58,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/sdt.h>
 #include <sys/syscallsubr.h>
 #include <sys/sysctl.h>
-#include <sys/pledge.h>
+#include <sys/sysfil.h>
 #include <sys/unveil.h>
 #ifdef KTRACE
 #include <sys/ktrace.h>
@@ -282,7 +282,8 @@ namei_handle_root(struct nameidata *ndp, struct vnode **dpp)
 	return (0);
 }
 
-static int pledge_check_namei(struct thread *, struct nameidata *);
+static void namei_unveil_init(struct nameidata *, struct vnode *, struct thread *);
+static int namei_sysfil_check(struct nameidata *);
 static void lookup_unveil_update(struct nameidata *, struct vnode *);
 static void lookup_unveil_update_dotdot(struct nameidata *, struct vnode *);
 static int lookup_unveil_check(struct nameidata *);
@@ -327,7 +328,6 @@ namei(struct nameidata *ndp)
 	td = cnp->cn_thread;
 	p = td->td_proc;
 	ndp->ni_cnd.cn_cred = ndp->ni_cnd.cn_thread->td_ucred;
-
 	KASSERT(cnp->cn_cred && p, ("namei: bad cred/proc"));
 	KASSERT((cnp->cn_nameiop & (~OPMASK)) == 0,
 	    ("namei: nameiop contaminated with flags"));
@@ -362,7 +362,7 @@ namei(struct nameidata *ndp)
 
 #ifdef PLEDGE
 	if (error == 0)
-		error = pledge_check_namei(td, ndp);
+		error = namei_sysfil_check(ndp);
 #endif
 
 #ifdef CAPABILITY_MODE
@@ -432,6 +432,9 @@ namei(struct nameidata *ndp)
 #endif
 			vrefact(dp);
 		} else {
+#ifdef PLEDGE
+			/* TODO: retrieve per-FD uperms */
+#endif
 			rights = ndp->ni_rightsneeded;
 			cap_rights_set_one(&rights, CAP_LOOKUP);
 
@@ -721,15 +724,14 @@ lookup(struct nameidata *ndp)
 	int rdonly;			/* lookup read-only flag bit */
 	int error = 0;
 	int dpunlocked = 0;		/* dp has already been unlocked */
+	int ni_dvp_unlocked = 0;	/* ni_dvp has already been unlocked */
 	int relookup = 0;		/* do not consume the path component */
 	struct componentname *cnp = &ndp->ni_cnd;
 	int lkflags_save;
-	int ni_dvp_unlocked;
-	
+
 	/*
 	 * Setup: break out flag bits into variables.
 	 */
-	ni_dvp_unlocked = 0;
 	wantparent = cnp->cn_flags & (LOCKPARENT | WANTPARENT);
 	KASSERT(cnp->cn_nameiop == LOOKUP || wantparent,
 	    ("CREATE, DELETE, RENAME require LOCKPARENT or WANTPARENT."));
@@ -840,7 +842,8 @@ dirloop:
 		if (wantparent) {
 			ndp->ni_dvp = dp;
 			VREF(dp);
-		}
+		} else
+			ni_dvp_unlocked = 2;
 		ndp->ni_vp = dp;
 
 		if (cnp->cn_flags & AUDITVNODE1)
@@ -848,8 +851,10 @@ dirloop:
 		else if (cnp->cn_flags & AUDITVNODE2)
 			AUDIT_ARG_VNODE2(dp);
 
-		if (!(cnp->cn_flags & (LOCKPARENT | LOCKLEAF)))
+		if (!(cnp->cn_flags & (LOCKPARENT | LOCKLEAF))) {
 			VOP_UNLOCK(dp);
+			dpunlocked = 1;
+		}
 		/* XXX This should probably move to the top of function. */
 		if (cnp->cn_flags & SAVESTART)
 			panic("lookup: SAVESTART");
@@ -888,6 +893,10 @@ dirloop:
 			goto bad;
 		}
 #ifdef PLEDGE
+		/*
+		 * This is to be done on the directory we are looking up ".."
+		 * from, not the result of this lookup.
+		 */
 		lookup_unveil_update_dotdot(ndp, dp);
 #endif
 		if ((cnp->cn_flags & ISLASTCN) != 0 &&
@@ -1019,6 +1028,8 @@ unionlookup:
 		}
 		if ((cnp->cn_flags & LOCKPARENT) == 0)
 			VOP_UNLOCK(dp);
+		/* cleanup code should ignore ni_dvp and only deal with dp */
+		ni_dvp_unlocked = 2;
 		/*
 		 * We return with ni_vp NULL to indicate that the entry
 		 * doesn't currently exist, leaving a pointer to the
@@ -1058,7 +1069,7 @@ good:
 		if (vn_lock(vp_crossmp, LK_SHARED | LK_NOWAIT))
 			panic("vp_crossmp exclusively locked or reclaimed");
 		if (error) {
-			dpunlocked = 1;
+			dpunlocked = 2;
 			goto bad2;
 		}
 		ndp->ni_vp = dp = tdp;
@@ -1172,10 +1183,18 @@ nextname:
 	else if (cnp->cn_flags & AUDITVNODE2)
 		AUDIT_ARG_VNODE2(dp);
 
-	if ((cnp->cn_flags & LOCKLEAF) == 0)
+	if ((cnp->cn_flags & LOCKLEAF) == 0) {
 		VOP_UNLOCK(dp);
+		dpunlocked = 1;
+	}
 success:
 #ifdef PLEDGE
+	/*
+	 * NOTE: "success:" is sometimes not so successful (especially with
+	 * unveil checking).  dp, dpunlocked, ni_dvp and ni_dvp_unlocked must
+	 * be properly set before jumping to success so that cleanup is done
+	 * correctly on failure.
+	 */
 	error = lookup_unveil_check(ndp);
 	if (error != 0)
 		goto bad2;
@@ -1202,8 +1221,12 @@ bad2:
 			vrele(ndp->ni_dvp);
 	}
 bad:
-	if (!dpunlocked)
-		vput(dp);
+	if (dpunlocked != 2) {
+		if (!dpunlocked)
+			vput(dp);
+		else
+			vrele(dp);
+	}
 	ndp->ni_vp = NULL;
 	return (error);
 }
@@ -1351,22 +1374,20 @@ NDINIT_ALL(struct nameidata *ndp, u_long op, u_long flags, enum uio_seg segflg,
 
 	ndp->ni_cnd.cn_nameiop = op;
 	ndp->ni_cnd.cn_flags = flags;
-	ndp->ni_cnd.cn_flags2 = 0;
 	ndp->ni_segflg = segflg;
 	ndp->ni_dirp = namep;
 	ndp->ni_dirfd = dirfd;
 	ndp->ni_startdir = startdir;
 	ndp->ni_resflags = 0;
 	filecaps_init(&ndp->ni_filecaps);
-#ifdef PLEDGE
-	ndp->ni_unveil = NULL;
-	ndp->ni_uperms = 0;
-#endif
 	ndp->ni_cnd.cn_thread = td;
 	if (rightsp != NULL)
 		ndp->ni_rightsneeded = *rightsp;
 	else
 		cap_rights_init_zero(&ndp->ni_rightsneeded);
+#ifdef PLEDGE
+	namei_unveil_init(ndp, startdir, td);
+#endif
 }
 
 /*
@@ -1537,24 +1558,53 @@ keeporig:
 }
 
 #ifdef PLEDGE
+
 static int
-pledge_check_namei(struct thread *td, struct nameidata *ndp)
+namei_sysfil_check(struct nameidata *ndp)
 {
-	struct componentname *cnp = &ndp->ni_cnd;
 	int error;
-	error = pledge_check_path_rights(td, &ndp->ni_rightsneeded,
-	    cnp->cn_nameiop != LOOKUP, cnp->cn_pnbuf);
-#if 1
-	if (error) {
-		printf("pledge_check_namei rejected operation: %lu %#jx:%#jx: %s\n",
-		    cnp->cn_nameiop,
-		    (uintmax_t)ndp->ni_rightsneeded.cr_rights[0],
-		    (uintmax_t)ndp->ni_rightsneeded.cr_rights[1],
-		    cnp->cn_pnbuf
-		);
-	}
+#ifdef PLEDGE
+	struct componentname *cnp = &ndp->ni_cnd;
+	struct thread *td = cnp->cn_thread;
+	if (cnp->cn_nameiop != LOOKUP &&
+	    (error = sysfil_check(td, SYF_PLEDGE_CPATH)))
+		return (error);
+	if ((ndp->ni_uflags & NIUNV_FORREAD) &&
+	    (error = sysfil_check(td, SYF_PLEDGE_RPATH)))
+		return (error);
+	if ((ndp->ni_uflags & NIUNV_FORWRITE) &&
+	    (error = sysfil_check(td, SYF_PLEDGE_WPATH)))
+		return (error);
 #endif
-	return (error);
+	return (0);
+}
+
+static int lookup_unveil_verbose = 0;
+SYSCTL_INT(_vfs, OID_AUTO, lookup_unveil_verbose, CTLFLAG_RWTUN,
+    &lookup_unveil_verbose, 0, NULL);
+
+void
+namei_unveil_init(struct nameidata *ndp, struct vnode *startdir, struct thread *td)
+{
+	struct filedesc *fdp = td->td_proc->p_fd;
+	bool active;
+	FILEDESC_SLOCK(fdp);
+	active = fdp->fd_unveil.active;
+	FILEDESC_SUNLOCK(fdp);
+
+	ndp->ni_uflags = 0;
+	ndp->ni_unveil = NULL;
+	ndp->ni_funveil = NULL;
+	/*
+	 * If a start vnode was explicitly specified, assume that unveil checks
+	 * don't need to apply.
+	 */
+	if (!active || startdir) {
+		ndp->ni_uperms = UNVEIL_PERM_ALL;
+		ndp->ni_uflags |= NIUNV_DISABLED;
+	} else {
+		ndp->ni_uperms = UNVEIL_PERM_NONE;
+	}
 }
 
 static void
@@ -1563,17 +1613,22 @@ lookup_unveil_update(struct nameidata *ndp, struct vnode *vp)
 	struct componentname *cnp = &ndp->ni_cnd;
 	struct filedesc *fdp = cnp->cn_thread->td_proc->p_fd;
 	struct unveil_node *unveil;
+	if (ndp->ni_uflags & NIUNV_DISABLED)
+		return;
 	FILEDESC_SLOCK(fdp);
 	unveil = unveil_lookup(&fdp->fd_unveil, vp);
 	FILEDESC_SUNLOCK(fdp);
 	if (unveil) {
-		printf("lookup_unveil_update: unveil found %#x %p for %p (\"%s\" \"%s\")\n",
-		    unveil->perms, unveil, vp, cnp->cn_pnbuf, cnp->cn_nameptr);
+		if (lookup_unveil_verbose)
+			printf("lookup_unveil_update: unveil found %#x %p for %p (\"%s\" \"%s\")\n",
+			    unveil->perms, unveil, vp, cnp->cn_pnbuf, cnp->cn_nameptr);
 		ndp->ni_unveil = unveil;
 		ndp->ni_uperms = unveil->perms;
+		if (unveil->frozen)
+			ndp->ni_funveil = unveil;
 	} else {
 		unveil = ndp->ni_unveil;
-		if (unveil)
+		if (unveil && lookup_unveil_verbose)
 			printf("lookup_unveil_update: unveil carry down %#x %p for %p (\"%s\" \"%s\")\n",
 			    unveil->perms, unveil, vp, cnp->cn_pnbuf, cnp->cn_nameptr);
 	}
@@ -1584,22 +1639,29 @@ lookup_unveil_update_dotdot(struct nameidata *ndp, struct vnode *vp)
 {
 	struct componentname *cnp = &ndp->ni_cnd;
 	struct unveil_node *unveil;
+	if (ndp->ni_uflags & NIUNV_DISABLED)
+		return;
 	if ((unveil = ndp->ni_unveil) && ndp->ni_unveil->vp == vp) {
 		unveil = unveil->cover;
 		if (unveil) {
-			printf("lookup_unveil_update_dotdot: unveil cover %#x %p for %p (\"%s\" \"%s\")\n",
-			    unveil->perms, unveil, vp, cnp->cn_pnbuf, cnp->cn_nameptr);
+			if (lookup_unveil_verbose)
+				printf("lookup_unveil_update_dotdot: unveil cover %#x %p for %p (\"%s\" \"%s\")\n",
+				    unveil->perms, unveil, vp, cnp->cn_pnbuf, cnp->cn_nameptr);
 			ndp->ni_unveil = unveil;
 			ndp->ni_uperms = unveil->perms;
+			if (unveil->frozen)
+				ndp->ni_funveil = unveil;
 		} else {
-			printf("lookup_unveil_update_dotdot: unveil drop for %p (\"%s\" \"%s\")\n",
-			    vp, cnp->cn_pnbuf, cnp->cn_nameptr);
+			if (lookup_unveil_verbose)
+				printf("lookup_unveil_update_dotdot: unveil drop for %p (\"%s\" \"%s\")\n",
+				    vp, cnp->cn_pnbuf, cnp->cn_nameptr);
 			ndp->ni_unveil = NULL;
 			ndp->ni_uperms = 0;
+			ndp->ni_funveil = NULL;
 		}
 	} else {
 		unveil = ndp->ni_unveil;
-		if (unveil)
+		if (unveil && lookup_unveil_verbose)
 			printf("lookup_unveil_update_dotdot: unveil carry up %#x %p for %p (\"%s\" \"%s\")\n",
 			    unveil->perms, unveil, vp, cnp->cn_pnbuf, cnp->cn_nameptr);
 	}
@@ -1609,27 +1671,24 @@ static int
 lookup_unveil_check(struct nameidata *ndp)
 {
 	struct componentname *cnp = &ndp->ni_cnd;
-	struct filedesc *fdp = cnp->cn_thread->td_proc->p_fd;
-	bool unrestricted;
-	FILEDESC_SLOCK(fdp);
-	unrestricted = fdp->fd_unveil.dir_count == 0;
-	FILEDESC_SUNLOCK(fdp);
-	if (unrestricted)
+	if (ndp->ni_uflags & NIUNV_DISABLED)
 		return (0);
-	printf("unveil_check_namei %lu %#x %#x %p: %s\n",
-	    cnp->cn_nameiop, cnp->cn_flags2, ndp->ni_uperms,
-	    ndp->ni_unveil,
-	    cnp->cn_pnbuf
-	);
+	if (lookup_unveil_verbose)
+		printf("unveil_check_namei %lu %#x %#x %p: %s\n",
+		    cnp->cn_nameiop, ndp->ni_uflags, ndp->ni_uperms,
+		    ndp->ni_unveil,
+		    cnp->cn_pnbuf
+		);
 	if ((cnp->cn_nameiop == DELETE || cnp->cn_nameiop == CREATE) &&
 	    !(ndp->ni_uperms & UNVEIL_PERM_CPATH))
 		return (EPERM);
-	if ((cnp->cn_flags2 & FORREADING) &&
+	if ((ndp->ni_uflags & NIUNV_FORREAD) &&
 	    !(ndp->ni_uperms & UNVEIL_PERM_RPATH))
 		return (EPERM);
-	if ((cnp->cn_flags2 & FORWRITING) &&
+	if ((ndp->ni_uflags & NIUNV_FORWRITE) &&
 	    !(ndp->ni_uperms & UNVEIL_PERM_WPATH))
 		return (EPERM);
 	return (0);
 }
+
 #endif

@@ -86,7 +86,7 @@ __FBSDID("$FreeBSD$");
 #include <vm/vm.h>
 #include <vm/vm_extern.h>
 #include <vm/uma.h>
-#include <sys/pledge.h>
+#include <sys/sysfil.h>
 
 #include <sys/jail.h>
 
@@ -1799,12 +1799,12 @@ kern_kill(struct thread *td, pid_t pid, int signum)
 	if (IN_CAPABILITY_MODE(td) && pid != td->td_proc->p_pid)
 		return (ECAPMODE);
 	/*
-	 * Similarly for pledged processes without PLEDGE_PROC, except
+	 * Similarly for pledged processes without SYF_PLEDGE_PROC, except
 	 * signaling the process group is allowed by OpenBSD.
 	 */
 	if (IN_SANDBOX_MODE(td) &&
 	    pid != 0 && pid != td->td_proc->p_pid &&
-	    (error = pledge_check(td, PLEDGE_PROC) != 0))
+	    (error = sysfil_check(td, SYF_PLEDGE_PROC) != 0))
 		return (error);
 
 	AUDIT_ARG_SIGNUM(signum);

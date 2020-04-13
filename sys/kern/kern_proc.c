@@ -74,7 +74,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/user.h>
 #include <sys/vnode.h>
 #include <sys/wait.h>
-#include <sys/pledge.h>
+#include <sys/sysfil.h>
 #include <sys/capsicum.h>
 
 #ifdef DDB
@@ -1021,9 +1021,7 @@ fill_kinfo_proc_only(struct proc *p, struct kinfo_proc *kp)
 		kp->ki_ruid = cred->cr_ruid;
 		kp->ki_svuid = cred->cr_svuid;
 		kp->ki_cr_flags = 0;
-		if (CRED_IN_SANDBOX_MODE(cred))
-			kp->ki_cr_flags |= KI_CRF_SANDBOX_MODE;
-		if (CRED_IN_CAPABILITY_MODE(cred))
+		if (cred->cr_flags & CRED_FLAG_CAPMODE)
 			kp->ki_cr_flags |= KI_CRF_CAPABILITY_MODE;
 		/* XXX bde doesn't like KI_NGROUPS */
 		if (cred->cr_ngroups > KI_NGROUPS) {

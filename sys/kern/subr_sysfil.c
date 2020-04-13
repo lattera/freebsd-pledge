@@ -1,0 +1,30 @@
+#include <sys/types.h>
+#include <sys/proc.h>
+#include <sys/sysfil.h>
+#include <sys/filio.h>
+
+int
+sysfil_check_ioctl(struct thread *td, sysfil_t sf, u_long cmd)
+{
+	switch (cmd) {
+#ifdef PLEDGE
+	case FIOCLEX:
+	case FIONCLEX:
+	case FIONREAD:
+	case FIONBIO:
+	case FIOASYNC:
+	case FIOGETOWN:
+	case FIODTYPE:
+#if 0
+	case FIOGETLBA:
+#endif
+		return (0);
+	case FIOSETOWN:
+		/* also checked in setown() */
+		return (sysfil_check(td, SYF_PLEDGE_PROC));
+#endif
+	default:
+		return (sysfil_check(td, sf));
+	}
+}
+

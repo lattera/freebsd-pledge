@@ -79,7 +79,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/ucred.h>
 #include <sys/uio.h>
 #include <sys/ktrace.h>
-#include <sys/pledge.h>
+#include <sys/sysfil.h>
 
 #include <security/audit/audit.h>
 
@@ -112,12 +112,17 @@ sys_cap_enter(struct thread *td, struct cap_enter_args *uap)
 	p = td->td_proc;
 	PROC_LOCK(p);
 	oldcred = crcopysafe(p, newcred);
-	newcred->cr_flags |= CRED_FLAG_CAPMODE | CRED_FLAG_SANDBOX;
-	KASSERT(CRED_IN_CAPABILITY_MODE(newcred),
-	    ("CRED_IN_CAPABILITY_MODE() inconsistent"));
-	KASSERT(CRED_IN_SANDBOX_MODE(newcred),
-	    ("CRED_IN_SANDBOX_MODE() inconsistent"));
+	newcred->cr_flags |= CRED_FLAG_CAPMODE;
 	proc_set_cred(p, newcred);
+	/*
+	 * To implement pledge(), a generic "sandbox" mode was added and some
+	 * of Capsicum's capability mode checks were converted to the more
+	 * general sandbox mode check when they should apply to both
+	 * Capsicumized and pledged processes.   It is very important that this
+	 * sandbox mode also be enabled when Capsicum's capability mode is.
+	 */
+	PROC_SET_SANDBOX_MODE(td->td_proc);
+	KASSERT(PROC_IN_SANDBOX_MODE(p), ("PROC_IN_SANDBOX_MODE() bogus"));
 	PROC_UNLOCK(p);
 	crfree(oldcred);
 	return (0);

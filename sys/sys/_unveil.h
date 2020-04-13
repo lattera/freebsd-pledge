@@ -3,7 +3,7 @@
 
 #include <sys/types.h>
 #include <sys/tree.h>
-#include <sys/_pledge.h>
+#include <sys/_sysfil.h>
 #ifndef _KERNEL
 #include <stdbool.h>
 #endif
@@ -13,7 +13,9 @@ struct unveil_node;
 struct unveil_base {
 	RB_HEAD(unveil_dir_tree, unveil_node) dir_root;
 	u_int dir_count;
+	bool active;
 	bool finished;
+	bool initial;
 };
 
 typedef uint8_t unveil_perms_t;

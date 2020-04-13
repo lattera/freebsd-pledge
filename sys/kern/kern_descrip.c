@@ -78,7 +78,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/unistd.h>
 #include <sys/user.h>
 #include <sys/vnode.h>
-#include <sys/pledge.h>
+#include <sys/sysfil.h>
 #include <sys/unveil.h>
 #ifdef KTRACE
 #include <sys/ktrace.h>
@@ -609,7 +609,7 @@ kern_fcntl(struct thread *td, int fd, int cmd, intptr_t arg)
 			break;
 		}
 
-		error = pledge_check(td, PLEDGE_FLOCK);
+		error = sysfil_check(td, SYF_PLEDGE_FLOCK);
 		if (error != 0)
 			break;
 		error = fget_unlocked(fdp, fd, &cap_flock_rights, &fp);
@@ -717,7 +717,7 @@ kern_fcntl(struct thread *td, int fd, int cmd, intptr_t arg)
 		break;
 
 	case F_GETLK:
-		error = pledge_check(td, PLEDGE_FLOCK);
+		error = sysfil_check(td, SYF_PLEDGE_FLOCK);
 		if (error != 0)
 			break;
 		error = fget_unlocked(fdp, fd, &cap_flock_rights, &fp);
@@ -754,7 +754,7 @@ kern_fcntl(struct thread *td, int fd, int cmd, intptr_t arg)
 		break;
 
 	case F_ADD_SEALS:
-		error = pledge_check(td, PLEDGE_FLOCK);
+		error = sysfil_check(td, SYF_PLEDGE_FLOCK);
 		if (error != 0)
 			break;
 		error = fget_unlocked(fdp, fd, &cap_no_rights, &fp);
@@ -765,7 +765,7 @@ kern_fcntl(struct thread *td, int fd, int cmd, intptr_t arg)
 		break;
 
 	case F_GET_SEALS:
-		error = pledge_check(td, PLEDGE_FLOCK);
+		error = sysfil_check(td, SYF_PLEDGE_FLOCK);
 		if (error != 0)
 			break;
 		error = fget_unlocked(fdp, fd, &cap_no_rights, &fp);
@@ -1129,7 +1129,7 @@ fsetown(pid_t pgid, struct sigio **sigiop)
 	struct sigio *sigio;
 	int ret;
 
-	ret = pledge_check(curthread, PLEDGE_PROC);
+	ret = sysfil_check(curthread, SYF_PLEDGE_PROC);
 	if (ret)
 		return (ret);
 
@@ -3291,6 +3291,9 @@ pwd_fill(struct pwd *oldpwd, struct pwd *newpwd)
 	if (newpwd->pwd_cdir == NULL && oldpwd->pwd_cdir != NULL) {
 		vrefact(oldpwd->pwd_cdir);
 		newpwd->pwd_cdir = oldpwd->pwd_cdir;
+#ifdef PLEDGE
+		newpwd->pwd_cdir_uperms = oldpwd->pwd_cdir_uperms;
+#endif
 	}
 
 	if (newpwd->pwd_rdir == NULL && oldpwd->pwd_rdir != NULL) {

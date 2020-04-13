@@ -73,7 +73,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/syscallsubr.h>
 #include <sys/sysctl.h>
 #include <sys/capsicum.h>
-#include <sys/pledge.h>
 
 #ifdef REGRESSION
 FEATURE(regression,
@@ -1852,7 +1851,6 @@ crget(void)
 
 	cr = malloc(sizeof(*cr), M_CRED, M_WAITOK | M_ZERO);
 	refcount_init(&cr->cr_ref, 1);
-	pledge_cred_init(cr); /* must be done even if PLEDGE isn't enabled */
 #ifdef AUDIT
 	audit_cred_init(cr);
 #endif

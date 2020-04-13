@@ -77,7 +77,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/syslog.h>
 #include <sys/unistd.h>
 #include <sys/user.h>
-#include <sys/pledge.h>
+#include <sys/sysfil.h>
 
 #include <security/audit/audit.h>
 #include <security/mac/mac_framework.h>
@@ -207,7 +207,13 @@ restart:
 	if ((fmode & (O_CREAT | O_EXCL | O_DIRECTORY)) == (O_CREAT |
 	    O_EXCL | O_DIRECTORY))
 		return (EINVAL);
-	else if ((fmode & (O_CREAT | O_DIRECTORY)) == O_CREAT) {
+#ifdef PLEDGE
+	if (fmode & FREAD)
+		ndp->ni_uflags |= NIUNV_FORREAD;
+	if (fmode & FWRITE)
+		ndp->ni_uflags |= NIUNV_FORWRITE;
+#endif
+	if ((fmode & (O_CREAT | O_DIRECTORY)) == O_CREAT) {
 		ndp->ni_cnd.cn_nameiop = CREATE;
 		/*
 		 * Set NOCACHE to avoid flushing the cache when
@@ -286,12 +292,6 @@ restart:
 			ndp->ni_cnd.cn_flags |= AUDITVNODE1;
 		if (vn_open_flags & VN_OPEN_NOCAPCHECK)
 			ndp->ni_cnd.cn_flags |= NOCAPCHECK;
-#ifdef PLEDGE
-		if (fmode & FREAD)
-			ndp->ni_cnd.cn_flags2 |= FORREADING;
-		if (fmode & FWRITE)
-			ndp->ni_cnd.cn_flags2 |= FORWRITING;
-#endif
 		if ((error = namei(ndp)) != 0)
 			return (error);
 		vp = ndp->ni_vp;
@@ -364,7 +364,7 @@ vn_open_vnode(struct vnode *vp, int fmode, struct ucred *cred,
 		if (vp->v_type == VDIR)
 			return (EISDIR);
 #if 0
-		error = pledge_check(td, PLEDGE_WPATH);
+		error = sysfil_check(td, SYF_PLEDGE_WPATH);
 		if (error)
 			return (error);
 #endif
@@ -372,7 +372,7 @@ vn_open_vnode(struct vnode *vp, int fmode, struct ucred *cred,
 	}
 	if (fmode & FREAD) {
 #if 0
-		error = pledge_check(td, PLEDGE_RPATH);
+		error = sysfil_check(td, SYF_PLEDGE_RPATH);
 		if (error)
 			return (error);
 #endif

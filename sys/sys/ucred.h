@@ -36,8 +36,6 @@
 #define	_SYS_UCRED_H_
 
 #include <bsm/audit.h>
-#include <sys/_pledge.h>
-#include <sys/sysfil.h>
 
 struct loginclass;
 
@@ -64,12 +62,6 @@ struct ucred {
 	struct prison	*cr_prison;	/* jail(2) */
 	struct loginclass	*cr_loginclass; /* login class */
 	u_int		cr_flags;	/* credential flags */
-	sysfil_t	cr_fflags;	/* syscall filter flags */
-	sysfil_t	cr_execfflags;	/* filter flags after execve(2) */
-#ifdef PLEDGE
-	pledge_set_t	cr_pledge;
-	pledge_set_t	cr_execpledge;
-#endif
 	void 		*cr_pspare2[2];	/* general use 2 */
 #define	cr_endcopy	cr_label
 	struct label	*cr_label;	/* MAC label */
@@ -84,28 +76,8 @@ struct ucred {
 
 /*
  * Flags for cr_flags.
- *
- * CRED_FLAG_CAPMODE ("capability mode") is on for Capsicum processes while
- * CRED_FLAG_SANDBOX ("sandbox mode") is on for Capsicum and pledge(2)
- * processes.  This is because some general security checks need to be done for
- * both (in which case CRED_FLAG_SANDBOX can be tested) while some need to be
- * done only for Capsicum (in which case CRED_FLAG_CAPMODE can be tested).
- * Enabling CRED_FLAG_CAPMODE without CRED_FLAG_SANDBOX should never be done.
- * pledge(2) promises can be tested independently of these flags with
- * pledge_check().
  */
-
 #define	CRED_FLAG_CAPMODE	0x00000001	/* In capability mode. */
-#define	CRED_FLAG_SANDBOX	0x00000002	/* In "sandbox" mode. */
-
-/* Checks if credentials represent a process specifically with Capsicum
- * enabled.  kvm(3) also uses this. */
-#define	CRED_IN_CAPABILITY_MODE(cr) (((cr)->cr_flags & CRED_FLAG_CAPMODE) != 0)
-#define	IN_CAPABILITY_MODE(td) CRED_IN_CAPABILITY_MODE((td)->td_ucred)
-
-/* Check if a general notion of "sandboxing" applies. */
-#define	CRED_IN_SANDBOX_MODE(cr) (((cr)->cr_flags & CRED_FLAG_SANDBOX) != 0)
-#define	IN_SANDBOX_MODE(td) CRED_IN_SANDBOX_MODE((td)->td_ucred)
 
 /*
  * This is the external representation of struct ucred.

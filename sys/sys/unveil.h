@@ -7,22 +7,29 @@
 #include <sys/refcount.h>
 #include <sys/_unveil.h>
 
-#ifdef PLEDGE
-MALLOC_DECLARE(M_UNVEIL);
-#endif
-
 enum {
+	UNVEIL_PERM_NONE  = 0,
 	UNVEIL_PERM_RPATH = 1 << 0,
 	UNVEIL_PERM_WPATH = 1 << 1,
 	UNVEIL_PERM_CPATH = 1 << 2,
 	UNVEIL_PERM_EXEC  = 1 << 3,
+	UNVEIL_PERM_ALL   = -1
 };
+
+int unveilctl(int atfd, const char *path, int flags, unveil_perms_t perms);
+
+#ifdef _KERNEL
+
+#ifdef PLEDGE
+MALLOC_DECLARE(M_UNVEIL);
+#endif
 
 struct unveil_node {
 	struct unveil_node *cover;
 	RB_ENTRY(unveil_node) entry;
 	struct vnode *vp;
 	unveil_perms_t perms;
+	bool frozen;
 };
 
 static inline void
@@ -30,6 +37,7 @@ unveil_init(struct unveil_base *base)
 {
 	*base = (struct unveil_base){
 		.dir_root = RB_INITIALIZER(&base->dir_root),
+		.initial = true,
 	};
 }
 
@@ -40,5 +48,7 @@ struct unveil_node *unveil_lookup(struct unveil_base *, struct vnode *);
 
 struct unveil_node *unveil_insert(struct unveil_base *,
     struct unveil_node *, struct vnode *);
+
+#endif /* _KERNEL */
 
 #endif

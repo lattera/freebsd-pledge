@@ -19,7 +19,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/syslog.h>
 #include <sys/jail.h>
 #include <sys/namei.h>
-#include <sys/pledge.h>
+#include <sys/sysfil.h>
 #include <sys/unveil.h>
 
 #ifdef PLEDGE
@@ -84,7 +84,8 @@ unveil_lookup(struct unveil_base *base, struct vnode *vp)
 }
 
 static int
-do_unveil(struct thread *td, const char *path, unveil_perms_t perms)
+do_unveil(struct thread *td, int atfd, const char *path, int flags,
+    unveil_perms_t perms)
 {
 	struct filedesc *fdp = td->td_proc->p_fd;
 	struct unveil_base *base = &fdp->fd_unveil;
@@ -103,19 +104,26 @@ do_unveil(struct thread *td, const char *path, unveil_perms_t perms)
 	if (error)
 		return (error);
 
-	NDINIT(&nd, LOOKUP, FOLLOW | LOCKLEAF, UIO_SYSSPACE, path, td);
+	NDINIT_AT(&nd, LOOKUP, FOLLOW | LOCKLEAF, UIO_SYSSPACE, path, atfd, td);
 	error = namei(&nd);
 	if (error)
 		return (error);
 
 	FILEDESC_XLOCK(fdp);
+	base->active = true;
 	node = unveil_insert(base, nd.ni_unveil, nd.ni_vp);
-	node->perms = perms; /* TODO: check previous permissions */
+	if (nd.ni_funveil)
+		perms &= nd.ni_funveil->perms;
+	else if (!base->initial)
+		perms = 0;
+	node->perms = perms;
 	FILEDESC_XUNLOCK(fdp);
 
 	NDFREE(&nd, 0);
+#if 0
 	printf("pid %d (%s) unveil \"%s\" %#x: %p cover %p\n",
 	    td->td_proc->p_pid, td->td_proc->p_comm, path, perms, node, node->cover);
+#endif
 	return (error);
 }
 
@@ -125,50 +133,23 @@ do_unveil_finished(struct thread *td)
 	struct filedesc *fdp = td->td_proc->p_fd;
 	FILEDESC_XLOCK(fdp);
 	fdp->fd_unveil.finished = true;
+	fdp->fd_unveil.initial = false;
 	FILEDESC_XUNLOCK(fdp);
-}
-
-static int
-unveil_parse_perms(unveil_perms_t *perms, const char *s)
-{
-	while (*s)
-		switch (*s++) {
-		case 'r': *perms |= UNVEIL_PERM_RPATH; break;
-		case 'w': *perms |= UNVEIL_PERM_WPATH; break;
-		case 'c': *perms |= UNVEIL_PERM_CPATH; break;
-		case 'x': *perms |= UNVEIL_PERM_EXEC;  break;
-		default:
-			  return (EINVAL);
-		}
-	return (0);
 }
 
 #endif /* PLEDGE */
 
 int
-sys_unveil(struct thread *td, struct unveil_args *uap)
+sys_unveilctl(struct thread *td, struct unveilctl_args *uap)
 {
 #ifdef PLEDGE
-	char *path, *permissions;
-	unveil_perms_t perms;
+	char *path;
 	int error;
 
-	if (!uap->path && !uap->permissions) {
+	if (uap->atfd < 0 && !uap->path) {
 		do_unveil_finished(td);
 		return (0);
 	}
-
-	permissions = malloc(MAXPATHLEN, M_TEMP, M_WAITOK);
-	error = copyinstr(uap->permissions, permissions, MAXPATHLEN, NULL);
-	if (error) {
-		free(permissions, M_TEMP);
-		return (error);
-	}
-	perms = 0;
-	error = unveil_parse_perms(&perms, permissions);
-	free(permissions, M_TEMP);
-	if (error)
-		return (error);
 
 	path = malloc(MAXPATHLEN, M_TEMP, M_WAITOK);
 	error = copyinstr(uap->path, path, MAXPATHLEN, NULL);
@@ -176,7 +157,7 @@ sys_unveil(struct thread *td, struct unveil_args *uap)
 		free(path, M_TEMP);
 		return (error);
 	}
-	error = do_unveil(td, path, perms);
+	error = do_unveil(td, uap->atfd, path, uap->flags, uap->perms);
 	free(path, M_TEMP);
 	return (error);
 #else

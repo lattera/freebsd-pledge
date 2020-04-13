@@ -611,6 +611,6 @@ const char *freebsd32_syscallnames[] = {
 	"shm_rename",			/* 572 = shm_rename */
 	"sigfastblock",			/* 573 = sigfastblock */
 	"__realpathat",			/* 574 = __realpathat */
-	"pledge",			/* 575 = pledge */
-	"unveil",			/* 576 = unveil */
+	"old_pledge",			/* 575 = old_pledge */
+	"unveilctl",			/* 576 = unveilctl */
 };

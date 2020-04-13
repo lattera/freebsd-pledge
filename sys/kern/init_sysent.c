@@ -599,7 +599,7 @@ struct sysent sysent[] = {
 	{ AS(accept4_args), (sy_call_t *)sys_accept4, AUE_ACCEPT, NULL, 0, 0, SYF_PLEDGE_INET | SYF_PLEDGE_UNIX | SYF_CAPENABLED, SY_THR_STATIC },	/* 541 = accept4 */
 	{ AS(pipe2_args), (sy_call_t *)sys_pipe2, AUE_PIPE, NULL, 0, 0, SYF_PLEDGE_STDIO | SYF_CAPENABLED, SY_THR_STATIC },	/* 542 = pipe2 */
 	{ AS(aio_mlock_args), (sy_call_t *)sys_aio_mlock, AUE_AIO_MLOCK, NULL, 0, 0, 0, SY_THR_STATIC },	/* 543 = aio_mlock */
-	{ AS(procctl_args), (sy_call_t *)sys_procctl, AUE_PROCCTL, NULL, 0, 0, 0, SY_THR_STATIC },	/* 544 = procctl */
+	{ AS(procctl_args), (sy_call_t *)sys_procctl, AUE_PROCCTL, NULL, 0, 0, SYF_PLEDGE_ALWAYS | SYF_CAPENABLED, SY_THR_STATIC },	/* 544 = procctl */
 	{ AS(ppoll_args), (sy_call_t *)sys_ppoll, AUE_POLL, NULL, 0, 0, SYF_PLEDGE_STDIO | SYF_CAPENABLED, SY_THR_STATIC },	/* 545 = ppoll */
 	{ AS(futimens_args), (sy_call_t *)sys_futimens, AUE_FUTIMES, NULL, 0, 0, SYF_PLEDGE_FATTR | SYF_CAPENABLED, SY_THR_STATIC },	/* 546 = futimens */
 	{ AS(utimensat_args), (sy_call_t *)sys_utimensat, AUE_FUTIMESAT, NULL, 0, 0, SYF_PLEDGE_FATTR | SYF_CAPENABLED, SY_THR_STATIC },	/* 547 = utimensat */
@@ -630,6 +630,6 @@ struct sysent sysent[] = {
 	{ AS(shm_rename_args), (sy_call_t *)sys_shm_rename, AUE_SHMRENAME, NULL, 0, 0, 0, SY_THR_STATIC },	/* 572 = shm_rename */
 	{ AS(sigfastblock_args), (sy_call_t *)sys_sigfastblock, AUE_NULL, NULL, 0, 0, SYF_PLEDGE_STDIO | SYF_CAPENABLED, SY_THR_STATIC },	/* 573 = sigfastblock */
 	{ AS(__realpathat_args), (sy_call_t *)sys___realpathat, AUE_REALPATHAT, NULL, 0, 0, SYF_PLEDGE_STDIO, SY_THR_STATIC },	/* 574 = __realpathat */
-	{ AS(pledge_args), (sy_call_t *)sys_pledge, AUE_PLEDGE, NULL, 0, 0, SYF_PLEDGE_ALWAYS | SYF_CAPENABLED, SY_THR_STATIC },	/* 575 = pledge */
-	{ AS(unveil_args), (sy_call_t *)sys_unveil, AUE_UNVEIL, NULL, 0, 0, SYF_PLEDGE_UNVEIL, SY_THR_STATIC },	/* 576 = unveil */
+	{ AS(old_pledge_args), (sy_call_t *)sys_old_pledge, AUE_PLEDGE, NULL, 0, 0, SYF_PLEDGE_ALWAYS, SY_THR_STATIC },	/* 575 = old_pledge */
+	{ AS(unveilctl_args), (sy_call_t *)sys_unveilctl, AUE_UNVEILCTL, NULL, 0, 0, SYF_PLEDGE_UNVEIL, SY_THR_STATIC },	/* 576 = unveilctl */
 };

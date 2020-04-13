@@ -501,6 +501,6 @@
 #define	FREEBSD32_SYS_shm_rename	572
 #define	FREEBSD32_SYS_sigfastblock	573
 #define	FREEBSD32_SYS___realpathat	574
-#define	FREEBSD32_SYS_pledge	575
-#define	FREEBSD32_SYS_unveil	576
+#define	FREEBSD32_SYS_old_pledge	575
+#define	FREEBSD32_SYS_unveilctl	576
 #define	FREEBSD32_SYS_MAXSYSCALL	577

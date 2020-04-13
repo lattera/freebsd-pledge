@@ -66,7 +66,7 @@ __FBSDID("$FreeBSD$");
 #undef TTYDEFCHARS
 #include <sys/ucred.h>
 #include <sys/vnode.h>
-#include <sys/pledge.h>
+#include <sys/sysfil.h>
 
 #include <machine/stdarg.h>
 
@@ -547,7 +547,7 @@ ttydev_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int fflag,
 	struct tty *tp = dev->si_drv1;
 	int error;
 
-	error = pledge_check_ioctl(td, PLEDGE_TTY, cmd);
+	error = sysfil_check_ioctl(td, SYF_PLEDGE_TTY, cmd);
 	if (error)
 		return (error);
 

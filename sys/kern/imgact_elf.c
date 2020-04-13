@@ -70,7 +70,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/syslog.h>
 #include <sys/eventhandler.h>
 #include <sys/user.h>
-#include <sys/pledge.h>
+#include <sys/sysfil.h>
 
 #include <vm/vm.h>
 #include <vm/vm_kern.h>
@@ -761,7 +761,7 @@ __elfN(load_file)(struct proc *p, const char *file, u_long *addr,
 		return (ECAPMODE);
 #endif
 
-	error = pledge_check(curthread, PLEDGE_EXEC);
+	error = sysfil_check(curthread, SYF_PLEDGE_EXEC);
 	if (error)
 		return (error);
 
