@@ -1351,6 +1351,14 @@ kern_close_range(struct thread *td, u_int lowfd, u_int highfd)
 		ret = EINVAL;
 		goto out;
 	}
+
+	/*
+	 * If fdp->fd_lastfile == -1, we're dealing with either a fresh file
+	 * table or one in which every fd has been closed.  Just return
+	 * successful; there's nothing left to do.
+	 */
+	if (fdp->fd_lastfile == -1)
+		goto out;
 	/* Clamped to [lowfd, fd_lastfile] */
 	highfd = MIN(highfd, fdp->fd_lastfile);
 	for (fd = lowfd; fd <= highfd; fd++) {
@@ -1382,17 +1390,18 @@ sys_close_range(struct thread *td, struct close_range_args *uap)
 	return (kern_close_range(td, uap->lowfd, uap->highfd));
 }
 
+#ifdef COMPAT_FREEBSD12
 /*
  * Close open file descriptors.
  */
 #ifndef _SYS_SYSPROTO_H_
-struct closefrom_args {
+struct freebsd12_closefrom_args {
 	int	lowfd;
 };
 #endif
 /* ARGSUSED */
 int
-sys_closefrom(struct thread *td, struct closefrom_args *uap)
+freebsd12_closefrom(struct thread *td, struct freebsd12_closefrom_args *uap)
 {
 	u_int lowfd;
 
@@ -1405,6 +1414,7 @@ sys_closefrom(struct thread *td, struct closefrom_args *uap)
 	lowfd = MAX(0, uap->lowfd);
 	return (kern_close_range(td, lowfd, ~0U));
 }
+#endif	/* COMPAT_FREEBSD12 */
 
 #if defined(COMPAT_43)
 /*

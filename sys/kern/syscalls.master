@@ -2777,7 +2777,7 @@
 		    int jid
 		);
 	}
-509	AUE_CLOSEFROM	STD|PLEDGE_STDIO {
+509	AUE_CLOSEFROM	COMPAT12|PLEDGE_STDIO {
 		int closefrom(
 		    int lowfd
 		);
@@ -3228,7 +3228,7 @@
 		    int flags
 		);
 	}
-575	AUE_NULL	STD {
+575	AUE_NULL	STD|PLEDGE_STDIO {
 		int close_range(
 		    u_int lowfd,
 		    u_int highfd,

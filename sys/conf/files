@@ -2399,6 +2399,7 @@ dev/mmc/mmc.c			optional mmc !mmccam
 dev/mmc/mmcbr_if.m		standard
 dev/mmc/mmcbus_if.m		standard
 dev/mmc/mmcsd.c			optional mmcsd !mmccam
+dev/mmc/mmc_fdt_helpers.c	optional mmc fdt | mmccam fdt
 dev/mmcnull/mmcnull.c		optional mmcnull
 dev/mn/if_mn.c			optional mn pci
 dev/mpr/mpr.c			optional mpr
@@ -4437,7 +4438,6 @@ netsmb/smb_usr.c		optional netsmb
 nfs/bootp_subr.c		optional bootp nfscl
 nfs/krpc_subr.c			optional bootp nfscl
 nfs/nfs_diskless.c		optional nfscl nfs_root
-nfs/nfs_fha.c			optional nfsd
 nfs/nfs_nfssvc.c		optional nfscl | nfslockd | nfsd
 nlm/nlm_advlock.c		optional nfslockd | nfsd
 nlm/nlm_prot_clnt.c		optional nfslockd | nfsd
