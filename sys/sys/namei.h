@@ -79,16 +79,16 @@ struct nameidata {
 	struct	vnode *ni_topdir;	/* logical top directory */
 	int	ni_dirfd;		/* starting directory for *at functions */
 	int	ni_lcf;			/* local call flags */
-	/*
-	 * Results: returned from namei
-	 */
-	struct filecaps ni_filecaps;	/* rights the *at base has */
 #ifdef PLEDGE
 	struct unveil_node *ni_unveil;	/* last unveil encountered */
 	struct unveil_node *ni_funveil;	/* last frozen unveil encountered */
 	unveil_perms_t ni_uperms;	/* covering unveil permissions */
 	u_int	ni_uflags;		/* flags related to unveil handling */
 #endif
+	/*
+	 * Results: returned from namei
+	 */
+	struct filecaps ni_filecaps;	/* rights the *at base has */
 	/*
 	 * Results: returned from/manipulated by lookup
 	 */
