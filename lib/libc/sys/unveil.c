@@ -30,16 +30,24 @@ unveil(const char *path, const char *permissions)
 	/* TODO: global lock */
 	int r;
 	unveil_perms_t perms;
-	if (!path && !permissions)
-		return (unveilctl(-1, NULL, 0, 0));
+	if (!path && !permissions) {
+		r = unveilctl(-1, NULL,
+		    UNVEIL_FLAG_RESTRICT,
+		    UNVEIL_PERM_NONE);
+		if (r < 0)
+			return (r);
+		r = unveilctl(-1, NULL,
+		    UNVEIL_FLAG_FOR_ALL | UNVEIL_FLAG_FREEZE,
+		    0);
+		return (r);
+	}
 	perms = 0;
 	r = unveil_parse_perms(&perms, permissions);
 	if (r < 0) {
 		errno = EINVAL;
 		return (-1);
 	}
-	r = unveilctl(AT_FDCWD, path, 0, perms);
-	return (r);
+	return (unveilctl(AT_FDCWD, path, 0, perms));
 #else
 	errno = ENOSYS;
 	return (-1);

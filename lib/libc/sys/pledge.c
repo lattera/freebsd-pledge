@@ -16,8 +16,8 @@ enum promise_type {
 	PROMISE_NONE = 0,
 	PROMISE_ERROR,
 	PROMISE_CAPSICUM,
+	PROMISE_BASIC, /* same as PROMISE_STDIO but without the unveils */
 	PROMISE_STDIO,
-	PROMISE__STDIO, /* stdio without unveils */
 	PROMISE_UNVEIL,
 	PROMISE_RPATH,
 	PROMISE_WPATH,
@@ -59,8 +59,8 @@ struct pledge_state {
 static const struct promise_name promise_names[] = {
 	{ "error",	PROMISE_ERROR },
 	{ "capsicum",	PROMISE_CAPSICUM },
+	{ "basic",	PROMISE_BASIC },
 	{ "stdio",	PROMISE_STDIO },
-	{ "_stdio",	PROMISE__STDIO },
 	{ "unveil",	PROMISE_UNVEIL },
 	{ "rpath",	PROMISE_RPATH },
 	{ "wpath",	PROMISE_WPATH },
@@ -84,10 +84,15 @@ static const struct promise_name promise_names[] = {
 };
 
 static const sysfil_t promise_sysfils[PROMISE_COUNT] = {
+	/*
+	 * Note that SYF_PLEDGE_UNVEIL and SYF_PLEDGE_?PATH/SYF_PLEDGE_EXEC are
+	 * automatially added if required by the promise's unveils (and removed
+	 * once they no longer are).
+	 */
 	[PROMISE_ERROR] = SYF_PLEDGE_ERROR,
 	[PROMISE_CAPSICUM] = SYF_CAPENABLED,
-	[PROMISE_STDIO] = SYF_PLEDGE_STDIO | SYF_PLEDGE_UNVEIL, /* XXX */
-	[PROMISE__STDIO] = SYF_PLEDGE_STDIO,
+	[PROMISE_BASIC] = SYF_PLEDGE_STDIO,
+	[PROMISE_STDIO] = SYF_PLEDGE_STDIO,
 	[PROMISE_UNVEIL] = SYF_PLEDGE_UNVEIL,
 	[PROMISE_RPATH] = SYF_PLEDGE_RPATH,
 	[PROMISE_WPATH] = SYF_PLEDGE_WPATH,
@@ -203,6 +208,15 @@ uperms2sysfil(unveil_perms_t up)
 	        ((up & UNVEIL_PERM_EXEC)  ? SYF_PLEDGE_EXEC  : 0));
 }
 
+static unveil_perms_t
+sysfil2uperms(sysfil_t sf)
+{
+	return (((sf & SYF_PLEDGE_RPATH) ? UNVEIL_PERM_RPATH : 0) |
+	        ((sf & SYF_PLEDGE_WPATH) ? UNVEIL_PERM_WPATH : 0) |
+	        ((sf & SYF_PLEDGE_CPATH) ? UNVEIL_PERM_CPATH : 0) |
+	        ((sf & SYF_PLEDGE_EXEC)  ? UNVEIL_PERM_EXEC  : 0));
+}
+
 static bool unveils_sorted = false;
 
 static int
@@ -230,15 +244,21 @@ apply_pledge(struct pledge_state *req_pledge, struct pledge_state *cur_pledge,
 {
 	struct promise_unveil *pu;
 	sysfil_t sysfil;
+	unveil_perms_t max_uperms;
 	int r, i;
+
 	sort_unveils();
+
 	sysfil = SYF_PLEDGE_ALWAYS;
 	for (i = 0; i < PROMISE_COUNT; i++)
 		if (req_pledge->promises[i])
 			sysfil |= promise_sysfils[i];
+
+	max_uperms = 0;
 	for (pu = promise_unveils; *pu->path; pu++) {
 		unveil_perms_t cur_uperms = 0, new_uperms = 0;
 		do {
+			/* Process all entries for the same path. */
 			if (req_pledge->promises[pu->type])
 				new_uperms |= pu->perms;
 			if (cur_pledge->promises[pu->type])
@@ -247,22 +267,45 @@ apply_pledge(struct pledge_state *req_pledge, struct pledge_state *cur_pledge,
 				break;
 			pu++;
 		} while (true);
-		sysfil |= uperms2sysfil(new_uperms);
-		if (new_uperms) {
-			r = unveilctl(AT_FDCWD, pu->path, 0, new_uperms);
+		if (new_uperms != cur_uperms) {
+			/* we modify the "special" permissions */
+			r = unveilctl(AT_FDCWD, pu->path,
+			    UNVEIL_FLAG_SPECIAL, new_uperms);
 			if (r < 0 && errno != ENOENT)
-				warn("unveil(\"%s\", \"%u\")", pu->path, new_uperms);
-		} else if (cur_uperms) {
-			/* undo unveils for previous pledge, if any */
-			/* XXX: This should drop the unveil instead of removing
-			 * permissions so that it doesn't mask a parent unveil
-			 * (possibly added by the application). */
-			r = unveilctl(AT_FDCWD, pu->path, 0, 0);
-			if (r < 0 && errno != ENOENT)
-				warn("unveil(\"%s\", %u)", pu->path, 0);
+				warn("unveil: %s", pu->path);
+		}
+		max_uperms |= new_uperms;
+	}
+
+	if (max_uperms) {
+		sysfil_t old_sysfil;
+		/*
+		 * Some of the promises required unveils.  Certain sysfils must
+		 * be implicitly enabled to allow accessing the unveiled files.
+		 */
+		old_sysfil = sysfil;
+		sysfil |= uperms2sysfil(max_uperms);
+		if (old_sysfil != sysfil) {
+			r = unveilctl(-1, NULL,
+			    UNVEIL_FLAG_FOR_ALL | UNVEIL_FLAG_RESTRICT,
+			    sysfil2uperms(old_sysfil));
+			if (r < 0)
+				warn("unveil restrict");
+		}
+		/*
+		 * Maintain the ability to drop the unveils later on if the
+		 * promises are pledged away.
+		 */
+		old_sysfil = sysfil;
+		sysfil |= SYF_PLEDGE_UNVEIL;
+		if (old_sysfil != sysfil) {
+			r = unveilctl(-1, NULL,
+			    UNVEIL_FLAG_FOR_ALL | UNVEIL_FLAG_FREEZE,
+			    0);
+			if (r < 0)
+				warn("unveil freeze");
 		}
 	}
-	/* TODO: freeze unveils */
 	r = procctl(P_PID, getpid(), procctl_cmd, &sysfil);
 	if (r < 0)
 		return (-1);

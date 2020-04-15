@@ -38,6 +38,15 @@ unveil_dir_node_cmp(struct unveil_node *a, struct unveil_node *b)
 RB_GENERATE_STATIC(unveil_dir_tree, unveil_node, entry, unveil_dir_node_cmp);
 
 void
+unveil_init(struct unveil_base *base)
+{
+	*base = (struct unveil_base){
+		.dir_root = RB_INITIALIZER(&base->dir_root),
+		.implicit_perms = UNVEIL_PERM_ALL,
+	};
+}
+
+void
 unveil_merge(struct unveil_base *dst, struct unveil_base *src)
 {
 	/* TODO */
@@ -69,10 +78,11 @@ unveil_insert(struct unveil_base *base,
 	old = RB_INSERT(unveil_dir_tree, &base->dir_root, new);
 	if (old) {
 		free(new, M_UNVEIL);
-		return (old);
+		new = old;
+	} else {
+		vref(vp);
+		base->dir_count++;
 	}
-	vref(vp);
-	base->dir_count++;
 	return (new);
 }
 
@@ -83,6 +93,7 @@ unveil_lookup(struct unveil_base *base, struct vnode *vp)
 	return (RB_FIND(unveil_dir_tree, &base->dir_root, &key));
 }
 
+
 static int
 do_unveil(struct thread *td, int atfd, const char *path, int flags,
     unveil_perms_t perms)
@@ -91,50 +102,98 @@ do_unveil(struct thread *td, int atfd, const char *path, int flags,
 	struct unveil_base *base = &fdp->fd_unveil;
 	struct unveil_node *node;
 	struct nameidata nd;
-	int error;
+	int error = 0;
+	bool adding;
 
-	FILEDESC_SLOCK(fdp);
-	if (base->finished)
-		error = EPERM;
-	else if (base->dir_count >= unveil_max_nodes)
-		error = E2BIG;
-	else
-		error = 0;
-	FILEDESC_SUNLOCK(fdp);
-	if (error)
-		return (error);
+	if (!(flags & UNVEIL_FLAG_SPECIAL))
+		flags |= UNVEIL_FLAG_REGULAR;
 
-	NDINIT_AT(&nd, LOOKUP, FOLLOW | LOCKLEAF, UIO_SYSSPACE, path, atfd, td);
-	error = namei(&nd);
-	if (error)
-		return (error);
+	if ((adding = path != NULL)) {
+		NDINIT_AT(&nd, LOOKUP, FOLLOW | LOCKLEAF,
+		    UIO_SYSSPACE, path, atfd, td);
+		error = namei(&nd);
+		if (error)
+			return (error);
+	}
 
 	FILEDESC_XLOCK(fdp);
-	base->active = true;
-	node = unveil_insert(base, nd.ni_unveil, nd.ni_vp);
-	if (nd.ni_funveil)
-		perms &= nd.ni_funveil->perms;
-	else if (!base->initial)
-		perms = 0;
-	node->perms = perms;
-	FILEDESC_XUNLOCK(fdp);
+	node = NULL;
 
-	NDFREE(&nd, 0);
+	if (flags & (UNVEIL_FLAG_RESTRICT)) {
+		base->active = true;
+		base->implicit_perms &= perms;
+	}
+
+	if (adding) {
+		unveil_perms_t limit;
+		if (base->dir_count >= unveil_max_nodes) {
+			if (!(node = unveil_lookup(base, nd.ni_vp))) {
+				error = E2BIG;
+				goto out;
+			}
+		}
+		if (!node)
+			node = unveil_insert(base, nd.ni_unveil, nd.ni_vp);
+		base->active = true;
+		if (nd.ni_funveil)
+			/*
+			 * Restrict permissions of a newly added node to those
+			 * present in the last frozen node that was encountered
+			 * during traversal.  If the node was already present
+			 * and was frozen, permissions will be restricted to
+			 * those that it already had.
+			 */
+			limit = unveil_node_perms(nd.ni_funveil);
+		else
+			limit = base->implicit_perms;
+		if (perms & ~limit) {
+			error = EPERM;
+			goto out;
+		}
+		perms &= limit;
+		if (flags & UNVEIL_FLAG_FREEZE)
+			node->frozen = true;
+		/*
+		 * Unveils have two sets of permissions to help implementing
+		 * the userland pledge() wrapper.  The "special" permissions
+		 * will be those that were done for the pledge promises that
+		 * require unveils, while the "regular" permissions will be for
+		 * unveils done directly by the user.
+		 */
+		if (flags & UNVEIL_FLAG_REGULAR)
+			node->regular_perms = perms;
+		if (flags & UNVEIL_FLAG_SPECIAL)
+			node->special_perms = perms;
 #if 0
-	printf("pid %d (%s) unveil \"%s\" %#x: %p cover %p\n",
-	    td->td_proc->p_pid, td->td_proc->p_comm, path, perms, node, node->cover);
+		printf("pid %d (%s) unveil \"%s\" %#x: %p cover %p\n",
+		    td->td_proc->p_pid, td->td_proc->p_comm, path, perms, node, node->cover);
 #endif
-	return (error);
-}
+	}
 
-static void
-do_unveil_finished(struct thread *td)
-{
-	struct filedesc *fdp = td->td_proc->p_fd;
-	FILEDESC_XLOCK(fdp);
-	fdp->fd_unveil.finished = true;
-	fdp->fd_unveil.initial = false;
-	FILEDESC_XUNLOCK(fdp);
+	if (flags & UNVEIL_FLAG_FOR_ALL) {
+		/*
+		 * This was specifically designed to allow the userland
+		 * pledge() wrapper to restrict filesystem access while keeping
+		 * the unveils that were done for pledge promises working.
+		 */
+		base->active = true;
+		RB_FOREACH(node, unveil_dir_tree, &base->dir_root) {
+			if (flags & UNVEIL_FLAG_FREEZE)
+				node->frozen = true;
+			if (flags & UNVEIL_FLAG_RESTRICT) {
+				if (flags & UNVEIL_FLAG_REGULAR)
+					node->regular_perms &= perms;
+				if (flags & UNVEIL_FLAG_SPECIAL)
+					node->special_perms &= perms;
+			}
+		}
+		node = NULL;
+	}
+
+out:	FILEDESC_XUNLOCK(fdp);
+	if (adding)
+		NDFREE(&nd, 0);
+	return (error);
 }
 
 #endif /* PLEDGE */
@@ -145,20 +204,18 @@ sys_unveilctl(struct thread *td, struct unveilctl_args *uap)
 #ifdef PLEDGE
 	char *path;
 	int error;
-
-	if (uap->atfd < 0 && !uap->path) {
-		do_unveil_finished(td);
-		return (0);
-	}
-
-	path = malloc(MAXPATHLEN, M_TEMP, M_WAITOK);
-	error = copyinstr(uap->path, path, MAXPATHLEN, NULL);
-	if (error) {
-		free(path, M_TEMP);
-		return (error);
-	}
+	if (uap->path) {
+		path = malloc(MAXPATHLEN, M_TEMP, M_WAITOK);
+		error = copyinstr(uap->path, path, MAXPATHLEN, NULL);
+		if (error) {
+			free(path, M_TEMP);
+			return (error);
+		}
+	} else
+		path = NULL;
 	error = do_unveil(td, uap->atfd, path, uap->flags, uap->perms);
-	free(path, M_TEMP);
+	if (path)
+		free(path, M_TEMP);
 	return (error);
 #else
 	return (ENOSYS);

@@ -8,16 +8,15 @@
 #include <stdbool.h>
 #endif
 
+typedef uint8_t unveil_perms_t;
+
 struct unveil_node;
 
 struct unveil_base {
 	RB_HEAD(unveil_dir_tree, unveil_node) dir_root;
 	u_int dir_count;
+	unveil_perms_t implicit_perms;
 	bool active;
-	bool finished;
-	bool initial;
 };
-
-typedef uint8_t unveil_perms_t;
 
 #endif
