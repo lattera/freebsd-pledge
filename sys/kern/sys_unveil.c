@@ -29,19 +29,19 @@ MALLOC_DEFINE(M_UNVEIL, "unveil", "unveil");
 static u_int unveil_max_nodes = 100; /* TODO: sysctl? */
 
 static int
-unveil_dir_node_cmp(struct unveil_node *a, struct unveil_node *b)
+unveil_node_cmp(struct unveil_node *a, struct unveil_node *b)
 {
 	uintptr_t ak = (uintptr_t)a->vp, bk = (uintptr_t)b->vp;
 	return (ak > bk ? 1 : ak < bk ? -1 : 0);
 }
 
-RB_GENERATE_STATIC(unveil_dir_tree, unveil_node, entry, unveil_dir_node_cmp);
+RB_GENERATE_STATIC(unveil_node_tree, unveil_node, entry, unveil_node_cmp);
 
 void
 unveil_init(struct unveil_base *base)
 {
 	*base = (struct unveil_base){
-		.dir_root = RB_INITIALIZER(&base->dir_root),
+		.root = RB_INITIALIZER(&base->root),
 		.implicit_perms = UNVEIL_PERM_ALL,
 	};
 }
@@ -56,13 +56,13 @@ void
 unveil_destroy(struct unveil_base *base)
 {
 	struct unveil_node *node, *node_tmp;
-	RB_FOREACH_SAFE(node, unveil_dir_tree, &base->dir_root, node_tmp) {
+	RB_FOREACH_SAFE(node, unveil_node_tree, &base->root, node_tmp) {
 		vrele(node->vp);
-		RB_REMOVE(unveil_dir_tree, &base->dir_root, node);
-		base->dir_count--;
+		RB_REMOVE(unveil_node_tree, &base->root, node);
+		base->node_count--;
 		free(node, M_UNVEIL);
 	}
-	MPASS(base->dir_count == 0);
+	MPASS(base->node_count == 0);
 }
 
 struct unveil_node *
@@ -75,13 +75,13 @@ unveil_insert(struct unveil_base *base,
 		.cover = cover,
 		.vp = vp,
 	};
-	old = RB_INSERT(unveil_dir_tree, &base->dir_root, new);
+	old = RB_INSERT(unveil_node_tree, &base->root, new);
 	if (old) {
 		free(new, M_UNVEIL);
 		new = old;
 	} else {
 		vref(vp);
-		base->dir_count++;
+		base->node_count++;
 	}
 	return (new);
 }
@@ -90,7 +90,7 @@ struct unveil_node *
 unveil_lookup(struct unveil_base *base, struct vnode *vp)
 {
 	struct unveil_node key = { .vp = vp };
-	return (RB_FIND(unveil_dir_tree, &base->dir_root, &key));
+	return (RB_FIND(unveil_node_tree, &base->root, &key));
 }
 
 
@@ -126,7 +126,7 @@ do_unveil(struct thread *td, int atfd, const char *path, int flags,
 
 	if (adding) {
 		unveil_perms_t limit;
-		if (base->dir_count >= unveil_max_nodes) {
+		if (base->node_count >= unveil_max_nodes) {
 			if (!(node = unveil_lookup(base, nd.ni_vp))) {
 				error = E2BIG;
 				goto out;
@@ -177,7 +177,7 @@ do_unveil(struct thread *td, int atfd, const char *path, int flags,
 		 * the unveils that were done for pledge promises working.
 		 */
 		base->active = true;
-		RB_FOREACH(node, unveil_dir_tree, &base->dir_root) {
+		RB_FOREACH(node, unveil_node_tree, &base->root) {
 			if (flags & UNVEIL_FLAG_FREEZE)
 				node->frozen = true;
 			if (flags & UNVEIL_FLAG_RESTRICT) {
