@@ -114,6 +114,7 @@ struct filedesc {
 	int	fd_holdleaderswakeup;	/* fdfree() needs wakeup */
 #ifdef PLEDGE
 	struct	unveil_base fd_unveil;
+	struct	unveil_base *fd_unveil_exec;
 #endif
 };
 

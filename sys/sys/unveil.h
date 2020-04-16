@@ -22,6 +22,7 @@ enum {
 	UNVEIL_FLAG_RESTRICT = 1 << 2,
 	UNVEIL_FLAG_REGULAR = 1 << 3,
 	UNVEIL_FLAG_SPECIAL = 1 << 4,
+	UNVEIL_FLAG_FOR_EXEC = 1 << 5,
 };
 
 int unveilctl(int atfd, const char *path, int flags, int perms);
@@ -49,12 +50,19 @@ unveil_node_perms(const struct unveil_node *node)
 
 void unveil_init(struct unveil_base *);
 void unveil_merge(struct unveil_base *dst, struct unveil_base *src);
-void unveil_destroy(struct unveil_base *);
+void unveil_clear(struct unveil_base *);
+void unveil_free(struct unveil_base *);
 
 struct unveil_node *unveil_lookup(struct unveil_base *, struct vnode *);
 
 struct unveil_node *unveil_insert(struct unveil_base *,
     struct unveil_node *, struct vnode *);
+
+void unveil_fd_init(struct filedesc *);
+void unveil_fd_merge(struct filedesc *dst, struct filedesc *src);
+void unveil_fd_free(struct filedesc *);
+
+void unveil_proc_exec_switch(struct thread *);
 
 #endif /* _KERNEL */
 

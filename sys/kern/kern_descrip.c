@@ -2070,7 +2070,7 @@ fdinit(struct filedesc *fdp, bool prepfiles)
 	newfdp->fd_files = (struct fdescenttbl *)&newfdp0->fd_dfiles;
 	newfdp->fd_files->fdt_nfiles = NDFILE;
 #ifdef PLEDGE
-	unveil_init(&newfdp->fd_unveil);
+	unveil_fd_init(newfdp);
 #endif
 
 	if (fdp == NULL) {
@@ -2083,9 +2083,6 @@ fdinit(struct filedesc *fdp, bool prepfiles)
 		fdgrowtable(newfdp, fdp->fd_lastfile + 1);
 
 	FILEDESC_SLOCK(fdp);
-#ifdef PLEDGE
-	unveil_merge(&newfdp->fd_unveil, &fdp->fd_unveil);
-#endif
 	newpwd = pwd_hold_filedesc(fdp);
 	smr_serialized_store(&newfdp->fd_pwd, newpwd, true);
 
@@ -2177,6 +2174,10 @@ fdcopy(struct filedesc *fdp)
 	MPASS(fdp != NULL);
 
 	newfdp = fdinit(fdp, true);
+#ifdef PLEDGE
+	if (fdp)
+		unveil_fd_merge(newfdp, fdp);
+#endif
 	/* copy all passable descriptors (i.e. not kqueue) */
 	newfdp->fd_freefile = -1;
 	for (i = 0; i <= fdp->fd_lastfile; ++i) {
@@ -2414,7 +2415,7 @@ fdescfree(struct thread *td)
 	pwd_drop(pwd);
 
 #ifdef PLEDGE
-	unveil_destroy(&fdp->fd_unveil);
+	unveil_fd_free(fdp);
 #endif
 	fdescfree_fds(td, fdp, 1);
 }

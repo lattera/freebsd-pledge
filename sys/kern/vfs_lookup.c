@@ -1587,19 +1587,22 @@ void
 namei_unveil_init(struct nameidata *ndp, struct vnode *startdir, struct thread *td)
 {
 	struct filedesc *fdp = td->td_proc->p_fd;
+	struct unveil_base *ubase;
 	ndp->ni_uflags = 0;
 	ndp->ni_unveil = NULL;
 	ndp->ni_funveil = NULL;
-	FILEDESC_SLOCK(fdp);
 	ndp->ni_uperms = UNVEIL_PERM_ALL;
-	if (!fdp->fd_unveil.active || startdir) {
+	FILEDESC_SLOCK(fdp);
+	ubase = ndp->ni_uflags & NIUNV_EXECBASE ?
+	    fdp->fd_unveil_exec : &fdp->fd_unveil;
+	if (!ubase || !ubase->active || startdir) {
 		/*
 		 * If a start vnode was explicitly specified, assume that
 		 * unveil checks don't need to apply.
 		 */
 		ndp->ni_uflags |= NIUNV_DISABLED;
 	} else {
-		ndp->ni_uperms = fdp->fd_unveil.implicit_perms;
+		ndp->ni_uperms = ubase->implicit_perms;
 	}
 	FILEDESC_SUNLOCK(fdp);
 }
@@ -1610,10 +1613,16 @@ lookup_unveil_update(struct nameidata *ndp, struct vnode *vp)
 	struct componentname *cnp = &ndp->ni_cnd;
 	struct filedesc *fdp = cnp->cn_thread->td_proc->p_fd;
 	struct unveil_node *unveil;
+	struct unveil_base *ubase;
 	if (ndp->ni_uflags & NIUNV_DISABLED)
 		return;
 	FILEDESC_SLOCK(fdp);
-	unveil = unveil_lookup(&fdp->fd_unveil, vp);
+	ubase = ndp->ni_uflags & NIUNV_EXECBASE ?
+	    fdp->fd_unveil_exec : &fdp->fd_unveil;
+	if (ubase)
+		unveil = unveil_lookup(ubase, vp);
+	else
+		unveil = NULL;
 	FILEDESC_SUNLOCK(fdp);
 	if (unveil) {
 		if (lookup_unveil_verbose)

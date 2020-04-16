@@ -47,6 +47,7 @@ unveil(const char *path, const char *permissions)
 		errno = EINVAL;
 		return (-1);
 	}
+	/* XXX need to restrict FS access after first unveil */
 	return (unveilctl(AT_FDCWD, path, 0, perms));
 #else
 	errno = ENOSYS;

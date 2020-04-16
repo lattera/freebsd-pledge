@@ -176,8 +176,9 @@ struct nameidata {
  */
 
 #define	NIUNV_DISABLED	0x00000001 /* unveil restrictions not enforced */
-#define	NIUNV_FORREAD	0x00000002 /* looked up file is to be read */
-#define	NIUNV_FORWRITE	0x00000004 /* looked up file is to be written */
+#define	NIUNV_EXECBASE	0x00000002 /* use the on-execute unveils instead */
+#define	NIUNV_FORREAD	0x00000004 /* looked up file is to be read */
+#define	NIUNV_FORWRITE	0x00000008 /* looked up file is to be written */
 
 /*
  * Namei results flags

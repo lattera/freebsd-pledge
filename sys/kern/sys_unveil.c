@@ -49,11 +49,29 @@ unveil_init(struct unveil_base *base)
 void
 unveil_merge(struct unveil_base *dst, struct unveil_base *src)
 {
-	/* TODO */
+	struct unveil_node *dst_node, *src_node;
+	dst->active = src->active;
+	dst->implicit_perms = src->implicit_perms;
+	/* first pass, copy the nodes without cover links */
+	RB_FOREACH(src_node, unveil_node_tree, &src->root) {
+		dst_node = unveil_insert(dst, NULL, src_node->vp);
+		dst_node->frozen = src_node->frozen;
+		dst_node->regular_perms = src_node->regular_perms;
+		dst_node->special_perms = src_node->special_perms;
+	}
+	/* second pass, fixup the cover links */
+	RB_FOREACH(src_node, unveil_node_tree, &src->root) {
+		if (!src_node->cover)
+			continue;
+		dst_node = unveil_lookup(dst, src_node->vp);
+		KASSERT(dst_node, ("unveil node missing"));
+		dst_node->cover = unveil_lookup(dst, src_node->cover->vp);
+		KASSERT(dst_node->cover, ("cover unveil node missing"));
+	}
 }
 
 void
-unveil_destroy(struct unveil_base *base)
+unveil_clear(struct unveil_base *base)
 {
 	struct unveil_node *node, *node_tmp;
 	RB_FOREACH_SAFE(node, unveil_node_tree, &base->root, node_tmp) {
@@ -63,6 +81,12 @@ unveil_destroy(struct unveil_base *base)
 		free(node, M_UNVEIL);
 	}
 	MPASS(base->node_count == 0);
+}
+
+void
+unveil_free(struct unveil_base *base)
+{
+	unveil_clear(base);
 }
 
 struct unveil_node *
@@ -94,12 +118,54 @@ unveil_lookup(struct unveil_base *base, struct vnode *vp)
 }
 
 
+void
+unveil_fd_init(struct filedesc *fd)
+{
+	unveil_init(&fd->fd_unveil);
+	fd->fd_unveil_exec = NULL;
+}
+
+void
+unveil_fd_merge(struct filedesc *dst_fdp, struct filedesc *src_fdp)
+{
+	unveil_merge(&dst_fdp->fd_unveil, &src_fdp->fd_unveil);
+	if (src_fdp->fd_unveil_exec) {
+		if (!dst_fdp->fd_unveil_exec) {
+			dst_fdp->fd_unveil_exec = malloc(
+			    sizeof *dst_fdp->fd_unveil_exec, M_UNVEIL, M_WAITOK);
+			unveil_init(dst_fdp->fd_unveil_exec);
+		}
+		unveil_merge(dst_fdp->fd_unveil_exec, src_fdp->fd_unveil_exec);
+	}
+}
+
+void
+unveil_fd_free(struct filedesc *fdp)
+{
+	unveil_free(&fdp->fd_unveil);
+	if (fdp->fd_unveil_exec) {
+		unveil_free(fdp->fd_unveil_exec);
+		free(fdp->fd_unveil_exec, M_UNVEIL);
+		fdp->fd_unveil_exec = NULL;
+	}
+}
+
+void
+unveil_proc_exec_switch(struct thread *td)
+{
+	struct filedesc *fdp = td->td_proc->p_fd;
+	unveil_clear(&fdp->fd_unveil);
+	if (fdp->fd_unveil_exec)
+		unveil_merge(&fdp->fd_unveil, fdp->fd_unveil_exec);
+}
+
+
 static int
 do_unveil(struct thread *td, int atfd, const char *path, int flags,
     unveil_perms_t perms)
 {
 	struct filedesc *fdp = td->td_proc->p_fd;
-	struct unveil_base *base = &fdp->fd_unveil;
+	struct unveil_base *base;
 	struct unveil_node *node;
 	struct nameidata nd;
 	int error = 0;
@@ -111,19 +177,30 @@ do_unveil(struct thread *td, int atfd, const char *path, int flags,
 	if ((adding = path != NULL)) {
 		NDINIT_AT(&nd, LOOKUP, FOLLOW | LOCKLEAF,
 		    UIO_SYSSPACE, path, atfd, td);
+		if (flags & UNVEIL_FLAG_FOR_EXEC)
+			nd.ni_uflags |= NIUNV_EXECBASE;
 		error = namei(&nd);
 		if (error)
 			return (error);
 	}
 
 	FILEDESC_XLOCK(fdp);
-	node = NULL;
+
+	if (flags & UNVEIL_FLAG_FOR_EXEC) {
+		if (!(base = fdp->fd_unveil_exec)) {
+			base = malloc(sizeof *base, M_UNVEIL, M_WAITOK);
+			unveil_init(base);
+			fdp->fd_unveil_exec = base;
+		}
+	} else
+		base = &fdp->fd_unveil;
 
 	if (flags & (UNVEIL_FLAG_RESTRICT)) {
 		base->active = true;
 		base->implicit_perms &= perms;
 	}
 
+	node = NULL;
 	if (adding) {
 		unveil_perms_t limit;
 		if (base->node_count >= unveil_max_nodes) {

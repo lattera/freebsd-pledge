@@ -70,6 +70,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysproto.h>
 #include <sys/vnode.h>
 #include <sys/wait.h>
+#include <sys/unveil.h>
 #ifdef KTRACE
 #include <sys/ktrace.h>
 #endif
@@ -714,6 +715,9 @@ interpret:
 		fdunshare(td);
 		/* close files on exec */
 		fdcloseexec(td);
+#ifdef PLEDGE
+		unveil_proc_exec_switch(td);
+#endif
 	}
 
 	/*

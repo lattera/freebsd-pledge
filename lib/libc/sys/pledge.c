@@ -154,6 +154,7 @@ static struct promise_unveil promise_unveils[] = {
 	/* TODO: Ideally we wouldn't allow to read the directory itself (so
 	 * that a pledged process can't find the names of the temporary files
 	 * of other processes). */
+	/* TODO: Respect TMPDIR? */
 	{ "/tmp/", R|W|C,			PROMISE_TMPPATH },
 	{ "", 0,				PROMISE_NONE }
 };
@@ -238,9 +239,15 @@ sort_unveils(void)
 	unveils_sorted = true;
 }
 
+/*
+ * XXX: This won't properly remove promise unveils if they were inherited.
+ *
+ * TODO: Handle partial failure better.
+ */
+
 static int
 apply_pledge(struct pledge_state *req_pledge, struct pledge_state *cur_pledge,
-    int procctl_cmd)
+    int procctl_cmd, int unveil_flags)
 {
 	struct promise_unveil *pu;
 	sysfil_t sysfil;
@@ -270,7 +277,7 @@ apply_pledge(struct pledge_state *req_pledge, struct pledge_state *cur_pledge,
 		if (new_uperms != cur_uperms) {
 			/* we modify the "special" permissions */
 			r = unveilctl(AT_FDCWD, pu->path,
-			    UNVEIL_FLAG_SPECIAL, new_uperms);
+			    unveil_flags | UNVEIL_FLAG_SPECIAL, new_uperms);
 			if (r < 0 && errno != ENOENT)
 				warn("unveil: %s", pu->path);
 		}
@@ -287,7 +294,7 @@ apply_pledge(struct pledge_state *req_pledge, struct pledge_state *cur_pledge,
 		sysfil |= uperms2sysfil(max_uperms);
 		if (old_sysfil != sysfil) {
 			r = unveilctl(-1, NULL,
-			    UNVEIL_FLAG_FOR_ALL | UNVEIL_FLAG_RESTRICT,
+			    unveil_flags | UNVEIL_FLAG_FOR_ALL | UNVEIL_FLAG_RESTRICT,
 			    sysfil2uperms(old_sysfil));
 			if (r < 0)
 				warn("unveil restrict");
@@ -300,7 +307,7 @@ apply_pledge(struct pledge_state *req_pledge, struct pledge_state *cur_pledge,
 		sysfil |= SYF_PLEDGE_UNVEIL;
 		if (old_sysfil != sysfil) {
 			r = unveilctl(-1, NULL,
-			    UNVEIL_FLAG_FOR_ALL | UNVEIL_FLAG_FREEZE,
+			    unveil_flags | UNVEIL_FLAG_FOR_ALL | UNVEIL_FLAG_FREEZE,
 			    0);
 			if (r < 0)
 				warn("unveil freeze");
@@ -324,7 +331,8 @@ do_pledge(const char *promises, bool for_exec)
 		return (-1);
 	cur_pledge = for_exec ? &current_execpledge : &current_pledge;
 	r = apply_pledge(&req_pledge, cur_pledge,
-	    for_exec ? PROC_SYSFIL_EXEC : PROC_SYSFIL);
+	    for_exec ? PROC_SYSFIL_EXEC : PROC_SYSFIL,
+	    for_exec ? UNVEIL_FLAG_FOR_EXEC : 0);
 	if (r < 0)
 		return (-1);
 	*cur_pledge = req_pledge;
