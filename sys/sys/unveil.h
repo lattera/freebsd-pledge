@@ -17,12 +17,14 @@ enum {
 };
 
 enum {
-	UNVEIL_FLAG_FOR_ALL = 1 << 0,
-	UNVEIL_FLAG_FREEZE = 1 << 1,
-	UNVEIL_FLAG_RESTRICT = 1 << 2,
+	UNVEIL_FLAG_IMPLICIT = 1 << 0,
+	UNVEIL_FLAG_FOR_ALL = 1 << 1,
+	UNVEIL_FLAG_FREEZE = 1 << 2,
 	UNVEIL_FLAG_REGULAR = 1 << 3,
 	UNVEIL_FLAG_SPECIAL = 1 << 4,
-	UNVEIL_FLAG_FOR_EXEC = 1 << 5,
+	UNVEIL_FLAG_MASK = 1 << 5,
+	UNVEIL_FLAG_FOR_EXEC = 1 << 6,
+	UNVEIL_FLAG_NOFOLLOW = 1 << 7,
 };
 
 int unveilctl(int atfd, const char *path, int flags, int perms);
@@ -37,15 +39,22 @@ struct unveil_node {
 	struct unveil_node *cover;
 	RB_ENTRY(unveil_node) entry;
 	struct vnode *vp;
+	unveil_perms_t frozen_perms;
 	unveil_perms_t regular_perms;
 	unveil_perms_t special_perms;
-	bool frozen;
 };
 
 static inline unveil_perms_t
 unveil_node_perms(const struct unveil_node *node)
 {
 	return (node->regular_perms | node->special_perms);
+}
+
+static inline bool
+unveil_is_active(const struct unveil_base *base)
+{
+	return (base->node_count != 0 &&
+	        base->implicit_perms != UNVEIL_PERM_ALL);
 }
 
 void unveil_init(struct unveil_base *);

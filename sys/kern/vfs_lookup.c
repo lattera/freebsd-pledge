@@ -1590,12 +1590,11 @@ namei_unveil_init(struct nameidata *ndp, struct vnode *startdir, struct thread *
 	struct unveil_base *ubase;
 	ndp->ni_uflags = 0;
 	ndp->ni_unveil = NULL;
-	ndp->ni_funveil = NULL;
 	ndp->ni_uperms = UNVEIL_PERM_ALL;
 	FILEDESC_SLOCK(fdp);
 	ubase = ndp->ni_uflags & NIUNV_EXECBASE ?
 	    fdp->fd_unveil_exec : &fdp->fd_unveil;
-	if (!ubase || !ubase->active || startdir) {
+	if (!ubase || !unveil_is_active(ubase) || startdir) {
 		/*
 		 * If a start vnode was explicitly specified, assume that
 		 * unveil checks don't need to apply.
@@ -1630,8 +1629,6 @@ lookup_unveil_update(struct nameidata *ndp, struct vnode *vp)
 			    unveil_node_perms(unveil), unveil, vp, cnp->cn_pnbuf, cnp->cn_nameptr);
 		ndp->ni_unveil = unveil;
 		ndp->ni_uperms = unveil_node_perms(unveil);
-		if (unveil->frozen)
-			ndp->ni_funveil = unveil;
 	} else {
 		unveil = ndp->ni_unveil;
 		if (unveil && lookup_unveil_verbose)
@@ -1655,15 +1652,13 @@ lookup_unveil_update_dotdot(struct nameidata *ndp, struct vnode *vp)
 				    unveil_node_perms(unveil), unveil, vp, cnp->cn_pnbuf, cnp->cn_nameptr);
 			ndp->ni_unveil = unveil;
 			ndp->ni_uperms = unveil_node_perms(unveil);
-			if (unveil->frozen)
-				ndp->ni_funveil = unveil;
 		} else {
 			if (lookup_unveil_verbose)
 				printf("lookup_unveil_update_dotdot: unveil drop for %p (\"%s\" \"%s\")\n",
 				    vp, cnp->cn_pnbuf, cnp->cn_nameptr);
 			ndp->ni_unveil = NULL;
-			ndp->ni_uperms = 0;
-			ndp->ni_funveil = NULL;
+			/* XXX revert to implicit perms? */
+			ndp->ni_uperms = UNVEIL_PERM_NONE;
 		}
 	} else {
 		unveil = ndp->ni_unveil;
@@ -1685,6 +1680,9 @@ lookup_unveil_check(struct nameidata *ndp)
 		    ndp->ni_unveil,
 		    cnp->cn_pnbuf
 		);
+	if ((cnp->cn_flags & FOLLOW) &&
+	    ndp->ni_vp && ndp->ni_vp->v_type == VLNK)
+		return (0);
 	if ((cnp->cn_nameiop == DELETE || cnp->cn_nameiop == CREATE) &&
 	    !(ndp->ni_uperms & UNVEIL_PERM_CPATH))
 		return (EPERM);

@@ -126,10 +126,12 @@ static const unveil_perms_t promise_uperms[PROMISE_COUNT] = {
 #define	X UNVEIL_PERM_EXEC
 
 static struct promise_unveil promise_unveils[] = {
+#if 0
 	{ "/", R,				PROMISE_RPATH },
 	{ "/", W,				PROMISE_WPATH },
 	{ "/", C,				PROMISE_CPATH },
 	{ "/", X,				PROMISE_EXEC },
+#endif
 	{ "/etc/malloc.conf", R,		PROMISE_STDIO },
 	{ "/etc/localtime", R,			PROMISE_STDIO },
 	{ "/usr/share/zoneinfo/", R,		PROMISE_STDIO },
@@ -284,33 +286,39 @@ apply_pledge(struct pledge_state *req_pledge, struct pledge_state *cur_pledge,
 		max_uperms |= new_uperms;
 	}
 
-	if (max_uperms) {
-		sysfil_t old_sysfil;
+	if (max_uperms || !(sysfil & SYF_PLEDGE_UNVEIL)) {
+		sysfil_t req_sysfil = sysfil;
 		/*
 		 * Some of the promises required unveils.  Certain sysfils must
 		 * be implicitly enabled to allow accessing the unveiled files.
 		 */
-		old_sysfil = sysfil;
 		sysfil |= uperms2sysfil(max_uperms);
-		if (old_sysfil != sysfil) {
-			r = unveilctl(-1, NULL,
-			    unveil_flags | UNVEIL_FLAG_FOR_ALL | UNVEIL_FLAG_RESTRICT,
-			    sysfil2uperms(old_sysfil));
-			if (r < 0)
-				warn("unveil restrict");
-		}
 		/*
 		 * Maintain the ability to drop the unveils later on if the
 		 * promises are pledged away.
 		 */
-		old_sysfil = sysfil;
 		sysfil |= SYF_PLEDGE_UNVEIL;
-		if (old_sysfil != sysfil) {
+		/*
+		 * Alter unveils to compensate for enabled sysfils.
+		 */
+		if (req_sysfil != sysfil) {
+			/*
+			 * Note that this does NOT mask the special permissions
+			 * (because UNVEIL_FLAG_SPECIAL is not passed).  The
+			 * special permissions are the "holes" that make the
+			 * promise unveils work.  But they still get frozen and
+			 * cannot be further increased.
+			 */
 			r = unveilctl(-1, NULL,
-			    unveil_flags | UNVEIL_FLAG_FOR_ALL | UNVEIL_FLAG_FREEZE,
-			    0);
+			    unveil_flags |
+			    UNVEIL_FLAG_IMPLICIT |
+			    UNVEIL_FLAG_FOR_ALL |
+			    UNVEIL_FLAG_MASK |
+			    (req_sysfil & SYF_PLEDGE_UNVEIL ?
+			     0 : UNVEIL_FLAG_FREEZE),
+			    sysfil2uperms(req_sysfil));
 			if (r < 0)
-				warn("unveil freeze");
+				warn("unveil lockdown");
 		}
 	}
 	r = procctl(P_PID, getpid(), procctl_cmd, &sysfil);

@@ -16,7 +16,7 @@ struct unveil_base {
 	RB_HEAD(unveil_node_tree, unveil_node) root;
 	u_int node_count;
 	unveil_perms_t implicit_perms;
-	bool active;
+	unveil_perms_t implicit_frozen_perms;
 };
 
 #endif
