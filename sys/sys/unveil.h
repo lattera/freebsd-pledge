@@ -17,7 +17,7 @@ enum {
 };
 
 enum {
-	UNVEIL_FLAG_IMPLICIT = 1 << 0,
+	UNVEIL_FLAG_ACTIVATE = 1 << 0,
 	UNVEIL_FLAG_FOR_ALL = 1 << 1,
 	UNVEIL_FLAG_FREEZE = 1 << 2,
 	UNVEIL_FLAG_REGULAR = 1 << 3,
@@ -40,22 +40,10 @@ struct unveil_node {
 	RB_ENTRY(unveil_node) entry;
 	struct vnode *vp;
 	unveil_perms_t frozen_perms;
+	unveil_perms_t current_perms;
 	unveil_perms_t regular_perms;
 	unveil_perms_t special_perms;
 };
-
-static inline unveil_perms_t
-unveil_node_perms(const struct unveil_node *node)
-{
-	return (node->regular_perms | node->special_perms);
-}
-
-static inline bool
-unveil_is_active(const struct unveil_base *base)
-{
-	return (base->node_count != 0 &&
-	        base->implicit_perms != UNVEIL_PERM_ALL);
-}
 
 void unveil_init(struct unveil_base *);
 void unveil_merge(struct unveil_base *dst, struct unveil_base *src);
@@ -63,9 +51,7 @@ void unveil_clear(struct unveil_base *);
 void unveil_free(struct unveil_base *);
 
 struct unveil_node *unveil_lookup(struct unveil_base *, struct vnode *);
-
-struct unveil_node *unveil_insert(struct unveil_base *,
-    struct unveil_node *, struct vnode *);
+struct unveil_node *unveil_insert(struct unveil_base *, struct vnode *);
 
 void unveil_fd_init(struct filedesc *);
 void unveil_fd_merge(struct filedesc *dst, struct filedesc *src);

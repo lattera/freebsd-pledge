@@ -53,6 +53,7 @@ struct promise_unveil {
 
 struct pledge_state {
 	bool promises[PROMISE_COUNT];
+	bool unveil_active;
 };
 
 
@@ -125,13 +126,13 @@ static const unveil_perms_t promise_uperms[PROMISE_COUNT] = {
 #define	C UNVEIL_PERM_CPATH
 #define	X UNVEIL_PERM_EXEC
 
+static const char *const root_path = "/";
+
 static struct promise_unveil promise_unveils[] = {
-#if 0
-	{ "/", R,				PROMISE_RPATH },
-	{ "/", W,				PROMISE_WPATH },
-	{ "/", C,				PROMISE_CPATH },
-	{ "/", X,				PROMISE_EXEC },
-#endif
+	{ root_path, R,				PROMISE_RPATH },
+	{ root_path, W,				PROMISE_WPATH },
+	{ root_path, C,				PROMISE_CPATH },
+	{ root_path, X,				PROMISE_EXEC },
 	{ "/etc/malloc.conf", R,		PROMISE_STDIO },
 	{ "/etc/localtime", R,			PROMISE_STDIO },
 	{ "/usr/share/zoneinfo/", R,		PROMISE_STDIO },
@@ -263,9 +264,12 @@ apply_pledge(struct pledge_state *req_pledge, struct pledge_state *cur_pledge,
 		if (req_pledge->promises[i])
 			sysfil |= promise_sysfils[i];
 
+	unveil_flags |= UNVEIL_FLAG_ACTIVATE;
 	max_uperms = 0;
 	for (pu = promise_unveils; *pu->path; pu++) {
 		unveil_perms_t cur_uperms = 0, new_uperms = 0;
+		if (cur_pledge->unveil_active && pu->path == root_path)
+			continue;
 		do {
 			/* Process all entries for the same path. */
 			if (req_pledge->promises[pu->type])
@@ -311,7 +315,6 @@ apply_pledge(struct pledge_state *req_pledge, struct pledge_state *cur_pledge,
 			 */
 			r = unveilctl(-1, NULL,
 			    unveil_flags |
-			    UNVEIL_FLAG_IMPLICIT |
 			    UNVEIL_FLAG_FOR_ALL |
 			    UNVEIL_FLAG_MASK |
 			    (req_sysfil & SYF_PLEDGE_UNVEIL ?
@@ -327,7 +330,7 @@ apply_pledge(struct pledge_state *req_pledge, struct pledge_state *cur_pledge,
 	return (0);
 }
 
-static struct pledge_state current_pledge, current_execpledge;
+static struct pledge_state current_pledge = { 0 }, current_execpledge = { 0 };
 
 static int
 do_pledge(const char *promises, bool for_exec)
@@ -350,7 +353,6 @@ do_pledge(const char *promises, bool for_exec)
 int
 pledge(const char *promises, const char *execpromises)
 {
-#ifdef PLEDGE
 	/* TODO: global lock */
 	int r;
 	if (promises) {
@@ -364,8 +366,84 @@ pledge(const char *promises, const char *execpromises)
 			return (-1);
 	}
 	return (0);
-#else
-	errno = ENOSYS;
-	return (-1);
-#endif
+}
+
+
+static int
+unveil_parse_perms(unveil_perms_t *perms, const char *s)
+{
+        *perms = 0;
+        while (*s)
+                switch (*s++) {
+                case 'r': *perms |= UNVEIL_PERM_RPATH; break;
+                case 'w': *perms |= UNVEIL_PERM_WPATH; break;
+                case 'c': *perms |= UNVEIL_PERM_CPATH; break;
+                case 'x': *perms |= UNVEIL_PERM_EXEC;  break;
+                default:
+                          return (-1);
+                }
+        return (0);
+}
+
+static int
+do_unveil(struct pledge_state *state, int flags,
+    const char *path, const char *permissions)
+{
+	int r;
+	unveil_perms_t perms;
+	flags |= UNVEIL_FLAG_ACTIVATE;
+	if (!path && !permissions) {
+		/*
+		 * Disallow increasing any unveil permissions.
+		 *
+		 * XXX: This also disallows any unveils that future pledge
+		 * promise may need to add.
+		 */
+		r = unveilctl(-1, NULL,
+		    flags |
+		    UNVEIL_FLAG_FOR_ALL |
+		    UNVEIL_FLAG_MASK |
+		    UNVEIL_FLAG_FREEZE,
+		    UNVEIL_PERM_ALL);
+		return (r);
+	}
+	r = unveil_parse_perms(&perms, permissions);
+	if (r < 0) {
+		errno = EINVAL;
+		return (-1);
+	}
+	if (!state->unveil_active) {
+		/*
+		 * After the first call to unveil(), filesystem access must be
+		 * restricted to what has been explicitly unveiled (modifying
+		 * or adding unveils with higher permissions is still
+		 * permitted).  After UNVEIL_FLAG_ACTIVATE is used, filesystem
+		 * access is restricted to paths that have been unveiled, but
+		 * the pledge() wrapper may have unveiled "/" for certain
+		 * promises.  This must be undone.
+		 */
+		r = unveilctl(AT_FDCWD, root_path,
+		    flags | UNVEIL_FLAG_SPECIAL | UNVEIL_FLAG_MASK,
+		    UNVEIL_PERM_NONE);
+		if (r < 0)
+			return (r);
+		state->unveil_active = true;
+	}
+	return (unveilctl(AT_FDCWD, path, flags, perms));
+}
+
+int
+unveil(const char *path, const char *permissions)
+{
+	/* TODO: global lock */
+	int r;
+	r = do_unveil(&current_pledge, 0,
+	    path, permissions);
+	if (r < 0)
+		return (r);
+	r = do_unveil(&current_execpledge, UNVEIL_FLAG_FOR_EXEC,
+	    path, permissions);
+	if (r < 0)
+		return (r);
+	return (0);
 }

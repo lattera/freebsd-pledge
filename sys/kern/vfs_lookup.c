@@ -1594,15 +1594,15 @@ namei_unveil_init(struct nameidata *ndp, struct vnode *startdir, struct thread *
 	FILEDESC_SLOCK(fdp);
 	ubase = ndp->ni_uflags & NIUNV_EXECBASE ?
 	    fdp->fd_unveil_exec : &fdp->fd_unveil;
-	if (!ubase || !unveil_is_active(ubase) || startdir) {
+	if (!ubase || !ubase->active || startdir) {
 		/*
 		 * If a start vnode was explicitly specified, assume that
 		 * unveil checks don't need to apply.
 		 */
 		ndp->ni_uflags |= NIUNV_DISABLED;
-	} else {
-		ndp->ni_uperms = ubase->implicit_perms;
-	}
+		ndp->ni_uperms = UNVEIL_PERM_ALL;
+	} else
+		ndp->ni_uperms = UNVEIL_PERM_NONE;
 	FILEDESC_SUNLOCK(fdp);
 }
 
@@ -1626,14 +1626,14 @@ lookup_unveil_update(struct nameidata *ndp, struct vnode *vp)
 	if (unveil) {
 		if (lookup_unveil_verbose)
 			printf("lookup_unveil_update: unveil found %#x %p for %p (\"%s\" \"%s\")\n",
-			    unveil_node_perms(unveil), unveil, vp, cnp->cn_pnbuf, cnp->cn_nameptr);
+			    unveil->current_perms, unveil, vp, cnp->cn_pnbuf, cnp->cn_nameptr);
 		ndp->ni_unveil = unveil;
-		ndp->ni_uperms = unveil_node_perms(unveil);
+		ndp->ni_uperms = unveil->current_perms;
 	} else {
 		unveil = ndp->ni_unveil;
 		if (unveil && lookup_unveil_verbose)
 			printf("lookup_unveil_update: unveil carry down %#x %p for %p (\"%s\" \"%s\")\n",
-			    unveil_node_perms(unveil), unveil, vp, cnp->cn_pnbuf, cnp->cn_nameptr);
+			    unveil->current_perms, unveil, vp, cnp->cn_pnbuf, cnp->cn_nameptr);
 	}
 }
 
@@ -1649,22 +1649,21 @@ lookup_unveil_update_dotdot(struct nameidata *ndp, struct vnode *vp)
 		if (unveil) {
 			if (lookup_unveil_verbose)
 				printf("lookup_unveil_update_dotdot: unveil cover %#x %p for %p (\"%s\" \"%s\")\n",
-				    unveil_node_perms(unveil), unveil, vp, cnp->cn_pnbuf, cnp->cn_nameptr);
+				    unveil->current_perms, unveil, vp, cnp->cn_pnbuf, cnp->cn_nameptr);
 			ndp->ni_unveil = unveil;
-			ndp->ni_uperms = unveil_node_perms(unveil);
+			ndp->ni_uperms = unveil->current_perms;
 		} else {
 			if (lookup_unveil_verbose)
 				printf("lookup_unveil_update_dotdot: unveil drop for %p (\"%s\" \"%s\")\n",
 				    vp, cnp->cn_pnbuf, cnp->cn_nameptr);
 			ndp->ni_unveil = NULL;
-			/* XXX revert to implicit perms? */
 			ndp->ni_uperms = UNVEIL_PERM_NONE;
 		}
 	} else {
 		unveil = ndp->ni_unveil;
 		if (unveil && lookup_unveil_verbose)
 			printf("lookup_unveil_update_dotdot: unveil carry up %#x %p for %p (\"%s\" \"%s\")\n",
-			    unveil_node_perms(unveil), unveil, vp, cnp->cn_pnbuf, cnp->cn_nameptr);
+			    unveil->current_perms, unveil, vp, cnp->cn_pnbuf, cnp->cn_nameptr);
 	}
 }
 
