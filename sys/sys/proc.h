@@ -801,8 +801,10 @@ struct proc {
  * The general notion of a process being sandboxed is used for checks that
  * should be done for both Capsicum and pledge().
  */
-#define	PROC_SET_SANDBOX_MODE(p) \
-	do { (p)->p_sysfil &= ~SYF_DEFAULT; } while (0)
+#define	PROC_SET_SANDBOX_MODE(p) do { \
+	(p)->p_sysfil &= ~SYF_DEFAULT; \
+	(p)->p_sysfilexec &= ~SYF_DEFAULT; \
+} while (0)
 
 #define	PROC_INIT_SANDBOX_BITS(p) \
 	do { (p)->p_sysfil = (p)->p_sysfilexec = -1; } while (0)

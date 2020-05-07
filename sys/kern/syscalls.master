@@ -3240,7 +3240,8 @@
 		    int atfd,
 		    _In_z_ const char *path,
 		    int flags,
-		    int perms
+		    int perms,
+		    int execperms
 		);
 	}
 

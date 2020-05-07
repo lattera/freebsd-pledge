@@ -3382,8 +3382,9 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		iarg[0] = p->atfd; /* int */
 		uarg[1] = (intptr_t) p->path; /* const char * */
 		iarg[2] = p->flags; /* int */
-		uarg[3] = p->perms; /* unveil_perms_t */
-		*n_args = 4;
+		iarg[3] = p->perms; /* int */
+		iarg[4] = p->execperms; /* int */
+		*n_args = 5;
 		break;
 	}
 	default:
@@ -9126,7 +9127,10 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			p = "int";
 			break;
 		case 3:
-			p = "unveil_perms_t";
+			p = "int";
+			break;
+		case 4:
+			p = "int";
 			break;
 		default:
 			break;

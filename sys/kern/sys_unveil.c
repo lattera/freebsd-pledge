@@ -43,7 +43,7 @@ unveil_init(struct unveil_base *base)
 	*base = (struct unveil_base){
 		.root = RB_INITIALIZER(&base->root),
 		.active = false,
-		.frozen = false,
+		.finished = false,
 	};
 }
 
@@ -52,14 +52,13 @@ unveil_merge(struct unveil_base *dst, struct unveil_base *src)
 {
 	struct unveil_node *dst_node, *src_node;
 	dst->active = src->active;
-	dst->frozen = src->frozen;
+	dst->finished = src->finished;
 	/* first pass, copy the nodes without cover links */
 	RB_FOREACH(src_node, unveil_node_tree, &src->root) {
 		dst_node = unveil_insert(dst, src_node->vp);
-		dst_node->frozen_perms = src_node->frozen_perms;
-		dst_node->regular_perms = src_node->regular_perms;
-		dst_node->special_perms = src_node->special_perms;
-		dst_node->current_perms = src_node->current_perms;
+		dst_node->hard_perms = src_node->hard_perms;
+		dst_node->soft_perms = src_node->soft_perms;
+		dst_node->exec_perms = src_node->exec_perms;
 	}
 	/* second pass, fixup the cover links */
 	RB_FOREACH(src_node, unveil_node_tree, &src->root) {
@@ -72,16 +71,21 @@ unveil_merge(struct unveil_base *dst, struct unveil_base *src)
 	}
 }
 
+static void
+unveil_node_drop(struct unveil_base *base, struct unveil_node *node)
+{
+	RB_REMOVE(unveil_node_tree, &base->root, node);
+	base->node_count--;
+	vrele(node->vp);
+	free(node, M_UNVEIL);
+}
+
 void
 unveil_clear(struct unveil_base *base)
 {
 	struct unveil_node *node, *node_tmp;
-	RB_FOREACH_SAFE(node, unveil_node_tree, &base->root, node_tmp) {
-		vrele(node->vp);
-		RB_REMOVE(unveil_node_tree, &base->root, node);
-		base->node_count--;
-		free(node, M_UNVEIL);
-	}
+	RB_FOREACH_SAFE(node, unveil_node_tree, &base->root, node_tmp)
+	    unveil_node_drop(base, node);
 	MPASS(base->node_count == 0);
 }
 
@@ -99,7 +103,7 @@ unveil_insert(struct unveil_base *base, struct vnode *vp)
 	*new = (struct unveil_node){
 		.cover = NULL,
 		.vp = vp,
-		.frozen_perms = UNVEIL_PERM_ALL,
+		.hard_perms = UNVEIL_PERM_ALL,
 	};
 	old = RB_INSERT(unveil_node_tree, &base->root, new);
 	if (old) {
@@ -124,76 +128,63 @@ void
 unveil_fd_init(struct filedesc *fd)
 {
 	unveil_init(&fd->fd_unveil);
-	fd->fd_unveil_exec = NULL;
 }
 
 void
 unveil_fd_merge(struct filedesc *dst_fdp, struct filedesc *src_fdp)
 {
 	unveil_merge(&dst_fdp->fd_unveil, &src_fdp->fd_unveil);
-	if (src_fdp->fd_unveil_exec) {
-		if (!dst_fdp->fd_unveil_exec) {
-			dst_fdp->fd_unveil_exec = malloc(
-			    sizeof *dst_fdp->fd_unveil_exec, M_UNVEIL, M_WAITOK);
-			unveil_init(dst_fdp->fd_unveil_exec);
-		}
-		unveil_merge(dst_fdp->fd_unveil_exec, src_fdp->fd_unveil_exec);
-	}
 }
 
 void
 unveil_fd_free(struct filedesc *fdp)
 {
 	unveil_free(&fdp->fd_unveil);
-	if (fdp->fd_unveil_exec) {
-		unveil_free(fdp->fd_unveil_exec);
-		free(fdp->fd_unveil_exec, M_UNVEIL);
-		fdp->fd_unveil_exec = NULL;
-	}
 }
 
 void
 unveil_proc_exec_switch(struct thread *td)
 {
 	struct filedesc *fdp = td->td_proc->p_fd;
-	unveil_clear(&fdp->fd_unveil);
-	if (fdp->fd_unveil_exec)
-		unveil_merge(&fdp->fd_unveil, fdp->fd_unveil_exec);
+	struct unveil_base *base = &fdp->fd_unveil;
+	struct unveil_node *node, *node_tmp;
+	RB_FOREACH_SAFE(node, unveil_node_tree, &base->root, node_tmp) {
+		node->hard_perms = node->soft_perms = node->exec_perms;
+		/*
+		 * TODO: Allow to drop unneeded unveils that came from the
+		 * parent process after exec rather than just masking them.
+		 * Only unveils that do not cover any unveils that are to be
+		 * kept should be dropped (since they can guard against
+		 * escapes).  Right now dropping unveils is unsafe.
+		 */
+		node->from_exec = true;
+	}
 }
 
 
 static inline void
-update_node_perms(struct unveil_node *node, int flags, unveil_perms_t perms)
+update_node_perms(struct unveil_node *np, int flags,
+    unveil_perms_t perms, unveil_perms_t execperms)
 {
-	/*
-	 * Unveils have multiple sets of permissions to help implementing the
-	 * userland pledge() wrapper.  The "special" permissions will be those
-	 * that were done for the pledge promises that require unveils, while
-	 * the "regular" permissions will be for unveils done directly by the
-	 * user.  The "current" permissions of a node is their union.  These
-	 * permissions may be modified, but are limited by the node's "frozen"
-	 * permissions.
-	 */
-	perms &= node->frozen_perms;
 	if (flags & UNVEIL_FLAG_MASK) {
-		if (flags & UNVEIL_FLAG_REGULAR)
-			node->regular_perms &= perms;
-		if (flags & UNVEIL_FLAG_SPECIAL)
-			node->special_perms &= perms;
+		np->soft_perms &= perms;
+		np->exec_perms &= execperms;
 	} else {
-		if (flags & UNVEIL_FLAG_REGULAR)
-			node->regular_perms = perms;
-		if (flags & UNVEIL_FLAG_SPECIAL)
-			node->special_perms = perms;
+		np->from_exec = false;
+		np->soft_perms = np->hard_perms & perms;
+		/*
+		 * exec_perms is allowed to be higher than hard_perms, but it
+		 * can never be added permissions that aren't in hard_perms.
+		 */
+		np->exec_perms = (np->exec_perms | np->hard_perms) & execperms;
 	}
-	node->current_perms = node->regular_perms | node->special_perms;
-	if (flags & UNVEIL_FLAG_FREEZE)
-		node->frozen_perms &= node->current_perms;
+	if (flags & UNVEIL_FLAG_HARDEN)
+		np->hard_perms &= np->soft_perms;
 }
 
 static int
 do_unveil(struct thread *td, int atfd, const char *path, int flags,
-    unveil_perms_t perms)
+    unveil_perms_t perms, unveil_perms_t execperms)
 {
 	struct filedesc *fdp = td->td_proc->p_fd;
 	struct unveil_base *base;
@@ -207,31 +198,18 @@ do_unveil(struct thread *td, int atfd, const char *path, int flags,
 	 * directory FDs once they're made to remember their uperms.
 	 */
 
-	if (!(flags & UNVEIL_FLAG_SPECIAL))
-		flags |= UNVEIL_FLAG_REGULAR;
-
 	if ((adding = path != NULL)) {
 		int nd_flags = LOCKLEAF;
 		if (!(flags & UNVEIL_FLAG_NOFOLLOW))
 			nd_flags |= FOLLOW;
 		NDINIT_AT(&nd, LOOKUP, nd_flags, UIO_SYSSPACE, path, atfd, td);
-		if (flags & UNVEIL_FLAG_FOR_EXEC)
-			nd.ni_uflags |= NIUNV_EXECBASE;
 		error = namei(&nd);
 		if (error)
 			return (error);
 	}
 
 	FILEDESC_XLOCK(fdp);
-
-	if (flags & UNVEIL_FLAG_FOR_EXEC) {
-		if (!(base = fdp->fd_unveil_exec)) {
-			base = malloc(sizeof *base, M_UNVEIL, M_WAITOK);
-			unveil_init(base);
-			fdp->fd_unveil_exec = base;
-		}
-	} else
-		base = &fdp->fd_unveil;
+	base = &fdp->fd_unveil;
 
 	if (adding) {
 		node = unveil_lookup(base, nd.ni_vp);
@@ -242,15 +220,15 @@ do_unveil(struct thread *td, int atfd, const char *path, int flags,
 		if (!(flags & UNVEIL_FLAG_MASK)) {
 			unveil_perms_t limit;
 			/*
-			 * Restrict permissions of a newly added node to
-			 * "frozen" permissions of the last node that was
-			 * encountered during traversal.  If the node was
-			 * already present, permissions will be restricted
-			 * against its own frozen permissions.
+			 * Restrict permissions of a newly added node to "hard"
+			 * permissions of the last node that was encountered
+			 * during traversal.  If the node was already present,
+			 * permissions will be restricted against its own
+			 * hard permissions.
 			 */
-			limit = nd.ni_unveil ? nd.ni_unveil->frozen_perms :
-			        base->frozen ? UNVEIL_PERM_NONE :
-			                       UNVEIL_PERM_ALL ;
+			limit = nd.ni_unveil   ? nd.ni_unveil->hard_perms :
+			        base->finished ? UNVEIL_PERM_NONE :
+			                         UNVEIL_PERM_ALL ;
 			if (perms & ~limit) {
 				error = EPERM;
 				goto out;
@@ -258,22 +236,22 @@ do_unveil(struct thread *td, int atfd, const char *path, int flags,
 			if (!node) {
 				node = unveil_insert(base, nd.ni_vp);
 				node->cover = nd.ni_unveil;
-				node->frozen_perms = limit;
+				node->hard_perms = limit;
 			}
 		}
 		if (node)
-			update_node_perms(node, flags, perms);
+			update_node_perms(node, flags, perms, execperms);
 	}
 
-	if (flags & UNVEIL_FLAG_FOR_ALL) {
+	if (flags & UNVEIL_FLAG_FOR_ALL)
 		RB_FOREACH(node, unveil_node_tree, &base->root)
-			update_node_perms(node, flags, perms);
-	}
+			if (!(flags & UNVEIL_FLAG_FROM_EXEC) || node->from_exec)
+				update_node_perms(node, flags, perms, execperms);
 
 	if (flags & UNVEIL_FLAG_ACTIVATE)
 		base->active = true;
-	if (flags & UNVEIL_FLAG_FREEZE)
-		base->frozen = true;
+	if (flags & UNVEIL_FLAG_FINISH)
+		base->finished = true;
 
 out:	FILEDESC_XUNLOCK(fdp);
 	if (adding)
@@ -298,7 +276,8 @@ sys_unveilctl(struct thread *td, struct unveilctl_args *uap)
 		}
 	} else
 		path = NULL;
-	error = do_unveil(td, uap->atfd, path, uap->flags, uap->perms);
+	error = do_unveil(td, uap->atfd, path, uap->flags,
+	    uap->perms, uap->execperms);
 	if (path)
 		free(path, M_TEMP);
 	return (error);

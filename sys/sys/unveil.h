@@ -18,16 +18,15 @@ enum {
 
 enum {
 	UNVEIL_FLAG_ACTIVATE = 1 << 0,
-	UNVEIL_FLAG_FOR_ALL = 1 << 1,
-	UNVEIL_FLAG_FREEZE = 1 << 2,
-	UNVEIL_FLAG_REGULAR = 1 << 3,
-	UNVEIL_FLAG_SPECIAL = 1 << 4,
+	UNVEIL_FLAG_FINISH = 1 << 1,
+	UNVEIL_FLAG_FOR_ALL = 1 << 2,
+	UNVEIL_FLAG_FROM_EXEC = 1 << 3,
+	UNVEIL_FLAG_HARDEN = 1 << 4,
 	UNVEIL_FLAG_MASK = 1 << 5,
-	UNVEIL_FLAG_FOR_EXEC = 1 << 6,
-	UNVEIL_FLAG_NOFOLLOW = 1 << 7,
+	UNVEIL_FLAG_NOFOLLOW = 1 << 6,
 };
 
-int unveilctl(int atfd, const char *path, int flags, int perms);
+int unveilctl(int atfd, const char *path, int flags, int perms, int execperms);
 
 #ifdef _KERNEL
 
@@ -39,10 +38,10 @@ struct unveil_node {
 	struct unveil_node *cover;
 	RB_ENTRY(unveil_node) entry;
 	struct vnode *vp;
-	unveil_perms_t frozen_perms;
-	unveil_perms_t current_perms;
-	unveil_perms_t regular_perms;
-	unveil_perms_t special_perms;
+	unveil_perms_t hard_perms;
+	unveil_perms_t soft_perms;
+	unveil_perms_t exec_perms;
+	bool from_exec;
 };
 
 void unveil_init(struct unveil_base *);

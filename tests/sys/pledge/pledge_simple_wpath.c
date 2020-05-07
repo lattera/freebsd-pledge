@@ -38,6 +38,8 @@ main()
 	atexit(cleanup);
 
 	r = pledge("error stdio wpath cpath", NULL);
+	if (r < 0)
+		err(1, "pledge");
 	fd = open(p, O_WRONLY|O_CREAT, 0644);
 	if (fd < 0)
 		err(1, "open");
