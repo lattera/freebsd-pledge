@@ -282,12 +282,6 @@ namei_handle_root(struct nameidata *ndp, struct vnode **dpp)
 	return (0);
 }
 
-static void namei_unveil_init(struct nameidata *, struct vnode *, struct thread *);
-static int namei_sysfil_check(struct nameidata *);
-static void lookup_unveil_update(struct nameidata *, struct vnode *);
-static void lookup_unveil_update_dotdot(struct nameidata *, struct vnode *);
-static int lookup_unveil_check(struct nameidata *);
-
 /*
  * Convert a pathname into a pointer to a locked vnode.
  *
@@ -362,7 +356,7 @@ namei(struct nameidata *ndp)
 
 #ifdef PLEDGE
 	if (error == 0)
-		error = namei_sysfil_check(ndp);
+		error = sysfil_namei_check(ndp);
 #endif
 
 #ifdef CAPABILITY_MODE
@@ -429,7 +423,7 @@ namei(struct nameidata *ndp)
 			dp = pwd->pwd_cdir;
 #ifdef PLEDGE
 			if (pwd->pwd_cdir_cover)
-				lookup_unveil_update(ndp, pwd->pwd_cdir_cover);
+				unveil_lookup_update(ndp, pwd->pwd_cdir_cover);
 #endif
 			vrefact(dp);
 		} else {
@@ -755,7 +749,7 @@ lookup(struct nameidata *ndp)
 	    compute_cn_lkflags(dp->v_mount, cnp->cn_lkflags | LK_RETRY,
 	    cnp->cn_flags));
 #ifdef PLEDGE
-	lookup_unveil_update(ndp, dp);
+	unveil_lookup_update(ndp, dp);
 #endif
 
 dirloop:
@@ -898,7 +892,7 @@ dirloop:
 		 * This is to be done on the directory we are looking up ".."
 		 * from, not the result of this lookup.
 		 */
-		lookup_unveil_update_dotdot(ndp, dp);
+		unveil_lookup_update_dotdot(ndp, dp);
 #endif
 		if ((cnp->cn_flags & ISLASTCN) != 0 &&
 		    (cnp->cn_nameiop == DELETE || cnp->cn_nameiop == RENAME)) {
@@ -1077,7 +1071,7 @@ good:
 	}
 
 #ifdef PLEDGE
-	lookup_unveil_update(ndp, dp);
+	unveil_lookup_update(ndp, dp);
 #endif
 
 	/*
@@ -1196,7 +1190,7 @@ success:
 	 * be properly set before jumping to success so that cleanup is done
 	 * correctly on failure.
 	 */
-	error = lookup_unveil_check(ndp);
+	error = unveil_lookup_check(ndp);
 	if (error != 0)
 		goto bad2;
 #endif
@@ -1387,7 +1381,7 @@ NDINIT_ALL(struct nameidata *ndp, u_long op, u_long flags, enum uio_seg segflg,
 	else
 		cap_rights_init_zero(&ndp->ni_rightsneeded);
 #ifdef PLEDGE
-	namei_unveil_init(ndp, startdir, td);
+	unveil_namei_init(ndp, startdir, td);
 #endif
 }
 
@@ -1557,134 +1551,3 @@ keeporig:
 		bcopy(ptr, buf, len);
 	return (error);
 }
-
-#ifdef PLEDGE
-
-static int
-namei_sysfil_check(struct nameidata *ndp)
-{
-	int error;
-#ifdef PLEDGE
-	struct componentname *cnp = &ndp->ni_cnd;
-	struct thread *td = cnp->cn_thread;
-	if (cnp->cn_nameiop != LOOKUP &&
-	    (error = sysfil_check(td, SYF_PLEDGE_CPATH)))
-		return (error);
-	if ((ndp->ni_uflags & NIUNV_FORREAD) &&
-	    (error = sysfil_check(td, SYF_PLEDGE_RPATH)))
-		return (error);
-	if ((ndp->ni_uflags & NIUNV_FORWRITE) &&
-	    (error = sysfil_check(td, SYF_PLEDGE_WPATH)))
-		return (error);
-#endif
-	return (0);
-}
-
-static int lookup_unveil_verbose = 0;
-SYSCTL_INT(_vfs, OID_AUTO, lookup_unveil_verbose, CTLFLAG_RWTUN,
-    &lookup_unveil_verbose, 0, NULL);
-
-void
-namei_unveil_init(struct nameidata *ndp, struct vnode *startdir, struct thread *td)
-{
-	struct filedesc *fdp = td->td_proc->p_fd;
-	struct unveil_base *ubase;
-	ndp->ni_uflags = 0;
-	ndp->ni_unveil = NULL;
-	FILEDESC_SLOCK(fdp);
-	ubase = &fdp->fd_unveil;
-	if (!ubase->active || startdir) {
-		/*
-		 * If a start vnode was explicitly specified, assume that
-		 * unveil checks don't need to apply.
-		 */
-		ndp->ni_uflags |= NIUNV_DISABLED;
-	}
-	FILEDESC_SUNLOCK(fdp);
-}
-
-static void
-lookup_unveil_update(struct nameidata *ndp, struct vnode *vp)
-{
-	struct componentname *cnp = &ndp->ni_cnd;
-	struct filedesc *fdp = cnp->cn_thread->td_proc->p_fd;
-	struct unveil_node *unveil;
-	struct unveil_base *ubase;
-	if (ndp->ni_uflags & NIUNV_DISABLED)
-		return;
-	FILEDESC_SLOCK(fdp);
-	ubase = &fdp->fd_unveil;
-	if (ubase)
-		unveil = unveil_lookup(ubase, vp);
-	else
-		unveil = NULL;
-	FILEDESC_SUNLOCK(fdp);
-	if (unveil) {
-		if (lookup_unveil_verbose)
-			printf("lookup_unveil_update: unveil found %#x %p for %p (\"%s\" \"%s\")\n",
-			    unveil->soft_perms, unveil, vp, cnp->cn_pnbuf, cnp->cn_nameptr);
-		ndp->ni_unveil = unveil;
-	} else {
-		unveil = ndp->ni_unveil;
-		if (unveil && lookup_unveil_verbose)
-			printf("lookup_unveil_update: unveil carry down %#x %p for %p (\"%s\" \"%s\")\n",
-			    unveil->soft_perms, unveil, vp, cnp->cn_pnbuf, cnp->cn_nameptr);
-	}
-}
-
-static void
-lookup_unveil_update_dotdot(struct nameidata *ndp, struct vnode *vp)
-{
-	struct componentname *cnp = &ndp->ni_cnd;
-	struct unveil_node *unveil;
-	if (ndp->ni_uflags & NIUNV_DISABLED)
-		return;
-	if ((unveil = ndp->ni_unveil) && ndp->ni_unveil->vp == vp) {
-		unveil = unveil->cover;
-		if (unveil) {
-			if (lookup_unveil_verbose)
-				printf("lookup_unveil_update_dotdot: unveil cover %#x %p for %p (\"%s\" \"%s\")\n",
-				    unveil->soft_perms, unveil, vp, cnp->cn_pnbuf, cnp->cn_nameptr);
-			ndp->ni_unveil = unveil;
-		} else {
-			if (lookup_unveil_verbose)
-				printf("lookup_unveil_update_dotdot: unveil drop for %p (\"%s\" \"%s\")\n",
-				    vp, cnp->cn_pnbuf, cnp->cn_nameptr);
-			ndp->ni_unveil = NULL;
-		}
-	} else {
-		unveil = ndp->ni_unveil;
-		if (unveil && lookup_unveil_verbose)
-			printf("lookup_unveil_update_dotdot: unveil carry up %#x %p for %p (\"%s\" \"%s\")\n",
-			    unveil->soft_perms, unveil, vp, cnp->cn_pnbuf, cnp->cn_nameptr);
-	}
-}
-
-static int
-lookup_unveil_check(struct nameidata *ndp)
-{
-	struct componentname *cnp = &ndp->ni_cnd;
-	unveil_perms_t uperms;
-	if (ndp->ni_uflags & NIUNV_DISABLED)
-		return (0);
-	if (lookup_unveil_verbose)
-		printf("unveil_check_namei %lu %#x %p: %s\n",
-		    cnp->cn_nameiop, ndp->ni_uflags,
-		    ndp->ni_unveil,
-		    cnp->cn_pnbuf
-		);
-	if ((cnp->cn_flags & FOLLOW) &&
-	    ndp->ni_vp && ndp->ni_vp->v_type == VLNK)
-		return (0);
-	uperms = ndp->ni_unveil ? ndp->ni_unveil->soft_perms : UNVEIL_PERM_NONE;
-	if ((cnp->cn_nameiop == DELETE || cnp->cn_nameiop == CREATE) &&
-	    !(uperms & UNVEIL_PERM_CPATH))
-		return (EPERM);
-	if ((ndp->ni_uflags & NIUNV_FORREAD) && !(uperms & UNVEIL_PERM_RPATH))
-		return (EPERM);
-	if ((ndp->ni_uflags & NIUNV_FORWRITE) && !(uperms & UNVEIL_PERM_WPATH))
-		return (EPERM);
-	return (0);
-}
-
-#endif

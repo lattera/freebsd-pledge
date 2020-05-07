@@ -6,6 +6,7 @@
 #include <sys/stdint.h>
 #include <sys/types.h>
 #include <sys/ucred.h>
+#include <sys/namei.h>
 #include <sys/_sysfil.h>
 
 /* OpenBSD generally returns EPERM for this, and ECAPMODE's error string is
@@ -50,5 +51,9 @@ sysfil_failed(struct thread *td)
 }
 
 int sysfil_check_ioctl(struct thread *, sysfil_t, u_long cmd);
+
+struct nameidata;
+
+int sysfil_namei_check(struct nameidata *);
 
 #endif

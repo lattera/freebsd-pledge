@@ -58,6 +58,12 @@ void unveil_fd_free(struct filedesc *);
 
 void unveil_proc_exec_switch(struct thread *);
 
+struct nameidata;
+void unveil_namei_init(struct nameidata *, struct vnode *, struct thread *);
+void unveil_lookup_update(struct nameidata *, struct vnode *);
+void unveil_lookup_update_dotdot(struct nameidata *, struct vnode *);
+int unveil_lookup_check(struct nameidata *);
+
 #endif /* _KERNEL */
 
 #endif
