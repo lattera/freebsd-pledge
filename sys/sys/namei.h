@@ -81,7 +81,6 @@ struct nameidata {
 	int	ni_lcf;			/* local call flags */
 #ifdef PLEDGE
 	struct unveil_node *ni_unveil;	/* last unveil encountered */
-	unveil_perms_t ni_uperms;	/* covering unveil permissions */
 	u_int	ni_uflags;		/* flags related to unveil handling */
 #endif
 	/*

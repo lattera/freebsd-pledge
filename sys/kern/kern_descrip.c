@@ -3341,10 +3341,13 @@ pwd_fill(struct pwd *oldpwd, struct pwd *newpwd)
 	if (newpwd->pwd_cdir == NULL && oldpwd->pwd_cdir != NULL) {
 		vrefact(oldpwd->pwd_cdir);
 		newpwd->pwd_cdir = oldpwd->pwd_cdir;
-#ifdef PLEDGE
-		newpwd->pwd_cdir_uperms = oldpwd->pwd_cdir_uperms;
-#endif
 	}
+#ifdef PLEDGE
+	if (newpwd->pwd_cdir_cover == NULL && oldpwd->pwd_cdir_cover != NULL) {
+		vrefact(oldpwd->pwd_cdir_cover);
+		newpwd->pwd_cdir_cover = oldpwd->pwd_cdir_cover;
+	}
+#endif
 
 	if (newpwd->pwd_rdir == NULL && oldpwd->pwd_rdir != NULL) {
 		vrefact(oldpwd->pwd_rdir);
@@ -3408,6 +3411,8 @@ pwd_drop(struct pwd *pwd)
 
 	if (pwd->pwd_cdir != NULL)
 		vrele(pwd->pwd_cdir);
+	if (pwd->pwd_cdir_cover != NULL)
+		vrele(pwd->pwd_cdir_cover);
 	if (pwd->pwd_rdir != NULL)
 		vrele(pwd->pwd_rdir);
 	if (pwd->pwd_jdir != NULL)
@@ -3456,7 +3461,7 @@ pwd_chroot(struct thread *td, struct vnode *vp)
 }
 
 void
-pwd_chdir_uperms(struct thread *td, struct vnode *vp, unveil_perms_t uperms)
+pwd_chdir_cover(struct thread *td, struct vnode *vp, struct vnode *cvp)
 {
 	struct filedesc *fdp;
 	struct pwd *newpwd, *oldpwd;
@@ -3469,7 +3474,7 @@ pwd_chdir_uperms(struct thread *td, struct vnode *vp, unveil_perms_t uperms)
 	oldpwd = FILEDESC_XLOCKED_LOAD_PWD(fdp);
 	newpwd->pwd_cdir = vp;
 #ifdef PLEDGE
-	newpwd->pwd_cdir_uperms = uperms;
+	newpwd->pwd_cdir_cover = cvp;
 #endif
 	pwd_fill(oldpwd, newpwd);
 	pwd_set(fdp, newpwd);
@@ -3480,7 +3485,7 @@ pwd_chdir_uperms(struct thread *td, struct vnode *vp, unveil_perms_t uperms)
 void
 pwd_chdir(struct thread *td, struct vnode *vp)
 {
-	pwd_chdir_uperms(td, vp, 0);
+	pwd_chdir_cover(td, vp, NULL);
 }
 
 void

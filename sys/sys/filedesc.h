@@ -52,10 +52,10 @@ struct filecaps {
 	cap_rights_t	 fc_rights;	/* per-descriptor capability rights */
 	u_long		*fc_ioctls;	/* per-descriptor allowed ioctls */
 	int16_t		 fc_nioctls;	/* fc_ioctls array size */
-#ifdef PLEDGE
-	unveil_perms_t	 fc_uperms;
-#endif
 	uint32_t	 fc_fcntls;	/* per-descriptor allowed fcntls */
+#ifdef PLEDGE
+	struct	vnode	*fc_cover;	/* covering unveil, if any */
+#endif
 };
 
 struct filedescent {
@@ -94,7 +94,7 @@ struct pwd {
 	struct	vnode *pwd_rdir;		/* root directory */
 	struct	vnode *pwd_jdir;		/* jail root directory */
 #ifdef PLEDGE
-	unveil_perms_t pwd_cdir_uperms;
+	struct	vnode *pwd_cdir_cover;
 #endif
 };
 typedef SMR_POINTER(struct pwd *) smrpwd_t;
@@ -306,7 +306,7 @@ fd_modified(struct filedesc *fdp, int fd, seqc_t seqc)
 
 /* cdir/rdir/jdir manipulation functions. */
 void	pwd_chdir(struct thread *td, struct vnode *vp);
-void	pwd_chdir_uperms(struct thread *td, struct vnode *vp, unveil_perms_t);
+void	pwd_chdir_cover(struct thread *td, struct vnode *vp, struct vnode *cvp);
 int	pwd_chroot(struct thread *td, struct vnode *vp);
 void	pwd_ensure_dirs(void);
 void	pwd_set_rootvnode(void);

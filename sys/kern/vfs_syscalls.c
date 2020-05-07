@@ -73,6 +73,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/jail.h>
 #include <sys/syscallsubr.h>
 #include <sys/sysctl.h>
+#include <sys/unveil.h>
 #ifdef KTRACE
 #include <sys/ktrace.h>
 #endif
@@ -857,7 +858,7 @@ sys_fchdir(struct thread *td, struct fchdir_args *uap)
 		return (error);
 	}
 	VOP_UNLOCK(vp);
-	pwd_chdir_uperms(td, vp, 0); /* XXX */
+	pwd_chdir_cover(td, vp, NULL); /* XXX */
 	return (0);
 }
 
@@ -881,6 +882,7 @@ kern_chdir(struct thread *td, const char *path, enum uio_seg pathseg)
 {
 	struct nameidata nd;
 	int error;
+	struct vnode *cover;
 
 	NDINIT(&nd, LOOKUP, FOLLOW | LOCKSHARED | LOCKLEAF | AUDITVNODE1,
 	    pathseg, path, td);
@@ -894,7 +896,12 @@ kern_chdir(struct thread *td, const char *path, enum uio_seg pathseg)
 	VOP_UNLOCK(nd.ni_vp);
 	NDFREE(&nd, NDF_ONLY_PNBUF);
 #ifdef PLEDGE
-	pwd_chdir_uperms(td, nd.ni_vp, nd.ni_uperms);
+	if (nd.ni_unveil) {
+		cover = nd.ni_unveil->vp;
+		vref(cover);
+	} else
+		cover = NULL;
+	pwd_chdir_cover(td, nd.ni_vp, cover);
 #else
 	pwd_chdir(td, nd.ni_vp);
 #endif

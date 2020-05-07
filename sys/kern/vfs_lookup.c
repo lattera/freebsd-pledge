@@ -428,7 +428,8 @@ namei(struct nameidata *ndp)
 		} else if (ndp->ni_dirfd == AT_FDCWD) {
 			dp = pwd->pwd_cdir;
 #ifdef PLEDGE
-			ndp->ni_uperms = pwd->pwd_cdir_uperms;
+			if (pwd->pwd_cdir_cover)
+				lookup_unveil_update(ndp, pwd->pwd_cdir_cover);
 #endif
 			vrefact(dp);
 		} else {
@@ -1590,18 +1591,15 @@ namei_unveil_init(struct nameidata *ndp, struct vnode *startdir, struct thread *
 	struct unveil_base *ubase;
 	ndp->ni_uflags = 0;
 	ndp->ni_unveil = NULL;
-	ndp->ni_uperms = UNVEIL_PERM_ALL;
 	FILEDESC_SLOCK(fdp);
 	ubase = &fdp->fd_unveil;
-	if (!ubase || !ubase->active || startdir) {
+	if (!ubase->active || startdir) {
 		/*
 		 * If a start vnode was explicitly specified, assume that
 		 * unveil checks don't need to apply.
 		 */
 		ndp->ni_uflags |= NIUNV_DISABLED;
-		ndp->ni_uperms = UNVEIL_PERM_ALL;
-	} else
-		ndp->ni_uperms = UNVEIL_PERM_NONE;
+	}
 	FILEDESC_SUNLOCK(fdp);
 }
 
@@ -1626,7 +1624,6 @@ lookup_unveil_update(struct nameidata *ndp, struct vnode *vp)
 			printf("lookup_unveil_update: unveil found %#x %p for %p (\"%s\" \"%s\")\n",
 			    unveil->soft_perms, unveil, vp, cnp->cn_pnbuf, cnp->cn_nameptr);
 		ndp->ni_unveil = unveil;
-		ndp->ni_uperms = unveil->soft_perms;
 	} else {
 		unveil = ndp->ni_unveil;
 		if (unveil && lookup_unveil_verbose)
@@ -1649,13 +1646,11 @@ lookup_unveil_update_dotdot(struct nameidata *ndp, struct vnode *vp)
 				printf("lookup_unveil_update_dotdot: unveil cover %#x %p for %p (\"%s\" \"%s\")\n",
 				    unveil->soft_perms, unveil, vp, cnp->cn_pnbuf, cnp->cn_nameptr);
 			ndp->ni_unveil = unveil;
-			ndp->ni_uperms = unveil->soft_perms;
 		} else {
 			if (lookup_unveil_verbose)
 				printf("lookup_unveil_update_dotdot: unveil drop for %p (\"%s\" \"%s\")\n",
 				    vp, cnp->cn_pnbuf, cnp->cn_nameptr);
 			ndp->ni_unveil = NULL;
-			ndp->ni_uperms = UNVEIL_PERM_NONE;
 		}
 	} else {
 		unveil = ndp->ni_unveil;
@@ -1669,25 +1664,25 @@ static int
 lookup_unveil_check(struct nameidata *ndp)
 {
 	struct componentname *cnp = &ndp->ni_cnd;
+	unveil_perms_t uperms;
 	if (ndp->ni_uflags & NIUNV_DISABLED)
 		return (0);
 	if (lookup_unveil_verbose)
-		printf("unveil_check_namei %lu %#x %#x %p: %s\n",
-		    cnp->cn_nameiop, ndp->ni_uflags, ndp->ni_uperms,
+		printf("unveil_check_namei %lu %#x %p: %s\n",
+		    cnp->cn_nameiop, ndp->ni_uflags,
 		    ndp->ni_unveil,
 		    cnp->cn_pnbuf
 		);
 	if ((cnp->cn_flags & FOLLOW) &&
 	    ndp->ni_vp && ndp->ni_vp->v_type == VLNK)
 		return (0);
+	uperms = ndp->ni_unveil ? ndp->ni_unveil->soft_perms : UNVEIL_PERM_NONE;
 	if ((cnp->cn_nameiop == DELETE || cnp->cn_nameiop == CREATE) &&
-	    !(ndp->ni_uperms & UNVEIL_PERM_CPATH))
+	    !(uperms & UNVEIL_PERM_CPATH))
 		return (EPERM);
-	if ((ndp->ni_uflags & NIUNV_FORREAD) &&
-	    !(ndp->ni_uperms & UNVEIL_PERM_RPATH))
+	if ((ndp->ni_uflags & NIUNV_FORREAD) && !(uperms & UNVEIL_PERM_RPATH))
 		return (EPERM);
-	if ((ndp->ni_uflags & NIUNV_FORWRITE) &&
-	    !(ndp->ni_uperms & UNVEIL_PERM_WPATH))
+	if ((ndp->ni_uflags & NIUNV_FORWRITE) && !(uperms & UNVEIL_PERM_WPATH))
 		return (EPERM);
 	return (0);
 }
