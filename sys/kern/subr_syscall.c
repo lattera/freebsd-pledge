@@ -210,10 +210,11 @@ syscallret(struct thread *td)
 
 	p = td->td_proc;
 	sa = &td->td_sa;
-	if (__predict_false(IN_CAPABILITY_MODE(td) ?
-	    (trap_enotcap || (p->p_flag2 & P2_TRAPCAP) != 0) :
-	    sysfil_check(td, SYF_PLEDGE_ERROR) != 0)) {
-		if (td->td_errno == ENOTCAPABLE || td->td_errno == ECAPMODE) {
+	if (__predict_false(td->td_errno == ENOTCAPABLE ||
+	    td->td_errno == ECAPMODE)) {
+		if (IN_CAPABILITY_MODE(td) ?
+		    (trap_enotcap || (p->p_flag2 & P2_TRAPCAP) != 0) :
+		    sysfil_check(td, SYF_PLEDGE_ERROR) != 0) {
 			/* XXX: OpenBSD uses an "uncatchable" SIGABRT */
 			ksiginfo_init_trap(&ksi);
 			ksi.ksi_signo = SIGTRAP;
