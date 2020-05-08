@@ -2,6 +2,7 @@
 #include <sys/proc.h>
 #include <sys/sysfil.h>
 #include <sys/filio.h>
+#include <sys/tty.h>
 
 int
 sysfil_check_ioctl(struct thread *td, sysfil_t sf, u_long cmd)
@@ -19,6 +20,9 @@ sysfil_check_ioctl(struct thread *td, sysfil_t sf, u_long cmd)
 	case FIOGETLBA:
 #endif
 		return (0);
+	case TIOCGETA:
+		/* needed for isatty(3) */
+		return (sysfil_check(td, SYF_PLEDGE_STDIO));
 	case FIOSETOWN:
 		/* also checked in setown() */
 		return (sysfil_check(td, SYF_PLEDGE_PROC));
