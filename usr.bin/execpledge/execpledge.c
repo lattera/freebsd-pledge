@@ -24,9 +24,14 @@ main(int argc, char *argv[])
 
 	while ((ch = getopt(argc, argv, "p:u:")) != -1)
 		switch (ch) {
-		case 'p':
+		case 'p': {
+			char *p;
 			promises = optarg;
+			for (p = promises; *p; p++)
+				if (*p == ',')
+					*p = ' ';
 			break;
+		}
 		case 'u': {
 			char *perms;
 			if ((perms = strrchr(optarg, ':')))
