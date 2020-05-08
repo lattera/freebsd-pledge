@@ -31,8 +31,8 @@ sysfil_check_ioctl(struct thread *td, sysfil_t sf, u_long cmd)
 int
 sysfil_namei_check(struct nameidata *ndp)
 {
-	int error;
 #ifdef PLEDGE
+	int error;
 	struct componentname *cnp = &ndp->ni_cnd;
 	struct thread *td = cnp->cn_thread;
 	if (cnp->cn_nameiop != LOOKUP &&

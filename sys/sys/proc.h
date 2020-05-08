@@ -801,6 +801,8 @@ struct proc {
  * The general notion of a process being sandboxed is used for checks that
  * should be done for both Capsicum and pledge().
  */
+#ifdef PLEDGE
+
 #define	PROC_SET_SANDBOX_MODE(p) do { \
 	(p)->p_sysfil &= ~(sysfil_t)SYF_DEFAULT; \
 	(p)->p_sysfilexec &= ~(sysfil_t)SYF_DEFAULT; \
@@ -812,6 +814,12 @@ struct proc {
 #define	PROC_IN_SANDBOX_MODE(p) ((p)->p_sysfil != -1)
 
 #define	IN_SANDBOX_MODE(td) PROC_IN_SANDBOX_MODE((td)->td_proc)
+
+#else
+
+#define	IN_SANDBOX_MODE(td) IN_CAPABILITY_MODE(td)
+
+#endif
 
 /*
  * These were process status values (p_stat), now they are only used in

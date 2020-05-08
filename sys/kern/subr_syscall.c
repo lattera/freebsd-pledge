@@ -125,17 +125,22 @@ syscallenter(struct thread *td)
 	}
 #endif
 
+#ifdef PLEDGE
 	/*
 	 * Only allow access to system calls marked with at least one filter
 	 * bit that is also enabled in the process's credentials filter bits.
 	 * This is checked on top of the above check so that restrictions
 	 * imposed by Capsicum and pledge(2) can stack.
+	 *
+	 * XXX: Access to p_sysfil might be improperly synchronized.  The
+	 * per-thread CoW cache protects' Capsicum flags better.
 	 */
 	if (__predict_false(((sa->callp->sy_fflags | SYF_DEFAULT) &
 	    p->p_sysfil) == 0)) {
 		td->td_errno = error = ECAPMODE; /* XXX OpenBSD uses ENOSYS */
 		goto retval;
 	}
+#endif
 
 	error = syscall_thread_enter(td, sa->callp);
 	if (error != 0) {

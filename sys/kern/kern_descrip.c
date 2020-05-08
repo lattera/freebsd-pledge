@@ -3411,8 +3411,10 @@ pwd_drop(struct pwd *pwd)
 
 	if (pwd->pwd_cdir != NULL)
 		vrele(pwd->pwd_cdir);
+#ifdef PLEDGE
 	if (pwd->pwd_cdir_cover != NULL)
 		vrele(pwd->pwd_cdir_cover);
+#endif
 	if (pwd->pwd_rdir != NULL)
 		vrele(pwd->pwd_rdir);
 	if (pwd->pwd_jdir != NULL)

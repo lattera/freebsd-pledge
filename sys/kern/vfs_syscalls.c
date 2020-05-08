@@ -882,7 +882,6 @@ kern_chdir(struct thread *td, const char *path, enum uio_seg pathseg)
 {
 	struct nameidata nd;
 	int error;
-	struct vnode *cover;
 
 	NDINIT(&nd, LOOKUP, FOLLOW | LOCKSHARED | LOCKLEAF | AUDITVNODE1,
 	    pathseg, path, td);
@@ -896,6 +895,7 @@ kern_chdir(struct thread *td, const char *path, enum uio_seg pathseg)
 	VOP_UNLOCK(nd.ni_vp);
 	NDFREE(&nd, NDF_ONLY_PNBUF);
 #ifdef PLEDGE
+	struct vnode *cover;
 	if (nd.ni_unveil) {
 		cover = nd.ni_unveil->vp;
 		vref(cover);
