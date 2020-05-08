@@ -802,8 +802,8 @@ struct proc {
  * should be done for both Capsicum and pledge().
  */
 #define	PROC_SET_SANDBOX_MODE(p) do { \
-	(p)->p_sysfil &= ~SYF_DEFAULT; \
-	(p)->p_sysfilexec &= ~SYF_DEFAULT; \
+	(p)->p_sysfil &= ~(sysfil_t)SYF_DEFAULT; \
+	(p)->p_sysfilexec &= ~(sysfil_t)SYF_DEFAULT; \
 } while (0)
 
 #define	PROC_INIT_SANDBOX_BITS(p) \
