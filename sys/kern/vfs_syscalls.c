@@ -894,7 +894,7 @@ kern_chdir(struct thread *td, const char *path, enum uio_seg pathseg)
 	}
 	VOP_UNLOCK(nd.ni_vp);
 	NDFREE(&nd, NDF_ONLY_PNBUF);
-#ifdef PLEDGE
+#ifdef UNVEIL
 	struct vnode *cover;
 	if (nd.ni_unveil) {
 		cover = nd.ni_unveil->vp;

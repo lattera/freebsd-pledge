@@ -715,7 +715,7 @@ interpret:
 		fdunshare(td);
 		/* close files on exec */
 		fdcloseexec(td);
-#ifdef PLEDGE
+#ifdef UNVEIL
 		unveil_proc_exec_switch(td);
 #endif
 	}
@@ -834,7 +834,7 @@ interpret:
 	/*
 	 * Switch sysfil to the process' on-execute sysfil.
 	 */
-#ifdef PLEDGE
+#ifdef SYSFIL
 	p->p_sysfil = p->p_sysfilexec;
 #endif
 

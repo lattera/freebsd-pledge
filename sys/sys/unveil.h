@@ -30,7 +30,7 @@ int unveilctl(int atfd, const char *path, int flags, int perms, int execperms);
 
 #ifdef _KERNEL
 
-#ifdef PLEDGE
+#ifdef UNVEIL
 MALLOC_DECLARE(M_UNVEIL);
 #endif
 

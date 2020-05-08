@@ -228,6 +228,8 @@ UMTX_PROFILING
 UMTX_CHAINS	opt_global.h
 VERBOSE_SYSINIT
 ZSTDIO		opt_zstdio.h
+SYSFIL		opt_sysfil.h
+UNVEIL		opt_unveil.h
 
 # Sanitizers
 COVERAGE	opt_global.h

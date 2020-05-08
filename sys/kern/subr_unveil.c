@@ -11,7 +11,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysfil.h>
 #include <sys/unveil.h>
 
-#ifdef PLEDGE
+#ifdef UNVEIL
 
 static int unveil_lookup_verbose = 0;
 SYSCTL_INT(_vfs, OID_AUTO, unveil_lookup_verbose, CTLFLAG_RWTUN,

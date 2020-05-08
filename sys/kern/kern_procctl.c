@@ -570,7 +570,7 @@ stackgap_status(struct thread *td, struct proc *p, int *data)
 	return (0);
 }
 
-#ifdef PLEDGE
+#ifdef SYSFIL
 static int
 sysfil_restrict(struct thread *td, struct proc *p, bool for_exec, sysfil_t *req)
 {
@@ -672,7 +672,7 @@ sys_procctl(struct thread *td, struct procctl_args *uap)
 	case PROC_PDEATHSIG_STATUS:
 		data = &signum;
 		break;
-#ifdef PLEDGE
+#ifdef SYSFIL
 	case PROC_SYSFIL:
 	case PROC_SYSFIL_EXEC:
 		error = copyin(uap->data, &x.sf, sizeof (x.sf));
@@ -748,7 +748,7 @@ kern_procctl_single(struct thread *td, struct proc *p, int com, void *data)
 		return (trapcap_ctl(td, p, *(int *)data));
 	case PROC_TRAPCAP_STATUS:
 		return (trapcap_status(td, p, data));
-#ifdef PLEDGE
+#ifdef SYSFIL
 	case PROC_SYSFIL:
 		return (sysfil_restrict(td, p, false, data));
 	case PROC_SYSFIL_EXEC:
@@ -832,7 +832,7 @@ kern_procctl(struct thread *td, idtype_t idtype, id_t id, int com, void *data)
 	case PROC_STACKGAP_STATUS:
 	case PROC_TRACE_STATUS:
 	case PROC_TRAPCAP_STATUS:
-#ifdef PLEDGE
+#ifdef SYSFIL
 	case PROC_SYSFIL:
 	case PROC_SYSFIL_EXEC:
 #endif

@@ -2069,7 +2069,7 @@ fdinit(struct filedesc *fdp, bool prepfiles)
 	newfdp->fd_lastfile = -1;
 	newfdp->fd_files = (struct fdescenttbl *)&newfdp0->fd_dfiles;
 	newfdp->fd_files->fdt_nfiles = NDFILE;
-#ifdef PLEDGE
+#ifdef UNVEIL
 	unveil_fd_init(newfdp);
 #endif
 
@@ -2174,7 +2174,7 @@ fdcopy(struct filedesc *fdp)
 	MPASS(fdp != NULL);
 
 	newfdp = fdinit(fdp, true);
-#ifdef PLEDGE
+#ifdef UNVEIL
 	if (fdp)
 		unveil_fd_merge(newfdp, fdp);
 #endif
@@ -2414,7 +2414,7 @@ fdescfree(struct thread *td)
 
 	pwd_drop(pwd);
 
-#ifdef PLEDGE
+#ifdef UNVEIL
 	unveil_fd_free(fdp);
 #endif
 	fdescfree_fds(td, fdp, 1);
@@ -3342,7 +3342,7 @@ pwd_fill(struct pwd *oldpwd, struct pwd *newpwd)
 		vrefact(oldpwd->pwd_cdir);
 		newpwd->pwd_cdir = oldpwd->pwd_cdir;
 	}
-#ifdef PLEDGE
+#ifdef UNVEIL
 	if (newpwd->pwd_cdir_cover == NULL && oldpwd->pwd_cdir_cover != NULL) {
 		vrefact(oldpwd->pwd_cdir_cover);
 		newpwd->pwd_cdir_cover = oldpwd->pwd_cdir_cover;
@@ -3411,7 +3411,7 @@ pwd_drop(struct pwd *pwd)
 
 	if (pwd->pwd_cdir != NULL)
 		vrele(pwd->pwd_cdir);
-#ifdef PLEDGE
+#ifdef UNVEIL
 	if (pwd->pwd_cdir_cover != NULL)
 		vrele(pwd->pwd_cdir_cover);
 #endif
@@ -3475,7 +3475,7 @@ pwd_chdir_cover(struct thread *td, struct vnode *vp, struct vnode *cvp)
 	FILEDESC_XLOCK(fdp);
 	oldpwd = FILEDESC_XLOCKED_LOAD_PWD(fdp);
 	newpwd->pwd_cdir = vp;
-#ifdef PLEDGE
+#ifdef UNVEIL
 	newpwd->pwd_cdir_cover = cvp;
 #endif
 	pwd_fill(oldpwd, newpwd);

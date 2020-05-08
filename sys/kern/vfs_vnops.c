@@ -207,7 +207,7 @@ restart:
 	if ((fmode & (O_CREAT | O_EXCL | O_DIRECTORY)) == (O_CREAT |
 	    O_EXCL | O_DIRECTORY))
 		return (EINVAL);
-#ifdef PLEDGE
+#if defined(SYSFIL) || defined(UNVEIL)
 	if (fmode & FREAD)
 		ndp->ni_uflags |= NIUNV_FORREAD;
 	if (fmode & FWRITE)

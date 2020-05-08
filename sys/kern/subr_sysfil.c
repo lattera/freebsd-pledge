@@ -7,7 +7,7 @@ int
 sysfil_check_ioctl(struct thread *td, sysfil_t sf, u_long cmd)
 {
 	switch (cmd) {
-#ifdef PLEDGE
+#ifdef SYSFIL
 	case FIOCLEX:
 	case FIONCLEX:
 	case FIONREAD:
@@ -31,7 +31,7 @@ sysfil_check_ioctl(struct thread *td, sysfil_t sf, u_long cmd)
 int
 sysfil_namei_check(struct nameidata *ndp)
 {
-#ifdef PLEDGE
+#ifdef SYSFIL
 	int error;
 	struct componentname *cnp = &ndp->ni_cnd;
 	struct thread *td = cnp->cn_thread;

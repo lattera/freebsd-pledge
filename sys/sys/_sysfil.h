@@ -1,10 +1,11 @@
 #ifndef	_SYS__SYSFIL_H_
 #define	_SYS__SYSFIL_H_
 
-#include <sys/types.h>
+#ifdef _KERNEL
+#include "opt_sysfil.h"
+#endif
 
-/* XXX TODO: turn into a real option */
-#define	PLEDGE
+#include <sys/types.h>
 
 /* sysfil - SYStem FILters
  *

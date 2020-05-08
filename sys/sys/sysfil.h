@@ -19,7 +19,7 @@ static const int sysfil_fail_errno = ECAPMODE;
 static inline int
 sysfil_probe(struct thread *td, sysfil_t sf)
 {
-#ifdef PLEDGE
+#ifdef SYSFIL
 	if (td->td_proc->p_sysfil & sf)
 		return (0);
 	return (sysfil_fail_errno);

@@ -22,7 +22,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysfil.h>
 #include <sys/unveil.h>
 
-#ifdef PLEDGE
+#ifdef UNVEIL
 
 MALLOC_DEFINE(M_UNVEIL, "unveil", "unveil");
 
@@ -259,12 +259,12 @@ out:	FILEDESC_XUNLOCK(fdp);
 	return (error);
 }
 
-#endif /* PLEDGE */
+#endif /* UNVEIL */
 
 int
 sys_unveilctl(struct thread *td, struct unveilctl_args *uap)
 {
-#ifdef PLEDGE
+#ifdef UNVEIL
 	char *path;
 	int error;
 	if (uap->path) {
@@ -283,5 +283,5 @@ sys_unveilctl(struct thread *td, struct unveilctl_args *uap)
 	return (error);
 #else
 	return (ENOSYS);
-#endif /* PLEDGE */
+#endif /* UNVEIL */
 }

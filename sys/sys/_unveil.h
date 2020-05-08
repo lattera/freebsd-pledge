@@ -1,6 +1,10 @@
 #ifndef	_SYS__UNVEIL_H_
 #define	_SYS__UNVEIL_H_
 
+#ifdef _KERNEL
+#include "opt_unveil.h"
+#endif
+
 #include <sys/types.h>
 #include <sys/tree.h>
 #include <sys/_sysfil.h>

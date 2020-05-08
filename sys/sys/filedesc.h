@@ -53,7 +53,7 @@ struct filecaps {
 	u_long		*fc_ioctls;	/* per-descriptor allowed ioctls */
 	int16_t		 fc_nioctls;	/* fc_ioctls array size */
 	uint32_t	 fc_fcntls;	/* per-descriptor allowed fcntls */
-#ifdef PLEDGE
+#ifdef UNVEIL
 	struct	vnode	*fc_cover;	/* covering unveil, if any */
 #endif
 };
@@ -93,7 +93,7 @@ struct pwd {
 	struct	vnode *pwd_cdir;		/* current directory */
 	struct	vnode *pwd_rdir;		/* root directory */
 	struct	vnode *pwd_jdir;		/* jail root directory */
-#ifdef PLEDGE
+#ifdef UNVEIL
 	struct	vnode *pwd_cdir_cover;
 #endif
 };
@@ -112,7 +112,7 @@ struct filedesc {
 	struct	kqlist fd_kqlist;	/* list of kqueues on this filedesc */
 	int	fd_holdleaderscount;	/* block fdfree() for shared close() */
 	int	fd_holdleaderswakeup;	/* fdfree() needs wakeup */
-#ifdef PLEDGE
+#ifdef UNVEIL
 	struct	unveil_base fd_unveil;
 #endif
 };

@@ -125,7 +125,7 @@ syscallenter(struct thread *td)
 	}
 #endif
 
-#ifdef PLEDGE
+#ifdef SYSFIL
 	/*
 	 * Only allow access to system calls marked with at least one filter
 	 * bit that is also enabled in the process's credentials filter bits.

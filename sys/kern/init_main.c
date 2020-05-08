@@ -519,7 +519,7 @@ proc0_init(void *dummy __unused)
 	p->p_reaper = p;
 	p->p_treeflag |= P_TREE_REAPER;
 	LIST_INIT(&p->p_reaplist);
-#ifdef PLEDGE
+#ifdef SYSFIL
 	/* The swapper process probably doesn't need this, but it will get
 	 * inherited by the init process. */
 	PROC_INIT_SANDBOX_BITS(p);

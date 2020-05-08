@@ -121,7 +121,7 @@ sys_cap_enter(struct thread *td, struct cap_enter_args *uap)
 	 * Capsicumized and pledged processes.   It is very important that this
 	 * sandbox mode also be enabled when Capsicum's capability mode is.
 	 */
-#ifdef PLEDGE
+#ifdef SYSFIL
 	PROC_SET_SANDBOX_MODE(td->td_proc);
 	KASSERT(PROC_IN_SANDBOX_MODE(p), ("PROC_IN_SANDBOX_MODE() bogus"));
 #endif

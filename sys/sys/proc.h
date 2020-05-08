@@ -676,7 +676,7 @@ struct proc {
 					       our subtree. */
 	uint16_t	p_elf_machine;	/* (x) ELF machine type */
 	uint64_t	p_elf_flags;	/* (x) ELF flags */
-#ifdef PLEDGE
+#ifdef SYSFIL
 	sysfil_t	p_sysfil;	/* syscall filter flags */
 	sysfil_t	p_sysfilexec;	/* filter flags after execve(2) */
 #endif
@@ -801,7 +801,7 @@ struct proc {
  * The general notion of a process being sandboxed is used for checks that
  * should be done for both Capsicum and pledge().
  */
-#ifdef PLEDGE
+#ifdef SYSFIL
 
 #define	PROC_SET_SANDBOX_MODE(p) do { \
 	(p)->p_sysfil &= ~(sysfil_t)SYF_DEFAULT; \

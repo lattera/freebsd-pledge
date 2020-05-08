@@ -354,7 +354,7 @@ namei(struct nameidata *ndp)
 	if (error == 0 && *cnp->cn_pnbuf == '\0')
 		error = ENOENT;
 
-#ifdef PLEDGE
+#ifdef SYSFIL
 	if (error == 0)
 		error = sysfil_namei_check(ndp);
 #endif
@@ -421,13 +421,13 @@ namei(struct nameidata *ndp)
 			startdir_used = 1;
 		} else if (ndp->ni_dirfd == AT_FDCWD) {
 			dp = pwd->pwd_cdir;
-#ifdef PLEDGE
+#ifdef UNVEIL
 			if (pwd->pwd_cdir_cover)
 				unveil_lookup_update(ndp, pwd->pwd_cdir_cover);
 #endif
 			vrefact(dp);
 		} else {
-#ifdef PLEDGE
+#ifdef UNVEIL
 			/* TODO: retrieve per-FD uperms */
 #endif
 			rights = ndp->ni_rightsneeded;
@@ -748,7 +748,7 @@ lookup(struct nameidata *ndp)
 	vn_lock(dp,
 	    compute_cn_lkflags(dp->v_mount, cnp->cn_lkflags | LK_RETRY,
 	    cnp->cn_flags));
-#ifdef PLEDGE
+#ifdef UNVEIL
 	unveil_lookup_update(ndp, dp);
 #endif
 
@@ -887,7 +887,7 @@ dirloop:
 			error = ENOTCAPABLE;
 			goto bad;
 		}
-#ifdef PLEDGE
+#ifdef UNVEIL
 		/*
 		 * This is to be done on the directory we are looking up ".."
 		 * from, not the result of this lookup.
@@ -1070,7 +1070,7 @@ good:
 		ndp->ni_vp = dp = tdp;
 	}
 
-#ifdef PLEDGE
+#ifdef UNVEIL
 	unveil_lookup_update(ndp, dp);
 #endif
 
@@ -1183,7 +1183,7 @@ nextname:
 		dpunlocked = 1;
 	}
 success:
-#ifdef PLEDGE
+#ifdef UNVEIL
 	/*
 	 * NOTE: "success:" is sometimes not so successful (especially with
 	 * unveil checking).  dp, dpunlocked, ni_dvp and ni_dvp_unlocked must
@@ -1380,7 +1380,7 @@ NDINIT_ALL(struct nameidata *ndp, u_long op, u_long flags, enum uio_seg segflg,
 		ndp->ni_rightsneeded = *rightsp;
 	else
 		cap_rights_init_zero(&ndp->ni_rightsneeded);
-#ifdef PLEDGE
+#ifdef UNVEIL
 	unveil_namei_init(ndp, startdir, td);
 #endif
 }

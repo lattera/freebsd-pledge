@@ -79,7 +79,7 @@ struct nameidata {
 	struct	vnode *ni_topdir;	/* logical top directory */
 	int	ni_dirfd;		/* starting directory for *at functions */
 	int	ni_lcf;			/* local call flags */
-#ifdef PLEDGE
+#if defined(UNVEIL) || defined(SYSFIL)
 	struct unveil_node *ni_unveil;	/* last unveil encountered */
 	u_int	ni_uflags;		/* flags related to unveil handling */
 #endif
