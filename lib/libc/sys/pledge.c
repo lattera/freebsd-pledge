@@ -507,7 +507,8 @@ apply_pledge(bool finish, int procctl_cmd,
 	 */
 
 	if (sysfil2uperms(req_sysfil) != sysfil2uperms(sysfil))
-		limit_unveils(custom_type, sysfil2uperms(req_sysfil));
+		limit_unveils(custom_type,
+		    sysfil2uperms(req_sysfil) | UNVEIL_PERM_ERROR);
 
 	/* Apply modified unveils. */
 
@@ -644,6 +645,7 @@ do_unveil(const char *path, const char *perms_str)
 	node = get_unveil(path, NULL, true);
 	if (!node)
 		return (-1);
+	perms |= UNVEIL_PERM_ERROR;
 	set_unveil_perms(node, UNVEIL_TYPE_CUSTOM, -1, perms);
 	set_unveil_perms(node, UNVEIL_TYPE_EXECCUSTOM, -1, perms);
 	return (apply_unveils(true));

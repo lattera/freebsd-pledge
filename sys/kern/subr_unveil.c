@@ -98,6 +98,7 @@ unveil_lookup_check(struct nameidata *ndp)
 {
 	struct componentname *cnp = &ndp->ni_cnd;
 	unveil_perms_t uperms;
+	int deny;
 	if (ndp->ni_uflags & NIUNV_DISABLED)
 		return (0);
 	if (unveil_lookup_verbose)
@@ -110,13 +111,14 @@ unveil_lookup_check(struct nameidata *ndp)
 	    ndp->ni_vp && ndp->ni_vp->v_type == VLNK)
 		return (0);
 	uperms = ndp->ni_unveil ? ndp->ni_unveil->soft_perms : UNVEIL_PERM_NONE;
+	deny = uperms & UNVEIL_PERM_ERROR ? EPERM : ECAPMODE;
 	if ((cnp->cn_nameiop == DELETE || cnp->cn_nameiop == CREATE) &&
 	    !(uperms & UNVEIL_PERM_CPATH))
-		return (EPERM);
+		return (deny);
 	if ((ndp->ni_uflags & NIUNV_FORREAD) && !(uperms & UNVEIL_PERM_RPATH))
-		return (EPERM);
+		return (deny);
 	if ((ndp->ni_uflags & NIUNV_FORWRITE) && !(uperms & UNVEIL_PERM_WPATH))
-		return (EPERM);
+		return (deny);
 	return (0);
 }
 
