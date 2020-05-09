@@ -150,6 +150,8 @@ static const struct promise_unveil promise_unveils[] = {
 	{ root_path, C,				PROMISE_CPATH },
 	{ root_path, X,				PROMISE_EXEC },
 	{ "/etc/malloc.conf", R,		PROMISE_STDIO },
+	{ "/etc/libmap.conf", R,		PROMISE_STDIO },
+	{ "/var/run/ld-elf.so.hints", R,	PROMISE_STDIO },
 	{ "/etc/localtime", R,			PROMISE_STDIO },
 	{ "/usr/share/zoneinfo/", R,		PROMISE_STDIO },
 	{ "/usr/share/nls/", R,			PROMISE_STDIO },
@@ -157,6 +159,8 @@ static const struct promise_unveil promise_unveils[] = {
 	/* Programs will often open /dev/null with O_CREAT.  TODO: Could have a
 	 * different unveil() permission just for that. */
 	{ "/dev/null", R|W|C,			PROMISE_STDIO },
+	{ "/dev/random", R,			PROMISE_STDIO },
+	{ "/dev/urandom", R,			PROMISE_STDIO },
 	/* XXX: Review /dev/crypto for safety. */
 	{ "/dev/crypto", W,			PROMISE_STDIO },
 	{ "/etc/nsswitch.conf", R,		PROMISE_DNS },
