@@ -9,11 +9,11 @@
 
 enum {
 	UNVEIL_PERM_NONE  = 0,
-	UNVEIL_PERM_ERROR = 1 << 0,
+	UNVEIL_PERM_INSPECT = 1 << 0,
 	UNVEIL_PERM_RPATH = 1 << 1,
 	UNVEIL_PERM_WPATH = 1 << 2,
 	UNVEIL_PERM_CPATH = 1 << 3,
-	UNVEIL_PERM_EXEC  = 1 << 4,
+	UNVEIL_PERM_XPATH  = 1 << 4,
 	UNVEIL_PERM_ALL = (unveil_perms_t)-1
 };
 

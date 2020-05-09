@@ -142,7 +142,7 @@ static const char *const tmp_path = _PATH_TMP;
 #define	R UNVEIL_PERM_RPATH
 #define	W UNVEIL_PERM_WPATH
 #define	C UNVEIL_PERM_CPATH
-#define	X UNVEIL_PERM_EXEC
+#define	X UNVEIL_PERM_XPATH
 
 static const struct promise_unveil promise_unveils[] = {
 	{ root_path, R,				PROMISE_RPATH },
@@ -189,7 +189,7 @@ uperms2sysfil(unveil_perms_t up)
 	return (((up & UNVEIL_PERM_RPATH) ? SYF_PLEDGE_RPATH : 0) |
 		((up & UNVEIL_PERM_WPATH) ? SYF_PLEDGE_WPATH : 0) |
 		((up & UNVEIL_PERM_CPATH) ? SYF_PLEDGE_CPATH : 0) |
-		((up & UNVEIL_PERM_EXEC)  ? SYF_PLEDGE_EXEC  : 0));
+		((up & UNVEIL_PERM_XPATH) ? SYF_PLEDGE_EXEC  : 0));
 }
 
 static unveil_perms_t
@@ -198,7 +198,7 @@ sysfil2uperms(sysfil_t sf)
 	return (((sf & SYF_PLEDGE_RPATH) ? UNVEIL_PERM_RPATH : 0) |
 		((sf & SYF_PLEDGE_WPATH) ? UNVEIL_PERM_WPATH : 0) |
 		((sf & SYF_PLEDGE_CPATH) ? UNVEIL_PERM_CPATH : 0) |
-		((sf & SYF_PLEDGE_EXEC)  ? UNVEIL_PERM_EXEC  : 0));
+		((sf & SYF_PLEDGE_EXEC)  ? UNVEIL_PERM_XPATH : 0));
 }
 
 
@@ -507,8 +507,7 @@ apply_pledge(bool finish, int procctl_cmd,
 	 */
 
 	if (sysfil2uperms(req_sysfil) != sysfil2uperms(sysfil))
-		limit_unveils(custom_type,
-		    sysfil2uperms(req_sysfil) | UNVEIL_PERM_ERROR);
+		limit_unveils(custom_type, sysfil2uperms(req_sysfil));
 
 	/* Apply modified unveils. */
 
@@ -595,7 +594,8 @@ unveil_parse_perms(unveil_perms_t *perms, const char *s)
 		case 'r': *perms |= UNVEIL_PERM_RPATH; break;
 		case 'w': *perms |= UNVEIL_PERM_WPATH; break;
 		case 'c': *perms |= UNVEIL_PERM_CPATH; break;
-		case 'x': *perms |= UNVEIL_PERM_EXEC;  break;
+		case 'x': *perms |= UNVEIL_PERM_XPATH; break;
+		case 'i': *perms |= UNVEIL_PERM_INSPECT; break;
 		default:
 			errno = EINVAL;
 			return (-1);
@@ -654,8 +654,6 @@ do_unveil(const char *path, const char *perms_str, const char *execperms_str)
 	node = get_unveil(path, NULL, true);
 	if (!node)
 		return (-1);
-	perms |= UNVEIL_PERM_ERROR;
-	execperms |= UNVEIL_PERM_ERROR;
 	if (perms_str)
 		set_unveil_perms(node, UNVEIL_TYPE_CUSTOM, -1, perms);
 	if (execperms_str)
