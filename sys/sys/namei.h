@@ -79,9 +79,8 @@ struct nameidata {
 	struct	vnode *ni_topdir;	/* logical top directory */
 	int	ni_dirfd;		/* starting directory for *at functions */
 	int	ni_lcf;			/* local call flags */
-#if defined(UNVEIL) || defined(SYSFIL)
+#if defined(UNVEIL)
 	struct unveil_node *ni_unveil;	/* last unveil encountered */
-	u_int	ni_uflags;		/* flags related to unveil handling */
 #endif
 	/*
 	 * Results: returned from namei
@@ -170,15 +169,6 @@ struct nameidata {
 #define	PARAMASK	0x7ffffe00 /* mask of parameter descriptors */
 
 /*
- * unveil flags
- */
-
-#define	NIUNV_DISABLED	0x00000001 /* unveil restrictions not enforced */
-#define	NIUNV_EXECBASE	0x00000002 /* use the on-execute unveils instead */
-#define	NIUNV_FORREAD	0x00000004 /* looked up file is to be read */
-#define	NIUNV_FORWRITE	0x00000008 /* looked up file is to be written */
-
-/*
  * Namei results flags
  */
 #define	NIRES_ABS	0x00000001 /* Path was absolute */
@@ -191,6 +181,7 @@ struct nameidata {
 #define	NI_LCF_BENEATH_ABS	0x0004	/* BENEATH with absolute path */
 #define	NI_LCF_BENEATH_LATCHED	0x0008	/* BENEATH_ABS traversed starting dir */
 #define	NI_LCF_LATCH		0x0010	/* ni_beneath_latch valid */
+#define	NI_LCF_UNVEIL_DISABLED	0x0020	/* unveil restrictions not enforced */
 
 /*
  * Initialization of a nameidata structure.

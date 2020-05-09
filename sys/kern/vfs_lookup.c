@@ -332,6 +332,10 @@ namei(struct nameidata *ndp)
 	TAILQ_INIT(&ndp->ni_cap_tracker);
 	ndp->ni_lcf = 0;
 
+#ifdef UNVEIL
+	unveil_namei_start(ndp, td);
+#endif
+
 	/* We will set this ourselves if we need it. */
 	cnp->cn_flags &= ~TRAILINGSLASH;
 
@@ -353,11 +357,6 @@ namei(struct nameidata *ndp)
 	 */
 	if (error == 0 && *cnp->cn_pnbuf == '\0')
 		error = ENOENT;
-
-#ifdef SYSFIL
-	if (error == 0)
-		error = sysfil_namei_check(ndp);
-#endif
 
 #ifdef CAPABILITY_MODE
 	/*
@@ -1380,9 +1379,6 @@ NDINIT_ALL(struct nameidata *ndp, u_long op, u_long flags, enum uio_seg segflg,
 		ndp->ni_rightsneeded = *rightsp;
 	else
 		cap_rights_init_zero(&ndp->ni_rightsneeded);
-#ifdef UNVEIL
-	unveil_namei_init(ndp, startdir, td);
-#endif
 }
 
 /*

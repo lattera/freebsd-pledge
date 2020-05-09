@@ -54,6 +54,4 @@ int sysfil_check_ioctl(struct thread *, sysfil_t, u_long cmd);
 
 struct nameidata;
 
-int sysfil_namei_check(struct nameidata *);
-
 #endif

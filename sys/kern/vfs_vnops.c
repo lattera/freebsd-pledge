@@ -207,12 +207,6 @@ restart:
 	if ((fmode & (O_CREAT | O_EXCL | O_DIRECTORY)) == (O_CREAT |
 	    O_EXCL | O_DIRECTORY))
 		return (EINVAL);
-#if defined(SYSFIL) || defined(UNVEIL)
-	if (fmode & FREAD)
-		ndp->ni_uflags |= NIUNV_FORREAD;
-	if (fmode & FWRITE)
-		ndp->ni_uflags |= NIUNV_FORWRITE;
-#endif
 	if ((fmode & (O_CREAT | O_DIRECTORY)) == O_CREAT) {
 		ndp->ni_cnd.cn_nameiop = CREATE;
 		/*
@@ -363,19 +357,20 @@ vn_open_vnode(struct vnode *vp, int fmode, struct ucred *cred,
 	if (fmode & (FWRITE | O_TRUNC)) {
 		if (vp->v_type == VDIR)
 			return (EISDIR);
-#if 0
+		if (fmode & O_CREAT) {
+			error = sysfil_check(td, SYF_PLEDGE_CPATH);
+			if (error)
+				return (error);
+		}
 		error = sysfil_check(td, SYF_PLEDGE_WPATH);
 		if (error)
 			return (error);
-#endif
 		accmode |= VWRITE;
 	}
 	if (fmode & FREAD) {
-#if 0
 		error = sysfil_check(td, SYF_PLEDGE_RPATH);
 		if (error)
 			return (error);
-#endif
 		accmode |= VREAD;
 	}
 	if (fmode & FEXEC)

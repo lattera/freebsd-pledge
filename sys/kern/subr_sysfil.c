@@ -31,24 +31,3 @@ sysfil_check_ioctl(struct thread *td, sysfil_t sf, u_long cmd)
 		return (sysfil_check(td, sf));
 	}
 }
-
-int
-sysfil_namei_check(struct nameidata *ndp)
-{
-#ifdef SYSFIL
-	int error;
-	struct componentname *cnp = &ndp->ni_cnd;
-	struct thread *td = cnp->cn_thread;
-	if (cnp->cn_nameiop != LOOKUP &&
-	    (error = sysfil_check(td, SYF_PLEDGE_CPATH)))
-		return (error);
-	if ((ndp->ni_uflags & NIUNV_FORREAD) &&
-	    (error = sysfil_check(td, SYF_PLEDGE_RPATH)))
-		return (error);
-	if ((ndp->ni_uflags & NIUNV_FORWRITE) &&
-	    (error = sysfil_check(td, SYF_PLEDGE_WPATH)))
-		return (error);
-#endif
-	return (0);
-}
-

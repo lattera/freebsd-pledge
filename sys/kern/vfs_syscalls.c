@@ -314,8 +314,8 @@ kern_statfs(struct thread *td, const char *path, enum uio_seg pathseg,
 	struct nameidata nd;
 	int error;
 
-	NDINIT(&nd, LOOKUP, FOLLOW | LOCKSHARED | LOCKLEAF | AUDITVNODE1,
-	    pathseg, path, td);
+	NDINIT_ATRIGHTS(&nd, LOOKUP, FOLLOW | LOCKSHARED | LOCKLEAF | AUDITVNODE1,
+	    pathseg, path, AT_FDCWD, &cap_fstatfs_rights, td);
 	error = namei(&nd);
 	if (error != 0)
 		return (error);
@@ -883,8 +883,8 @@ kern_chdir(struct thread *td, const char *path, enum uio_seg pathseg)
 	struct nameidata nd;
 	int error;
 
-	NDINIT(&nd, LOOKUP, FOLLOW | LOCKSHARED | LOCKLEAF | AUDITVNODE1,
-	    pathseg, path, td);
+	NDINIT_ATRIGHTS(&nd, LOOKUP, FOLLOW | LOCKSHARED | LOCKLEAF | AUDITVNODE1,
+	    pathseg, path, AT_FDCWD, &cap_fchdir_rights, td);
 	if ((error = namei(&nd)) != 0)
 		return (error);
 	if ((error = change_dir(nd.ni_vp, td)) != 0) {
@@ -2494,8 +2494,8 @@ kern_pathconf(struct thread *td, const char *path, enum uio_seg pathseg,
 	struct nameidata nd;
 	int error;
 
-	NDINIT(&nd, LOOKUP, LOCKSHARED | LOCKLEAF | AUDITVNODE1 | flags,
-	    pathseg, path, td);
+	NDINIT_ATRIGHTS(&nd, LOOKUP, LOCKSHARED | LOCKLEAF | AUDITVNODE1 | flags,
+	    pathseg, path, AT_FDCWD, &cap_fpathconf_rights, td);
 	if ((error = namei(&nd)) != 0)
 		return (error);
 	NDFREE(&nd, NDF_ONLY_PNBUF);
@@ -3193,7 +3193,8 @@ kern_lutimes(struct thread *td, const char *path, enum uio_seg pathseg,
 
 	if ((error = getutimes(tptr, tptrseg, ts)) != 0)
 		return (error);
-	NDINIT(&nd, LOOKUP, NOFOLLOW | AUDITVNODE1, pathseg, path, td);
+	NDINIT_ATRIGHTS(&nd, LOOKUP, NOFOLLOW | AUDITVNODE1,
+	    pathseg, path, AT_FDCWD, &cap_futimes_rights, td);
 	if ((error = namei(&nd)) != 0)
 		return (error);
 	NDFREE(&nd, NDF_ONLY_PNBUF);
@@ -3347,7 +3348,8 @@ kern_truncate(struct thread *td, const char *path, enum uio_seg pathseg,
 
 	if (length < 0)
 		return(EINVAL);
-	NDINIT(&nd, LOOKUP, FOLLOW | AUDITVNODE1, pathseg, path, td);
+	NDINIT_ATRIGHTS(&nd, LOOKUP, FOLLOW | AUDITVNODE1,
+	    pathseg, path, AT_FDCWD, &cap_ftruncate_rights, td);
 	if ((error = namei(&nd)) != 0)
 		return (error);
 	vp = nd.ni_vp;
