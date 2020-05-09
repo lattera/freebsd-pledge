@@ -26,7 +26,9 @@ __FBSDID("$FreeBSD$");
 
 MALLOC_DEFINE(M_UNVEIL, "unveil", "unveil");
 
-static u_int unveil_max_nodes = 100; /* TODO: sysctl? */
+static unsigned int unveil_max_nodes_per_process = 100;
+SYSCTL_UINT(_kern, OID_AUTO, maxunveilsperproc, CTLFLAG_RW,
+	&unveil_max_nodes_per_process, 0, "Maximum unveils allowed per process");
 
 static int
 unveil_node_cmp(struct unveil_node *a, struct unveil_node *b)
@@ -213,7 +215,7 @@ do_unveil(struct thread *td, int atfd, const char *path, int flags,
 
 	if (adding) {
 		node = unveil_lookup(base, nd.ni_vp);
-		if (base->node_count >= unveil_max_nodes && !node) {
+		if (base->node_count >= unveil_max_nodes_per_process && !node) {
 			error = E2BIG;
 			goto out;
 		}
