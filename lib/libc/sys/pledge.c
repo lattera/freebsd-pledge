@@ -604,25 +604,32 @@ unveil_parse_perms(unveil_perms_t *perms, const char *s)
 }
 
 static int
-do_unveil(const char *path, const char *perms_str)
+do_unveil(const char *path, const char *perms_str, const char *execperms_str)
 {
 	int r;
 	struct unveil_node *node;
-	unveil_perms_t perms;
+	unveil_perms_t perms, execperms;
 	int flags;
 
 	flags |= UNVEIL_FLAG_ACTIVATE;
 
-	if (!path && !perms_str)
+	if (!path && !perms_str && !execperms_str)
 		/*
 		 * XXX: This also disallows any unveils that future pledge
 		 * promise may need to add.
 		 */
 		return (unveil_lockdown());
 
-	r = unveil_parse_perms(&perms, perms_str);
-	if (r < 0)
-		return (-1);
+	if (perms_str) {
+		r = unveil_parse_perms(&perms, perms_str);
+		if (r < 0)
+			return (-1);
+	}
+	if (execperms_str) {
+		r = unveil_parse_perms(&execperms, execperms_str);
+		if (r < 0)
+			return (-1);
+	}
 
 	if (!state.has_custom_unveils) {
 		/*
@@ -637,8 +644,10 @@ do_unveil(const char *path, const char *perms_str)
 		state.has_custom_unveils = true;
 		node = get_unveil(root_path, NULL, false);
 		if (node) {
-			set_unveil_perms(node, UNVEIL_TYPE_PROMISE, -1, 0);
-			set_unveil_perms(node, UNVEIL_TYPE_EXECPROMISE, -1, 0);
+			if (perms_str)
+				set_unveil_perms(node, UNVEIL_TYPE_PROMISE, -1, 0);
+			if (execperms_str)
+				set_unveil_perms(node, UNVEIL_TYPE_EXECPROMISE, -1, 0);
 		}
 	}
 
@@ -646,8 +655,11 @@ do_unveil(const char *path, const char *perms_str)
 	if (!node)
 		return (-1);
 	perms |= UNVEIL_PERM_ERROR;
-	set_unveil_perms(node, UNVEIL_TYPE_CUSTOM, -1, perms);
-	set_unveil_perms(node, UNVEIL_TYPE_EXECCUSTOM, -1, perms);
+	execperms |= UNVEIL_PERM_ERROR;
+	if (perms_str)
+		set_unveil_perms(node, UNVEIL_TYPE_CUSTOM, -1, perms);
+	if (execperms_str)
+		set_unveil_perms(node, UNVEIL_TYPE_EXECCUSTOM, -1, execperms);
 	return (apply_unveils(true));
 }
 
@@ -656,6 +668,15 @@ unveil(const char *path, const char *permissions)
 {
 	/* TODO: global lock */
 	int r;
-	r = do_unveil(path, permissions);
+	r = do_unveil(path, permissions, NULL);
+	return (r);
+}
+
+int
+unveilexec(const char *path, const char *permissions)
+{
+	/* TODO: global lock */
+	int r;
+	r = do_unveil(path, NULL, permissions);
 	return (r);
 }
