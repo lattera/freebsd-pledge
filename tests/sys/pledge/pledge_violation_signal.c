@@ -5,6 +5,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/signal.h>
+#include <signal.h>
 
 int
 main()
@@ -18,7 +19,13 @@ main()
 		r = pledge("stdio", "");
 		if (r < 0)
 			err(1, "pledge");
+#if 0
 		close(open("/etc/rc", O_RDONLY));
+#else
+		r = kill(getppid(), SIGTERM);
+		if (r < 0)
+			err(1, "kill");
+#endif
 		_exit(0);
 	}
 	r = waitpid(pid, &status, WEXITED);

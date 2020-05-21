@@ -1804,7 +1804,7 @@ kern_kill(struct thread *td, pid_t pid, int signum)
 	 */
 	if (IN_SANDBOX_MODE(td) &&
 	    pid != 0 && pid != td->td_proc->p_pid &&
-	    (error = sysfil_check(td, SYF_PLEDGE_PROC) != 0))
+	    (error = sysfil_check(td, SYF_PLEDGE_PROC)) != 0)
 		return (error);
 
 	AUDIT_ARG_SIGNUM(signum);
