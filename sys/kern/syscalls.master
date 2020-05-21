@@ -145,7 +145,7 @@
 		    _In_z_ const char *link
 		);
 	}
-10	AUE_UNLINK	STD|PLEDGE_CPATH|PLEDGE_TMPPATH {
+10	AUE_UNLINK	STD|PLEDGE_CPATH {
 		int unlink(
 		    _In_z_ const char *path
 		);
@@ -3049,7 +3049,7 @@
 		    _Out_ struct stat *sb
 		);
 	}
-552	AUE_FSTATAT	STD|PLEDGE_STDIO|PLEDGE_RPATH|PLEDGE_WPATH|PLEDGE_TMPPATH {
+552	AUE_FSTATAT	STD|PLEDGE_STDIO|PLEDGE_RPATH|PLEDGE_WPATH {
 		int fstatat(
 		    int fd,
 		    _In_z_ const char *path,
@@ -3169,7 +3169,7 @@
 		    size_t bufsize
 		);
 	}
-568	AUE_UNLINKAT	STD|PLEDGE_CPATH|PLEDGE_TMPPATH {
+568	AUE_UNLINKAT	STD|PLEDGE_CPATH {
 		int funlinkat(
 		    int dfd,
 		    _In_z_ const char *path,
