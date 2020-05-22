@@ -4078,6 +4078,7 @@ bbr_cong_signal(struct tcpcb *tp, struct tcphdr *th, uint32_t type, struct bbr_s
  */
 #define DELAY_ACK(tp, bbr, nsegs)				\
 	(((tp->t_flags & TF_RXWIN0SENT) == 0) &&		\
+	 ((tp->t_flags & TF_DELACK) == 0) && 		 	\
 	 ((bbr->bbr_segs_rcvd + nsegs) < tp->t_delayed_ack) &&	\
 	 (tp->t_delayed_ack || (tp->t_flags & TF_NEEDSYN)))
 
@@ -4974,6 +4975,15 @@ bbr_remxt_tmr(struct tcpcb *tp)
 			rsm->r_flags &= ~(BBR_ACKED | BBR_SACK_PASSED | BBR_WAS_SACKPASS);
 			bbr_log_type_rsmclear(bbr, cts, rsm, old_flags, __LINE__);
 		} else {
+			if ((tp->t_state < TCPS_ESTABLISHED) &&
+			    (rsm->r_start == tp->snd_una)) {
+				/*
+				 * Special case for TCP FO. Where
+				 * we sent more data beyond the snd_max.
+				 * We don't mark that as lost and stop here.
+				 */
+				break;
+			}
 			if ((rsm->r_flags & BBR_MARKED_LOST) == 0) {
 				bbr->r_ctl.rc_lost += rsm->r_end - rsm->r_start;
 				bbr->r_ctl.rc_lost_bytes += rsm->r_end - rsm->r_start;
@@ -8992,7 +9002,7 @@ bbr_do_syn_sent(struct mbuf *m, struct tcphdr *th, struct socket *so,
 		 * If there's data, delay ACK; if there's also a FIN ACKNOW
 		 * will be turned on later.
 		 */
-		if (DELAY_ACK(tp, bbr, 1) && tlen != 0 && (tfo_partial == 0)) {
+		if (DELAY_ACK(tp, bbr, 1) && tlen != 0 && !tfo_partial) {
 			bbr->bbr_segs_rcvd += 1;
 			tp->t_flags |= TF_DELACK;
 			bbr_timer_cancel(bbr, __LINE__, bbr->r_ctl.rc_rcvtime);
@@ -11585,17 +11595,20 @@ bbr_do_segment_nounlock(struct mbuf *m, struct tcphdr *th, struct socket *so,
 			    (tp->t_flags & TF_REQ_SCALE)) {
 				tp->t_flags |= TF_RCVD_SCALE;
 				tp->snd_scale = to.to_wscale;
-			}
+			} else
+				tp->t_flags &= ~TF_REQ_SCALE;
 			/*
 			 * Initial send window.  It will be updated with the
 			 * next incoming segment to the scaled value.
 			 */
 			tp->snd_wnd = th->th_win;
-			if (to.to_flags & TOF_TS) {
+			if ((to.to_flags & TOF_TS) &&
+			    (tp->t_flags & TF_REQ_TSTMP)) {
 				tp->t_flags |= TF_RCVD_TSTMP;
 				tp->ts_recent = to.to_tsval;
 				tp->ts_recent_age = tcp_tv_to_mssectick(&bbr->rc_tv);
-			}
+			} else
+			    tp->t_flags &= ~TF_REQ_TSTMP;
 			if (to.to_flags & TOF_MSS)
 				tcp_mss(tp, to.to_mss);
 			if ((tp->t_flags & TF_SACK_PERMIT) &&
@@ -12314,7 +12327,8 @@ bbr_output_wtime(struct tcpcb *tp, const struct timeval *tv)
 	     (tp->t_state == TCPS_SYN_SENT)) &&
 	    SEQ_GT(tp->snd_max, tp->snd_una) &&	/* initial SYN or SYN|ACK sent */
 	    (tp->t_rxtshift == 0)) {	/* not a retransmit */
-		return (0);
+		len = 0;
+		goto just_return_nolock;
 	}
 	/*
 	 * Before sending anything check for a state update. For hpts
@@ -13420,9 +13434,6 @@ send:
 #endif
 			orig_len = len;
 			m->m_next = tcp_m_copym(
-#ifdef NETFLIX_COPY_ARGS
-				tp,
-#endif
 				mb, moff, &len,
 				if_hw_tsomaxsegcount,
 				if_hw_tsomaxsegsize, msb,
@@ -14288,6 +14299,7 @@ nomore:
 	    (hw_tls == 0) &&
 	    (len > 0) &&
 	    ((flags & TH_RST) == 0) &&
+	    ((flags & TH_SYN) == 0) &&
 	    (IN_RECOVERY(tp->t_flags) == 0) &&
 	    (bbr->rc_in_persist == 0) &&
 	    (tot_len < bbr->r_ctl.rc_pace_max_segs)) {

@@ -207,7 +207,6 @@ OLD_FILES+=usr/bin/as
 OLD_FILES+=usr/bin/ld
 OLD_FILES+=usr/share/man/man1/ld.1.gz
 .endif
-OLD_FILES+=usr/bin/objdump
 .endif
 OLD_FILES+=usr/libdata/ldscripts/armelf_fbsd.x
 OLD_FILES+=usr/libdata/ldscripts/armelf_fbsd.xbn
@@ -406,7 +405,6 @@ OLD_FILES+=usr/libdata/ldscripts/elf_x86_64_fbsd.xu
 OLD_FILES+=usr/libdata/ldscripts/elf_x86_64_fbsd.xw
 .if !defined(WITH_PORT_BASE_BINUTILS)
 OLD_FILES+=usr/share/man/man1/as.1.gz
-OLD_FILES+=usr/share/man/man1/objdump.1.gz
 OLD_FILES+=usr/share/man/man7/as.7.gz
 OLD_FILES+=usr/share/man/man7/ld.7.gz
 OLD_FILES+=usr/share/man/man7/ldint.7.gz
@@ -7533,7 +7531,6 @@ OLD_FILES+=usr/share/man/man8/pppctl.8.gz
 .if ${MK_PROFILE} == no
 OLD_FILES+=usr/lib/lib80211_p.a
 OLD_FILES+=usr/lib/libBlocksRuntime_p.a
-OLD_FILES+=usr/lib/libalias_cuseeme_p.a
 OLD_FILES+=usr/lib/libalias_dummy_p.a
 OLD_FILES+=usr/lib/libalias_ftp_p.a
 OLD_FILES+=usr/lib/libalias_irc_p.a
@@ -9650,7 +9647,6 @@ OLD_FILES+=usr/share/man/man4/uark.4.gz
 OLD_FILES+=usr/share/man/man4/uart.4.gz
 OLD_FILES+=usr/share/man/man4/uath.4.gz
 OLD_FILES+=usr/share/man/man4/ubsa.4.gz
-OLD_FILES+=usr/share/man/man4/ubsec.4.gz
 OLD_FILES+=usr/share/man/man4/ubser.4.gz
 OLD_FILES+=usr/share/man/man4/ubtbcmfw.4.gz
 OLD_FILES+=usr/share/man/man4/uchcom.4.gz

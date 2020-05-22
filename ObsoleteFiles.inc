@@ -36,9 +36,20 @@
 #   xargs -n1 | sort | uniq -d;
 # done
 
+# 20200515: libalias cuseeme protocol support retired
+OLD_LIBS+=lib/libalias_cuseeme.so
+OLD_FILES+=usr/lib/libalias_cuseeme.a
+OLD_FILES+=usr/lib/libalias_cuseeme_p.a
+
+# 20200511: Remove ubsec(4)
+OLD_FILES+=usr/share/man/man4/ubsec.4.gz
+
 # 20200506: GNU objdump 2.17.50 retired
 OLD_FILES+=usr/bin/objdump
 OLD_FILES+=usr/share/man/man1/objdump.1.gz
+
+# 20200428: route_var.h moved to net/route
+OLD_FILES+=usr/include/net/route_var.h
 
 # 20200418: Make libauditd private
 OLD_FILES+=usr/lib/libauditd.a
@@ -49,6 +60,9 @@ OLD_FILES+=usr/lib/libauditd_p.a
 # 20200418: Remove bogus man links
 OLD_FILES+=usr/share/man/man3/getauusernam_R.3.gz
 OLD_FILES+=usr/share/man/man3/getauclassnam_3.3.gz
+
+# 20200414: NFS file handle affinity code for the NFS server re-organized
+OLD_FILES+=usr/include/nfs/nfs_fha.h
 
 # 20200401: Remove procfs-based process debugging
 OLD_FILES+=usr/include/sys/pioctl.h
@@ -3165,6 +3179,8 @@ OLD_DIRS+=usr/lib/clang/4.0.0/lib/freebsd
 OLD_DIRS+=usr/lib/clang/4.0.0/lib
 OLD_DIRS+=usr/lib/clang/4.0.0
 OLD_FILES+=usr/bin/llvm-pdbdump
+# 20170717: Remove documentation of vaporware
+OLD_FILES+=usr/share/man/man2/pdwait4.2.gz
 # 20170610: chown-f_test replaced by chown_test
 OLD_FILES+=usr/tests/usr.sbin/chown/chown-f_test
 # 20170609: drop obsolete manpage link (if_rtwn.ko -> rtwn.ko)

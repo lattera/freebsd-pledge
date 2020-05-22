@@ -47,12 +47,8 @@ __FBSDID("$FreeBSD$");
 #include <sys/limits.h>
 #include <sys/mutex.h>
 
-#include <crypto/blowfish/blowfish.h>
 #include <crypto/sha1.h>
 #include <opencrypto/rmd160.h>
-#include <opencrypto/cast.h>
-#include <opencrypto/skipjack.h>
-#include <sys/md5.h>
 
 #include <opencrypto/cryptodev.h>
 #include <opencrypto/xform.h>
@@ -66,11 +62,10 @@ struct swcr_auth {
 	void		*sw_octx;
 	struct auth_hash *sw_axf;
 	uint16_t	sw_mlen;
-	uint16_t	sw_octx_len;
 };
 
 struct swcr_encdec {
-	uint8_t		*sw_kschedule;
+	void		*sw_kschedule;
 	struct enc_xform *sw_exf;
 };
 
@@ -136,11 +131,8 @@ swcr_encdec(struct swcr_session *ses, struct cryptop *crp)
 	crypto_read_iv(crp, iv);
 
 	if (crp->crp_cipher_key != NULL) {
-		if (sw->sw_kschedule)
-			exf->zerokey(&(sw->sw_kschedule));
-
 		csp = crypto_get_params(crp->crp_session);
-		error = exf->setkey(&sw->sw_kschedule,
+		error = exf->setkey(sw->sw_kschedule,
 		    crp->crp_cipher_key, csp->csp_cipher_klen);
 		if (error)
 			return (error);
@@ -202,10 +194,10 @@ swcr_encdec(struct swcr_session *ses, struct cryptop *crp)
 			/* Actual encryption/decryption */
 			if (exf->reinit) {
 				if (encrypting) {
-					exf->encrypt(sw->sw_kschedule,
+					exf->encrypt(sw->sw_kschedule, blk,
 					    blk);
 				} else {
-					exf->decrypt(sw->sw_kschedule,
+					exf->decrypt(sw->sw_kschedule, blk,
 					    blk);
 				}
 			} else if (encrypting) {
@@ -213,7 +205,7 @@ swcr_encdec(struct swcr_session *ses, struct cryptop *crp)
 				for (j = 0; j < blks; j++)
 					blk[j] ^= ivp[j];
 
-				exf->encrypt(sw->sw_kschedule, blk);
+				exf->encrypt(sw->sw_kschedule, blk, blk);
 
 				/*
 				 * Keep encrypted block for XOR'ing
@@ -229,7 +221,7 @@ swcr_encdec(struct swcr_session *ses, struct cryptop *crp)
 				nivp = (ivp == iv) ? iv2 : iv;
 				bcopy(blk, nivp, blks);
 
-				exf->decrypt(sw->sw_kschedule, blk);
+				exf->decrypt(sw->sw_kschedule, blk, blk);
 
 				/* XOR with previous block */
 				for (j = 0; j < blks; j++)
@@ -269,25 +261,25 @@ swcr_encdec(struct swcr_session *ses, struct cryptop *crp)
 			if (exf->reinit) {
 				if (encrypting && exf->encrypt_multi == NULL)
 					exf->encrypt(sw->sw_kschedule,
-					    idat);
+					    idat, idat);
 				else if (encrypting) {
 					nb = rounddown(rem, blks);
 					exf->encrypt_multi(sw->sw_kschedule,
-					    idat, nb);
+					    idat, idat, nb);
 				} else if (exf->decrypt_multi == NULL)
 					exf->decrypt(sw->sw_kschedule,
-					    idat);
+					    idat, idat);
 				else {
 					nb = rounddown(rem, blks);
 					exf->decrypt_multi(sw->sw_kschedule,
-					    idat, nb);
+					    idat, idat, nb);
 				}
 			} else if (encrypting) {
 				/* XOR with previous block/IV */
 				for (j = 0; j < blks; j++)
 					idat[j] ^= ivp[j];
 
-				exf->encrypt(sw->sw_kschedule, idat);
+				exf->encrypt(sw->sw_kschedule, idat, idat);
 				ivp = idat;
 			} else {	/* decrypt */
 				/*
@@ -297,7 +289,7 @@ swcr_encdec(struct swcr_session *ses, struct cryptop *crp)
 				nivp = (ivp == iv) ? iv2 : iv;
 				bcopy(idat, nivp, blks);
 
-				exf->decrypt(sw->sw_kschedule, idat);
+				exf->decrypt(sw->sw_kschedule, idat, idat);
 
 				/* XOR with previous block/IV */
 				for (j = 0; j < blks; j++)
@@ -340,7 +332,6 @@ swcr_authprepare(struct auth_hash *axf, struct swcr_auth *sw,
 {
 
 	switch (axf->type) {
-	case CRYPTO_MD5_HMAC:
 	case CRYPTO_SHA1_HMAC:
 	case CRYPTO_SHA2_224_HMAC:
 	case CRYPTO_SHA2_256_HMAC:
@@ -351,27 +342,6 @@ swcr_authprepare(struct auth_hash *axf, struct swcr_auth *sw,
 		hmac_init_ipad(axf, key, klen, sw->sw_ictx);
 		hmac_init_opad(axf, key, klen, sw->sw_octx);
 		break;
-	case CRYPTO_MD5_KPDK:
-	case CRYPTO_SHA1_KPDK:
-	{
-		/* 
-		 * We need a buffer that can hold an md5 and a sha1 result
-		 * just to throw it away.
-		 * What we do here is the initial part of:
-		 *   ALGO( key, keyfill, .. )
-		 * adding the key to sw_ictx and abusing Final() to get the
-		 * "keyfill" padding.
-		 * In addition we abuse the sw_octx to save the key to have
-		 * it to be able to append it at the end in swcr_authcompute().
-		 */
-		u_char buf[SHA1_RESULTLEN];
-
-		bcopy(key, sw->sw_octx, klen);
-		axf->Init(sw->sw_ictx);
-		axf->Update(sw->sw_ictx, key, klen);
-		axf->Final(buf, sw->sw_ictx);
-		break;
-	}
 	case CRYPTO_POLY1305:
 	case CRYPTO_BLAKE2B:
 	case CRYPTO_BLAKE2S:
@@ -428,7 +398,6 @@ swcr_authcompute(struct swcr_session *ses, struct cryptop *crp)
 		axf->Final(aalg, &ctx);
 		break;
 
-	case CRYPTO_MD5_HMAC:
 	case CRYPTO_SHA1_HMAC:
 	case CRYPTO_SHA2_224_HMAC:
 	case CRYPTO_SHA2_256_HMAC:
@@ -441,23 +410,6 @@ swcr_authcompute(struct swcr_session *ses, struct cryptop *crp)
 		axf->Final(aalg, &ctx);
 		bcopy(sw->sw_octx, &ctx, axf->ctxsize);
 		axf->Update(&ctx, aalg, axf->hashsize);
-		axf->Final(aalg, &ctx);
-		break;
-
-	case CRYPTO_MD5_KPDK:
-	case CRYPTO_SHA1_KPDK:
-		/* If we have no key saved, return error. */
-		if (sw->sw_octx == NULL)
-			return EINVAL;
-
-		/*
-		 * Add the trailing copy of the key (see comment in
-		 * swcr_authprepare()) after the data:
-		 *   ALGO( .., key, algofill )
-		 * and let Final() do the proper, natural "algofill"
-		 * padding.
-		 */
-		axf->Update(&ctx, sw->sw_octx, sw->sw_octx_len);
 		axf->Final(aalg, &ctx);
 		break;
 
@@ -588,7 +540,7 @@ swcr_gcm(struct swcr_session *ses, struct cryptop *crp)
 			bzero(blk, blksz);
 		crypto_copydata(crp, crp->crp_payload_start + i, len, blk);
 		if (CRYPTO_OP_IS_ENCRYPT(crp->crp_op)) {
-			exf->encrypt(swe->sw_kschedule, blk);
+			exf->encrypt(swe->sw_kschedule, blk, blk);
 			axf->Update(&ctx, blk, len);
 			crypto_copyback(crp, crp->crp_payload_start + i, len,
 			    blk);
@@ -624,7 +576,7 @@ swcr_gcm(struct swcr_session *ses, struct cryptop *crp)
 				bzero(blk, blksz);
 			crypto_copydata(crp, crp->crp_payload_start + i, len,
 			    blk);
-			exf->decrypt(swe->sw_kschedule, blk);
+			exf->decrypt(swe->sw_kschedule, blk, blk);
 			crypto_copyback(crp, crp->crp_payload_start + i, len,
 			    blk);
 		}
@@ -749,7 +701,7 @@ swcr_ccm(struct swcr_session *ses, struct cryptop *crp)
 		crypto_copydata(crp, crp->crp_payload_start + i, len, blk);
 		if (CRYPTO_OP_IS_ENCRYPT(crp->crp_op)) {
 			axf->Update(&ctx, blk, len);
-			exf->encrypt(swe->sw_kschedule, blk);
+			exf->encrypt(swe->sw_kschedule, blk, blk);
 			crypto_copyback(crp, crp->crp_payload_start + i, len,
 			    blk);
 		} else {
@@ -761,7 +713,7 @@ swcr_ccm(struct swcr_session *ses, struct cryptop *crp)
 			 * the tag and a second time after the tag is
 			 * verified.
 			 */
-			exf->decrypt(swe->sw_kschedule, blk);
+			exf->decrypt(swe->sw_kschedule, blk, blk);
 			axf->Update(&ctx, blk, len);
 		}
 	}
@@ -786,7 +738,7 @@ swcr_ccm(struct swcr_session *ses, struct cryptop *crp)
 				bzero(blk, blksz);
 			crypto_copydata(crp, crp->crp_payload_start + i, len,
 			    blk);
-			exf->decrypt(swe->sw_kschedule, blk);
+			exf->decrypt(swe->sw_kschedule, blk, blk);
 			crypto_copyback(crp, crp->crp_payload_start + i, len,
 			    blk);
 		}
@@ -899,7 +851,7 @@ swcr_compdec(struct swcr_session *ses, struct cryptop *crp)
 }
 
 static int
-swcr_setup_encdec(struct swcr_session *ses,
+swcr_setup_cipher(struct swcr_session *ses,
     const struct crypto_session_params *csp)
 {
 	struct swcr_encdec *swe;
@@ -909,8 +861,14 @@ swcr_setup_encdec(struct swcr_session *ses,
 	swe = &ses->swcr_encdec;
 	txf = crypto_cipher(csp);
 	MPASS(txf->ivsize == csp->csp_ivlen);
+	if (txf->ctxsize != 0) {
+		swe->sw_kschedule = malloc(txf->ctxsize, M_CRYPTO_DATA,
+		    M_NOWAIT);
+		if (swe->sw_kschedule == NULL)
+			return (ENOMEM);
+	}
 	if (csp->csp_cipher_key != NULL) {
-		error = txf->setkey(&swe->sw_kschedule,
+		error = txf->setkey(swe->sw_kschedule,
 		    csp->csp_cipher_key, csp->csp_cipher_klen);
 		if (error)
 			return (error);
@@ -941,7 +899,6 @@ swcr_setup_auth(struct swcr_session *ses,
 		return (ENOBUFS);
 	
 	switch (csp->csp_auth_alg) {
-	case CRYPTO_MD5_HMAC:
 	case CRYPTO_SHA1_HMAC:
 	case CRYPTO_SHA2_224_HMAC:
 	case CRYPTO_SHA2_256_HMAC:
@@ -949,8 +906,7 @@ swcr_setup_auth(struct swcr_session *ses,
 	case CRYPTO_SHA2_512_HMAC:
 	case CRYPTO_NULL_HMAC:
 	case CRYPTO_RIPEMD160_HMAC:
-		swa->sw_octx_len = axf->ctxsize;
-		swa->sw_octx = malloc(swa->sw_octx_len, M_CRYPTO_DATA,
+		swa->sw_octx = malloc(axf->ctxsize, M_CRYPTO_DATA,
 		    M_NOWAIT);
 		if (swa->sw_octx == NULL)
 			return (ENOBUFS);
@@ -963,26 +919,6 @@ swcr_setup_auth(struct swcr_session *ses,
 		if (csp->csp_mode == CSP_MODE_DIGEST)
 			ses->swcr_process = swcr_authcompute;
 		break;
-	case CRYPTO_MD5_KPDK:
-	case CRYPTO_SHA1_KPDK:
-		swa->sw_octx_len = csp->csp_auth_klen;
-		swa->sw_octx = malloc(swa->sw_octx_len, M_CRYPTO_DATA,
-		    M_NOWAIT);
-		if (swa->sw_octx == NULL)
-			return (ENOBUFS);
-
-		/* Store the key so we can "append" it to the payload */
-		if (csp->csp_auth_key != NULL) {
-			swcr_authprepare(axf, swa, csp->csp_auth_key,
-			    csp->csp_auth_klen);
-		}
-
-		if (csp->csp_mode == CSP_MODE_DIGEST)
-			ses->swcr_process = swcr_authcompute;
-		break;
-#ifdef notdef
-	case CRYPTO_MD5:
-#endif
 	case CRYPTO_SHA1:
 	case CRYPTO_SHA2_224:
 	case CRYPTO_SHA2_256:
@@ -1029,11 +965,8 @@ static int
 swcr_setup_gcm(struct swcr_session *ses,
     const struct crypto_session_params *csp)
 {
-	struct swcr_encdec *swe;
 	struct swcr_auth *swa;
-	struct enc_xform *txf;
 	struct auth_hash *axf;
-	int error;
 
 	if (csp->csp_ivlen != AES_GCM_IV_LEN)
 		return (EINVAL);
@@ -1069,28 +1002,15 @@ swcr_setup_gcm(struct swcr_session *ses,
 		    csp->csp_cipher_klen);
 
 	/* Second, setup the cipher side. */
-	swe = &ses->swcr_encdec;
-	txf = &enc_xform_aes_nist_gcm;
-	if (csp->csp_cipher_key != NULL) {
-		error = txf->setkey(&swe->sw_kschedule,
-		    csp->csp_cipher_key, csp->csp_cipher_klen);
-		if (error)
-			return (error);
-	}
-	swe->sw_exf = txf;
-
-	return (0);
+	return (swcr_setup_cipher(ses, csp));
 }
 
 static int
 swcr_setup_ccm(struct swcr_session *ses,
     const struct crypto_session_params *csp)
 {
-	struct swcr_encdec *swe;
 	struct swcr_auth *swa;
-	struct enc_xform *txf;
 	struct auth_hash *axf;
-	int error;
 
 	if (csp->csp_ivlen != AES_CCM_IV_LEN)
 		return (EINVAL);
@@ -1126,17 +1046,7 @@ swcr_setup_ccm(struct swcr_session *ses,
 		    csp->csp_cipher_klen);
 
 	/* Second, setup the cipher side. */
-	swe = &ses->swcr_encdec;
-	txf = &enc_xform_ccm;
-	if (csp->csp_cipher_key != NULL) {
-		error = txf->setkey(&swe->sw_kschedule,
-		    csp->csp_cipher_key, csp->csp_cipher_klen);
-		if (error)
-			return (error);
-	}
-	swe->sw_exf = txf;
-
-	return (0);
+	return (swcr_setup_cipher(ses, csp));
 }
 
 static bool
@@ -1148,7 +1058,6 @@ swcr_auth_supported(const struct crypto_session_params *csp)
 	if (axf == NULL)
 		return (false);
 	switch (csp->csp_auth_alg) {
-	case CRYPTO_MD5_HMAC:
 	case CRYPTO_SHA1_HMAC:
 	case CRYPTO_SHA2_224_HMAC:
 	case CRYPTO_SHA2_256_HMAC:
@@ -1156,8 +1065,6 @@ swcr_auth_supported(const struct crypto_session_params *csp)
 	case CRYPTO_SHA2_512_HMAC:
 	case CRYPTO_NULL_HMAC:
 	case CRYPTO_RIPEMD160_HMAC:
-	case CRYPTO_MD5_KPDK:
-	case CRYPTO_SHA1_KPDK:
 		break;
 	case CRYPTO_AES_NIST_GMAC:
 		switch (csp->csp_auth_klen * 8) {
@@ -1316,7 +1223,7 @@ swcr_newsession(device_t dev, crypto_session_t cses,
 			panic("bad cipher algo");
 #endif
 		default:
-			error = swcr_setup_encdec(ses, csp);
+			error = swcr_setup_cipher(ses, csp);
 			if (error == 0)
 				ses->swcr_process = swcr_encdec;
 		}
@@ -1365,7 +1272,7 @@ swcr_newsession(device_t dev, crypto_session_t cses,
 			break;
 		}
 
-		error = swcr_setup_encdec(ses, csp);
+		error = swcr_setup_cipher(ses, csp);
 		if (error == 0)
 			ses->swcr_process = swcr_eta;
 		break;
@@ -1383,18 +1290,13 @@ swcr_freesession(device_t dev, crypto_session_t cses)
 {
 	struct swcr_session *ses;
 	struct swcr_auth *swa;
-	struct enc_xform *txf;
 	struct auth_hash *axf;
 
 	ses = crypto_get_driver_session(cses);
 
 	mtx_destroy(&ses->swcr_lock);
 
-	txf = ses->swcr_encdec.sw_exf;
-	if (txf != NULL) {
-		if (ses->swcr_encdec.sw_kschedule != NULL)
-			txf->zerokey(&(ses->swcr_encdec.sw_kschedule));
-	}
+	zfree(ses->swcr_encdec.sw_kschedule, M_CRYPTO_DATA);
 
 	axf = ses->swcr_auth.sw_axf;
 	if (axf != NULL) {
@@ -1404,7 +1306,7 @@ swcr_freesession(device_t dev, crypto_session_t cses)
 			free(swa->sw_ictx, M_CRYPTO_DATA);
 		}
 		if (swa->sw_octx != NULL) {
-			explicit_bzero(swa->sw_octx, swa->sw_octx_len);
+			explicit_bzero(swa->sw_octx, axf->ctxsize);
 			free(swa->sw_octx, M_CRYPTO_DATA);
 		}
 	}
