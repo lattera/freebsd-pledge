@@ -55,17 +55,17 @@ struct promise_unveil {
 
 
 enum unveil_type {
-	UNVEIL_TYPE_PROMISE,
-	UNVEIL_TYPE_EXECPROMISE,
-	UNVEIL_TYPE_CUSTOM,
-	UNVEIL_TYPE_EXECCUSTOM,
-	UNVEIL_TYPE_COUNT
+	SLOT_PROMISE,
+	SLOT_EXECPROMISE,
+	SLOT_CUSTOM,
+	SLOT_EXECCUSTOM,
+	SLOT_COUNT
 };
 
 struct unveil_node {
 	struct unveil_node *parent, *sibling, *children;
-	unveil_perms_t rem_perms[UNVEIL_TYPE_COUNT];
-	unveil_perms_t add_perms[UNVEIL_TYPE_COUNT];
+	unveil_perms_t rem_perms[SLOT_COUNT];
+	unveil_perms_t add_perms[SLOT_COUNT];
 	int last_errno;
 	bool dirty, has_dirty;
 	char name[];
@@ -75,7 +75,7 @@ static struct {
 	struct unveil_node *unveils;
 	unveil_perms_t retained_perms, retained_execperms;
 	bool initial;
-	bool inhibit_root[UNVEIL_TYPE_COUNT];
+	bool inhibit_root[SLOT_COUNT];
 	bool promises[PROMISE_COUNT], execpromises[PROMISE_COUNT];
 } state = { .initial = true, .retained_perms = -1, .retained_execperms = -1 };
 
@@ -312,7 +312,7 @@ apply_unveils_1(struct unveil_node *node, unveil_perms_t *inherited_perms,
     char *path_prefix, bool dirty)
 {
 	char *path_end;
-	unveil_perms_t all_perms[UNVEIL_TYPE_COUNT];
+	unveil_perms_t all_perms[SLOT_COUNT];
 	unsigned i;
 	int r;
 
@@ -320,7 +320,7 @@ apply_unveils_1(struct unveil_node *node, unveil_perms_t *inherited_perms,
 	*path_end = '/';
 	strcpy(path_end + 1, node->name);
 
-	for (i = 0; i < UNVEIL_TYPE_COUNT; i++) {
+	for (i = 0; i < SLOT_COUNT; i++) {
 		all_perms[i] = inherited_perms[i];
 		all_perms[i] &= ~node->rem_perms[i];
 		all_perms[i] |= node->add_perms[i];
@@ -329,10 +329,8 @@ apply_unveils_1(struct unveil_node *node, unveil_perms_t *inherited_perms,
 	node->last_errno = 0;
 	if (dirty || (dirty = node->dirty)) {
 		r = unveilctl(AT_FDCWD, path_prefix, 0,
-		    all_perms[UNVEIL_TYPE_PROMISE] |
-		    all_perms[UNVEIL_TYPE_CUSTOM],
-		    all_perms[UNVEIL_TYPE_EXECPROMISE] |
-		    all_perms[UNVEIL_TYPE_EXECCUSTOM]);
+		    all_perms[SLOT_PROMISE] | all_perms[SLOT_CUSTOM],
+		    all_perms[SLOT_EXECPROMISE] | all_perms[SLOT_EXECCUSTOM]);
 		if (r < 0) {
 			if (errno != ENOENT) {
 				/* XXX: This is fragile. */
@@ -356,7 +354,7 @@ static void
 apply_unveils(bool all)
 {
 	char path_buf[PATH_MAX] = ""; /* XXX: length */
-	unveil_perms_t all_perms[UNVEIL_TYPE_COUNT] = { 0 };
+	unveil_perms_t all_perms[SLOT_COUNT] = { 0 };
 	if (!state.unveils)
 		return;
 	apply_unveils_1(state.unveils, all_perms, path_buf, all);
@@ -551,8 +549,7 @@ do_pledge(const bool *promises, const bool *execpromises)
 		r = update_promises_unveils(
 		    &retained_perms, &sysfil,
 		    state.promises, promises,
-		    UNVEIL_TYPE_PROMISE,
-		    UNVEIL_TYPE_CUSTOM);
+		    SLOT_PROMISE, SLOT_CUSTOM);
 		if (r < 0)
 			return (-1);
 	} else
@@ -561,8 +558,7 @@ do_pledge(const bool *promises, const bool *execpromises)
 		r = update_promises_unveils(
 		    &retained_execperms, &execsysfil,
 		    state.execpromises, execpromises,
-		    UNVEIL_TYPE_EXECPROMISE,
-		    UNVEIL_TYPE_EXECCUSTOM);
+		    SLOT_EXECPROMISE, SLOT_EXECCUSTOM);
 		if (r < 0)
 			return (-1);
 	} else
@@ -669,11 +665,9 @@ do_unveil(const char *path,
 		node = NULL;
 
 	if (perms)
-		do_unveil_node(UNVEIL_TYPE_PROMISE, UNVEIL_TYPE_CUSTOM,
-		    node, *perms);
+		do_unveil_node(SLOT_PROMISE, SLOT_CUSTOM, node, *perms);
 	if (execperms)
-		do_unveil_node(UNVEIL_TYPE_EXECPROMISE, UNVEIL_TYPE_EXECCUSTOM,
-		    node, *execperms);
+		do_unveil_node(SLOT_EXECPROMISE, SLOT_EXECCUSTOM, node, *execperms);
 
 	/*
 	 * XXX: This also disallows unveils that future pledge promise may need
