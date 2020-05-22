@@ -15,7 +15,6 @@ main()
 	EXPECT((pid = fork()));
 	err_set_exit(_exit);
 	EXPECT(unveil(NULL, NULL));
-	REJECT(unveil("/", "r"));
 	EXPECT(fd = open("/dev/null", O_RDONLY));
 	EXPECT(close(fd));
 	EXPECT(fd = open("/dev/null", O_WRONLY));

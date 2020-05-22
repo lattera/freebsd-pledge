@@ -20,7 +20,6 @@ struct unveil_base {
 	RB_HEAD(unveil_node_tree, unveil_node) root;
 	u_int node_count;
 	bool active;
-	bool finished;
 };
 
 #endif

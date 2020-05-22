@@ -7,46 +7,20 @@
 int
 main()
 {
-	int fd;
 	EXPECT(unveil("/etc", "r"));
 	EXPECT(unveil(NULL, NULL));
-
-	REJECT(open("/COPYRIGHT", O_RDONLY));
-
-	EXPECT(fd = open("/etc/rc.conf", O_RDONLY));
-	EXPECT(close(fd));
-	EXPECT(fd = open("/etc/defaults/rc.conf", O_RDONLY));
-	EXPECT(close(fd));
-
+	REJECT(chdir("/"));
+	REJECT(chdir("/."));
+	REJECT(chdir("/tmp"));
+	REJECT(chdir("/tmp/."));
 	EXPECT(chdir("/etc"));
-	EXPECT(fd = open("rc.conf", O_RDONLY));
-	EXPECT(close(fd));
-	EXPECT(fd = open("./rc.conf", O_RDONLY));
-	EXPECT(close(fd));
-	EXPECT(fd = open("defaults/rc.conf", O_RDONLY));
-	EXPECT(close(fd));
-	EXPECT(fd = open("./defaults/rc.conf", O_RDONLY));
-	EXPECT(close(fd));
-
-	EXPECT(chdir("defaults"));
-	EXPECT(fd = open("rc.conf", O_RDONLY));
-	EXPECT(close(fd));
-	EXPECT(fd = open("./rc.conf", O_RDONLY));
-	EXPECT(close(fd));
-	EXPECT(fd = open("../rc.conf", O_RDONLY));
-	EXPECT(close(fd));
-	EXPECT(fd = open("./../rc.conf", O_RDONLY));
-	EXPECT(close(fd));
-
+	EXPECT(chdir("/etc/."));
 	EXPECT(chdir("/etc/defaults"));
-	EXPECT(fd = open("rc.conf", O_RDONLY));
-	EXPECT(close(fd));
-	EXPECT(fd = open("./rc.conf", O_RDONLY));
-	EXPECT(close(fd));
-	EXPECT(fd = open("../rc.conf", O_RDONLY));
-	EXPECT(close(fd));
-	EXPECT(fd = open("./../rc.conf", O_RDONLY));
-	EXPECT(close(fd));
-
+	EXPECT(chdir("/etc/defaults/."));
+	EXPECT(chdir(".."));
+	REJECT(chdir(".."));
+	EXPECT(chdir("/./etc/./defaults/.././defaults"));
+	REJECT(chdir("/etc/.."));
+	REJECT(chdir("/etc/../tmp"));
 	return (0);
 }

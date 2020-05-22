@@ -4,7 +4,8 @@
 #include <sys/types.h>
 #include <sys/malloc.h>
 #include <sys/vnode.h>
-#include <sys/refcount.h>
+#include <sys/queue.h>
+#include <sys/tree.h>
 #include <sys/_unveil.h>
 
 enum {
@@ -18,13 +19,9 @@ enum {
 };
 
 enum {
-	UNVEIL_FLAG_ACTIVATE = 1 << 0,
-	UNVEIL_FLAG_FINISH = 1 << 1,
-	UNVEIL_FLAG_FOR_ALL = 1 << 2,
-	UNVEIL_FLAG_FROM_EXEC = 1 << 3,
-	UNVEIL_FLAG_HARDEN = 1 << 4,
-	UNVEIL_FLAG_MASK = 1 << 5,
-	UNVEIL_FLAG_NOFOLLOW = 1 << 6,
+	UNVEIL_FLAG_SWEEP = 1 << 0,
+	UNVEIL_FLAG_RESTRICT = 1 << 1,
+	UNVEIL_FLAG_NOFOLLOW = 1 << 3,
 };
 
 int unveilctl(int atfd, const char *path, int flags, int perms, int execperms);
@@ -39,11 +36,14 @@ struct unveil_node {
 	struct unveil_node *cover;
 	RB_ENTRY(unveil_node) entry;
 	struct vnode *vp;
-	unveil_perms_t hard_perms;
-	unveil_perms_t soft_perms;
-	unveil_perms_t exec_perms;
-	bool from_exec;
+	unveil_perms_t curr_want_perms;
+	unveil_perms_t exec_want_perms;
+	unveil_perms_t curr_hard_perms;
+	unveil_perms_t exec_hard_perms;
+	bool ghost;
 };
+
+unveil_perms_t unveil_node_effective_perms(struct unveil_node *node);
 
 void unveil_init(struct unveil_base *);
 void unveil_merge(struct unveil_base *dst, struct unveil_base *src);
@@ -51,7 +51,8 @@ void unveil_clear(struct unveil_base *);
 void unveil_free(struct unveil_base *);
 
 struct unveil_node *unveil_lookup(struct unveil_base *, struct vnode *);
-struct unveil_node *unveil_insert(struct unveil_base *, struct vnode *);
+struct unveil_node *unveil_insert(struct unveil_base *, struct vnode *,
+    struct unveil_node *cover);
 
 void unveil_fd_init(struct filedesc *);
 void unveil_fd_merge(struct filedesc *dst, struct filedesc *src);

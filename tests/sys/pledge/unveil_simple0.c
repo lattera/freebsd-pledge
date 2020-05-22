@@ -9,10 +9,6 @@ main()
 	int r;
 	EXPECT(unveil("/", "r"));
 	EXPECT(unveil(NULL, NULL));
-	REJECT(unveil("/", "w"));
-	REJECT(unveil("/", "c"));
-	REJECT(unveil("/", "x"));
-	REJECT(unveil("/", "rw"));
 	r = write(STDOUT_FILENO, "ok!\n", 4);
 	if (r < 0)
 		err(1, "write");

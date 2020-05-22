@@ -23,7 +23,7 @@ main()
 	try("error stdio proc", true);
 	try("error stdio proc", true);
 	try("error stdio proc id", true);
-	try("stdio proc exec", true);
+	try("stdio proc flock", true);
 	try("stdio proc id", false); /* "error" should now be off */
 	try("stdio proc", true);
 	try("error stdio proc", false);

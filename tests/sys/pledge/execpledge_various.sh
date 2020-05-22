@@ -20,10 +20,17 @@ cmd_cat_body() {
 	atf_check -s exit:0 -e empty -o file:"$f" execpledge -p 'stdio rpath' cat "$f"
 }
 
+atf_test_case cmd_execpledge_cat
+cmd_execpledge_cat_body() {
+	local f="/etc/rc"
+	atf_check -s exit:0 -e empty -o file:"$f" execpledge -p 'stdio rpath exec' execpledge -p 'stdio rpath' cat "$f"
+}
+
 
 atf_init_test_cases() {
 	atf_add_test_case cmd_true
 	atf_add_test_case cmd_false
 	atf_add_test_case cmd_echo
 	atf_add_test_case cmd_cat
+	atf_add_test_case cmd_execpledge_cat
 }

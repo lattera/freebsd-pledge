@@ -18,7 +18,7 @@ main(int argc, char *argv[])
 	int ch, r;
 	char *promises = NULL;
 
-	r = pledge("stdio exec unveil", NULL);
+	r = pledge("stdio exec", NULL);
 	if (r < 0)
 		err(EX_NOPERM, "pledge");
 

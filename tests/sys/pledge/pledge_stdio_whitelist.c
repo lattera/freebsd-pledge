@@ -5,19 +5,7 @@
 #include <stdbool.h>
 #include <fcntl.h>
 
-#define TRY(expr, should_work) do { \
-	if ((expr) < 0 && ENOENT != errno) { \
-		if (should_work) \
-			err(1, "%s", #expr); \
-	} else { \
-		if (!should_work) \
-			errx(1, "%s: %s", #expr, "shouldn't have worked"); \
-	} \
-} while (0)
-
-#define EXPECT(expr) TRY(expr, true)
-#define REJECT(expr) TRY(expr, false)
-
+#include "util.h"
 
 int
 main()
@@ -25,7 +13,7 @@ main()
 	const char *p;
 	int fd;
 	EXPECT(pledge("error stdio", ""));
-	p = "/etc/malloc.conf";
+	p = "/etc/localtime";
 	EXPECT(access(p, R_OK));
 	EXPECT((fd = open(p, O_RDONLY)));
 	if (fd >= 0)
