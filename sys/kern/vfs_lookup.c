@@ -332,10 +332,6 @@ namei(struct nameidata *ndp)
 	TAILQ_INIT(&ndp->ni_cap_tracker);
 	ndp->ni_lcf = 0;
 
-#ifdef UNVEIL
-	unveil_namei_start(ndp, td);
-#endif
-
 	/* We will set this ourselves if we need it. */
 	cnp->cn_flags &= ~TRAILINGSLASH;
 
@@ -1372,13 +1368,18 @@ NDINIT_ALL(struct nameidata *ndp, u_long op, u_long flags, enum uio_seg segflg,
 	ndp->ni_dirp = namep;
 	ndp->ni_dirfd = dirfd;
 	ndp->ni_startdir = startdir;
+	ndp->ni_intflags = 0;
 	ndp->ni_resflags = 0;
 	filecaps_init(&ndp->ni_filecaps);
 	ndp->ni_cnd.cn_thread = td;
-	if (rightsp != NULL)
+	if (rightsp != NULL) {
+		ndp->ni_intflags |= NIINT_HASRIGHTS;
 		ndp->ni_rightsneeded = *rightsp;
-	else
+	} else
 		cap_rights_init_zero(&ndp->ni_rightsneeded);
+#ifdef UNVEIL
+	unveil_ndinit(ndp, td);
+#endif
 }
 
 /*

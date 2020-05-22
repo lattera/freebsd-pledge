@@ -15,7 +15,7 @@ __FBSDID("$FreeBSD$");
 #ifdef UNVEIL
 
 void
-unveil_namei_start(struct nameidata *ndp, struct thread *td)
+unveil_ndinit(struct nameidata *ndp, struct thread *td)
 {
 	struct filedesc *fdp = td->td_proc->p_fd;
 	struct unveil_base *base = &fdp->fd_unveil;
@@ -26,7 +26,7 @@ unveil_namei_start(struct nameidata *ndp, struct thread *td)
 		 * If a start vnode was explicitly specified, assume that
 		 * unveil checks don't need to apply.
 		 */
-		ndp->ni_lcf |= NI_LCF_UNVEIL_DISABLED;
+		ndp->ni_intflags |= NIINT_UNVEIL_DISABLED;
 	}
 	FILEDESC_SUNLOCK(fdp);
 }
@@ -38,7 +38,7 @@ unveil_lookup_update(struct nameidata *ndp, struct vnode *vp)
 	struct filedesc *fdp = cnp->cn_thread->td_proc->p_fd;
 	struct unveil_base *base = &fdp->fd_unveil;
 	struct unveil_node *node;
-	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
+	if (ndp->ni_intflags & NIINT_UNVEIL_DISABLED)
 		return;
 	FILEDESC_SLOCK(fdp);
 	node = unveil_lookup(base, vp);
@@ -51,7 +51,7 @@ void
 unveil_lookup_update_dotdot(struct nameidata *ndp, struct vnode *vp)
 {
 	struct unveil_node *node;
-	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
+	if (ndp->ni_intflags & NIINT_UNVEIL_DISABLED)
 		return;
 	if ((node = ndp->ni_unveil) && node->vp == vp)
 		ndp->ni_unveil = node->cover;
@@ -125,7 +125,7 @@ unveil_lookup_check(struct nameidata *ndp)
 	unveil_perms_t uperms;
 	cap_rights_t haverights;
 	int failed;
-	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
+	if (ndp->ni_intflags & NIINT_UNVEIL_DISABLED)
 		return (0);
 
 	if ((cnp->cn_flags & FOLLOW) &&
@@ -141,6 +141,18 @@ unveil_lookup_check(struct nameidata *ndp)
 	}
 	failed = !uperms || uperms == UNVEIL_PERM_INSPECT ? ENOENT : EACCES;
 
+	/*
+	 * When unveil checking is enabled, only allow namei() calls that were
+	 * given a set of needed capability rights (NDINIT_ATRIGHTS()).
+	 * Otherwise those calls would always pass the permission check.  Some
+	 * calls haven't been converted to use capability rights yet.
+	 */
+	if (!(ndp->ni_intflags & NIINT_HASRIGHTS))
+		return (failed);
+	/*
+	 * This should not be necessary, but it could catch some namei() calls
+	 * that have the wrong rights.
+	 */
 	if ((cnp->cn_nameiop == DELETE || cnp->cn_nameiop == CREATE) &&
 	    !(uperms & UNVEIL_PERM_CPATH))
 		return (failed);

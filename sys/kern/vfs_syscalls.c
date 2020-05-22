@@ -2549,8 +2549,8 @@ kern_readlinkat(struct thread *td, int fd, const char *path,
 	if (count > IOSIZE_MAX)
 		return (EINVAL);
 
-	NDINIT_AT(&nd, LOOKUP, NOFOLLOW | LOCKSHARED | LOCKLEAF | AUDITVNODE1,
-	    pathseg, path, fd, td);
+	NDINIT_ATRIGHTS(&nd, LOOKUP, NOFOLLOW | LOCKSHARED | LOCKLEAF | AUDITVNODE1,
+	    pathseg, path, fd, &cap_fstat_rights, td);
 
 	if ((error = namei(&nd)) != 0)
 		return (error);

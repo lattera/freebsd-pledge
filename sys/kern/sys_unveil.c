@@ -249,10 +249,12 @@ do_unveil(struct thread *td, int atfd, const char *path, int flags,
 	bool adding;
 
 	if ((adding = path != NULL)) {
+		cap_rights_t rights;
 		int nd_flags = LOCKLEAF;
 		if (!(flags & UNVEIL_FLAG_NOFOLLOW))
 			nd_flags |= FOLLOW;
-		NDINIT_AT(&nd, LOOKUP, nd_flags, UIO_SYSSPACE, path, atfd, td);
+		NDINIT_ATRIGHTS(&nd, LOOKUP, nd_flags, UIO_SYSSPACE,
+		    path, atfd, cap_rights_init_zero(&rights), td);
 		error = namei(&nd);
 		if (error)
 			return (error);
