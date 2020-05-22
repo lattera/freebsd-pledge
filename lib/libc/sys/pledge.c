@@ -54,7 +54,7 @@ struct promise_unveil {
 };
 
 
-enum unveil_type {
+enum unveil_slot {
 	SLOT_PROMISE,
 	SLOT_EXECPROMISE,
 	SLOT_CUSTOM,
@@ -300,10 +300,10 @@ dirty_unveil(struct unveil_node *node)
 
 static void
 set_unveil_perms(struct unveil_node *node,
-    enum unveil_type type, unveil_perms_t rem_perms, unveil_perms_t add_perms)
+    enum unveil_slot slot, unveil_perms_t rem_perms, unveil_perms_t add_perms)
 {
-	node->rem_perms[type] = rem_perms;
-	node->add_perms[type] = add_perms;
+	node->rem_perms[slot] = rem_perms;
+	node->add_perms[slot] = add_perms;
 	dirty_unveil(node);
 }
 
@@ -363,25 +363,25 @@ apply_unveils(bool all)
 
 static void
 limit_unveils_1(struct unveil_node *node,
-    enum unveil_type type, unveil_perms_t limit)
+    enum unveil_slot slot, unveil_perms_t limit)
 {
 	struct unveil_node *parent;
 	unveil_perms_t *p, b;
-	p = &node->add_perms[type];
+	p = &node->add_perms[slot];
 	b = *p;
 	*p &= limit;
 	if (*p != b)
 		dirty_unveil(node);
 	for (node = (parent = node)->children; node; node = node->sibling)
-		limit_unveils_1(node, type, limit);
+		limit_unveils_1(node, slot, limit);
 }
 
 static void
-limit_unveils(enum unveil_type type, unveil_perms_t limit)
+limit_unveils(enum unveil_slot slot, unveil_perms_t limit)
 {
 	if (!state.unveils)
 		return;
-	limit_unveils_1(state.unveils, type, limit);
+	limit_unveils_1(state.unveils, slot, limit);
 }
 
 
@@ -437,7 +437,7 @@ flush_unveils(void)
 }
 
 static int
-merge_promises_unveils(enum unveil_type type, sysfil_t *sysfil,
+merge_promises_unveils(enum unveil_slot slot, sysfil_t *sysfil,
     const bool *cur_promises, const bool *req_promises)
 {
 	const struct promise_unveil *pu;
@@ -456,7 +456,7 @@ merge_promises_unveils(enum unveil_type type, sysfil_t *sysfil,
 				 * access must be restricted to what has been
 				 * explicitly unveiled.
 				 */
-				if (state.inhibit_root[type])
+				if (state.inhibit_root[slot])
 					continue;
 			} else if (path == tmp_path) {
 				char *tmpdir;
@@ -466,12 +466,12 @@ merge_promises_unveils(enum unveil_type type, sysfil_t *sysfil,
 			node = get_unveil(path, NULL, true);
 			if (!node)
 				return (-1);
-			perms = node->add_perms[type];
+			perms = node->add_perms[slot];
 			if (req_promises[pu->type])
 				perms |= pu->perms;
 			else
 				perms &= ~pu->perms;
-			set_unveil_perms(node, type, 0, perms);
+			set_unveil_perms(node, slot, 0, perms);
 		}
 		if (req_promises[pu->type] && pu->perms) {
 			/* unveil won't work if sysfil blocks all accesses */
@@ -488,7 +488,7 @@ update_promises_unveils(
     unveil_perms_t *retained_perms,
     sysfil_t *ret_sysfil,
     bool *cur_promises, const bool *req_promises,
-    enum unveil_type promise_type, enum unveil_type custom_type)
+    enum unveil_slot promise_slot, enum unveil_slot custom_slot)
 {
 	bool errors = false;
 	sysfil_t sysfil, req_sysfil;
@@ -508,7 +508,7 @@ update_promises_unveils(
 	 */
 
 	sysfil = req_sysfil;
-	r = merge_promises_unveils(promise_type, &sysfil,
+	r = merge_promises_unveils(promise_slot, &sysfil,
 	    cur_promises, req_promises);
 	if (r < 0)
 		errors = true;
@@ -522,7 +522,7 @@ update_promises_unveils(
 	 */
 
 	if (sysfil2uperms(req_sysfil) != sysfil2uperms(sysfil))
-		limit_unveils(custom_type, sysfil2uperms(req_sysfil));
+		limit_unveils(custom_slot, sysfil2uperms(req_sysfil));
 
 	if (req_sysfil & SYF_PLEDGE_UNVEIL)
 		*retained_perms = sysfil2uperms(req_sysfil);
@@ -629,10 +629,10 @@ unveil_parse_perms(unveil_perms_t *perms, const char *s)
 }
 
 static void
-do_unveil_node(enum unveil_type promise_type, enum unveil_type custom_type,
+do_unveil_node(enum unveil_slot promise_slot, enum unveil_slot custom_slot,
     struct unveil_node *node, unveil_perms_t perms)
 {
-	if (!state.inhibit_root[promise_type]) {
+	if (!state.inhibit_root[promise_slot]) {
 		/*
 		 * After the first call to unveil(), filesystem access must be
 		 * restricted to what has been explicitly unveiled (modifying
@@ -644,11 +644,11 @@ do_unveil_node(enum unveil_type promise_type, enum unveil_type custom_type,
 		struct unveil_node *root;
 		root = get_unveil(root_path, NULL, false);
 		if (root)
-			set_unveil_perms(root, promise_type, -1, 0);
-		state.inhibit_root[promise_type] = true;
+			set_unveil_perms(root, promise_slot, -1, 0);
+		state.inhibit_root[promise_slot] = true;
 	}
 	if (node)
-		set_unveil_perms(node, custom_type, -1, perms);
+		set_unveil_perms(node, custom_slot, -1, perms);
 }
 
 static int
