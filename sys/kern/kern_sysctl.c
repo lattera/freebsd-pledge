@@ -2115,9 +2115,9 @@ sysctl_root(SYSCTL_HANDLER_ARGS)
 	 */
 	if (IN_SANDBOX_MODE(req->td)) {
 		if ((req->oldptr && !(oid->oid_kind &
-		    (CTLFLAG_CAPRD|CTLFLAG_PLEDRD))) ||
+		    (CTLFLAG_CAPRD|CTLFLAG_SANDRD))) ||
 		    (req->newptr && !(oid->oid_kind &
-		    (CTLFLAG_CAPWR|CTLFLAG_PLEDWR)))) {
+		    (CTLFLAG_CAPWR|CTLFLAG_SANDWR)))) {
 			error = EPERM;
 			goto out;
 		}

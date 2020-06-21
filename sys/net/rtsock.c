@@ -2138,7 +2138,7 @@ sysctl_rtsock(SYSCTL_HANDLER_ARGS)
 }
 
 static SYSCTL_NODE(_net, PF_ROUTE, routetable,
-    CTLFLAG_RD | CTLFLAG_PLEDRD | CTLFLAG_MPSAFE,
+    CTLFLAG_RD | CTLFLAG_SANDRD | CTLFLAG_MPSAFE,
     sysctl_rtsock, "Return route tables and interface/address lists");
 
 /*
