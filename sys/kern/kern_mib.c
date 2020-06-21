@@ -102,7 +102,8 @@ SYSCTL_STRING(_kern, OID_AUTO, ident, CTLFLAG_RD|CTLFLAG_MPSAFE,
 SYSCTL_INT(_kern, KERN_OSREV, osrevision, CTLFLAG_RD|CTLFLAG_CAPRD,
     SYSCTL_NULL_INT_PTR, BSD, "Operating system revision");
 
-SYSCTL_STRING(_kern, KERN_VERSION, version, CTLFLAG_RD|CTLFLAG_MPSAFE,
+SYSCTL_STRING(_kern, KERN_VERSION, version,
+    CTLFLAG_RD|CTLFLAG_SANDRD|CTLFLAG_MPSAFE,
     version, 0, "Kernel version");
 
 SYSCTL_STRING(_kern, OID_AUTO, compiler_version, CTLFLAG_RD|CTLFLAG_MPSAFE,
@@ -293,8 +294,9 @@ sysctl_hw_machine_arch(SYSCTL_HANDLER_ARGS)
 		machine_arch = MACHINE_ARCH;
 	return (SYSCTL_OUT(req, machine_arch, strlen(machine_arch) + 1));
 }
-SYSCTL_PROC(_hw, HW_MACHINE_ARCH, machine_arch, CTLTYPE_STRING | CTLFLAG_RD |
-    CTLFLAG_MPSAFE, NULL, 0, sysctl_hw_machine_arch, "A",
+SYSCTL_PROC(_hw, HW_MACHINE_ARCH, machine_arch,
+    CTLTYPE_STRING | CTLFLAG_RD | CTLFLAG_SANDRD | CTLFLAG_MPSAFE,
+    NULL, 0, sysctl_hw_machine_arch, "A",
     "System architecture");
 
 #ifndef MACHINE_ARCHES

@@ -153,8 +153,9 @@ sysctl_hw_machine(SYSCTL_HANDLER_ARGS)
 	return (error);
 
 }
-SYSCTL_PROC(_hw, HW_MACHINE, machine, CTLTYPE_STRING | CTLFLAG_RD |
-    CTLFLAG_MPSAFE, NULL, 0, sysctl_hw_machine, "A", "Machine class");
+SYSCTL_PROC(_hw, HW_MACHINE, machine,
+    CTLTYPE_STRING | CTLFLAG_RD | CTLFLAG_SANDRD | CTLFLAG_MPSAFE,
+    NULL, 0, sysctl_hw_machine, "A", "Machine class");
 #else
 SYSCTL_STRING(_hw, HW_MACHINE, machine, CTLFLAG_RD,
     machine, 0, "Machine class");
