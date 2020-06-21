@@ -764,7 +764,7 @@ kern_shm_open2(struct thread *td, const char *userpath, int flags, mode_t mode,
 	/*
 	 * shm_open(2) is only allowed for anonymous objects.
 	 */
-	if (IN_CAPABILITY_MODE(td) && (userpath != SHM_ANON))
+	if (IN_SANDBOX_MODE(td) && (userpath != SHM_ANON))
 		return (ECAPMODE);
 #endif
 
