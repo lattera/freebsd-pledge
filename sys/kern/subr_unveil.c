@@ -120,6 +120,7 @@ int
 unveil_lookup_check(struct nameidata *ndp)
 {
 	struct componentname *cnp = &ndp->ni_cnd;
+	struct filedesc *fdp = cnp->cn_thread->td_proc->p_fd;
 	struct unveil_node *node;
 	bool descendant;
 	unveil_perms_t uperms;
@@ -133,7 +134,9 @@ unveil_lookup_check(struct nameidata *ndp)
 		return (0);
 
 	if ((node = ndp->ni_unveil)) {
-		uperms = unveil_node_effective_perms(node);
+		FILEDESC_SLOCK(fdp);
+		uperms = unveil_node_soft_perms(node, UNVEIL_ROLE_CURR);
+		FILEDESC_SUNLOCK(fdp);
 		descendant = node->vp != ndp->ni_vp;
 	} else {
 		uperms = UNVEIL_PERM_NONE;

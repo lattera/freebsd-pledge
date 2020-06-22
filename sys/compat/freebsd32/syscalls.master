@@ -1165,6 +1165,6 @@
 575	AUE_CLOSERANGE	NOPROTO	{ int close_range(u_int lowfd, u_int highfd, \
 				    int flags); }
 576	AUE_UNVEILCTL	NOPROTO { int unveilctl(int atfd, const char *path, \
-				    int flags, int perms, int execperms); }
+				    int flags, int perms); }
 
 ; vim: syntax=off

@@ -9,7 +9,7 @@ int
 main()
 {
 	int r;
-	r = pledge("error stdio flock", "");
+	r = pledge("error stdio", "");
 	if (r < 0)
 		err(1, "pledge");
 	/* this is allowed by pledge("stdio") but not Capsicum */
@@ -25,14 +25,7 @@ main()
 	r = access("/etc/malloc.conf", R_OK);
 	if (!(r < 0 && errno == ECAPMODE))
 		errx(1, "access() shouldn't have worked!");
-	/* flock would be allowed by Capsicum but not pledge("stdio") */
 	r = flock(STDIN_FILENO, LOCK_SH);
-	if (r < 0)
-		err(1, "flock");
-	r = pledge("error stdio", "");
-	if (r < 0)
-		err(1, "pledge");
-	r = flock(STDIN_FILENO, LOCK_UN);
 	if (!(r < 0 && errno == ECAPMODE))
 		errx(1, "flock() shouldn't have worked!");
 	return 0;

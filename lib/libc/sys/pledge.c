@@ -11,6 +11,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/_sysfil.h>
 #include <sys/procctl.h>
 #include <sys/unveil.h>
+#include <sysexits.h>
 #include <unistd.h>
 
 enum promise_type {
@@ -46,39 +47,6 @@ struct promise_name {
 	const char name[12];
 	enum promise_type type;
 };
-
-struct promise_unveil {
-	const char *path;
-	unveil_perms_t perms;
-	enum promise_type type;
-};
-
-
-enum unveil_slot {
-	SLOT_PROMISE,
-	SLOT_EXECPROMISE,
-	SLOT_CUSTOM,
-	SLOT_EXECCUSTOM,
-	SLOT_COUNT
-};
-
-struct unveil_node {
-	struct unveil_node *parent, *sibling, *children;
-	unveil_perms_t rem_perms[SLOT_COUNT];
-	unveil_perms_t add_perms[SLOT_COUNT];
-	int last_errno;
-	bool dirty, has_dirty;
-	char name[];
-};
-
-static struct {
-	struct unveil_node *unveils;
-	unveil_perms_t retained_perms, retained_execperms;
-	bool initial;
-	bool inhibit_root[SLOT_COUNT];
-	bool promises[PROMISE_COUNT], execpromises[PROMISE_COUNT];
-} state = { .initial = true, .retained_perms = -1, .retained_execperms = -1 };
-
 
 static const struct promise_name promise_names[] = {
 	{ "error",	PROMISE_ERROR },
@@ -139,12 +107,20 @@ static const sysfil_t promise_sysfils[PROMISE_COUNT] = {
 static const char *const root_path = "/";
 static const char *const tmp_path = _PATH_TMP;
 
+static bool promise_unveils_sorted = false;
+
+struct promise_unveil {
+	const char *path;
+	unveil_perms_t perms;
+	enum promise_type type;
+};
+
 #define	R UNVEIL_PERM_RPATH
 #define	W UNVEIL_PERM_WPATH
 #define	C UNVEIL_PERM_CPATH
 #define	X UNVEIL_PERM_XPATH
 
-static const struct promise_unveil promise_unveils[] = {
+static struct promise_unveil promise_unveils[] = {
 	{ root_path, R,				PROMISE_RPATH },
 	{ root_path, W,				PROMISE_WPATH },
 	{ root_path, C,				PROMISE_CPATH },
@@ -185,6 +161,17 @@ static const struct promise_unveil promise_unveils[] = {
 #undef	C
 #undef	W
 #undef	R
+
+
+enum {
+	UNVEIL_FLAG_FOR_PLEDGE = UNVEIL_FLAG_FOR_SLOT0,
+	UNVEIL_FLAG_FOR_CUSTOM = UNVEIL_FLAG_FOR_SLOT1,
+};
+
+/* Global state for not-on-exec and on-exec cases. */
+
+static bool has_pledge_unveils[2], has_custom_unveils[2];
+static bool cur_promises[2][PROMISE_COUNT];
 
 
 static sysfil_t
@@ -230,166 +217,18 @@ parse_promises(bool *promises, const char *promises_str)
 }
 
 
-static const char *
-skip_extra_path_prefix(const char *p)
+static sysfil_t
+do_pledge_unveils(const bool *req_promises, bool for_exec)
 {
-	/*
-	 * This does some trivial canonicalization.  If complex paths are used,
-	 * custom and promise unveil permissions may interfere with each others.
-	 */
-	while (true) {
-		if (*p == '/') {
-			p++;
-			if (p[0] == '.' && p[1] == '/')
-				p += 2;
-		} else
-			break;
-	}
-	return (p);
-}
+	const struct promise_unveil *pu;
+	const char *path;
+	sysfil_t sysfil, req_sysfil;
+	unveil_perms_t need_uperms, req_uperms;
+	int flags, flags1, r, i;
 
-static struct unveil_node *
-get_unveil(const char *path, const char **rest, bool insert)
-{
-	struct unveil_node **link, *parent;
-	const char *next;
-	parent = NULL;
-	link = &state.unveils;
-	/* start with empty path component for root node */
-	next = path;
-	do {
-		if (!*link) {
-			struct unveil_node *node;
-			if (!insert)
-				return (NULL);
-			node = malloc(sizeof *node + (next - path) + 1);
-			if (!node)
-				return (NULL);
-			*node = (struct unveil_node){ .parent = parent };
-			memcpy(node->name, path, next - path);
-			node->name[next - path] = '\0';
-			*link = node;
-		}
-		path = skip_extra_path_prefix(next);
-		next = strchrnul(path, '/');
-		if (next == path)
-			return (*link);
-		parent = *link;
-		for (link = &(**link).children;
-		    *link;
-		    link = &(**link).sibling) {
-			const char *p, *q;
-			for (p = path, q = (**link).name;
-			    *p == *q && p != next;
-			    p++, q++);
-			if (p == next)
-				break;
-		}
-	} while (true);
-}
+	flags = for_exec ? UNVEIL_FLAG_FOR_EXEC : UNVEIL_FLAG_FOR_CURR;
+	flags1 = flags | UNVEIL_FLAG_FOR_PLEDGE;
 
-static inline void
-dirty_unveil(struct unveil_node *node)
-{
-	if (!node->dirty) {
-		node->dirty = true;
-		while ((node = node->parent) && !node->has_dirty)
-			node->has_dirty = true;
-	}
-}
-
-static void
-set_unveil_perms(struct unveil_node *node,
-    enum unveil_slot slot, unveil_perms_t rem_perms, unveil_perms_t add_perms)
-{
-	node->rem_perms[slot] = rem_perms;
-	node->add_perms[slot] = add_perms;
-	dirty_unveil(node);
-}
-
-static void
-apply_unveils_1(struct unveil_node *node, unveil_perms_t *inherited_perms,
-    char *path_prefix, bool dirty)
-{
-	char *path_end;
-	unveil_perms_t all_perms[SLOT_COUNT];
-	unsigned i;
-	int r;
-
-	path_end = path_prefix + strlen(path_prefix);
-	*path_end = '/';
-	strcpy(path_end + 1, node->name);
-
-	for (i = 0; i < SLOT_COUNT; i++) {
-		all_perms[i] = inherited_perms[i];
-		all_perms[i] &= ~node->rem_perms[i];
-		all_perms[i] |= node->add_perms[i];
-	}
-
-	node->last_errno = 0;
-	if (dirty || (dirty = node->dirty)) {
-		r = unveilctl(AT_FDCWD, path_prefix, 0,
-		    all_perms[SLOT_PROMISE] | all_perms[SLOT_CUSTOM],
-		    all_perms[SLOT_EXECPROMISE] | all_perms[SLOT_EXECCUSTOM]);
-		if (r < 0) {
-			if (errno != ENOENT) {
-				/* XXX: This is fragile. */
-				node->last_errno = errno;
-				warn("unveil %s", path_prefix);
-			}
-		}
-	}
-
-	if (dirty || node->has_dirty) {
-		struct unveil_node *child;
-		for (child = node->children; child; child = child->sibling)
-			apply_unveils_1(child, all_perms, path_prefix, dirty);
-	}
-
-	*path_end = '\0';
-	node->dirty = node->has_dirty = false;
-}
-
-static void
-apply_unveils(bool all)
-{
-	char path_buf[PATH_MAX] = ""; /* XXX: length */
-	unveil_perms_t all_perms[SLOT_COUNT] = { 0 };
-	if (!state.unveils)
-		return;
-	apply_unveils_1(state.unveils, all_perms, path_buf, all);
-}
-
-
-static void
-limit_unveils_1(struct unveil_node *node,
-    enum unveil_slot slot, unveil_perms_t limit)
-{
-	struct unveil_node *parent;
-	unveil_perms_t *p, b;
-	p = &node->add_perms[slot];
-	b = *p;
-	*p &= limit;
-	if (*p != b)
-		dirty_unveil(node);
-	for (node = (parent = node)->children; node; node = node->sibling)
-		limit_unveils_1(node, slot, limit);
-}
-
-static void
-limit_unveils(enum unveil_slot slot, unveil_perms_t limit)
-{
-	if (!state.unveils)
-		return;
-	limit_unveils_1(state.unveils, slot, limit);
-}
-
-
-static int
-flush_restrict_unveils(unveil_perms_t retained_perms, unveil_perms_t retained_execperms)
-{
-	bool errors = false;
-	int r;
 	/*
 	 * If no unveiling has been done yet, do a "sweep" to get rid of any
 	 * inherited unveils.  After a sweep, all unveils become "inactive" and
@@ -397,56 +236,37 @@ flush_restrict_unveils(unveil_perms_t retained_perms, unveil_perms_t retained_ex
 	 * track of their "hard" permissions.  This allows to re-add them with
 	 * those permissions if needed.
 	 */
-	if (state.initial) {
-		r = unveilctl(-1, NULL, UNVEIL_FLAG_SWEEP, -1, -1);
-		if (r < 0) {
-			errors = true;
-			warn("unveilctl sweep");
-		}
+	if (!has_pledge_unveils[for_exec]) {
+		r = unveilctl(-1, NULL, flags1 | UNVEIL_FLAG_SWEEP, -1);
+		if (r < 0)
+			err(EX_OSERR, "unveilctl sweep");
+		/* kludge to save hard permissions for initial unveil */
+		r = unveilctl(AT_FDCWD, root_path, flags1, 0);
+		if (r < 0 && errno != ENOENT) /* XXX */
+			warn("unveil: %s", path);
 	}
-	/*
-	 * If doing a sweep, re-apply all of our unveils to keep them active.
-	 * If not, only apply the modified ones.
-	 */
-	apply_unveils(state.initial);
-	/*
-	 * "Harden" unveil permissions, if needed.  The general idea is that
-	 * after hardening it should not be possible to regain any permissions
-	 * not within the passed "retained" sets.
-	 */
-	if (state.retained_perms & ~retained_perms ||
-	    state.retained_execperms & ~retained_execperms) {
-		r = unveilctl(-1, NULL, UNVEIL_FLAG_RESTRICT,
-		    retained_perms, retained_execperms);
-		if (r < 0) {
-			errors = true;
-			warn("unveilctl restrict");
-		}
-	}
-	/* Done. */
-	state.initial = false;
-	state.retained_perms = retained_perms;
-	state.retained_execperms = retained_execperms;
-	return (errors ? -1 : 0);
-}
 
-static int
-flush_unveils(void)
-{
-	return (flush_restrict_unveils(state.retained_perms, state.retained_execperms));
-}
+	/* Map promises to sysfils. */
+	req_sysfil = SYF_PLEDGE_ALWAYS | SYF_PLEDGE_UNVEIL;
+	for (i = 0; i < PROMISE_COUNT; i++)
+		if (req_promises[i])
+			req_sysfil |= promise_sysfils[i];
 
-static int
-merge_promises_unveils(enum unveil_slot slot, sysfil_t *sysfil,
-    const bool *cur_promises, const bool *req_promises)
-{
-	const struct promise_unveil *pu;
-	for (pu = promise_unveils; *pu->path; pu++) {
-		struct unveil_node *node;
-		if (cur_promises[pu->type] != req_promises[pu->type]) {
-			const char *path;
-			unveil_perms_t perms;
-			path = pu->path;
+	/* Do unveils for the unveils added or removed. */
+	need_uperms = 0;
+	pu = promise_unveils;
+	while (*(path = pu->path)) {
+		unveil_perms_t uperms = 0;
+		bool modified = false;
+		do {
+			if (cur_promises[for_exec][pu->type] != req_promises[pu->type])
+				modified = true;
+			if (req_promises[pu->type])
+				uperms |= pu->perms;
+			pu++;
+		} while (strcmp(pu->path, path) == 0);
+		need_uperms |= uperms; /* maximum permissions we'll need */
+		if (modified) {
 			if (path == root_path) {
 				/*
 				 * The unveil on "/" is only there to
@@ -456,62 +276,25 @@ merge_promises_unveils(enum unveil_slot slot, sysfil_t *sysfil,
 				 * access must be restricted to what has been
 				 * explicitly unveiled.
 				 */
-				if (state.inhibit_root[slot])
+				if (has_custom_unveils[for_exec])
 					continue;
 			} else if (path == tmp_path) {
 				char *tmpdir;
 				if ((tmpdir = getenv("TMPDIR")))
 					path = tmpdir;
 			}
-			node = get_unveil(path, NULL, true);
-			if (!node)
-				return (-1);
-			perms = node->add_perms[slot];
-			if (req_promises[pu->type])
-				perms |= pu->perms;
-			else
-				perms &= ~pu->perms;
-			set_unveil_perms(node, slot, 0, perms);
-		}
-		if (req_promises[pu->type] && pu->perms) {
-			/* unveil won't work if sysfil blocks all accesses */
-			*sysfil |= uperms2sysfil(pu->perms);
-			/* maintain ability to drop the unveil later on */
-			*sysfil |= SYF_PLEDGE_UNVEIL;
+			r = unveilctl(AT_FDCWD, path, flags1, uperms);
+			if (r < 0 && errno != ENOENT) /* XXX */
+				warn("unveil: %s", path);
 		}
 	}
-	return (0);
-}
-
-static int
-update_promises_unveils(
-    unveil_perms_t *retained_perms,
-    sysfil_t *ret_sysfil,
-    bool *cur_promises, const bool *req_promises,
-    enum unveil_slot promise_slot, enum unveil_slot custom_slot)
-{
-	bool errors = false;
-	sysfil_t sysfil, req_sysfil;
-	int r, i;
-
-	/* Map promises to sysfils. */
-
-	req_sysfil = SYF_PLEDGE_ALWAYS;
-	for (i = 0; i < PROMISE_COUNT; i++)
-		if (req_promises[i])
-			req_sysfil |= promise_sysfils[i];
 
 	/*
-	 * Figure out what unveils will be needed for these promises.  Also
-	 * figure out what additional sysfils might be needed to make these
-	 * unveils work.
+	 * Figure out what additional sysfils might be needed to make the
+	 * promises work.
 	 */
-
-	sysfil = req_sysfil;
-	r = merge_promises_unveils(promise_slot, &sysfil,
-	    cur_promises, req_promises);
-	if (r < 0)
-		errors = true;
+	req_uperms = sysfil2uperms(req_sysfil);
+	sysfil = req_sysfil | uperms2sysfil(need_uperms);
 
 	/*
 	 * Alter user's explicit unveils to compensate for sysfils implicitly
@@ -520,71 +303,40 @@ update_promises_unveils(
 	 * that.  Since we use unveils to implement these exceptions, add the
 	 * restrictions to the user's unveils to get a similar effect.
 	 */
+	flags1 = flags | UNVEIL_FLAG_FOR_CUSTOM;
+	if (sysfil != req_sysfil) {
+		r = unveilctl(-1, NULL, flags1 | UNVEIL_FLAG_LIMIT, req_uperms);
+		if (r < 0)
+			err(EX_OSERR, "unveilctl limit");
+	}
 
-	if (sysfil2uperms(req_sysfil) != sysfil2uperms(sysfil))
-		limit_unveils(custom_slot, sysfil2uperms(req_sysfil));
+	/*
+	 * Permanently drop permissions that aren't explicitly requested.
+	 */
+	flags1 = flags | UNVEIL_FLAG_FOR_PLEDGE | UNVEIL_FLAG_FOR_CUSTOM;
+	r = unveilctl(-1, NULL, flags1 | UNVEIL_FLAG_HARDEN, req_uperms);
+	if (r < 0)
+		err(EX_OSERR, "unveilctl harden");
 
-	if (req_sysfil & SYF_PLEDGE_UNVEIL)
-		*retained_perms = sysfil2uperms(req_sysfil);
-	else
-		*retained_perms = 0;
-	*ret_sysfil = sysfil;
-	return (errors ? -1 : 0);
+	has_pledge_unveils[for_exec] = true;
+	return (sysfil);
 }
 
-/*
- * TODO: Handle partial failure better.
- */
+static int do_pledge(const bool *promises, bool for_exec) {
+	sysfil_t sysfil;
+	int r;
+	sysfil = do_pledge_unveils(promises, for_exec);
+	r = procctl(P_PID, getpid(), for_exec ? PROC_SYSFIL_EXEC : PROC_SYSFIL, &sysfil);
+	memcpy(cur_promises[for_exec], promises, PROMISE_COUNT * sizeof *promises);
+	return (r);
+}
+
 
 static int
-do_pledge(const bool *promises, const bool *execpromises)
+promise_unveil_cmp(const void *p0, const void *p1)
 {
-	bool errors = false;
-	sysfil_t sysfil, execsysfil;
-	unveil_perms_t retained_perms, retained_execperms;
-	pid_t pid;
-	int r;
-
-	if (promises) {
-		r = update_promises_unveils(
-		    &retained_perms, &sysfil,
-		    state.promises, promises,
-		    SLOT_PROMISE, SLOT_CUSTOM);
-		if (r < 0)
-			return (-1);
-	} else
-		retained_perms = state.retained_perms;
-	if (execpromises) {
-		r = update_promises_unveils(
-		    &retained_execperms, &execsysfil,
-		    state.execpromises, execpromises,
-		    SLOT_EXECPROMISE, SLOT_EXECCUSTOM);
-		if (r < 0)
-			return (-1);
-	} else
-		retained_execperms = state.retained_execperms;
-
-	r = flush_restrict_unveils(retained_perms, retained_execperms);
-	if (r < 0)
-		errors = true;
-
-	pid = getpid();
-	if (promises) {
-		r = procctl(P_PID, pid, PROC_SYSFIL, &sysfil);
-		if (r < 0)
-			errors = true;
-		memcpy(state.promises, promises,
-		    PROMISE_COUNT * sizeof *promises);
-	}
-	if (execpromises) {
-		r = procctl(P_PID, pid, PROC_SYSFIL_EXEC, &execsysfil);
-		if (r < 0)
-			errors = true;
-		memcpy(state.execpromises, execpromises,
-		    PROMISE_COUNT * sizeof *execpromises);
-	}
-
-	return (errors ? -1 : 0);
+	const struct promise_unveil *pu0 = p0, *pu1 = p1;
+	return (strcmp(pu0->path, pu1->path));
 }
 
 int
@@ -592,8 +344,17 @@ pledge(const char *promises_str, const char *execpromises_str)
 {
 	bool promises[PROMISE_COUNT] = { 0 };
 	bool execpromises[PROMISE_COUNT] = { 0 };
+	bool errors;
 	int r;
 	/* TODO: global lock */
+	if (!promise_unveils_sorted) {
+		qsort(promise_unveils,
+		    (sizeof (promise_unveils) / sizeof (*promise_unveils)) - 1,
+		    sizeof (*promise_unveils),
+		    promise_unveil_cmp);
+		promise_unveils_sorted = true;
+	}
+
 	if (promises_str) {
 		r = parse_promises(promises, promises_str);
 		if (r < 0)
@@ -604,9 +365,19 @@ pledge(const char *promises_str, const char *execpromises_str)
 		if (r < 0)
 			return (-1);
 	}
-	r = do_pledge(promises_str ? promises : NULL,
-	    execpromises_str ? execpromises : NULL);
-	return (r);
+
+	errors = false;
+	if (execpromises_str) {
+		r = do_pledge(execpromises, true);
+		if (r < 0)
+			errors = true;
+	}
+	if (promises_str) {
+		r = do_pledge(promises, false);
+		if (r < 0)
+			errors = true;
+	}
+	return (errors ? -1 : 0);
 }
 
 
@@ -622,17 +393,25 @@ unveil_parse_perms(unveil_perms_t *perms, const char *s)
 		case 'x': *perms |= UNVEIL_PERM_XPATH; break;
 		case 'i': *perms |= UNVEIL_PERM_INSPECT; break;
 		default:
-			errno = EINVAL;
 			return (-1);
 		}
 	return (0);
 }
 
-static void
-do_unveil_node(enum unveil_slot promise_slot, enum unveil_slot custom_slot,
-    struct unveil_node *node, unveil_perms_t perms)
+static int
+do_unveil(const char *path, int flags, unveil_perms_t perms)
 {
-	if (!state.inhibit_root[promise_slot]) {
+	int r, flags1, req_custom_flags, has_pledge_flags, has_custom_flags;
+
+	has_pledge_flags =
+	    (has_pledge_unveils[false] ? UNVEIL_FLAG_FOR_CURR : 0) |
+	    (has_pledge_unveils[true]  ? UNVEIL_FLAG_FOR_EXEC : 0);
+	has_custom_flags =
+	    (has_custom_unveils[false] ? UNVEIL_FLAG_FOR_CURR : 0) |
+	    (has_custom_unveils[true]  ? UNVEIL_FLAG_FOR_EXEC : 0);
+	req_custom_flags = flags & (UNVEIL_FLAG_FOR_CURR | UNVEIL_FLAG_FOR_EXEC);
+
+	if ((flags1 = has_pledge_flags & ~has_custom_flags & req_custom_flags)) {
 		/*
 		 * After the first call to unveil(), filesystem access must be
 		 * restricted to what has been explicitly unveiled (modifying
@@ -641,78 +420,57 @@ do_unveil_node(enum unveil_slot promise_slot, enum unveil_slot custom_slot,
 		 * The pledge() wrapper may have unveiled "/" for certain
 		 * promises.  This must be undone.
 		 */
-		struct unveil_node *root;
-		root = get_unveil(root_path, NULL, false);
-		if (root)
-			set_unveil_perms(root, promise_slot, -1, 0);
-		state.inhibit_root[promise_slot] = true;
+		flags1 |= UNVEIL_FLAG_FOR_PLEDGE;
+		r = unveilctl(AT_FDCWD, root_path, flags1, 0);
+		if (r < 0) /* XXX */
+			warn("unveil: %s", root_path);
 	}
-	if (node)
-		set_unveil_perms(node, custom_slot, -1, perms);
+
+	if ((flags1 = ~has_custom_flags & req_custom_flags)) {
+		flags1 |= UNVEIL_FLAG_FOR_CUSTOM;
+		r = unveilctl(-1, NULL, flags1 | UNVEIL_FLAG_SWEEP, -1);
+		if (r < 0)
+			err(EX_OSERR, "unveilctl sweep");
+		/* kludge to save hard permissions for initial unveil */
+		r = unveilctl(AT_FDCWD, root_path, flags1, 0);
+		if (r < 0 && errno != ENOENT) /* XXX */
+			warn("unveil: %s", path);
+	}
+
+	if (flags & UNVEIL_FLAG_FOR_CURR)
+		has_custom_unveils[false] = true;
+	if (flags & UNVEIL_FLAG_FOR_EXEC)
+		has_custom_unveils[true] = true;
+
+	flags |= UNVEIL_FLAG_FOR_CUSTOM;
+
+	if (!path) {
+		r = unveilctl(-1, NULL, flags | UNVEIL_FLAG_HARDEN, 0);
+		if (r < 0)
+			err(EX_OSERR, "unveilctl harden");
+		return (0);
+	}
+
+	return (unveilctl(AT_FDCWD, path, flags | UNVEIL_FLAG_NOINHERIT, perms));
 }
 
-static int
-do_unveil(const char *path,
-    const unveil_perms_t *perms, const unveil_perms_t *execperms)
+int
+unveil_1(const char *path, int flags, const char *perms_str)
 {
-	struct unveil_node *node;
+	unveil_perms_t perms;
 	int r;
-	if (path) {
-		node = get_unveil(path, NULL, true);
-		if (!node)
-			return (-1);
-	} else
-		node = NULL;
-
-	if (perms)
-		do_unveil_node(SLOT_PROMISE, SLOT_CUSTOM, node, *perms);
-	if (execperms)
-		do_unveil_node(SLOT_EXECPROMISE, SLOT_EXECCUSTOM, node, *execperms);
-
-	/*
-	 * XXX: This also disallows unveils that future pledge promise may need
-	 * to add.
-	 */
-	r = flush_restrict_unveils(
-	    path || !perms ? state.retained_perms : 0,
-	    path || !execperms ? state.retained_execperms : 0);
-	if (r < 0)
-		return (-1);
-
-	if (node && node->last_errno) {
-		errno = node->last_errno;
+	if ((perms_str == NULL) != (path == NULL)) {
+		errno = EINVAL;
 		return (-1);
 	}
-	return (0);
-}
-
-/*
- * Allows to set the current and on-execute permissions separately.  A NULL
- * permission string means to not change the corresponding unveil state at all
- * (like for pledge()).  To request disabling future unveil calls, a NULL path
- * and an empty permissions string should be passed.
- */
-
-static int
-unveil2(const char *path, const char *perms_str, const char *execperms_str)
-{
-	unveil_perms_t perms, execperms;
-	int r;
-	/* TODO: global lock */
 	if (perms_str) {
 		r = unveil_parse_perms(&perms, perms_str);
-		if (r < 0)
+		if (r < 0) {
+			errno = EINVAL;
 			return (-1);
+		}
 	}
-	if (execperms_str) {
-		r = unveil_parse_perms(&execperms, execperms_str);
-		if (r < 0)
-			return (-1);
-	}
-	r = do_unveil(path,
-	    perms_str ? &perms : NULL,
-	    execperms_str ? &execperms : NULL);
-	return (r);
+	return (do_unveil(path, flags, perms));
 }
 
 int
@@ -724,23 +482,11 @@ unveil(const char *path, const char *permissions)
 	 * does not have execpledges, unveils are not inherited and the
 	 * executed process can do its own unveiling.
 	 */
-	if ((permissions == NULL) != (path == NULL)) {
-		errno = EINVAL;
-		return (-1);
-	}
-	if (!permissions)
-		permissions = "";
-	return (unveil2(path, permissions, permissions));
+	return (unveil_1(path, UNVEIL_FLAG_FOR_CURR | UNVEIL_FLAG_FOR_EXEC, permissions));
 }
 
 int
 unveilexec(const char *path, const char *permissions)
 {
-	if ((permissions == NULL) != (path == NULL)) {
-		errno = EINVAL;
-		return (-1);
-	}
-	if (!permissions)
-		permissions = "";
-	return (unveil2(path, NULL, permissions));
+	return (unveil_1(path, UNVEIL_FLAG_FOR_EXEC, permissions));
 }

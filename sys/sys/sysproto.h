@@ -1837,7 +1837,6 @@ struct unveilctl_args {
 	char path_l_[PADL_(const char *)]; const char * path; char path_r_[PADR_(const char *)];
 	char flags_l_[PADL_(int)]; int flags; char flags_r_[PADR_(int)];
 	char perms_l_[PADL_(int)]; int perms; char perms_r_[PADR_(int)];
-	char execperms_l_[PADL_(int)]; int execperms; char execperms_r_[PADR_(int)];
 };
 int	nosys(struct thread *, struct nosys_args *);
 void	sys_sys_exit(struct thread *, struct sys_exit_args *);

@@ -15,16 +15,26 @@ enum {
 	UNVEIL_PERM_WPATH = 1 << 2,
 	UNVEIL_PERM_CPATH = 1 << 3,
 	UNVEIL_PERM_XPATH  = 1 << 4,
-	UNVEIL_PERM_ALL = (unveil_perms_t)-1
+	/* NOTE: last bit used internally */
+	UNVEIL_PERM_ALL = (1 << (8 - 1)) - 1,
+	UNVEIL_PERM_FILLED  = 1 << 7,
 };
 
 enum {
 	UNVEIL_FLAG_SWEEP = 1 << 0,
-	UNVEIL_FLAG_RESTRICT = 1 << 1,
-	UNVEIL_FLAG_NOFOLLOW = 1 << 3,
+	UNVEIL_FLAG_HARDEN = 1 << 1,
+	UNVEIL_FLAG_LIMIT = 1 << 2,
+	UNVEIL_FLAG_NOFOLLOW = 1 << 8,
+	UNVEIL_FLAG_NOINHERIT = 1 << 9,
+	UNVEIL_FLAG_ROLE_SHIFT = 16,
+	UNVEIL_FLAG_FOR_CURR = 1 << 16,
+	UNVEIL_FLAG_FOR_EXEC = 1 << 17,
+	UNVEIL_FLAG_SLOT_SHIFT = 24,
+	UNVEIL_FLAG_FOR_SLOT0 = 1 << 24,
+	UNVEIL_FLAG_FOR_SLOT1 = 1 << 25,
 };
 
-int unveilctl(int atfd, const char *path, int flags, int perms, int execperms);
+int unveilctl(int atfd, const char *path, int flags, int perms);
 
 #ifdef _KERNEL
 
@@ -32,18 +42,25 @@ int unveilctl(int atfd, const char *path, int flags, int perms, int execperms);
 MALLOC_DECLARE(M_UNVEIL);
 #endif
 
+enum unveil_role {
+	UNVEIL_ROLE_CURR,
+	UNVEIL_ROLE_EXEC,
+};
+
+enum {
+	UNVEIL_ROLE_COUNT = 2,
+	UNVEIL_SLOT_COUNT = 2,
+};
+
 struct unveil_node {
 	struct unveil_node *cover;
 	RB_ENTRY(unveil_node) entry;
 	struct vnode *vp;
-	unveil_perms_t curr_want_perms;
-	unveil_perms_t exec_want_perms;
-	unveil_perms_t curr_hard_perms;
-	unveil_perms_t exec_hard_perms;
-	bool ghost;
+	unveil_perms_t hard_perms[UNVEIL_ROLE_COUNT];
+	unveil_perms_t want_perms[UNVEIL_ROLE_COUNT][UNVEIL_SLOT_COUNT];
 };
 
-unveil_perms_t unveil_node_effective_perms(struct unveil_node *node);
+unveil_perms_t unveil_node_soft_perms(struct unveil_node *, enum unveil_role);
 
 void unveil_init(struct unveil_base *);
 void unveil_merge(struct unveil_base *dst, struct unveil_base *src);
