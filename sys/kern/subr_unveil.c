@@ -17,41 +17,52 @@ __FBSDID("$FreeBSD$");
 void
 unveil_ndinit(struct nameidata *ndp, struct thread *td)
 {
-	struct filedesc *fdp = td->td_proc->p_fd;
-	struct unveil_base *base = &fdp->fd_unveil;
 	ndp->ni_unveil = NULL;
-	FILEDESC_SLOCK(fdp);
-	if (!base->active || ndp->ni_startdir) {
-		/*
-		 * If a start vnode was explicitly specified, assume that
-		 * unveil checks don't need to apply.
-		 */
-		ndp->ni_intflags |= NIINT_UNVEIL_DISABLED;
-	}
-	FILEDESC_SUNLOCK(fdp);
+	ndp->ni_unveil_data = NULL;
 }
 
 void
+unveil_namei_start(struct nameidata *ndp, struct thread *td)
+{
+	struct filedesc *fdp = td->td_proc->p_fd;
+	struct unveil_base *base = &fdp->fd_unveil;
+	FILEDESC_SLOCK(fdp);
+	if (!ndp->ni_unveil_data && (!base->active || ndp->ni_startdir))
+		ndp->ni_lcf |= NI_LCF_UNVEIL_DISABLED;
+	FILEDESC_SUNLOCK(fdp);
+}
+
+int
 unveil_lookup_update(struct nameidata *ndp, struct vnode *vp)
 {
 	struct componentname *cnp = &ndp->ni_cnd;
 	struct filedesc *fdp = cnp->cn_thread->td_proc->p_fd;
 	struct unveil_base *base = &fdp->fd_unveil;
 	struct unveil_node *node;
-	if (ndp->ni_intflags & NIINT_UNVEIL_DISABLED)
-		return;
+	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
+		return (0);
 	FILEDESC_SLOCK(fdp);
 	node = unveil_lookup(base, vp);
 	FILEDESC_SUNLOCK(fdp);
 	if (node)
 		ndp->ni_unveil = node;
+	if (ndp->ni_unveil_data) {
+		int error;
+		FILEDESC_XLOCK(fdp);
+		error = unveil_save(base, ndp->ni_unveil_data, false,
+		    vp, &ndp->ni_unveil);
+		FILEDESC_XUNLOCK(fdp);
+		if (error)
+			return (error);
+	}
+	return (0);
 }
 
 void
 unveil_lookup_update_dotdot(struct nameidata *ndp, struct vnode *vp)
 {
 	struct unveil_node *node;
-	if (ndp->ni_intflags & NIINT_UNVEIL_DISABLED)
+	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
 		return;
 	if ((node = ndp->ni_unveil) && node->vp == vp)
 		ndp->ni_unveil = node->cover;
@@ -121,17 +132,30 @@ unveil_lookup_check(struct nameidata *ndp)
 {
 	struct componentname *cnp = &ndp->ni_cnd;
 	struct filedesc *fdp = cnp->cn_thread->td_proc->p_fd;
+	struct unveil_base *base = &fdp->fd_unveil;
 	struct unveil_node *node;
 	bool descendant;
 	unveil_perms_t uperms;
 	cap_rights_t haverights;
 	int failed;
-	if (ndp->ni_intflags & NIINT_UNVEIL_DISABLED)
+	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
 		return (0);
 
+	if (ndp->ni_unveil_data) {
+		int error;
+		FILEDESC_XLOCK(fdp);
+		error = unveil_save(base, ndp->ni_unveil_data, true,
+		    ndp->ni_vp, &ndp->ni_unveil);
+		FILEDESC_XUNLOCK(fdp);
+		if (error)
+			return (error);
+	}
+
+#if 0
 	if ((cnp->cn_flags & FOLLOW) &&
 	    ndp->ni_vp && ndp->ni_vp->v_type == VLNK)
 		return (0);
+#endif
 
 	if ((node = ndp->ni_unveil)) {
 		FILEDESC_SLOCK(fdp);
@@ -150,7 +174,7 @@ unveil_lookup_check(struct nameidata *ndp)
 	 * Otherwise those calls would always pass the permission check.  Some
 	 * calls haven't been converted to use capability rights yet.
 	 */
-	if (!(ndp->ni_intflags & NIINT_HASRIGHTS))
+	if (!(ndp->ni_intflags & NI_INT_HASRIGHTS))
 		return (failed);
 	/*
 	 * This should not be necessary, but it could catch some namei() calls

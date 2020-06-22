@@ -80,7 +80,8 @@ struct nameidata {
 	int	ni_dirfd;		/* starting directory for *at functions */
 	int	ni_lcf;			/* local call flags */
 #if defined(UNVEIL)
-	struct unveil_node *ni_unveil;	/* last unveil encountered */
+	struct	unveil_node *ni_unveil;	/* last unveil encountered */
+	void	*ni_unveil_data;	/* used internally by unveil callbacks */
 #endif
 	/*
 	 * Results: returned from namei
@@ -173,16 +174,15 @@ struct nameidata {
 #define	PARAMASK	0x7ffffe00 /* mask of parameter descriptors */
 
 /*
+ * Namei results flags
+ */
+#define	NIRES_ABS		0x00000001 /* Path was absolute */
+
+/*
  * Internal flags
  */
 
-#define	NIINT_HASRIGHTS		0x00000001 /* was initialized with capability rights */
-#define	NIINT_UNVEIL_DISABLED	0x00000002 /* unveil restrictions not enforced */
-
-/*
- * Namei results flags
- */
-#define	NIRES_ABS	0x00000001 /* Path was absolute */
+#define	NI_INT_HASRIGHTS	0x00000001 /* was initialized with capability rights */
 
 /*
  * Flags in ni_lcf, valid for the duration of the namei call.
@@ -192,6 +192,7 @@ struct nameidata {
 #define	NI_LCF_BENEATH_ABS	0x0004	/* BENEATH with absolute path */
 #define	NI_LCF_BENEATH_LATCHED	0x0008	/* BENEATH_ABS traversed starting dir */
 #define	NI_LCF_LATCH		0x0010	/* ni_beneath_latch valid */
+#define	NI_LCF_UNVEIL_DISABLED	0x0020 /* unveil restrictions not enforced */
 
 /*
  * Initialization of a nameidata structure.

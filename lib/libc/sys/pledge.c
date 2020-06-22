@@ -240,10 +240,6 @@ do_pledge_unveils(const bool *req_promises, bool for_exec)
 		r = unveilctl(-1, NULL, flags1 | UNVEIL_FLAG_SWEEP, -1);
 		if (r < 0)
 			err(EX_OSERR, "unveilctl sweep");
-		/* kludge to save hard permissions for initial unveil */
-		r = unveilctl(AT_FDCWD, root_path, flags1, 0);
-		if (r < 0 && errno != ENOENT) /* XXX */
-			warn("unveil: %s", path);
 	}
 
 	/* Map promises to sysfils. */
@@ -253,6 +249,7 @@ do_pledge_unveils(const bool *req_promises, bool for_exec)
 			req_sysfil |= promise_sysfils[i];
 
 	/* Do unveils for the unveils added or removed. */
+	flags1 |= UNVEIL_FLAG_INTERMEDIATE | UNVEIL_FLAG_INSPECTABLE;
 	need_uperms = 0;
 	pu = promise_unveils;
 	while (*(path = pu->path)) {
@@ -431,10 +428,6 @@ do_unveil(const char *path, int flags, unveil_perms_t perms)
 		r = unveilctl(-1, NULL, flags1 | UNVEIL_FLAG_SWEEP, -1);
 		if (r < 0)
 			err(EX_OSERR, "unveilctl sweep");
-		/* kludge to save hard permissions for initial unveil */
-		r = unveilctl(AT_FDCWD, root_path, flags1, 0);
-		if (r < 0 && errno != ENOENT) /* XXX */
-			warn("unveil: %s", path);
 	}
 
 	if (flags & UNVEIL_FLAG_FOR_CURR)
@@ -443,6 +436,7 @@ do_unveil(const char *path, int flags, unveil_perms_t perms)
 		has_custom_unveils[true] = true;
 
 	flags |= UNVEIL_FLAG_FOR_CUSTOM;
+	flags |= UNVEIL_FLAG_INTERMEDIATE | UNVEIL_FLAG_INSPECTABLE;
 
 	if (!path) {
 		r = unveilctl(-1, NULL, flags | UNVEIL_FLAG_HARDEN, 0);

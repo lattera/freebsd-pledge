@@ -26,6 +26,8 @@ enum {
 	UNVEIL_FLAG_LIMIT = 1 << 2,
 	UNVEIL_FLAG_NOFOLLOW = 1 << 8,
 	UNVEIL_FLAG_NOINHERIT = 1 << 9,
+	UNVEIL_FLAG_INTERMEDIATE = 1 << 10,
+	UNVEIL_FLAG_INSPECTABLE = 1 << 11,
 	UNVEIL_FLAG_ROLE_SHIFT = 16,
 	UNVEIL_FLAG_FOR_CURR = 1 << 16,
 	UNVEIL_FLAG_FOR_EXEC = 1 << 17,
@@ -71,6 +73,11 @@ struct unveil_node *unveil_lookup(struct unveil_base *, struct vnode *);
 struct unveil_node *unveil_insert(struct unveil_base *, struct vnode *,
     struct unveil_node *cover);
 
+struct unveil_namei_data;
+
+int unveil_save(struct unveil_base *, struct unveil_namei_data *,
+    bool last, struct vnode *, struct unveil_node **);
+
 void unveil_fd_init(struct filedesc *);
 void unveil_fd_merge(struct filedesc *dst, struct filedesc *src);
 void unveil_fd_free(struct filedesc *);
@@ -79,7 +86,8 @@ void unveil_proc_exec_switch(struct thread *);
 
 struct nameidata;
 void unveil_ndinit(struct nameidata *, struct thread *);
-void unveil_lookup_update(struct nameidata *, struct vnode *);
+void unveil_namei_start(struct nameidata *, struct thread *);
+int unveil_lookup_update(struct nameidata *, struct vnode *);
 void unveil_lookup_update_dotdot(struct nameidata *, struct vnode *);
 int unveil_lookup_check(struct nameidata *);
 

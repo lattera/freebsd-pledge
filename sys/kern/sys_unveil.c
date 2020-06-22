@@ -164,6 +164,7 @@ struct unveil_node *
 unveil_insert(struct unveil_base *base, struct vnode *vp, struct unveil_node *cover)
 {
 	struct unveil_node *new, *old;
+	int i;
 	new = malloc(sizeof *new, M_UNVEIL, M_WAITOK);
 	*new = (struct unveil_node){
 		.cover = cover,
@@ -172,11 +173,14 @@ unveil_insert(struct unveil_base *base, struct vnode *vp, struct unveil_node *co
 	old = RB_INSERT(unveil_node_tree, &base->root, new);
 	if (old) {
 		free(new, M_UNVEIL);
-		new = old;
-	} else {
-		vref(vp);
-		base->node_count++;
+		return (old);
 	}
+	for (i = 0; i < UNVEIL_ROLE_COUNT; i++)
+		new->hard_perms[i] = cover ? cover->hard_perms[i] :
+		                     base->active ? UNVEIL_PERM_NONE :
+		                                    UNVEIL_PERM_ALL;
+	vref(vp);
+	base->node_count++;
 	return (new);
 }
 
@@ -225,33 +229,40 @@ unveil_proc_exec_switch(struct thread *td)
 			for (j = 0; j < UNVEIL_SLOT_COUNT; j++) \
 				if ((flags) & (1 << (UNVEIL_FLAG_SLOT_SHIFT + j)))
 
-static int
-do_unveil_add(struct unveil_base *base, int flags, unveil_perms_t perms,
-    struct vnode *vp, struct unveil_node *cover)
+struct unveil_namei_data {
+	int flags;
+	unveil_perms_t perms;
+};
+
+int
+unveil_save(struct unveil_base *base, struct unveil_namei_data *data,
+    bool last, struct vnode *vp, struct unveil_node **cover)
 {
+	int flags = data->flags, i, j;
 	struct unveil_node *node;
-	int i, j;
-	node = cover && cover->vp == vp ? cover : NULL;
-	if (base->node_count >= unveil_max_nodes_per_process && !node)
-		return (E2BIG);
-
-	if (!node) {
-		node = unveil_insert(base, vp, cover);
-		if (cover) {
-			memcpy(node->hard_perms, cover->hard_perms,
-			    sizeof (node->hard_perms));
-		} else if (!base->active) {
-			for (i = 0; i < UNVEIL_ROLE_COUNT; i++)
-				node->hard_perms[i] = UNVEIL_PERM_ALL;
-		}
+	if (!last && !(flags & UNVEIL_FLAG_INTERMEDIATE))
+		return (0);
+	if (*cover && (*cover)->vp == vp) {
+		node = *cover;
+	} else {
+		if (base->node_count >= unveil_max_nodes_per_process)
+			return (E2BIG);
+		node = unveil_insert(base, vp, *cover);
 	}
-
-	if (flags & UNVEIL_FLAG_NOINHERIT)
-		perms |= UNVEIL_PERM_FILLED;
-	FOREACH_SLOT_FLAGS(flags, i, j)
-		node->want_perms[i][j] = perms;
+	if (last) {
+		unveil_perms_t perms = data->perms;
+		if (flags & UNVEIL_FLAG_NOINHERIT)
+			perms |= UNVEIL_PERM_FILLED;
+		FOREACH_SLOT_FLAGS(flags, i, j)
+			node->want_perms[i][j] = perms;
+	} else if (flags & UNVEIL_FLAG_INSPECTABLE) {
+		FOREACH_SLOT_FLAGS(flags, i, j)
+			node->want_perms[i][j] |= UNVEIL_PERM_INSPECT;
+	}
+	*cover = node;
 	return (0);
 }
+
 
 static void
 do_unveil_limit(struct unveil_base *base, int flags, unveil_perms_t perms)
@@ -290,34 +301,33 @@ do_unveil(struct thread *td, int atfd, const char *path,
     int flags, unveil_perms_t perms)
 {
 	struct filedesc *fdp = td->td_proc->p_fd;
-	struct unveil_base *base;
-	struct nameidata nd;
-	int error = 0;
-	bool adding;
+	struct unveil_base *base = &fdp->fd_unveil;
+	bool activate = false;
 
 	perms &= ~(unveil_perms_t)UNVEIL_PERM_FILLED;
 
-	if ((adding = path != NULL)) {
+	if (path != NULL) {
+		struct unveil_namei_data data = { flags, perms };
+		struct nameidata nd;
 		cap_rights_t rights;
+		int error;
 		int nd_flags = LOCKLEAF;
 		if (!(flags & UNVEIL_FLAG_NOFOLLOW))
 			nd_flags |= FOLLOW;
 		NDINIT_ATRIGHTS(&nd, LOOKUP, nd_flags, UIO_SYSSPACE,
 		    path, atfd, cap_rights_init_zero(&rights), td);
+		/* setting this will cause namei() to call unveil_save() */
+		nd.ni_unveil_data = &data;
 		error = namei(&nd);
 		if (error)
 			return (error);
+		NDFREE(&nd, 0);
+		activate = true;
 	}
 
 	FILEDESC_XLOCK(fdp);
-	base = &fdp->fd_unveil;
-
-	if (adding) {
-		error = do_unveil_add(base, flags, perms, nd.ni_vp, nd.ni_unveil);
-		if (error)
-			goto out;
+	if (activate)
 		base->active = true;
-	}
 
 	if (flags & UNVEIL_FLAG_LIMIT)
 		do_unveil_limit(base, flags, perms);
@@ -326,10 +336,8 @@ do_unveil(struct thread *td, int atfd, const char *path,
 	if (flags & UNVEIL_FLAG_SWEEP)
 		do_unveil_sweep(base, flags);
 
-out:	FILEDESC_XUNLOCK(fdp);
-	if (adding)
-		NDFREE(&nd, 0);
-	return (error);
+	FILEDESC_XUNLOCK(fdp);
+	return (0);
 }
 
 #endif /* UNVEIL */

@@ -354,6 +354,10 @@ namei(struct nameidata *ndp)
 	if (error == 0 && *cnp->cn_pnbuf == '\0')
 		error = ENOENT;
 
+#ifdef UNVEIL
+	unveil_namei_start(ndp, td);
+#endif
+
 #ifdef CAPABILITY_MODE
 	/*
 	 * In capability mode, lookups must be restricted to happen in
@@ -744,7 +748,9 @@ lookup(struct nameidata *ndp)
 	    compute_cn_lkflags(dp->v_mount, cnp->cn_lkflags | LK_RETRY,
 	    cnp->cn_flags));
 #ifdef UNVEIL
-	unveil_lookup_update(ndp, dp);
+	error = unveil_lookup_update(ndp, dp);
+	if (error)
+		goto bad;
 #endif
 
 dirloop:
@@ -1066,7 +1072,9 @@ good:
 	}
 
 #ifdef UNVEIL
-	unveil_lookup_update(ndp, dp);
+	error = unveil_lookup_update(ndp, dp);
+	if (error)
+		goto bad2;
 #endif
 
 	/*
@@ -1373,7 +1381,7 @@ NDINIT_ALL(struct nameidata *ndp, u_long op, u_long flags, enum uio_seg segflg,
 	filecaps_init(&ndp->ni_filecaps);
 	ndp->ni_cnd.cn_thread = td;
 	if (rightsp != NULL) {
-		ndp->ni_intflags |= NIINT_HASRIGHTS;
+		ndp->ni_intflags |= NI_INT_HASRIGHTS;
 		ndp->ni_rightsneeded = *rightsp;
 	} else
 		cap_rights_init_zero(&ndp->ni_rightsneeded);
