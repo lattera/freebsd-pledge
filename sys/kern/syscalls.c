@@ -582,5 +582,6 @@ const char *syscallnames[] = {
 	"sigfastblock",			/* 573 = sigfastblock */
 	"__realpathat",			/* 574 = __realpathat */
 	"close_range",			/* 575 = close_range */
-	"unveilctl",			/* 576 = unveilctl */
+	"rpctls_syscall",			/* 576 = rpctls_syscall */
+	"unveilctl",			/* 577 = unveilctl */
 };

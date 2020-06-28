@@ -105,6 +105,7 @@ __DEFAULT_YES_OPTIONS = \
     FTP \
     GAMES \
     GDB \
+    GH_BC \
     GNU_DIFF \
     GNU_GREP \
     GOOGLETEST \
@@ -202,6 +203,7 @@ __DEFAULT_NO_OPTIONS = \
     BHYVE_SNAPSHOT \
     BSD_GREP \
     CLANG_EXTRAS \
+    CLANG_FORMAT \
     DTRACE_TESTS \
     EXPERIMENTAL \
     GNU_GREP_COMPAT \
@@ -286,19 +288,9 @@ __DEFAULT_NO_OPTIONS+=LLVM_TARGET_BPF
 
 .include <bsd.compiler.mk>
 
-# In-tree binutils/gcc are older versions without modern architecture support.
+# In-tree gdb is an older versions without modern architecture support.
 .if ${__T} == "aarch64" || ${__T:Mriscv*} != ""
-BROKEN_OPTIONS+=BINUTILS BINUTILS_BOOTSTRAP GDB
-.endif
-# BINUTILS is enabled on x86 to provide as for ports - PR 205250
-# BINUTILS_BOOTSTRAP is needed on amd64 only, for skein_block_asm.s
-.if ${__T} == "amd64"
-__DEFAULT_YES_OPTIONS+=BINUTILS BINUTILS_BOOTSTRAP
-.elif ${__T} == "i386"
-__DEFAULT_YES_OPTIONS+=BINUTILS
-__DEFAULT_NO_OPTIONS+=BINUTILS_BOOTSTRAP
-.else
-__DEFAULT_NO_OPTIONS+=BINUTILS BINUTILS_BOOTSTRAP
+BROKEN_OPTIONS+=GDB
 .endif
 .if ${__T:Mriscv*} != ""
 BROKEN_OPTIONS+=OFED
@@ -477,14 +469,12 @@ MK_ZONEINFO_LEAPSECONDS_SUPPORT:= no
 .endif
 
 .if ${MK_CROSS_COMPILER} == "no"
-MK_BINUTILS_BOOTSTRAP:= no
 MK_CLANG_BOOTSTRAP:= no
 MK_ELFTOOLCHAIN_BOOTSTRAP:= no
 MK_LLD_BOOTSTRAP:= no
 .endif
 
 .if ${MK_TOOLCHAIN} == "no"
-MK_BINUTILS:=	no
 MK_CLANG:=	no
 MK_GDB:=	no
 MK_INCLUDES:=	no
@@ -494,6 +484,7 @@ MK_LLDB:=	no
 
 .if ${MK_CLANG} == "no"
 MK_CLANG_EXTRAS:= no
+MK_CLANG_FORMAT:= no
 MK_CLANG_FULL:= no
 MK_LLVM_COV:= no
 .endif
