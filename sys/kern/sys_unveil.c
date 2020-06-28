@@ -37,7 +37,7 @@ unveil_perms_t
 unveil_node_soft_perms(struct unveil_node *node, enum unveil_role role)
 {
 	struct unveil_node *node1;
-	unveil_perms_t inherited_perms[UNVEIL_SLOT_COUNT], soft_perms;
+	unveil_perms_t inherited_perms[UNVEIL_SLOT_COUNT], soft_perms, mask;
 	bool all_filled;
 	int i;
 	for (i = 0; i < UNVEIL_SLOT_COUNT; i++)
@@ -47,14 +47,16 @@ unveil_node_soft_perms(struct unveil_node *node, enum unveil_role role)
 	 * without any more inheritance required.
 	 */
 	node1 = node;
+	mask = UNVEIL_PERM_ALL;
 	do {
 		all_filled = true;
 		for (i = 0; i < UNVEIL_SLOT_COUNT; i++) {
 			if (!(inherited_perms[i] & UNVEIL_PERM_FILLED))
-				inherited_perms[i] |= node1->want_perms[role][i];
+				inherited_perms[i] |= node1->want_perms[role][i] & mask;
 			if (!(inherited_perms[i] & UNVEIL_PERM_FILLED))
 				all_filled = false;
 		}
+		mask = UNVEIL_PERM_INHERITABLE_MASK;
 	} while (!all_filled && (node1 = node1->cover));
 	/*
 	 * Merge wanted permissions and mask them with the hard permissions.

@@ -69,13 +69,12 @@ unveil_lookup_update_dotdot(struct nameidata *ndp, struct vnode *vp)
 }
 
 static void
-unveil_perms_to_rights(cap_rights_t *rights,
-    unveil_perms_t uperms, bool descendant)
+unveil_perms_to_rights(cap_rights_t *rights, unveil_perms_t uperms)
 {
 	cap_rights_init(rights, CAP_LOOKUP);
 	/* TODO: cache these sets */
 	/* TODO: ACLs caps */
-	if (uperms & UNVEIL_PERM_INSPECT && !descendant)
+	if (uperms & UNVEIL_PERM_INSPECT)
 		cap_rights_set(rights,
 		    CAP_FPATHCONF,
 		    CAP_FSTAT,
@@ -134,7 +133,6 @@ unveil_lookup_check(struct nameidata *ndp)
 	struct filedesc *fdp = cnp->cn_thread->td_proc->p_fd;
 	struct unveil_base *base = &fdp->fd_unveil;
 	struct unveil_node *node;
-	bool descendant;
 	unveil_perms_t uperms;
 	cap_rights_t haverights;
 	int failed;
@@ -161,12 +159,13 @@ unveil_lookup_check(struct nameidata *ndp)
 		FILEDESC_SLOCK(fdp);
 		uperms = unveil_node_soft_perms(node, UNVEIL_ROLE_CURR);
 		FILEDESC_SUNLOCK(fdp);
-		descendant = node->vp != ndp->ni_vp;
+		if (node->vp != ndp->ni_vp)
+			uperms &= UNVEIL_PERM_INHERITABLE_MASK;
+		failed = uperms ? EACCES : ENOENT;
 	} else {
 		uperms = UNVEIL_PERM_NONE;
-		descendant = true;
+		failed = ENOENT;
 	}
-	failed = !uperms || uperms == UNVEIL_PERM_INSPECT ? ENOENT : EACCES;
 
 	/*
 	 * When unveil checking is enabled, only allow namei() calls that were
@@ -176,6 +175,7 @@ unveil_lookup_check(struct nameidata *ndp)
 	 */
 	if (!(ndp->ni_intflags & NI_INT_HASRIGHTS))
 		return (failed);
+
 	/*
 	 * This should not be necessary, but it could catch some namei() calls
 	 * that have the wrong rights.
@@ -184,7 +184,7 @@ unveil_lookup_check(struct nameidata *ndp)
 	    !(uperms & UNVEIL_PERM_CPATH))
 		return (failed);
 
-	unveil_perms_to_rights(&haverights, uperms, descendant);
+	unveil_perms_to_rights(&haverights, uperms);
 	if (!cap_rights_contains(&haverights, &ndp->ni_rightsneeded))
 		return (failed);
 

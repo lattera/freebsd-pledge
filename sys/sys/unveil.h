@@ -18,6 +18,8 @@ enum {
 	/* NOTE: last bit used internally */
 	UNVEIL_PERM_ALL = (1 << (8 - 1)) - 1,
 	UNVEIL_PERM_FILLED  = 1 << 7,
+	/* NOTE: the internal last bit is included in the mask */
+	UNVEIL_PERM_INHERITABLE_MASK = ~(unveil_perms_t)UNVEIL_PERM_INSPECT,
 };
 
 enum {
