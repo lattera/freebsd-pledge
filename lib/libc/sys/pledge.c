@@ -435,17 +435,21 @@ do_unveil(const char *path, int flags, unveil_perms_t perms)
 	if (flags & UNVEIL_FLAG_FOR_EXEC)
 		has_custom_unveils[true] = true;
 
-	flags |= UNVEIL_FLAG_FOR_CUSTOM;
-	flags |= UNVEIL_FLAG_INTERMEDIATE | UNVEIL_FLAG_INSPECTABLE;
+	flags1 = flags | UNVEIL_FLAG_FOR_CUSTOM;
 
 	if (!path) {
-		r = unveilctl(-1, NULL, flags | UNVEIL_FLAG_HARDEN, 0);
+		/*
+		 * XXX If unveil(NULL, NULL) is done before pledge(), pledge()
+		 * won't be able to add its unveils.
+		 */
+		r = unveilctl(-1, NULL, flags1 | UNVEIL_FLAG_HARDEN, 0);
 		if (r < 0)
 			err(EX_OSERR, "unveilctl harden");
 		return (0);
 	}
 
-	return (unveilctl(AT_FDCWD, path, flags | UNVEIL_FLAG_NOINHERIT, perms));
+	flags1 |= UNVEIL_FLAG_INTERMEDIATE | UNVEIL_FLAG_INSPECTABLE;
+	return (unveilctl(AT_FDCWD, path, flags1 | UNVEIL_FLAG_NOINHERIT, perms));
 }
 
 int
