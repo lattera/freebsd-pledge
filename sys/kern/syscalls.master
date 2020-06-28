@@ -168,7 +168,7 @@
 		    uint32_t dev
 		);
 	}
-15	AUE_CHMOD	STD {
+15	AUE_CHMOD	STD|PLEDGE_FATTR {
 		int chmod(
 		    _In_z_ const char *path,
 		    mode_t mode
