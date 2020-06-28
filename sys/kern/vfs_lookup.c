@@ -415,20 +415,22 @@ namei(struct nameidata *ndp)
 		ndp->ni_resflags |= NIRES_ABS;
 		error = namei_handle_root(ndp, &dp);
 	} else {
+#ifdef UNVEIL
+		struct vnode *cover;
+#endif
 		if (ndp->ni_startdir != NULL) {
 			dp = ndp->ni_startdir;
 			startdir_used = 1;
+#ifdef UNVEIL
+			cover = NULL;
+#endif
 		} else if (ndp->ni_dirfd == AT_FDCWD) {
 			dp = pwd->pwd_cdir;
 #ifdef UNVEIL
-			if (pwd->pwd_cdir_cover)
-				unveil_lookup_update(ndp, pwd->pwd_cdir_cover);
+			cover = pwd->pwd_cdir_cover;
 #endif
 			vrefact(dp);
 		} else {
-#ifdef UNVEIL
-			/* TODO: retrieve per-FD uperms */
-#endif
 			rights = ndp->ni_rightsneeded;
 			cap_rights_set_one(&rights, CAP_LOOKUP);
 
@@ -476,9 +478,16 @@ namei(struct nameidata *ndp)
 				ndp->ni_lcf |= NI_LCF_STRICTRELATIVE;
 			}
 #endif
+#ifdef UNVEIL
+			cover = ndp->ni_filecaps.fc_cover;
+#endif
 		}
 		if (error == 0 && dp->v_type != VDIR)
 			error = ENOTDIR;
+#ifdef UNVEIL
+		if (cover)
+			unveil_lookup_update(ndp, cover);
+#endif
 	}
 	if (error == 0 && (cnp->cn_flags & BENEATH) != 0) {
 		if (ndp->ni_dirfd == AT_FDCWD) {

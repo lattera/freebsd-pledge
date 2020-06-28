@@ -1673,7 +1673,7 @@ filecaps_move(struct filecaps *src, struct filecaps *dst)
 /*
  * Fill the given filecaps structure with full rights.
  */
-static void
+void
 filecaps_fill(struct filecaps *fcaps)
 {
 
@@ -3344,7 +3344,11 @@ pwd_fill(struct pwd *oldpwd, struct pwd *newpwd)
 	}
 #ifdef UNVEIL
 	if (newpwd->pwd_cdir_cover == NULL && oldpwd->pwd_cdir_cover != NULL) {
-		vrefact(oldpwd->pwd_cdir_cover);
+		/*
+		 * No need to acquire a new vnode reference since the unveil
+		 * node's vnode reference is guaranteed to last until the
+		 * descriptor table is freed.
+		 */
 		newpwd->pwd_cdir_cover = oldpwd->pwd_cdir_cover;
 	}
 #endif
@@ -3409,12 +3413,9 @@ pwd_drop(struct pwd *pwd)
 	if (!refcount_release(&pwd->pwd_refcount))
 		return;
 
+	/* NOTE: no reference owned to pwd_cdir_cover */
 	if (pwd->pwd_cdir != NULL)
 		vrele(pwd->pwd_cdir);
-#ifdef UNVEIL
-	if (pwd->pwd_cdir_cover != NULL)
-		vrele(pwd->pwd_cdir_cover);
-#endif
 	if (pwd->pwd_rdir != NULL)
 		vrele(pwd->pwd_rdir);
 	if (pwd->pwd_jdir != NULL)
