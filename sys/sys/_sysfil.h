@@ -1,10 +1,6 @@
 #ifndef	_SYS__SYSFIL_H_
 #define	_SYS__SYSFIL_H_
 
-#ifdef _KERNEL
-#include "opt_sysfil.h"
-#endif
-
 #include <sys/types.h>
 
 /* sysfil - SYStem FILters
