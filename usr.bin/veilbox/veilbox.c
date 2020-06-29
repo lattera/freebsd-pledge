@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/errno.h>
 #include <sys/stat.h>
 #include <sysexits.h>
 #include <unistd.h>
@@ -98,7 +99,9 @@ int
 main(int argc, char *argv[])
 {
 	int ch, r;
-	char promises[1024];
+	char promises[1024] = "";
+	char abspath[PATH_MAX];
+	size_t abspath_len = 0;
 
 	strlcat(promises, default_promises, sizeof promises);
 	strlcat(promises, network_promises, sizeof promises);
@@ -123,12 +126,27 @@ main(int argc, char *argv[])
 			break;
 		}
 		case 'u': {
-			char *perms;
-			if ((perms = strrchr(optarg, ':')))
+			char *path, *perms;
+			path = optarg;
+			if ((perms = strrchr(path, ':')))
 				*perms++ = '\0';
 			else
 				perms = __DECONST(char *, "rx");
-			r = unveilexec(optarg, perms);
+			if (path[0] != '/') {
+				size_t n, m;
+				if (!abspath_len) {
+					if (!getcwd(abspath, sizeof abspath))
+						err(EX_OSERR, "getcwd");
+					abspath_len = strlen(abspath);
+					abspath[abspath_len++] = '/';
+				}
+				n = (sizeof abspath) - abspath_len;
+				m = strlcpy(abspath + abspath_len, path, n);
+				if (m >= n)
+					errc(EX_OSFILE, ENAMETOOLONG, "%s", path);
+				path = abspath;
+			}
+			r = unveilexec(path, perms);
 			if (r < 0)
 				err(EX_OSERR, "%s", optarg);
 			break;
