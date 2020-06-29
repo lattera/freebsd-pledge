@@ -39,6 +39,7 @@ enum promise_type {
 	PROMISE_UNIX,
 	PROMISE_DNS,
 	PROMISE_GETPW,
+	PROMISE_SSL,
 	PROMISE_COUNT /* must be last */
 };
 
@@ -72,6 +73,7 @@ static const struct promise_name promise_names[] = {
 	{ "unix",	PROMISE_UNIX },
 	{ "dns",	PROMISE_DNS },
 	{ "getpw",	PROMISE_GETPW },
+	{ "ssl",	PROMISE_SSL },
 	{ "",		PROMISE_NONE },
 };
 
@@ -150,6 +152,7 @@ static struct promise_unveil promise_unveils[] = {
 	{ "/etc/pwd.db", R,			PROMISE_GETPW },
 	{ "/etc/spwd.db", R,			PROMISE_GETPW },
 	{ "/etc/group", R,			PROMISE_GETPW },
+	{ "/etc/ssl/cert.pem", R,		PROMISE_SSL },
 	/* TODO: Ideally we wouldn't allow to read the directory itself (so
 	 * that a pledged process can't find the names of the temporary files
 	 * of other processes). */

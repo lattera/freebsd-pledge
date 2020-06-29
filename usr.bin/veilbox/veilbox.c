@@ -68,7 +68,9 @@ static const char *default_promises =
     "flock fattr chown id "
     "proc thread "
     "tty "
-    "dns inet unix";
+    "unix ";
+static const char *network_promises =
+    "ssl dns inet ";
 
 static const struct unveil_entry default_unveils[] = {
 	{ "/dev/fd", "rwc" }, /* not included by "stdio" */
@@ -97,6 +99,7 @@ main(int argc, char *argv[])
 	char promises[1024];
 
 	strlcat(promises, default_promises, sizeof promises);
+	strlcat(promises, network_promises, sizeof promises);
 
 	const struct unveil_entry *entry;
 	for (entry = default_unveils;
