@@ -40,7 +40,7 @@ unveil_node_soft_perms(struct unveil_node *node, enum unveil_role role)
 {
 	struct unveil_node *node1;
 	unveil_perms_t inherited_perms[UNVEIL_SLOT_COUNT], soft_perms, mask;
-	bool all_filled;
+	bool all_final;
 	int i;
 	for (i = 0; i < UNVEIL_SLOT_COUNT; i++)
 		inherited_perms[i] = UNVEIL_PERM_NONE;
@@ -51,15 +51,15 @@ unveil_node_soft_perms(struct unveil_node *node, enum unveil_role role)
 	node1 = node;
 	mask = UNVEIL_PERM_FULL_MASK;
 	do {
-		all_filled = true;
+		all_final = true;
 		for (i = 0; i < UNVEIL_SLOT_COUNT; i++) {
-			if (!(inherited_perms[i] & UNVEIL_PERM_FILLED))
+			if (!(inherited_perms[i] & UNVEIL_PERM_FINAL))
 				inherited_perms[i] |= node1->want_perms[role][i] & mask;
-			if (!(inherited_perms[i] & UNVEIL_PERM_FILLED))
-				all_filled = false;
+			if (!(inherited_perms[i] & UNVEIL_PERM_FINAL))
+				all_final = false;
 		}
 		mask = UNVEIL_PERM_INHERITABLE_MASK;
-	} while (!all_filled && (node1 = node1->cover));
+	} while (!all_final && (node1 = node1->cover));
 	/*
 	 * Merge wanted permissions and mask them with the hard permissions.
 	 */
@@ -92,7 +92,7 @@ unveil_node_flatten(struct unveil_node *node)
 	for (i = 0; i < UNVEIL_ROLE_COUNT; i++) {
 		unveil_node_harden(node, i, UNVEIL_PERM_NONE);
 		for (j = 0; j < UNVEIL_SLOT_COUNT; j++)
-			node->want_perms[i][j] = node->hard_perms[i] | UNVEIL_PERM_FILLED;
+			node->want_perms[i][j] = node->hard_perms[i] | UNVEIL_PERM_FINAL;
 	}
 }
 
@@ -256,7 +256,7 @@ unveil_save(struct unveil_base *base, struct unveil_namei_data *data,
 	if (last) {
 		unveil_perms_t perms = data->perms;
 		if (flags & UNVEIL_FLAG_NOINHERIT)
-			perms |= UNVEIL_PERM_FILLED;
+			perms |= UNVEIL_PERM_FINAL;
 		FOREACH_SLOT_FLAGS(flags, i, j)
 			node->want_perms[i][j] = perms;
 	} else if (flags & UNVEIL_FLAG_INSPECTABLE) {
@@ -273,7 +273,7 @@ do_unveil_limit(struct unveil_base *base, int flags, unveil_perms_t perms)
 {
 	struct unveil_node *node;
 	int i, j;
-	perms |= UNVEIL_PERM_FILLED;
+	perms |= UNVEIL_PERM_FINAL;
 	RB_FOREACH(node, unveil_node_tree, &base->root)
 		FOREACH_SLOT_FLAGS(flags, i, j)
 			node->want_perms[i][j] &= perms;
@@ -308,7 +308,7 @@ do_unveil(struct thread *td, int atfd, const char *path,
 	struct unveil_base *base = &fdp->fd_unveil;
 	bool activate = false;
 
-	perms &= ~(unveil_perms_t)UNVEIL_PERM_FILLED;
+	perms &= ~(unveil_perms_t)UNVEIL_PERM_FINAL;
 
 	if (!unveil_enabled)
 		return (EPERM);
