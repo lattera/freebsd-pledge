@@ -26,7 +26,9 @@ __FBSDID("$FreeBSD$");
 
 MALLOC_DEFINE(M_UNVEIL, "unveil", "unveil");
 
-/* TODO: global on/off switch for unveil support */
+static bool unveil_enabled = true;
+SYSCTL_BOOL(_kern, OID_AUTO, unveil_enabled, CTLFLAG_RW,
+	&unveil_enabled, 0, "Allow unveil usage");
 
 static unsigned int unveil_max_nodes_per_process = 100;
 SYSCTL_UINT(_kern, OID_AUTO, maxunveilsperproc, CTLFLAG_RW,
@@ -307,6 +309,9 @@ do_unveil(struct thread *td, int atfd, const char *path,
 	bool activate = false;
 
 	perms &= ~(unveil_perms_t)UNVEIL_PERM_FILLED;
+
+	if (!unveil_enabled)
+		return (EPERM);
 
 	if (path != NULL) {
 		struct unveil_namei_data data = { flags, perms };
