@@ -9,13 +9,6 @@
 #include <sysexits.h>
 #include <unistd.h>
 
-static void
-usage(void)
-{
-	fprintf(stderr, "usage: %s [-p promises] [-u unveil ...] cmd [arg ...]\n", getprogname());
-	exit(EX_USAGE);
-}
-
 /*
  * Creating a "blind" directory for the new TMPDIR.  Since secure usage of
  * TMPDIR generally requires using unpredictable filenames, this should help
@@ -24,6 +17,49 @@ usage(void)
  * This is (hopefully) better than nothing, but probably still risky.
  */
 static const mode_t tmpdir_mode = S_IWUSR|S_IXUSR;
+
+static const char *default_promises =
+    "error capsicum stdio "
+    "rpath wpath cpath dpath tmppath exec "
+    "flock fattr chown id "
+    "proc thread "
+    "tty "
+    "unix ";
+static const char *network_promises =
+    "ssl dns inet ";
+
+struct unveil_entry {
+	const char *path;
+	const char perms[8];
+};
+
+static const struct unveil_entry default_unveils[] = {
+	{ "/dev/fd", "rwc" }, /* not included by "stdio" */
+	{ "/lib", "rx" },
+	{ "/usr/lib", "rx" },
+	{ "/usr/local/lib", "rx" },
+	{ "/libexec", "rx" },
+	{ "/usr/libexec", "rx" },
+	{ "/bin", "rx" },
+	{ "/sbin", "rx" },
+	{ "/usr/bin", "rx" },
+	{ "/usr/sbin", "rx" },
+	{ "/usr/local/bin", "rx" },
+	{ "/usr/local/sbin", "rx" },
+	{ "/usr/share", "rx" },
+	{ "/usr/local/share", "rx" },
+};
+
+static const size_t default_unveils_count =
+    sizeof default_unveils / sizeof *default_unveils;
+
+
+static void
+usage(void)
+{
+	fprintf(stderr, "usage: %s [-p promises] [-u unveil ...] cmd [arg ...]\n", getprogname());
+	exit(EX_USAGE);
+}
 
 static void
 new_tmpdir()
@@ -57,40 +93,6 @@ new_tmpdir()
 		err(EX_OSERR, "setenv");
 }
 
-struct unveil_entry {
-	const char *path;
-	const char perms[8];
-};
-
-static const char *default_promises =
-    "error capsicum stdio "
-    "rpath wpath cpath dpath tmppath exec "
-    "flock fattr chown id "
-    "proc thread "
-    "tty "
-    "unix ";
-static const char *network_promises =
-    "ssl dns inet ";
-
-static const struct unveil_entry default_unveils[] = {
-	{ "/dev/fd", "rwc" }, /* not included by "stdio" */
-	{ "/lib", "rx" },
-	{ "/usr/lib", "rx" },
-	{ "/usr/local/lib", "rx" },
-	{ "/libexec", "rx" },
-	{ "/usr/libexec", "rx" },
-	{ "/bin", "rx" },
-	{ "/sbin", "rx" },
-	{ "/usr/bin", "rx" },
-	{ "/usr/sbin", "rx" },
-	{ "/usr/local/bin", "rx" },
-	{ "/usr/local/sbin", "rx" },
-	{ "/usr/share", "rx" },
-	{ "/usr/local/share", "rx" },
-};
-
-static const size_t default_unveils_count =
-    sizeof default_unveils / sizeof *default_unveils;
 
 int
 main(int argc, char *argv[])
