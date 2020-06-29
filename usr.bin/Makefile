@@ -172,6 +172,7 @@ SUBDIR=	alias \
 	unvis \
 	uudecode \
 	uuencode \
+	veilbox \
 	vis \
 	vmstat \
 	w \
