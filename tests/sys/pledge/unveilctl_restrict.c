@@ -8,8 +8,9 @@
 int
 main()
 {
-	int fl = UNVEIL_FLAG_FOR_CURR | UNVEIL_FLAG_FOR_SLOT0;
+	int fl = UNVEIL_FLAG_FOR_CURR | UNVEIL_FLAG_FOR_SLOT1;
 	int fd;
+	EXPECT(unveilctl(-1, NULL, UNVEIL_FLAG_FOR_ALL | UNVEIL_FLAG_SWEEP, -1));
 	EXPECT(unveilctl(AT_FDCWD, "/dev", fl, UNVEIL_PERM_RPATH | UNVEIL_PERM_WPATH));
 	EXPECT(unveilctl(-1, NULL, fl | UNVEIL_FLAG_HARDEN, 0));
 	REJECT(fd = open("/", O_RDONLY));

@@ -21,6 +21,6 @@ main()
 	EXPECT(close(fd));
 	REJECT(fd = open("/dev/zero", O_WRONLY));
 	REJECT(fd = open("/dev/zero", O_RDWR));
-	REJECT(open("/dev/random", O_RDONLY));
+	REJECT(open("/dev/mem", O_RDONLY));
 	return (0);
 }

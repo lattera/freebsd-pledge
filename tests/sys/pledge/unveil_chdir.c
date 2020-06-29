@@ -11,8 +11,8 @@ main()
 	EXPECT(unveil(NULL, NULL));
 	REJECT(chdir("/"));
 	REJECT(chdir("/."));
-	REJECT(chdir("/tmp"));
-	REJECT(chdir("/tmp/."));
+	REJECT(chdir("/var"));
+	REJECT(chdir("/var/."));
 	EXPECT(chdir("/etc"));
 	EXPECT(chdir("/etc/."));
 	EXPECT(chdir("/etc/defaults"));
@@ -21,6 +21,6 @@ main()
 	REJECT(chdir(".."));
 	EXPECT(chdir("/./etc/./defaults/.././defaults"));
 	REJECT(chdir("/etc/.."));
-	REJECT(chdir("/etc/../tmp"));
+	REJECT(chdir("/etc/../var"));
 	return (0);
 }
