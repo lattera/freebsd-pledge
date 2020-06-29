@@ -4,15 +4,15 @@ exec execpledge \
 	-u /lib \
 	-u /usr/lib \
 	-u /usr/local/lib \
-	-u /usr/share \
-	-u /usr/local/share \
-	-u /var/tmp:rwc \
-	-u /libexec:x \
+	-u /libexec \
+	-u /usr/libexec \
 	-u /bin \
 	-u /sbin \
 	-u /usr/bin \
 	-u /usr/sbin \
 	-u /usr/local/bin \
 	-u /usr/local/sbin \
-	-u /:i \
+	-u /usr/share \
+	-u /usr/local/share \
+	-u /var/tmp:rwc \
 	"$@"
