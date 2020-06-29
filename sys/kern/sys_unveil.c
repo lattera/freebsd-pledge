@@ -49,7 +49,7 @@ unveil_node_soft_perms(struct unveil_node *node, enum unveil_role role)
 	 * without any more inheritance required.
 	 */
 	node1 = node;
-	mask = UNVEIL_PERM_ALL;
+	mask = UNVEIL_PERM_FULL_MASK;
 	do {
 		all_filled = true;
 		for (i = 0; i < UNVEIL_SLOT_COUNT; i++) {
