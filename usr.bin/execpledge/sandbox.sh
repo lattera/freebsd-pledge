@@ -1,6 +1,6 @@
 #!/bin/sh
 exec execpledge \
-	-p error,capsicum,stdio,rpath,wpath,cpath,dpath,tmppath,flock,fattr,chown,id,proc,thread,exec,tty,inet,unix \
+	-p error,capsicum,stdio,rpath,wpath,cpath,dpath,tmppath,flock,fattr,chown,id,proc,thread,exec,tty,dns,inet,unix \
 	-u /lib \
 	-u /usr/lib \
 	-u /usr/local/lib \
@@ -14,5 +14,4 @@ exec execpledge \
 	-u /usr/local/sbin \
 	-u /usr/share \
 	-u /usr/local/share \
-	-u /var/tmp:rwc \
 	"$@"
