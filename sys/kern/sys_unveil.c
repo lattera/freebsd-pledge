@@ -85,17 +85,6 @@ unveil_node_exec_to_curr(struct unveil_node *node)
 		node->want_perms[UNVEIL_ROLE_CURR][i] = node->want_perms[UNVEIL_ROLE_EXEC][i];
 }
 
-static void
-unveil_node_flatten(struct unveil_node *node)
-{
-	int i, j;
-	for (i = 0; i < UNVEIL_ROLE_COUNT; i++) {
-		unveil_node_harden(node, i, UNVEIL_PERM_NONE);
-		for (j = 0; j < UNVEIL_SLOT_COUNT; j++)
-			node->want_perms[i][j] = node->hard_perms[i] | UNVEIL_PERM_FINAL;
-	}
-}
-
 
 static int
 unveil_node_cmp(struct unveil_node *a, struct unveil_node *b)
@@ -220,10 +209,8 @@ unveil_proc_exec_switch(struct thread *td)
 	struct filedesc *fdp = td->td_proc->p_fd;
 	struct unveil_base *base = &fdp->fd_unveil;
 	struct unveil_node *node, *node_tmp;
-	RB_FOREACH_SAFE(node, unveil_node_tree, &base->root, node_tmp) {
-		unveil_node_flatten(node);
+	RB_FOREACH_SAFE(node, unveil_node_tree, &base->root, node_tmp)
 		unveil_node_exec_to_curr(node);
-	}
 }
 
 
