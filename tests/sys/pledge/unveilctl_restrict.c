@@ -12,7 +12,7 @@ main()
 	int fd;
 	EXPECT(unveilctl(-1, NULL, UNVEIL_FLAG_FOR_ALL | UNVEIL_FLAG_SWEEP, -1));
 	EXPECT(unveilctl(AT_FDCWD, "/dev", fl, UNVEIL_PERM_RPATH | UNVEIL_PERM_WPATH));
-	EXPECT(unveilctl(-1, NULL, fl | UNVEIL_FLAG_HARDEN, 0));
+	EXPECT(unveilctl(-1, NULL, fl | UNVEIL_FLAG_ACTIVATE | UNVEIL_FLAG_HARDEN, 0));
 	REJECT(fd = open("/", O_RDONLY));
 	REJECT(fd = open("/etc", O_RDONLY));
 	EXPECT(fd = open("/dev", O_RDONLY)); EXPECT(close(fd));

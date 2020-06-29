@@ -311,6 +311,7 @@ do_pledge_unveils(const bool *req_promises, bool for_exec)
 	 * Permanently drop permissions that aren't explicitly requested.
 	 */
 	flags1 = flags | UNVEIL_FLAG_FOR_PLEDGE | UNVEIL_FLAG_FOR_CUSTOM;
+	flags1 |= UNVEIL_FLAG_ACTIVATE; /* also a good time to activate */
 	r = unveilctl(-1, NULL, flags1 | UNVEIL_FLAG_HARDEN, req_uperms);
 	if (r < 0)
 		err(EX_OSERR, "unveilctl harden");
@@ -436,6 +437,7 @@ do_unveil(const char *path, int flags, unveil_perms_t perms)
 		has_custom_unveils[true] = true;
 
 	flags1 = flags | UNVEIL_FLAG_FOR_CUSTOM;
+	flags1 |= UNVEIL_FLAG_ACTIVATE;
 
 	if (!path) {
 		/*

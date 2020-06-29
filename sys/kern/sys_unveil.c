@@ -101,7 +101,6 @@ unveil_init(struct unveil_base *base)
 {
 	*base = (struct unveil_base){
 		.root = RB_INITIALIZER(&base->root),
-		.active = false,
 	};
 }
 
@@ -110,6 +109,7 @@ unveil_merge(struct unveil_base *dst, struct unveil_base *src)
 {
 	struct unveil_node *dst_node, *src_node;
 	dst->active = src->active;
+	dst->exec_active = src->exec_active;
 	/* first pass, copy the nodes without cover links */
 	RB_FOREACH(src_node, unveil_node_tree, &src->root) {
 		dst_node = unveil_insert(dst, src_node->vp, NULL);
@@ -209,6 +209,7 @@ unveil_proc_exec_switch(struct thread *td)
 	struct filedesc *fdp = td->td_proc->p_fd;
 	struct unveil_base *base = &fdp->fd_unveil;
 	struct unveil_node *node, *node_tmp;
+	base->active = base->exec_active;
 	RB_FOREACH_SAFE(node, unveil_node_tree, &base->root, node_tmp)
 		unveil_node_exec_to_curr(node);
 }
@@ -293,7 +294,6 @@ do_unveil(struct thread *td, int atfd, const char *path,
 {
 	struct filedesc *fdp = td->td_proc->p_fd;
 	struct unveil_base *base = &fdp->fd_unveil;
-	bool activate = false;
 
 	perms &= ~(unveil_perms_t)UNVEIL_PERM_FINAL;
 
@@ -316,13 +316,16 @@ do_unveil(struct thread *td, int atfd, const char *path,
 		if (error)
 			return (error);
 		NDFREE(&nd, 0);
-		activate = true;
 	}
 
 	FILEDESC_XLOCK(fdp);
-	if (activate)
-		base->active = true;
 
+	if (flags & UNVEIL_FLAG_ACTIVATE) {
+		if (flags & UNVEIL_FLAG_FOR_CURR)
+			base->active = true;
+		if (flags & UNVEIL_FLAG_FOR_EXEC)
+			base->exec_active = true;
+	}
 	if (flags & UNVEIL_FLAG_LIMIT)
 		do_unveil_limit(base, flags, perms);
 	if (flags & UNVEIL_FLAG_HARDEN)

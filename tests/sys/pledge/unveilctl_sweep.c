@@ -14,7 +14,7 @@ main()
 	EXPECT(unveilctl(AT_FDCWD, "/etc", fl, UNVEIL_PERM_RPATH));
 	EXPECT(unveilctl(AT_FDCWD, "/etc/rc.conf", fl, UNVEIL_PERM_RPATH));
 	EXPECT(unveilctl(AT_FDCWD, "/etc/defaults", fl, UNVEIL_PERM_RPATH));
-	EXPECT(unveilctl(-1, NULL, UNVEIL_FLAG_FOR_ALL | UNVEIL_FLAG_SWEEP, -1));
+	EXPECT(unveilctl(-1, NULL, UNVEIL_FLAG_FOR_ALL | UNVEIL_FLAG_SWEEP | UNVEIL_FLAG_ACTIVATE, -1));
 	REJECT(fd = open("/", O_RDONLY));
 	REJECT(fd = open("/COPYRIGHT", O_RDONLY));
 	REJECT(fd = open("/etc", O_RDONLY));
