@@ -224,8 +224,8 @@ do_pledge_unveils(const bool *req_promises, bool for_exec)
 	 * If no unveiling has been done yet, do a "sweep" to get rid of any
 	 * inherited unveils.  After a sweep, all unveils become "inactive" and
 	 * generally behave as if they were not there, but they still keep
-	 * track of their "hard" permissions.  This allows to re-add them with
-	 * those permissions if needed.
+	 * track of their "frozen" permissions.  This allows to re-add them
+	 * with those permissions if needed.
 	 */
 	if (!has_pledge_unveils[for_exec]) {
 		r = unveilctl(-1, NULL, flags1 | UNVEIL_FLAG_SWEEP, -1);
@@ -311,9 +311,9 @@ do_pledge_unveils(const bool *req_promises, bool for_exec)
 	 */
 	flags1 = flags | UNVEIL_FLAG_FOR_PLEDGE | UNVEIL_FLAG_FOR_CUSTOM;
 	flags1 |= UNVEIL_FLAG_ACTIVATE; /* also a good time to activate */
-	r = unveilctl(-1, NULL, flags1 | UNVEIL_FLAG_HARDEN, req_uperms);
+	r = unveilctl(-1, NULL, flags1 | UNVEIL_FLAG_FREEZE, req_uperms);
 	if (r < 0)
-		err(EX_OSERR, "unveilctl harden");
+		err(EX_OSERR, "unveilctl freeze");
 
 	has_pledge_unveils[for_exec] = true;
 	return (sysfil);
@@ -413,7 +413,7 @@ do_unveil(const char *path, int flags, unveil_perms_t perms)
 		 * After the first call to unveil(), filesystem access must be
 		 * restricted to what has been explicitly unveiled (modifying
 		 * or adding unveils with higher permissions is still permitted
-		 * within the constraints of the unveils' hard permissions).
+		 * within the constraints of the unveils' frozen permissions).
 		 * The pledge() wrapper may have unveiled "/" for certain
 		 * promises.  This must be undone.
 		 */
@@ -443,9 +443,9 @@ do_unveil(const char *path, int flags, unveil_perms_t perms)
 		 * XXX If unveil(NULL, NULL) is done before pledge(), pledge()
 		 * won't be able to add its unveils.
 		 */
-		r = unveilctl(-1, NULL, flags1 | UNVEIL_FLAG_HARDEN, 0);
+		r = unveilctl(-1, NULL, flags1 | UNVEIL_FLAG_FREEZE, 0);
 		if (r < 0)
-			err(EX_OSERR, "unveilctl harden");
+			err(EX_OSERR, "unveilctl freeze");
 		return (0);
 	}
 

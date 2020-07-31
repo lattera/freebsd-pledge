@@ -25,7 +25,7 @@ enum {
 
 enum {
 	UNVEIL_FLAG_SWEEP = 1 << 0,
-	UNVEIL_FLAG_HARDEN = 1 << 1,
+	UNVEIL_FLAG_FREEZE = 1 << 1,
 	UNVEIL_FLAG_LIMIT = 1 << 2,
 	UNVEIL_FLAG_ACTIVATE = 1 << 3,
 	UNVEIL_FLAG_NOFOLLOW = 1 << 8,
@@ -70,8 +70,8 @@ struct unveil_node {
 	struct unveil_node *cover;
 	RB_ENTRY(unveil_node) entry;
 	struct vnode *vp;
-	unveil_perms_t hard_perms[UNVEIL_ROLE_COUNT];
-	unveil_perms_t want_perms[UNVEIL_ROLE_COUNT][UNVEIL_SLOT_COUNT];
+	unveil_perms_t frozen_perms[UNVEIL_ROLE_COUNT];
+	unveil_perms_t wanted_perms[UNVEIL_ROLE_COUNT][UNVEIL_SLOT_COUNT];
 };
 
 unveil_perms_t unveil_node_soft_perms(struct unveil_node *, enum unveil_role);
