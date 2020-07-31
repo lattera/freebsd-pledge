@@ -41,6 +41,7 @@ static const struct unveil_entry default_unveils[] = {
 	{ "/usr/local/lib", "rx" },
 	{ "/libexec", "rx" },
 	{ "/usr/libexec", "rx" },
+	{ "/usr/local/libexec", "rx" },
 	{ "/bin", "rx" },
 	{ "/sbin", "rx" },
 	{ "/usr/bin", "rx" },
