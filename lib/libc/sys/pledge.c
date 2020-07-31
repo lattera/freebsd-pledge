@@ -43,11 +43,10 @@ enum promise_type {
 	PROMISE_COUNT /* must be last */
 };
 
-
 static const struct promise_name {
 	const char name[12];
 	enum promise_type type;
-} promise_names[] = {
+} names_table[] = {
 	{ "error",	PROMISE_ERROR },
 	{ "capsicum",	PROMISE_CAPSICUM },
 	{ "basic",	PROMISE_BASIC },
@@ -75,51 +74,59 @@ static const struct promise_name {
 	{ "",		PROMISE_NONE },
 };
 
-static const struct promise_restriction {
+static const struct promise_sysfil {
 	enum promise_type type : 8;
-	unveil_perms_t uperms;
 	sysfil_t sysfil;
-} promise_restrictions[] = {
-	{ PROMISE_ERROR,	0,			SYF_PLEDGE_ERROR },
-	{ PROMISE_CAPSICUM,	0,			SYF_CAPENABLED },
-	{ PROMISE_BASIC,	0,			SYF_PLEDGE_STDIO },
-	{ PROMISE_STDIO,	0,			SYF_PLEDGE_STDIO },
-	{ PROMISE_UNVEIL,	0,			SYF_PLEDGE_UNVEIL },
-	{ PROMISE_RPATH,	UNVEIL_PERM_RPATH,	SYF_PLEDGE_RPATH },
-	{ PROMISE_WPATH,	UNVEIL_PERM_WPATH,	SYF_PLEDGE_WPATH },
-	{ PROMISE_CPATH,	UNVEIL_PERM_CPATH,	SYF_PLEDGE_CPATH },
-	{ PROMISE_DPATH,	0,			SYF_PLEDGE_DPATH },
-	{ PROMISE_FLOCK,	0,			SYF_PLEDGE_FLOCK },
-	{ PROMISE_FATTR,	0,			SYF_PLEDGE_FATTR },
-	{ PROMISE_CHOWN,	0,			SYF_PLEDGE_CHOWN },
-	{ PROMISE_ID,		0,			SYF_PLEDGE_ID },
-	{ PROMISE_PROC,		0,			SYF_PLEDGE_PROC },
-	{ PROMISE_THREAD,	0,			SYF_PLEDGE_THREAD },
-	{ PROMISE_EXEC,		UNVEIL_PERM_XPATH,	SYF_PLEDGE_EXEC },
-	{ PROMISE_TTY,		0,			SYF_PLEDGE_TTY },
-	{ PROMISE_SETTIME,	0,			SYF_PLEDGE_SETTIME },
-	{ PROMISE_INET,		0,			SYF_PLEDGE_INET },
-	{ PROMISE_UNIX,		0,			SYF_PLEDGE_UNIX },
-	{ PROMISE_DNS,		0,			SYF_PLEDGE_DNS },
+} sysfils_table[] = {
+	{ PROMISE_ERROR,	SYF_PLEDGE_ERROR },
+	{ PROMISE_CAPSICUM,	SYF_CAPENABLED },
+	{ PROMISE_BASIC,	SYF_PLEDGE_STDIO },
+	{ PROMISE_STDIO,	SYF_PLEDGE_STDIO },
+	{ PROMISE_UNVEIL,	SYF_PLEDGE_UNVEIL },
+	{ PROMISE_RPATH,	SYF_PLEDGE_RPATH },
+	{ PROMISE_WPATH,	SYF_PLEDGE_WPATH },
+	{ PROMISE_CPATH,	SYF_PLEDGE_CPATH },
+	{ PROMISE_DPATH,	SYF_PLEDGE_DPATH },
+	{ PROMISE_FLOCK,	SYF_PLEDGE_FLOCK },
+	{ PROMISE_FATTR,	SYF_PLEDGE_FATTR },
+	{ PROMISE_CHOWN,	SYF_PLEDGE_CHOWN },
+	{ PROMISE_ID,		SYF_PLEDGE_ID },
+	{ PROMISE_PROC,		SYF_PLEDGE_PROC },
+	{ PROMISE_THREAD,	SYF_PLEDGE_THREAD },
+	{ PROMISE_EXEC,		SYF_PLEDGE_EXEC },
+	{ PROMISE_TTY,		SYF_PLEDGE_TTY },
+	{ PROMISE_SETTIME,	SYF_PLEDGE_SETTIME },
+	{ PROMISE_INET,		SYF_PLEDGE_INET },
+	{ PROMISE_UNIX,		SYF_PLEDGE_UNIX },
+	{ PROMISE_DNS,		SYF_PLEDGE_DNS },
+};
+
+static const struct promise_uperms {
+	enum promise_type type;
+	unveil_perms_t uperms;
+} uperms_table[] = {
+	{ PROMISE_RPATH,	UNVEIL_PERM_RPATH },
+	{ PROMISE_WPATH,	UNVEIL_PERM_WPATH },
+	{ PROMISE_CPATH,	UNVEIL_PERM_CPATH },
+	{ PROMISE_EXEC,		UNVEIL_PERM_XPATH },
 };
 
 static const char *const root_path = "/";
 static const char *const tmp_path = _PATH_TMP;
 
-static bool promise_unveils_sorted = false;
+static bool unveils_table_sorted = false;
 
-struct promise_unveil {
+static struct promise_unveil {
 	const char *path;
 	unveil_perms_t perms;
 	enum promise_type type;
-};
+} unveils_table[] = {
 
 #define	R UNVEIL_PERM_RPATH
 #define	W UNVEIL_PERM_WPATH
 #define	C UNVEIL_PERM_CPATH
 #define	X UNVEIL_PERM_XPATH
 
-static struct promise_unveil promise_unveils[] = {
 	{ root_path, R,				PROMISE_RPATH },
 	{ root_path, W,				PROMISE_WPATH },
 	{ root_path, C,				PROMISE_CPATH },
@@ -155,12 +162,12 @@ static struct promise_unveil promise_unveils[] = {
 	 * of other processes). */
 	{ tmp_path, R|W|C,			PROMISE_TMPPATH },
 	{ "", 0,				PROMISE_NONE }
-};
 
 #undef	X
 #undef	C
 #undef	W
 #undef	R
+};
 
 
 enum {
@@ -185,7 +192,7 @@ parse_promises(bool *promises, const char *promises_str)
 	while ((cur = strsep(&str, " ")))
 		if (*cur) {
 			const struct promise_name *pn;
-			for (pn = promise_names; *pn->name; pn++)
+			for (pn = names_table; *pn->name; pn++)
 				if (0 == strcmp(pn->name, cur))
 					break;
 			if (pn->type == PROMISE_NONE) {
@@ -201,12 +208,14 @@ parse_promises(bool *promises, const char *promises_str)
 static sysfil_t
 do_pledge_unveils(const bool *req_promises, bool for_exec)
 {
+	const struct promise_sysfil *ps;
 	const struct promise_unveil *pu;
-	const struct promise_restriction *pr;
+	const struct promise_uperms *pp;
 	const char *path;
-	sysfil_t sysfil, req_sysfil;
+	sysfil_t sysfil;
 	unveil_perms_t need_uperms, req_uperms;
 	int flags, flags1, r;
+	bool need_promises[PROMISE_COUNT];
 
 	flags = for_exec ? UNVEIL_FLAG_FOR_EXEC : UNVEIL_FLAG_FOR_CURR;
 	flags1 = flags | UNVEIL_FLAG_FOR_PLEDGE;
@@ -224,22 +233,12 @@ do_pledge_unveils(const bool *req_promises, bool for_exec)
 			err(EX_OSERR, "unveilctl sweep");
 	}
 
-	/* Map promises to sysfils and uperms. */
-	req_sysfil = SYF_PLEDGE_ALWAYS | SYF_PLEDGE_UNVEIL;
-	req_uperms = 0;
-	for (pr = promise_restrictions;
-	    pr != &promise_restrictions[nitems(promise_restrictions)];
-	    pr++)
-		if (req_promises[pr->type]) {
-			req_sysfil |= pr->sysfil;
-			req_uperms |= pr->uperms;
-		}
-
-	/* Do unveils for the unveils added or removed. */
+	/*
+	 * Do unveils for the promises added or removed.
+	 */
 	flags1 |= UNVEIL_FLAG_INTERMEDIATE | UNVEIL_FLAG_INSPECTABLE;
 	need_uperms = 0;
-	pu = promise_unveils;
-	while (*(path = pu->path)) {
+	for (pu = unveils_table; (*(path = pu->path)); ) {
 		unveil_perms_t uperms = 0;
 		bool modified = false;
 		do {
@@ -274,15 +273,24 @@ do_pledge_unveils(const bool *req_promises, bool for_exec)
 	}
 
 	/*
-	 * Figure out what additional sysfils might be needed to make the
-	 * promises work.
+	 * Figure out which uperms equivalents were explicitly requested with
+	 * promises and which additional promises might need to be implicitly
+	 * enabled for the implcit uperms needed for their unveils to work.
 	 */
-	sysfil = req_sysfil;
-	for (pr = promise_restrictions;
-	    pr != &promise_restrictions[nitems(promise_restrictions)];
-	    pr++)
-		if (pr->uperms & need_uperms)
-			sysfil |= pr->sysfil;
+	memcpy(need_promises, req_promises, PROMISE_COUNT * sizeof *need_promises);
+	req_uperms = 0;
+	for (pp = uperms_table; pp != &uperms_table[nitems(uperms_table)]; pp++) {
+		if (req_promises[pp->type])
+			req_uperms |= pp->uperms;
+		if (pp->uperms & need_uperms)
+			need_promises[pp->type] = true;
+	}
+
+	/* Map promises to sysfils. */
+	sysfil = SYF_PLEDGE_ALWAYS | SYF_PLEDGE_UNVEIL;
+	for (ps = sysfils_table; ps != &sysfils_table[nitems(sysfils_table)]; ps++)
+		if (need_promises[ps->type])
+			sysfil |= ps->sysfil;
 
 	/*
 	 * Alter user's explicit unveils to compensate for sysfils implicitly
@@ -336,12 +344,12 @@ pledge(const char *promises_str, const char *execpromises_str)
 	bool errors;
 	int r;
 	/* TODO: global lock */
-	if (!promise_unveils_sorted) {
-		qsort(promise_unveils,
-		    (sizeof (promise_unveils) / sizeof (*promise_unveils)) - 1,
-		    sizeof (*promise_unveils),
+	if (!unveils_table_sorted) {
+		qsort(unveils_table,
+		    (sizeof (unveils_table) / sizeof (*unveils_table)) - 1,
+		    sizeof (*unveils_table),
 		    promise_unveil_cmp);
-		promise_unveils_sorted = true;
+		unveils_table_sorted = true;
 	}
 
 	if (promises_str) {
