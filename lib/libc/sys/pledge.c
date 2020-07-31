@@ -44,12 +44,10 @@ enum promise_type {
 };
 
 
-struct promise_name {
+static const struct promise_name {
 	const char name[12];
 	enum promise_type type;
-};
-
-static const struct promise_name promise_names[] = {
+} promise_names[] = {
 	{ "error",	PROMISE_ERROR },
 	{ "capsicum",	PROMISE_CAPSICUM },
 	{ "basic",	PROMISE_BASIC },
@@ -77,33 +75,32 @@ static const struct promise_name promise_names[] = {
 	{ "",		PROMISE_NONE },
 };
 
-static const sysfil_t promise_sysfils[PROMISE_COUNT] = {
-	/*
-	 * Note that SYF_PLEDGE_UNVEIL and SYF_PLEDGE_?PATH/SYF_PLEDGE_EXEC are
-	 * automatially added if required by the promise's unveils (and removed
-	 * once they no longer are).
-	 */
-	[PROMISE_ERROR] = SYF_PLEDGE_ERROR,
-	[PROMISE_CAPSICUM] = SYF_CAPENABLED,
-	[PROMISE_BASIC] = SYF_PLEDGE_STDIO,
-	[PROMISE_STDIO] = SYF_PLEDGE_STDIO,
-	[PROMISE_UNVEIL] = SYF_PLEDGE_UNVEIL,
-	[PROMISE_RPATH] = SYF_PLEDGE_RPATH,
-	[PROMISE_WPATH] = SYF_PLEDGE_WPATH,
-	[PROMISE_CPATH] = SYF_PLEDGE_CPATH,
-	[PROMISE_DPATH] = SYF_PLEDGE_DPATH,
-	[PROMISE_FLOCK] = SYF_PLEDGE_FLOCK,
-	[PROMISE_FATTR] = SYF_PLEDGE_FATTR,
-	[PROMISE_CHOWN] = SYF_PLEDGE_CHOWN,
-	[PROMISE_ID] = SYF_PLEDGE_ID,
-	[PROMISE_PROC] = SYF_PLEDGE_PROC,
-	[PROMISE_THREAD] = SYF_PLEDGE_THREAD,
-	[PROMISE_EXEC] = SYF_PLEDGE_EXEC,
-	[PROMISE_TTY] = SYF_PLEDGE_TTY,
-	[PROMISE_SETTIME] = SYF_PLEDGE_SETTIME,
-	[PROMISE_INET] = SYF_PLEDGE_INET,
-	[PROMISE_UNIX] = SYF_PLEDGE_UNIX,
-	[PROMISE_DNS] = SYF_PLEDGE_DNS,
+static const struct promise_restriction {
+	enum promise_type type : 8;
+	unveil_perms_t uperms;
+	sysfil_t sysfil;
+} promise_restrictions[] = {
+	{ PROMISE_ERROR,	0,			SYF_PLEDGE_ERROR },
+	{ PROMISE_CAPSICUM,	0,			SYF_CAPENABLED },
+	{ PROMISE_BASIC,	0,			SYF_PLEDGE_STDIO },
+	{ PROMISE_STDIO,	0,			SYF_PLEDGE_STDIO },
+	{ PROMISE_UNVEIL,	0,			SYF_PLEDGE_UNVEIL },
+	{ PROMISE_RPATH,	UNVEIL_PERM_RPATH,	SYF_PLEDGE_RPATH },
+	{ PROMISE_WPATH,	UNVEIL_PERM_WPATH,	SYF_PLEDGE_WPATH },
+	{ PROMISE_CPATH,	UNVEIL_PERM_CPATH,	SYF_PLEDGE_CPATH },
+	{ PROMISE_DPATH,	0,			SYF_PLEDGE_DPATH },
+	{ PROMISE_FLOCK,	0,			SYF_PLEDGE_FLOCK },
+	{ PROMISE_FATTR,	0,			SYF_PLEDGE_FATTR },
+	{ PROMISE_CHOWN,	0,			SYF_PLEDGE_CHOWN },
+	{ PROMISE_ID,		0,			SYF_PLEDGE_ID },
+	{ PROMISE_PROC,		0,			SYF_PLEDGE_PROC },
+	{ PROMISE_THREAD,	0,			SYF_PLEDGE_THREAD },
+	{ PROMISE_EXEC,		UNVEIL_PERM_XPATH,	SYF_PLEDGE_EXEC },
+	{ PROMISE_TTY,		0,			SYF_PLEDGE_TTY },
+	{ PROMISE_SETTIME,	0,			SYF_PLEDGE_SETTIME },
+	{ PROMISE_INET,		0,			SYF_PLEDGE_INET },
+	{ PROMISE_UNIX,		0,			SYF_PLEDGE_UNIX },
+	{ PROMISE_DNS,		0,			SYF_PLEDGE_DNS },
 };
 
 static const char *const root_path = "/";
@@ -177,25 +174,6 @@ static bool has_pledge_unveils[2], has_custom_unveils[2];
 static bool cur_promises[2][PROMISE_COUNT];
 
 
-static sysfil_t
-uperms2sysfil(unveil_perms_t up)
-{
-	return (((up & UNVEIL_PERM_RPATH) ? SYF_PLEDGE_RPATH : 0) |
-		((up & UNVEIL_PERM_WPATH) ? SYF_PLEDGE_WPATH : 0) |
-		((up & UNVEIL_PERM_CPATH) ? SYF_PLEDGE_CPATH : 0) |
-		((up & UNVEIL_PERM_XPATH) ? SYF_PLEDGE_EXEC  : 0));
-}
-
-static unveil_perms_t
-sysfil2uperms(sysfil_t sf)
-{
-	return (((sf & SYF_PLEDGE_RPATH) ? UNVEIL_PERM_RPATH : 0) |
-		((sf & SYF_PLEDGE_WPATH) ? UNVEIL_PERM_WPATH : 0) |
-		((sf & SYF_PLEDGE_CPATH) ? UNVEIL_PERM_CPATH : 0) |
-		((sf & SYF_PLEDGE_EXEC)  ? UNVEIL_PERM_XPATH : 0));
-}
-
-
 static int
 parse_promises(bool *promises, const char *promises_str)
 {
@@ -224,10 +202,11 @@ static sysfil_t
 do_pledge_unveils(const bool *req_promises, bool for_exec)
 {
 	const struct promise_unveil *pu;
+	const struct promise_restriction *pr;
 	const char *path;
 	sysfil_t sysfil, req_sysfil;
 	unveil_perms_t need_uperms, req_uperms;
-	int flags, flags1, r, i;
+	int flags, flags1, r;
 
 	flags = for_exec ? UNVEIL_FLAG_FOR_EXEC : UNVEIL_FLAG_FOR_CURR;
 	flags1 = flags | UNVEIL_FLAG_FOR_PLEDGE;
@@ -245,11 +224,16 @@ do_pledge_unveils(const bool *req_promises, bool for_exec)
 			err(EX_OSERR, "unveilctl sweep");
 	}
 
-	/* Map promises to sysfils. */
+	/* Map promises to sysfils and uperms. */
 	req_sysfil = SYF_PLEDGE_ALWAYS | SYF_PLEDGE_UNVEIL;
-	for (i = 0; i < PROMISE_COUNT; i++)
-		if (req_promises[i])
-			req_sysfil |= promise_sysfils[i];
+	req_uperms = 0;
+	for (pr = promise_restrictions;
+	    pr != &promise_restrictions[nitems(promise_restrictions)];
+	    pr++)
+		if (req_promises[pr->type]) {
+			req_sysfil |= pr->sysfil;
+			req_uperms |= pr->uperms;
+		}
 
 	/* Do unveils for the unveils added or removed. */
 	flags1 |= UNVEIL_FLAG_INTERMEDIATE | UNVEIL_FLAG_INSPECTABLE;
@@ -293,8 +277,12 @@ do_pledge_unveils(const bool *req_promises, bool for_exec)
 	 * Figure out what additional sysfils might be needed to make the
 	 * promises work.
 	 */
-	req_uperms = sysfil2uperms(req_sysfil);
-	sysfil = req_sysfil | uperms2sysfil(need_uperms);
+	sysfil = req_sysfil;
+	for (pr = promise_restrictions;
+	    pr != &promise_restrictions[nitems(promise_restrictions)];
+	    pr++)
+		if (pr->uperms & need_uperms)
+			sysfil |= pr->sysfil;
 
 	/*
 	 * Alter user's explicit unveils to compensate for sysfils implicitly
@@ -304,7 +292,7 @@ do_pledge_unveils(const bool *req_promises, bool for_exec)
 	 * restrictions to the user's unveils to get a similar effect.
 	 */
 	flags1 = flags | UNVEIL_FLAG_FOR_CUSTOM;
-	if (sysfil != req_sysfil) {
+	if (need_uperms != req_uperms) {
 		r = unveilctl(-1, NULL, flags1 | UNVEIL_FLAG_LIMIT, req_uperms);
 		if (r < 0)
 			err(EX_OSERR, "unveilctl limit");
