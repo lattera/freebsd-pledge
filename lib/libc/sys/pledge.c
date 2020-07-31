@@ -237,9 +237,9 @@ do_pledge_unveils(const bool *req_promises, bool for_exec)
 	 * Do unveils for the promises added or removed.
 	 */
 	flags1 |= UNVEIL_FLAG_INTERMEDIATE | UNVEIL_FLAG_INSPECTABLE;
-	need_uperms = 0;
+	need_uperms = UNVEIL_PERM_NONE;
 	for (pu = unveils_table; (*(path = pu->path)); ) {
-		unveil_perms_t uperms = 0;
+		unveil_perms_t uperms = UNVEIL_PERM_NONE;
 		bool modified = false;
 		do {
 			if (cur_promises[for_exec][pu->type] != req_promises[pu->type])
@@ -278,7 +278,7 @@ do_pledge_unveils(const bool *req_promises, bool for_exec)
 	 * enabled for the implcit uperms needed for their unveils to work.
 	 */
 	memcpy(need_promises, req_promises, PROMISE_COUNT * sizeof *need_promises);
-	req_uperms = 0;
+	req_uperms = UNVEIL_PERM_NONE;
 	for (pp = uperms_table; pp != &uperms_table[nitems(uperms_table)]; pp++) {
 		if (req_promises[pp->type])
 			req_uperms |= pp->uperms;
@@ -381,7 +381,7 @@ pledge(const char *promises_str, const char *execpromises_str)
 static int
 unveil_parse_perms(unveil_perms_t *perms, const char *s)
 {
-	*perms = 0;
+	*perms = UNVEIL_PERM_NONE;
 	while (*s)
 		switch (*s++) {
 		case 'r': *perms |= UNVEIL_PERM_RPATH; break;
@@ -418,7 +418,7 @@ do_unveil(const char *path, int flags, unveil_perms_t perms)
 		 * promises.  This must be undone.
 		 */
 		flags1 |= UNVEIL_FLAG_FOR_PLEDGE;
-		r = unveilctl(AT_FDCWD, root_path, flags1, 0);
+		r = unveilctl(AT_FDCWD, root_path, flags1, UNVEIL_PERM_NONE);
 		if (r < 0) /* XXX */
 			warn("unveil: %s", root_path);
 	}
@@ -443,7 +443,7 @@ do_unveil(const char *path, int flags, unveil_perms_t perms)
 		 * XXX If unveil(NULL, NULL) is done before pledge(), pledge()
 		 * won't be able to add its unveils.
 		 */
-		r = unveilctl(-1, NULL, flags1 | UNVEIL_FLAG_FREEZE, 0);
+		r = unveilctl(-1, NULL, flags1 | UNVEIL_FLAG_FREEZE, UNVEIL_PERM_NONE);
 		if (r < 0)
 			err(EX_OSERR, "unveilctl freeze");
 		return (0);
