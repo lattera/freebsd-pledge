@@ -338,6 +338,7 @@ struct siginfo32 {
 #define TRAP_TRACE	2	/* Process trace trap.			*/
 #define	TRAP_DTRACE	3	/* DTrace induced trap.			*/
 #define	TRAP_CAP	4	/* Capabilities protective trap.	*/
+#define	TRAP_SYSFIL	5	/* Sysfil violation trap.		*/
 
 /* codes for SIGCHLD */
 #define CLD_EXITED	1	/* Child has exited			*/

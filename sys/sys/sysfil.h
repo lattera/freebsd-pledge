@@ -58,7 +58,7 @@
 #define	SYSFIL_INET		35
 #define	SYSFIL_INET_RAW		36
 #define	SYSFIL_UNIX		37
-#define	SYSFIL_SIGABRT		38
+#define	SYSFIL_UNUSED1		38
 #define	SYSFIL_SIGTRAP		39
 #define	SYSFIL_CHMOD_SPECIAL	40
 #define	SYSFIL_SYSFLAGS		41
@@ -114,7 +114,7 @@ sysfil_check(const struct thread *td, int sf)
 	return (sysfil_check_cred(td->td_ucred, sf));
 }
 
-void sysfil_violation(struct thread *, int sf);
+void sysfil_violation(struct thread *, int sf, int error);
 void sysfil_require_debug(struct thread *);
 
 /*
@@ -131,14 +131,14 @@ sysfil_require(struct thread *td, int sf)
 #endif
 	error = sysfil_check(td, sf);
 	if (__predict_false(error))
-		sysfil_violation(td, sf);
+		sysfil_violation(td, sf, error);
 	return (error);
 }
 
 static inline int
 sysfil_failed(struct thread *td, int sf)
 {
-	sysfil_violation(td, sf);
+	sysfil_violation(td, sf, SYSFIL_FAILED_ERRNO);
 	return (SYSFIL_FAILED_ERRNO);
 }
 

@@ -705,7 +705,6 @@ kern_sigaction(struct thread *td, int sig, const struct sigaction *act,
 	/* NOTE: sysfil_require() must not be called under PROC_LOCK() */
 	if (act && act->sa_handler != SIG_DFL &&
 	    (sig == SIGKILL || sig == SIGSTOP ||
-	    (sig == SIGABRT && sysfil_require(td, SYSFIL_SIGABRT) != 0) ||
 	    (sig == SIGTRAP && sysfil_require(td, SYSFIL_SIGTRAP) != 0)))
 		return (EINVAL);
 

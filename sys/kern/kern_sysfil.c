@@ -216,7 +216,7 @@ sysfil_log_violation(struct thread *td, int sf)
 }
 
 void
-sysfil_violation(struct thread *td, int sf)
+sysfil_violation(struct thread *td, int sf, int error)
 {
 #ifdef SYSFIL
 	if (sysfil_violation_log_level >= 2)
@@ -231,7 +231,9 @@ sysfil_violation(struct thread *td, int sf)
 		 * handle SIGABRT in the first place.
 		 */
 		ksiginfo_init_trap(&ksi);
-		ksi.ksi_signo = SIGABRT;
+		ksi.ksi_signo = SIGTRAP;
+		ksi.ksi_errno = error;
+		ksi.ksi_code = TRAP_SYSFIL;
 		trapsignal(td, &ksi);
 	}
 #endif
