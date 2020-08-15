@@ -44,7 +44,7 @@
 
 struct loginclass;
 
-#define	XU_NGROUPS	14
+#define	XU_NGROUPS	16
 
 /*
  * Credentials.
@@ -77,8 +77,13 @@ struct ucred {
 	struct uidinfo	*cr_ruidinfo;	/* per ruid resource consumption */
 	struct prison	*cr_prison;	/* jail(2) */
 	struct loginclass	*cr_loginclass; /* login class */
+	u_int		cr_flags;	/* credential flags */
+#ifdef SYSFIL
 	sysfilset_t	cr_sysfilset;	/* syscall filter flags */
-	sysfilset_t	cr_sysfilset_exec;	/* on-exec syscall filter flags */
+	sysfilset_t	cr_sysfilset_exec; /* on-exec syscall filter flags */
+#else
+	void		*cr_pspare2[2];	/* general use 2 */
+#endif
 	struct label	*cr_label;	/* MAC label */
 #define	cr_endcopy	cr_label
 	struct auditinfo_addr	cr_audit;	/* Audit properties. */
@@ -90,14 +95,24 @@ struct ucred {
 #define	NOCRED	((struct ucred *)0)	/* no credential available */
 #define	FSCRED	((struct ucred *)-1)	/* filesystem credential */
 
+#define	CRED_IN_CAPABILITY_MODE(cr) (((cr)->cr_flags & CRED_FLAG_CAPMODE) != 0)
+
+#ifdef SYSFIL
 #define	CRED_IN_SANDBOX_MODE(cr) \
 	SYSFILSET_IS_RESTRICTED(&(cr)->cr_sysfilset)
 #define	CRED_IN_SANDBOX_EXEC_MODE(cr) \
 	SYSFILSET_IS_RESTRICTED(&(cr)->cr_sysfilset_exec)
-#define	CRED_IN_CAPABILITY_MODE(cr) \
-	SYSFILSET_IS_CAPSICUM(&(cr)->cr_sysfilset)
+#else
+#define	CRED_IN_SANDBOX_MODE(cr)	CRED_IN_CAPABILITY_MODE(cr)
+#define	CRED_IN_SANDBOX_EXEC_MODE(cr)	CRED_IN_CAPABILITY_MODE(cr)
+#endif
 
 #endif /* _KERNEL || _WANT_UCRED */
+
+/*
+ * Flags for cr_flags.
+ */
+#define	CRED_FLAG_CAPMODE	0x00000001	/* In capability mode. */
 
 /*
  * This is the external representation of struct ucred.

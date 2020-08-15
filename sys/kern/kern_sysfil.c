@@ -248,11 +248,6 @@ sysfilset_fill(sysfilset_t *sysfilset, int sf)
 	 */
 	if (!SYSFIL_VALID(sf))
 		return;
-	if (sf == SYSFIL_CAPSICUM) {
-		const sysfilset_t capsicum = SYSFILSET_LITERAL_CAPSICUM;
-		SYSFILSET_MERGE(sysfilset, &capsicum);
-		return;
-	}
 	switch (sf) {
 	case SYSFIL_RPATH:
 	case SYSFIL_WPATH:

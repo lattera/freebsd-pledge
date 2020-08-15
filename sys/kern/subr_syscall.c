@@ -46,9 +46,9 @@
 __FBSDID("$FreeBSD$");
 
 #include <sys/capsicum.h>
+#include <sys/sysfil.h>
 #include <sys/ktr.h>
 #include <sys/vmmeter.h>
-#include <sys/sysfil.h>
 #ifdef KTRACE
 #include <sys/uio.h>
 #include <sys/ktrace.h>
@@ -115,12 +115,24 @@ syscallenter(struct thread *td)
 
 #ifdef CAPABILITY_MODE
 	/*
-	 * Check if syscall is denied by Capsicum or pledge restrictions.
+	 * In capability mode, we only allow access to system calls
+	 * flagged with SYF_CAPENABLED.
 	 */
-	if (__predict_false(!SYSFILSET_MATCH(&td->td_ucred->cr_sysfilset,
-	    sa->callp->sy_flags & SYSFIL_MASK))) {
+	if (__predict_false(IN_CAPABILITY_MODE(td) &&
+	    !(sa->callp->sy_flags & SYF_CAPENABLED))) {
 		td->td_errno = error = ECAPMODE;
-		sysfil_violation(td, sa->callp->sy_flags & SYSFIL_MASK);
+		goto retval;
+	}
+#endif
+
+#ifdef SYSFIL
+	/*
+	 * In addition to that, check that the system call's filter index is
+	 * enabled in the process' sysfilset.
+	 */
+	if (__predict_false(error = sysfil_require(td,
+	    (sa->callp->sy_flags & SYF_SYSFIL_MASK) >> SYF_SYSFIL_SHIFT))) {
+		td->td_errno = error;
 		goto retval;
 	}
 #endif

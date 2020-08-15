@@ -108,7 +108,6 @@ static const struct promise_sysfil {
 	int sysfil;
 } sysfils_table[] = {
 	{ PROMISE_ERROR,		SYSFIL_ERROR },
-	{ PROMISE_CAPSICUM,		SYSFIL_CAPSICUM },
 	{ PROMISE_BASIC,		SYSFIL_STDIO },
 	{ PROMISE_STDIO,		SYSFIL_STDIO },
 	{ PROMISE_UNVEIL,		SYSFIL_UNVEIL },

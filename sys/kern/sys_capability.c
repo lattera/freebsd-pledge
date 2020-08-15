@@ -112,8 +112,12 @@ sys_cap_enter(struct thread *td, struct cap_enter_args *uap)
 	p = td->td_proc;
 	PROC_LOCK(p);
 	oldcred = crcopysafe(p, newcred);
-	sysfil_cred_capsicum(newcred);
+	newcred->cr_flags |= CRED_FLAG_CAPMODE;
+#ifdef SYSFIL
+	sysfil_cred_sandbox(newcred);
+#endif
 	KASSERT(CRED_IN_SANDBOX_MODE(newcred), ("CRED_IN_SANDBOX_MODE() bogus"));
+	KASSERT(CRED_IN_CAPABILITY_MODE(newcred), ("CRED_IN_CAPABILITY_MODE() bogus"));
 	proc_set_cred(p, newcred);
 	if (!PROC_IN_SANDBOX_MODE(p))
 		panic("PROC_IN_SANDBOX_MODE() bogus after cap_enter(2)");

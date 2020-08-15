@@ -922,7 +922,7 @@ process_syscall_def = function(line)
 	-- Split flags
 	for flag in allflags:gmatch("([^|]+)") do
 		if flag:match("^SYSFIL_") then
-			sysflags_list[#sysflags_list + 1] = flag
+			sysflags_list[#sysflags_list + 1] = "(" .. flag .. " << SYF_SYSFIL_SHIFT)"
 		else
 			if known_flags[flag] == nil then
 				abort(1, "Unknown flag " .. flag .. " for " ..  sysnum)

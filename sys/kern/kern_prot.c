@@ -1950,9 +1950,9 @@ crget(void)
 #ifdef MAC
 	mac_cred_init(cr);
 #endif
-//#ifdef SYSFIL
+#ifdef SYSFIL
 	sysfil_cred_init(cr);
-//#endif
+#endif
 	cr->cr_groups = cr->cr_smallgroups;
 	cr->cr_agroups =
 	    sizeof(cr->cr_smallgroups) / sizeof(cr->cr_smallgroups[0]);

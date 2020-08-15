@@ -35,7 +35,7 @@
 #define	_SYS_SYSENT_H_
 
 #include <bsm/audit.h>
-#include <sys/sysfil.h>
+#include <sys/_sysfil.h>
 
 struct rlimit;
 struct sysent;
@@ -77,11 +77,10 @@ struct sysent {			/* system call table */
 	u_int32_t sy_thrcnt;
 };
 
-/*
- * The lower bits of sy_flags contain a "sysfil" index used to restrict
- * syscalls for Capsicum and pledged processes.
- */
-#define	SYF_CAPENABLED	SYSFIL_CAPSICUM	/* permitted in capability mode */
+#define	SYF_CAPENABLED		1	/* permitted in capability mode */
+#define	SYF_SYSFIL_SHIFT	1	/* SYSFIL index follows */
+#define	SYF_SYSFIL_SIZE		SYSFIL_SIZE
+#define	SYF_SYSFIL_MASK		(SYSFIL_MASK << SYF_SYSFIL_SHIFT)
 
 #define	SY_THR_FLAGMASK	0x7
 #define	SY_THR_STATIC	0x1
