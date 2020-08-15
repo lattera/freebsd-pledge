@@ -88,7 +88,7 @@ __FBSDID("$FreeBSD$");
 
 bool __read_frequently trap_enotcap;
 SYSCTL_BOOL(_kern, OID_AUTO, trap_enotcap, CTLFLAG_RWTUN, &trap_enotcap, 0,
-    "Deliver SIGTRAP on ENOTCAPABLE");
+    "Deliver SIGTRAP on ENOTCAPABLE/ECAPMODE");
 
 #ifdef CAPABILITY_MODE
 
@@ -112,19 +112,15 @@ sys_cap_enter(struct thread *td, struct cap_enter_args *uap)
 	p = td->td_proc;
 	PROC_LOCK(p);
 	oldcred = crcopysafe(p, newcred);
-	newcred->cr_flags |= CRED_FLAG_CAPMODE;
+	sysfil_cred_capsicum(newcred);
+	KASSERT(CRED_IN_SANDBOX_MODE(newcred), ("CRED_IN_SANDBOX_MODE() bogus"));
 	proc_set_cred(p, newcred);
-	/*
-	 * To implement pledge(), a generic "sandbox" mode was added and some
-	 * of Capsicum's capability mode checks were converted to the more
-	 * general sandbox mode check when they should apply to both
-	 * Capsicumized and pledged processes.   It is very important that this
-	 * sandbox mode also be enabled when Capsicum's capability mode is.
-	 */
-#ifdef SYSFIL
-	PROC_SET_SANDBOX_MODE(td->td_proc);
-	KASSERT(PROC_IN_SANDBOX_MODE(p), ("PROC_IN_SANDBOX_MODE() bogus"));
-#endif
+	if (!PROC_IN_SANDBOX_MODE(p))
+		panic("PROC_IN_SANDBOX_MODE() bogus after cap_enter(2)");
+	if (!PROC_IN_SANDBOX_EXEC_MODE(p))
+		panic("PROC_IN_SANDBOX_EXEC_MODE() bogus after cap_enter(2)");
+	if (!PROC_IN_CAPABILITY_MODE(p))
+		panic("PROC_IN_CAPABILITY_MODE() bogus after cap_enter(2)");
 	PROC_UNLOCK(p);
 	crfree(oldcred);
 	return (0);

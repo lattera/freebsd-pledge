@@ -19,7 +19,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/syslog.h>
 #include <sys/jail.h>
 #include <sys/namei.h>
-#include <sys/sysfil.h>
 #include <sys/unveil.h>
 
 #ifdef UNVEIL

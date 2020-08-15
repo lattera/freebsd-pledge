@@ -74,6 +74,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/syscallsubr.h>
 #include <sys/sysctl.h>
 #include <sys/unveil.h>
+#include <sys/sysfil.h>
 #ifdef KTRACE
 #include <sys/ktrace.h>
 #endif
@@ -2774,12 +2775,14 @@ setfmode(struct thread *td, struct ucred *cred, struct vnode *vp, int mode)
 	struct mount *mp;
 	struct vattr vattr;
 	int error;
+	bool allow_special;
 
 	if ((error = vn_start_write(vp, &mp, V_WAIT | PCATCH)) != 0)
 		return (error);
 	vn_lock(vp, LK_EXCLUSIVE | LK_RETRY);
 	VATTR_NULL(&vattr);
-	vattr.va_mode = mode & ALLPERMS;
+	allow_special = sysfil_check(td, SYSFIL_CHMOD_SPECIAL) == 0;
+	vattr.va_mode = mode & (allow_special ? ALLPERMS : ACCESSPERMS);
 #ifdef MAC
 	error = mac_vnode_check_setmode(cred, vp, vattr.va_mode);
 	if (error == 0)

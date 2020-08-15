@@ -94,13 +94,8 @@ _Static_assert(offsetof(struct proc, p_filemon) == 0x3b8,
     "struct proc KBI p_filemon");
 _Static_assert(offsetof(struct proc, p_comm) == 0x3d0,
     "struct proc KBI p_comm");
-#ifdef SYSFIL
-_Static_assert(offsetof(struct proc, p_emuldata) == 0x4b8,
-    "struct proc KBI p_emuldata");
-#else
 _Static_assert(offsetof(struct proc, p_emuldata) == 0x4b0,
     "struct proc KBI p_emuldata");
-#endif
 #endif
 #ifdef __i386__
 _Static_assert(offsetof(struct thread, td_flags) == 0x98,
@@ -119,13 +114,8 @@ _Static_assert(offsetof(struct proc, p_filemon) == 0x268,
     "struct proc KBI p_filemon");
 _Static_assert(offsetof(struct proc, p_comm) == 0x27c,
     "struct proc KBI p_comm");
-#ifdef SYSFIL
-_Static_assert(offsetof(struct proc, p_emuldata) == 0x310,
-    "struct proc KBI p_emuldata");
-#else
 _Static_assert(offsetof(struct proc, p_emuldata) == 0x308,
     "struct proc KBI p_emuldata");
-#endif
 #endif
 
 SDT_PROVIDER_DECLARE(proc);

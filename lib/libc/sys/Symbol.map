@@ -412,6 +412,7 @@ FBSD_1.6 {
 	funlinkat;
 	memfd_create;
 	shm_rename;
+	sysfilctl;
 	unveilctl;
 	pledge;
 	unveil;

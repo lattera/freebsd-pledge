@@ -253,6 +253,9 @@
 #define	BITSET_FSET(n)							\
 	[ 0 ... ((n) - 1) ] = (-1L)
 
+#define	BITSET_ASET(n, v)						\
+	[ 0 ... ((n) - 1) ] = (v)
+
 #define	BITSET_SIZE(_s)	(__bitset_words((_s)) * sizeof(long))
 
 /*

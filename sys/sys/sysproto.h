@@ -1836,6 +1836,11 @@ struct rpctls_syscall_args {
 	char op_l_[PADL_(int)]; int op; char op_r_[PADR_(int)];
 	char path_l_[PADL_(const char *)]; const char * path; char path_r_[PADR_(const char *)];
 };
+struct sysfilctl_args {
+	char flags_l_[PADL_(int)]; int flags; char flags_r_[PADR_(int)];
+	char sysfils_l_[PADL_(const int *)]; const int * sysfils; char sysfils_r_[PADR_(const int *)];
+	char count_l_[PADL_(size_t)]; size_t count; char count_r_[PADR_(size_t)];
+};
 struct unveilctl_args {
 	char atfd_l_[PADL_(int)]; int atfd; char atfd_r_[PADR_(int)];
 	char path_l_[PADL_(const char *)]; const char * path; char path_r_[PADR_(const char *)];
@@ -2233,6 +2238,7 @@ int	sys_sigfastblock(struct thread *, struct sigfastblock_args *);
 int	sys___realpathat(struct thread *, struct __realpathat_args *);
 int	sys_close_range(struct thread *, struct close_range_args *);
 int	sys_rpctls_syscall(struct thread *, struct rpctls_syscall_args *);
+int	sys_sysfilctl(struct thread *, struct sysfilctl_args *);
 int	sys_unveilctl(struct thread *, struct unveilctl_args *);
 
 #ifdef COMPAT_43
@@ -3165,6 +3171,7 @@ int	freebsd12_closefrom(struct thread *, struct freebsd12_closefrom_args *);
 #define	SYS_AUE___realpathat	AUE_REALPATHAT
 #define	SYS_AUE_close_range	AUE_CLOSERANGE
 #define	SYS_AUE_rpctls_syscall	AUE_NULL
+#define	SYS_AUE_sysfilctl	AUE_SYSFILCTL
 #define	SYS_AUE_unveilctl	AUE_UNVEILCTL
 
 #undef PAD_

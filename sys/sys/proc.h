@@ -678,10 +678,6 @@ struct proc {
 					       our subtree. */
 	uint16_t	p_elf_machine;	/* (x) ELF machine type */
 	uint64_t	p_elf_flags;	/* (x) ELF flags */
-#ifdef SYSFIL
-	sysfil_t	p_sysfil;	/* syscall filter flags */
-	sysfil_t	p_sysfilexec;	/* filter flags after execve(2) */
-#endif
 /* End area that is copied on creation. */
 #define	p_endcopy	p_xexit
 
@@ -797,31 +793,16 @@ struct proc {
 #define	P_TREE_REAPER		0x00000004	/* Reaper of subtree */
 
 /*
- * A process is considered "sandboxed" when its sysfil doesn't have all bits
- * enabled.
- *
- * The general notion of a process being sandboxed is used for checks that
+ * The general notion of a process being "sandboxed" is used for checks that
  * should be done for both Capsicum and pledge().
  */
-#ifdef SYSFIL
+#define	PROC_IN_SANDBOX_MODE(p)		CRED_IN_SANDBOX_MODE(p->p_ucred)
+#define	PROC_IN_SANDBOX_EXEC_MODE(p)	CRED_IN_SANDBOX_EXEC_MODE(p->p_ucred)
+#define	PROC_IN_CAPABILITY_MODE(p)	CRED_IN_CAPABILITY_MODE(p->p_ucred)
 
-#define	PROC_SET_SANDBOX_MODE(p) do { \
-	(p)->p_sysfil &= ~(sysfil_t)SYF_DEFAULT; \
-	(p)->p_sysfilexec &= ~(sysfil_t)SYF_DEFAULT; \
-} while (0)
-
-#define	PROC_INIT_SANDBOX_BITS(p) \
-	do { (p)->p_sysfil = (p)->p_sysfilexec = -1; } while (0)
-
-#define	PROC_IN_SANDBOX_MODE(p) ((p)->p_sysfil != -1)
-
-#define	IN_SANDBOX_MODE(td) PROC_IN_SANDBOX_MODE((td)->td_proc)
-
-#else
-
-#define	IN_SANDBOX_MODE(td) IN_CAPABILITY_MODE(td)
-
-#endif
+#define	IN_SANDBOX_MODE(td)		PROC_IN_SANDBOX_MODE((td)->td_proc)
+#define	IN_SANDBOX_EXEC_MODE(td)	PROC_IN_SANDBOX_EXEC_MODE((td)->td_proc)
+#define	IN_CAPABILITY_MODE(td)		PROC_IN_CAPABILITY_MODE((td)->td_proc)
 
 /*
  * These were process status values (p_stat), now they are only used in

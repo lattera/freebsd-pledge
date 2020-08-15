@@ -702,6 +702,13 @@ kern_sigaction(struct thread *td, int sig, const struct sigaction *act,
 	    SA_NOCLDWAIT | SA_SIGINFO)) != 0)
 		return (EINVAL);
 
+	/* NOTE: sysfil_require() must not be called under PROC_LOCK() */
+	if (act && act->sa_handler != SIG_DFL &&
+	    (sig == SIGKILL || sig == SIGSTOP ||
+	    (sig == SIGABRT && sysfil_require(td, SYSFIL_SIGABRT) != 0) ||
+	    (sig == SIGTRAP && sysfil_require(td, SYSFIL_SIGTRAP) != 0)))
+		return (EINVAL);
+
 	PROC_LOCK(p);
 	ps = p->p_sigacts;
 	mtx_lock(&ps->ps_mtx);
@@ -728,13 +735,6 @@ kern_sigaction(struct thread *td, int sig, const struct sigaction *act,
 			oact->sa_flags |= SA_NOCLDWAIT;
 	}
 	if (act) {
-		if ((sig == SIGKILL || sig == SIGSTOP) &&
-		    act->sa_handler != SIG_DFL) {
-			mtx_unlock(&ps->ps_mtx);
-			PROC_UNLOCK(p);
-			return (EINVAL);
-		}
-
 		/*
 		 * Change setting atomically.
 		 */
@@ -1799,12 +1799,12 @@ kern_kill(struct thread *td, pid_t pid, int signum)
 	if (IN_CAPABILITY_MODE(td) && pid != td->td_proc->p_pid)
 		return (ECAPMODE);
 	/*
-	 * Similarly for pledged processes without SYF_PLEDGE_PROC, except
+	 * Similarly for pledged processes without SYSFIL_PROC, except
 	 * signaling the process group is allowed by OpenBSD.
 	 */
 	if (IN_SANDBOX_MODE(td) &&
 	    pid != 0 && pid != td->td_proc->p_pid &&
-	    (error = sysfil_check(td, SYF_PLEDGE_PROC)) != 0)
+	    (error = sysfil_require(td, SYSFIL_PROC)) != 0)
 		return (error);
 
 	AUDIT_ARG_SIGNUM(signum);

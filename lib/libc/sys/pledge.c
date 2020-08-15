@@ -8,8 +8,7 @@ __FBSDID("$FreeBSD$");
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/_sysfil.h>
-#include <sys/procctl.h>
+#include <sys/sysfil.h>
 #include <sys/unveil.h>
 #include <sysexits.h>
 #include <unistd.h>
@@ -34,7 +33,22 @@ enum promise_type {
 	PROMISE_THREAD,
 	PROMISE_EXEC,
 	PROMISE_TTY,
+	PROMISE_RLIMIT,
 	PROMISE_SETTIME,
+	PROMISE_AIO,
+	PROMISE_EXTATTR,
+	PROMISE_ACL,
+	PROMISE_MAC,
+	PROMISE_CPUSET,
+	PROMISE_SYSVIPC,
+	PROMISE_POSIXIPC,
+	PROMISE_POSIXRT,
+	PROMISE_CHROOT,
+	PROMISE_JAIL,
+	PROMISE_PS,
+	PROMISE_CHMOD_SPECIAL,
+	PROMISE_SYSFLAGS,
+	PROMISE_SENDFILE,
 	PROMISE_INET,
 	PROMISE_UNIX,
 	PROMISE_DNS,
@@ -44,61 +58,91 @@ enum promise_type {
 };
 
 static const struct promise_name {
-	const char name[12];
-	enum promise_type type;
+	const char name[15];
+	enum promise_type type : 8;
 } names_table[] = {
-	{ "error",	PROMISE_ERROR },
-	{ "capsicum",	PROMISE_CAPSICUM },
-	{ "basic",	PROMISE_BASIC },
-	{ "stdio",	PROMISE_STDIO },
-	{ "unveil",	PROMISE_UNVEIL },
-	{ "rpath",	PROMISE_RPATH },
-	{ "wpath",	PROMISE_WPATH },
-	{ "cpath",	PROMISE_CPATH },
-	{ "dpath",	PROMISE_DPATH },
-	{ "tmppath",	PROMISE_TMPPATH },
-	{ "flock",	PROMISE_FLOCK },
-	{ "fattr",	PROMISE_FATTR },
-	{ "chown",	PROMISE_CHOWN },
-	{ "id",		PROMISE_ID },
-	{ "proc",	PROMISE_PROC },
-	{ "thread",	PROMISE_THREAD },
-	{ "exec",	PROMISE_EXEC },
-	{ "tty",	PROMISE_TTY },
-	{ "settime",	PROMISE_SETTIME },
-	{ "inet",	PROMISE_INET },
-	{ "unix",	PROMISE_UNIX },
-	{ "dns",	PROMISE_DNS },
-	{ "getpw",	PROMISE_GETPW },
-	{ "ssl",	PROMISE_SSL },
-	{ "",		PROMISE_NONE },
+	{ "error",		PROMISE_ERROR },
+	{ "capsicum",		PROMISE_CAPSICUM },
+	{ "basic",		PROMISE_BASIC },
+	{ "stdio",		PROMISE_STDIO },
+	{ "unveil",		PROMISE_UNVEIL },
+	{ "rpath",		PROMISE_RPATH },
+	{ "wpath",		PROMISE_WPATH },
+	{ "cpath",		PROMISE_CPATH },
+	{ "dpath",		PROMISE_DPATH },
+	{ "tmppath",		PROMISE_TMPPATH },
+	{ "flock",		PROMISE_FLOCK },
+	{ "fattr",		PROMISE_FATTR },
+	{ "chown",		PROMISE_CHOWN },
+	{ "id",			PROMISE_ID },
+	{ "proc",		PROMISE_PROC },
+	{ "thread",		PROMISE_THREAD },
+	{ "exec",		PROMISE_EXEC },
+	{ "tty",		PROMISE_TTY },
+	{ "rlimit",		PROMISE_RLIMIT },
+	{ "settime",		PROMISE_SETTIME },
+	{ "aio",		PROMISE_AIO },
+	{ "extattr",		PROMISE_EXTATTR },
+	{ "acl",		PROMISE_ACL },
+	{ "mac",		PROMISE_MAC },
+	{ "cpuset",		PROMISE_CPUSET },
+	{ "sysvipc",		PROMISE_SYSVIPC },
+	{ "posixipc",		PROMISE_POSIXIPC },
+	{ "posixrt",		PROMISE_POSIXRT },
+	{ "chroot",		PROMISE_CHROOT },
+	{ "jail",		PROMISE_JAIL },
+	{ "ps",			PROMISE_PS },
+	{ "chmod_special",	PROMISE_CHMOD_SPECIAL },
+	{ "sysflags",		PROMISE_SYSFLAGS },
+	{ "sendfile",		PROMISE_SENDFILE },
+	{ "inet",		PROMISE_INET },
+	{ "unix",		PROMISE_UNIX },
+	{ "dns",		PROMISE_DNS },
+	{ "getpw",		PROMISE_GETPW },
+	{ "ssl",		PROMISE_SSL },
+	{ "",			PROMISE_NONE },
 };
 
 static const struct promise_sysfil {
-	enum promise_type type : 8;
-	sysfil_t sysfil;
+	enum promise_type type;
+	int sysfil;
 } sysfils_table[] = {
-	{ PROMISE_ERROR,	SYF_PLEDGE_ERROR },
-	{ PROMISE_CAPSICUM,	SYF_CAPENABLED },
-	{ PROMISE_BASIC,	SYF_PLEDGE_STDIO },
-	{ PROMISE_STDIO,	SYF_PLEDGE_STDIO },
-	{ PROMISE_UNVEIL,	SYF_PLEDGE_UNVEIL },
-	{ PROMISE_RPATH,	SYF_PLEDGE_RPATH },
-	{ PROMISE_WPATH,	SYF_PLEDGE_WPATH },
-	{ PROMISE_CPATH,	SYF_PLEDGE_CPATH },
-	{ PROMISE_DPATH,	SYF_PLEDGE_DPATH },
-	{ PROMISE_FLOCK,	SYF_PLEDGE_FLOCK },
-	{ PROMISE_FATTR,	SYF_PLEDGE_FATTR },
-	{ PROMISE_CHOWN,	SYF_PLEDGE_CHOWN },
-	{ PROMISE_ID,		SYF_PLEDGE_ID },
-	{ PROMISE_PROC,		SYF_PLEDGE_PROC },
-	{ PROMISE_THREAD,	SYF_PLEDGE_THREAD },
-	{ PROMISE_EXEC,		SYF_PLEDGE_EXEC },
-	{ PROMISE_TTY,		SYF_PLEDGE_TTY },
-	{ PROMISE_SETTIME,	SYF_PLEDGE_SETTIME },
-	{ PROMISE_INET,		SYF_PLEDGE_INET },
-	{ PROMISE_UNIX,		SYF_PLEDGE_UNIX },
-	{ PROMISE_DNS,		SYF_PLEDGE_DNS },
+	{ PROMISE_ERROR,		SYSFIL_ERROR },
+	{ PROMISE_CAPSICUM,		SYSFIL_CAPSICUM },
+	{ PROMISE_BASIC,		SYSFIL_STDIO },
+	{ PROMISE_STDIO,		SYSFIL_STDIO },
+	{ PROMISE_UNVEIL,		SYSFIL_UNVEIL },
+	{ PROMISE_RPATH,		SYSFIL_RPATH },
+	{ PROMISE_WPATH,		SYSFIL_WPATH },
+	{ PROMISE_CPATH,		SYSFIL_CPATH },
+	{ PROMISE_DPATH,		SYSFIL_DPATH },
+	{ PROMISE_FLOCK,		SYSFIL_FLOCK },
+	{ PROMISE_FATTR,		SYSFIL_FATTR },
+	{ PROMISE_CHOWN,		SYSFIL_CHOWN },
+	{ PROMISE_ID,			SYSFIL_ID },
+	{ PROMISE_PROC,			SYSFIL_PROC },
+	{ PROMISE_THREAD,		SYSFIL_THREAD },
+	{ PROMISE_EXEC,			SYSFIL_EXEC },
+	{ PROMISE_TTY,			SYSFIL_TTY },
+	{ PROMISE_RLIMIT,		SYSFIL_RLIMIT },
+	{ PROMISE_SETTIME,		SYSFIL_SETTIME },
+	{ PROMISE_AIO,			SYSFIL_AIO },
+	{ PROMISE_EXTATTR,		SYSFIL_EXTATTR },
+	{ PROMISE_ACL,			SYSFIL_ACL },
+	{ PROMISE_MAC,			SYSFIL_MAC },
+	{ PROMISE_CPUSET,		SYSFIL_CPUSET },
+	{ PROMISE_SYSVIPC,		SYSFIL_SYSVIPC },
+	{ PROMISE_POSIXIPC,		SYSFIL_POSIXIPC },
+	{ PROMISE_POSIXRT,		SYSFIL_POSIXRT },
+	{ PROMISE_CHROOT,		SYSFIL_CHROOT },
+	{ PROMISE_JAIL,			SYSFIL_JAIL },
+	{ PROMISE_PS,			SYSFIL_PS },
+	{ PROMISE_CHMOD_SPECIAL,	SYSFIL_CHMOD_SPECIAL },
+	{ PROMISE_SYSFLAGS,		SYSFIL_SYSFLAGS },
+	{ PROMISE_SENDFILE,		SYSFIL_SENDFILE },
+	{ PROMISE_INET,			SYSFIL_INET },
+	{ PROMISE_UNIX,			SYSFIL_UNIX },
+	{ PROMISE_DNS,			SYSFIL_INET }, /* XXX */
 };
 
 static const struct promise_uperms {
@@ -205,14 +249,14 @@ parse_promises(bool *promises, const char *promises_str)
 }
 
 
-static sysfil_t
-do_pledge_unveils(const bool *req_promises, bool for_exec)
+static size_t
+do_pledge_unveils(const bool *req_promises, bool for_exec, int *sysfils)
 {
-	const struct promise_sysfil *ps;
+	int *orig_sysfils = sysfils;
+	const struct promise_sysfil *pa;
 	const struct promise_unveil *pu;
 	const struct promise_uperms *pp;
 	const char *path;
-	sysfil_t sysfil;
 	unveil_perms_t need_uperms, req_uperms;
 	int flags, flags1, r;
 	bool need_promises[PROMISE_COUNT];
@@ -286,11 +330,15 @@ do_pledge_unveils(const bool *req_promises, bool for_exec)
 			need_promises[pp->type] = true;
 	}
 
-	/* Map promises to sysfils. */
-	sysfil = SYF_PLEDGE_ALWAYS | SYF_PLEDGE_UNVEIL;
-	for (ps = sysfils_table; ps != &sysfils_table[nitems(sysfils_table)]; ps++)
-		if (need_promises[ps->type])
-			sysfil |= ps->sysfil;
+	/*
+	 * Map promises to sysfils.
+	 *
+	 * NOTE: do_pledge() must allocate a large enough array.
+	 */
+	*sysfils++ = SYSFIL_UNVEIL;
+	for (pa = sysfils_table; pa != &sysfils_table[nitems(sysfils_table)]; pa++)
+		if (need_promises[pa->type])
+			*sysfils++ = pa->sysfil;
 
 	/*
 	 * Alter user's explicit unveils to compensate for sysfils implicitly
@@ -316,14 +364,17 @@ do_pledge_unveils(const bool *req_promises, bool for_exec)
 		err(EX_OSERR, "unveilctl freeze");
 
 	has_pledge_unveils[for_exec] = true;
-	return (sysfil);
+	return (sysfils - orig_sysfils);
 }
 
 static int do_pledge(const bool *promises, bool for_exec) {
-	sysfil_t sysfil;
+	int sysfils[nitems(sysfils_table) + 1];
+	size_t count;
 	int r;
-	sysfil = do_pledge_unveils(promises, for_exec);
-	r = procctl(P_PID, getpid(), for_exec ? PROC_SYSFIL_EXEC : PROC_SYSFIL, &sysfil);
+	count = do_pledge_unveils(promises, for_exec, sysfils);
+	r = sysfilctl(
+	    SYSFILCTL_MASK | (for_exec ? SYSFILCTL_FOR_EXEC : SYSFILCTL_FOR_CURR),
+	    sysfils, count);
 	memcpy(cur_promises[for_exec], promises, PROMISE_COUNT * sizeof *promises);
 	return (r);
 }

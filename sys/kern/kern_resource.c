@@ -307,7 +307,7 @@ sys_rtprio_thread(struct thread *td, struct rtprio_thread_args *uap)
 	int cierror, error;
 
 	if ((uap->function != RTP_LOOKUP || uap->lwpid != td->td_tid))
-		return sysfil_check(td, SYF_PLEDGE_THREAD);
+		return (sysfil_require(td, SYSFIL_THREAD));
 
 	/* Perform copyin before acquiring locks if needed. */
 	if (uap->function == RTP_SET)
@@ -392,7 +392,7 @@ sys_rtprio(struct thread *td, struct rtprio_args *uap)
 	int cierror, error;
 
 	if ((uap->function != RTP_LOOKUP || uap->pid != td->td_proc->p_pid))
-		return sysfil_check(td, SYF_PLEDGE_PROC);
+		return (sysfil_require(td, SYSFIL_PROC));
 
 	/* Perform copyin before acquiring locks if needed. */
 	if (uap->function == RTP_SET)

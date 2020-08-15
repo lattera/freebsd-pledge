@@ -659,7 +659,7 @@
 #define	AUE_SHMRENAME		43263	/* FreeBSD-specific. */
 #define	AUE_REALPATHAT		43264	/* FreeBSD-specific. */
 #define	AUE_CLOSERANGE		43265	/* FreeBSD-specific. */
-#define	AUE_PLEDGE		43266	/* FreeBSD-specific. */
+#define	AUE_SYSFILCTL		43266	/* FreeBSD-specific. */
 #define	AUE_UNVEILCTL		43267	/* FreeBSD-specific. */
 
 /*

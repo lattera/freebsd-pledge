@@ -3842,7 +3842,7 @@ kern/subr_smp.c			standard
 kern/subr_smr.c			standard
 kern/subr_stack.c		optional ddb | stack | ktr
 kern/subr_stats.c		optional stats
-kern/subr_sysfil.c		standard
+kern/kern_sysfil.c		standard
 kern/subr_taskqueue.c		standard
 kern/subr_terminal.c		optional vt
 kern/subr_trap.c		standard

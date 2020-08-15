@@ -61,7 +61,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/uio.h>
 #include <sys/un.h>
 #include <sys/unpcb.h>
-#include <sys/sysfil.h>
 #ifdef KTRACE
 #include <sys/ktrace.h>
 #endif

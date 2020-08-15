@@ -609,7 +609,7 @@ kern_fcntl(struct thread *td, int fd, int cmd, intptr_t arg)
 			break;
 		}
 
-		error = sysfil_check(td, SYF_PLEDGE_FLOCK);
+		error = sysfil_require(td, SYSFIL_FLOCK);
 		if (error != 0)
 			break;
 		error = fget_unlocked(fdp, fd, &cap_flock_rights, &fp);
@@ -717,7 +717,7 @@ kern_fcntl(struct thread *td, int fd, int cmd, intptr_t arg)
 		break;
 
 	case F_GETLK:
-		error = sysfil_check(td, SYF_PLEDGE_FLOCK);
+		error = sysfil_require(td, SYSFIL_FLOCK);
 		if (error != 0)
 			break;
 		error = fget_unlocked(fdp, fd, &cap_flock_rights, &fp);
@@ -754,7 +754,7 @@ kern_fcntl(struct thread *td, int fd, int cmd, intptr_t arg)
 		break;
 
 	case F_ADD_SEALS:
-		error = sysfil_check(td, SYF_PLEDGE_FLOCK);
+		error = sysfil_require(td, SYSFIL_FLOCK);
 		if (error != 0)
 			break;
 		error = fget_unlocked(fdp, fd, &cap_no_rights, &fp);
@@ -765,7 +765,7 @@ kern_fcntl(struct thread *td, int fd, int cmd, intptr_t arg)
 		break;
 
 	case F_GET_SEALS:
-		error = sysfil_check(td, SYF_PLEDGE_FLOCK);
+		error = sysfil_require(td, SYSFIL_FLOCK);
 		if (error != 0)
 			break;
 		error = fget_unlocked(fdp, fd, &cap_no_rights, &fp);
@@ -1129,7 +1129,7 @@ fsetown(pid_t pgid, struct sigio **sigiop)
 	struct sigio *sigio;
 	int ret;
 
-	ret = sysfil_check(curthread, SYF_PLEDGE_PROC);
+	ret = sysfil_require(curthread, SYSFIL_PROC);
 	if (ret)
 		return (ret);
 

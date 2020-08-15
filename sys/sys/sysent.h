@@ -35,7 +35,7 @@
 #define	_SYS_SYSENT_H_
 
 #include <bsm/audit.h>
-#include <sys/_sysfil.h>
+#include <sys/sysfil.h>
 
 struct rlimit;
 struct sysent;
@@ -73,9 +73,15 @@ struct sysent {			/* system call table */
 				/* optional argument conversion function. */
 	u_int32_t sy_entry;	/* DTrace entry ID for systrace. */
 	u_int32_t sy_return;	/* DTrace return ID for systrace. */
-	sysfil_t  sy_fflags;	/* Filter bitmap for system calls. */
+	u_int32_t sy_flags;	/* Flags and syscall filter index. */
 	u_int32_t sy_thrcnt;
 };
+
+/*
+ * The lower bits of sy_flags contain a "sysfil" index used to restrict
+ * syscalls for Capsicum and pledged processes.
+ */
+#define	SYF_CAPENABLED	SYSFIL_CAPSICUM	/* permitted in capability mode */
 
 #define	SY_THR_FLAGMASK	0x7
 #define	SY_THR_STATIC	0x1
@@ -193,7 +199,7 @@ struct syscall_module_data {
 	.sy_systrace_args_func = NULL,				\
 	.sy_entry = 0,						\
 	.sy_return = 0,						\
-	.sy_fflags = 0,						\
+	.sy_flags = 0,						\
 	.sy_thrcnt = 0						\
 }							
 
@@ -240,23 +246,23 @@ struct syscall_helper_data {
 	int syscall_no;
 	int registered;
 };
-#define SYSCALL_INIT_HELPER_F(syscallname, fflags) {		\
+#define SYSCALL_INIT_HELPER_F(syscallname, flags) {		\
     .new_sysent = {						\
 	.sy_narg = (sizeof(struct syscallname ## _args )	\
 	    / sizeof(register_t)),				\
 	.sy_call = (sy_call_t *)& sys_ ## syscallname,		\
 	.sy_auevent = SYS_AUE_##syscallname,			\
-	.sy_fflags = (fflags)					\
+	.sy_flags = (flags)					\
     },								\
     .syscall_no = SYS_##syscallname				\
 }
-#define SYSCALL_INIT_HELPER_COMPAT_F(syscallname, fflags) {	\
+#define SYSCALL_INIT_HELPER_COMPAT_F(syscallname, flags) {	\
     .new_sysent = {						\
 	.sy_narg = (sizeof(struct syscallname ## _args )	\
 	    / sizeof(register_t)),				\
 	.sy_call = (sy_call_t *)& syscallname,			\
 	.sy_auevent = SYS_AUE_##syscallname,			\
-	.sy_fflags = (fflags)					\
+	.sy_flags = (flags)					\
     },								\
     .syscall_no = SYS_##syscallname				\
 }

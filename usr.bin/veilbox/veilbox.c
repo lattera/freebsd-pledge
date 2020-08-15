@@ -20,7 +20,7 @@
 static const mode_t tmpdir_mode = S_IWUSR|S_IXUSR;
 
 static const char *default_promises =
-    "error capsicum stdio "
+    "error stdio "
     "rpath wpath cpath dpath tmppath exec "
     "flock fattr chown id "
     "proc thread "

@@ -13,7 +13,7 @@ try(const char *promises, bool should_work)
 			err(1, "pledge(\"%s\") should have worked!", promises);
 	} else {
 		if (!should_work)
-			err(1, "pledge(\"%s\") shouldn't have worked!", promises);
+			errx(1, "pledge(\"%s\") shouldn't have worked!", promises);
 	}
 }
 

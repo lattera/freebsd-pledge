@@ -8,7 +8,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/systm.h>
 #include <sys/namei.h>
 #include <sys/sysctl.h>
-#include <sys/sysfil.h>
 #include <sys/unveil.h>
 #include <sys/capsicum.h>
 

@@ -570,20 +570,6 @@ stackgap_status(struct thread *td, struct proc *p, int *data)
 	return (0);
 }
 
-#ifdef SYSFIL
-static int
-sysfil_restrict(struct thread *td, struct proc *p, bool for_exec, sysfil_t *req)
-{
-	sysfil_t *cur = for_exec ? &p->p_sysfilexec : &p->p_sysfil;
-	/* Adding allowed sysfils is never permitted, but silently ignore the
-	 * attempt to do so when under pledge("error"). */
-	if (!(*cur & SYF_PLEDGE_ERROR) && (*req & ~*cur))
-		return (EPERM);
-	*cur &= *req;
-	return (0);
-}
-#endif
-
 #ifndef _SYS_SYSPROTO_H_
 struct procctl_args {
 	idtype_t idtype;
@@ -601,21 +587,21 @@ sys_procctl(struct thread *td, struct procctl_args *uap)
 		struct procctl_reaper_status rs;
 		struct procctl_reaper_pids rp;
 		struct procctl_reaper_kill rk;
-		sysfil_t sf;
 	} x;
 	int error, error1, flags, signum;
 
 	if (IN_SANDBOX_MODE(td)) {
 		/* when sandboxed, only allow operations on self */
 		if (uap->idtype != P_PID || uap->id != td->td_proc->p_pid)
-			return sysfil_failed(td);
+			return sysfil_failed(td, SYSFIL_DEFAULT);
 		/* whitelist of allowed commands */
 		switch (uap->com) {
-		case PROC_SYSFIL:
-		case PROC_SYSFIL_EXEC:
-			break; /* allowed */
+		case PROC_TRAPCAP_CTL:
+		case PROC_TRAPCAP_STATUS:
+			/* TODO: Should only allow to enable? */
+			break;
 		default:
-			return sysfil_failed(td);
+			return sysfil_failed(td, SYSFIL_DEFAULT);
 		}
 	}
 
@@ -672,15 +658,6 @@ sys_procctl(struct thread *td, struct procctl_args *uap)
 	case PROC_PDEATHSIG_STATUS:
 		data = &signum;
 		break;
-#ifdef SYSFIL
-	case PROC_SYSFIL:
-	case PROC_SYSFIL_EXEC:
-		error = copyin(uap->data, &x.sf, sizeof (x.sf));
-		if (error != 0)
-			return (error);
-		data = &x.sf;
-		break;
-#endif
 	default:
 		return (EINVAL);
 	}
@@ -748,12 +725,6 @@ kern_procctl_single(struct thread *td, struct proc *p, int com, void *data)
 		return (trapcap_ctl(td, p, *(int *)data));
 	case PROC_TRAPCAP_STATUS:
 		return (trapcap_status(td, p, data));
-#ifdef SYSFIL
-	case PROC_SYSFIL:
-		return (sysfil_restrict(td, p, false, data));
-	case PROC_SYSFIL_EXEC:
-		return (sysfil_restrict(td, p, true, data));
-#endif
 	default:
 		return (EINVAL);
 	}
@@ -832,10 +803,6 @@ kern_procctl(struct thread *td, idtype_t idtype, id_t id, int com, void *data)
 	case PROC_STACKGAP_STATUS:
 	case PROC_TRACE_STATUS:
 	case PROC_TRAPCAP_STATUS:
-#ifdef SYSFIL
-	case PROC_SYSFIL:
-	case PROC_SYSFIL_EXEC:
-#endif
 		tree_locked = false;
 		break;
 	default:

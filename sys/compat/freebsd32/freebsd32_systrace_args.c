@@ -3384,8 +3384,17 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		*n_args = 2;
 		break;
 	}
-	/* unveilctl */
+	/* sysfilctl */
 	case 577: {
+		struct sysfilctl_args *p = params;
+		iarg[0] = p->flags; /* int */
+		uarg[1] = (intptr_t) p->sysfils; /* const int * */
+		uarg[2] = p->count; /* size_t */
+		*n_args = 3;
+		break;
+	}
+	/* unveilctl */
+	case 578: {
 		struct unveilctl_args *p = params;
 		iarg[0] = p->atfd; /* int */
 		uarg[1] = (intptr_t) p->path; /* const char * */
@@ -9134,8 +9143,24 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
-	/* unveilctl */
+	/* sysfilctl */
 	case 577:
+		switch(ndx) {
+		case 0:
+			p = "int";
+			break;
+		case 1:
+			p = "userland const int *";
+			break;
+		case 2:
+			p = "size_t";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* unveilctl */
+	case 578:
 		switch(ndx) {
 		case 0:
 			p = "int";
@@ -11057,8 +11082,13 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
-	/* unveilctl */
+	/* sysfilctl */
 	case 577:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* unveilctl */
+	case 578:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;

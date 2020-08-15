@@ -547,7 +547,7 @@ ttydev_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int fflag,
 	struct tty *tp = dev->si_drv1;
 	int error;
 
-	error = sysfil_check_ioctl(td, SYF_PLEDGE_TTY, cmd);
+	error = sysfil_require_ioctl(td, SYSFIL_TTY, cmd);
 	if (error)
 		return (error);
 

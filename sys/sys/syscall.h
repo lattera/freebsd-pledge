@@ -512,5 +512,6 @@
 #define	SYS___realpathat	574
 #define	SYS_close_range	575
 #define	SYS_rpctls_syscall	576
-#define	SYS_unveilctl	577
-#define	SYS_MAXSYSCALL	578
+#define	SYS_sysfilctl	577
+#define	SYS_unveilctl	578
+#define	SYS_MAXSYSCALL	579

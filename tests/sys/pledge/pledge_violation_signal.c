@@ -31,7 +31,7 @@ main()
 	r = waitpid(pid, &status, WEXITED);
 	if (r < 0)
 		err(1, "waitpid");
-	if (r != pid || WTERMSIG(status) != SIGTRAP)
-		errx(1, "child process did not terminate with SIGTRAP");
+	if (r != pid || WTERMSIG(status) != SIGABRT)
+		errx(1, "child process did not terminate with SIGABRT");
 	return 0;
 }

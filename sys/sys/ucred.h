@@ -40,10 +40,11 @@
 #include <sys/_mutex.h>
 #endif
 #include <bsm/audit.h>
+#include <sys/_sysfil.h>
 
 struct loginclass;
 
-#define	XU_NGROUPS	16
+#define	XU_NGROUPS	14
 
 /*
  * Credentials.
@@ -58,7 +59,9 @@ struct loginclass;
  *
  * See "Credential management" comment in kern_prot.c for more information.
  */
+
 #if defined(_KERNEL) || defined(_WANT_UCRED)
+
 struct ucred {
 	struct mtx cr_mtx;
 	u_int	cr_ref;			/* (c) reference count */
@@ -74,23 +77,27 @@ struct ucred {
 	struct uidinfo	*cr_ruidinfo;	/* per ruid resource consumption */
 	struct prison	*cr_prison;	/* jail(2) */
 	struct loginclass	*cr_loginclass; /* login class */
-	u_int		cr_flags;	/* credential flags */
-	void 		*cr_pspare2[2];	/* general use 2 */
-#define	cr_endcopy	cr_label
+	sysfilset_t	cr_sysfilset;	/* syscall filter flags */
+	sysfilset_t	cr_sysfilset_exec;	/* on-exec syscall filter flags */
 	struct label	*cr_label;	/* MAC label */
+#define	cr_endcopy	cr_label
 	struct auditinfo_addr	cr_audit;	/* Audit properties. */
 	gid_t	*cr_groups;		/* groups */
 	int	cr_agroups;		/* Available groups */
 	gid_t   cr_smallgroups[XU_NGROUPS];	/* storage for small groups */
 };
+
 #define	NOCRED	((struct ucred *)0)	/* no credential available */
 #define	FSCRED	((struct ucred *)-1)	/* filesystem credential */
-#endif /* _KERNEL || _WANT_UCRED */
 
-/*
- * Flags for cr_flags.
- */
-#define	CRED_FLAG_CAPMODE	0x00000001	/* In capability mode. */
+#define	CRED_IN_SANDBOX_MODE(cr) \
+	SYSFILSET_IS_RESTRICTED(&(cr)->cr_sysfilset)
+#define	CRED_IN_SANDBOX_EXEC_MODE(cr) \
+	SYSFILSET_IS_RESTRICTED(&(cr)->cr_sysfilset_exec)
+#define	CRED_IN_CAPABILITY_MODE(cr) \
+	SYSFILSET_IS_CAPSICUM(&(cr)->cr_sysfilset)
+
+#endif /* _KERNEL || _WANT_UCRED */
 
 /*
  * This is the external representation of struct ucred.

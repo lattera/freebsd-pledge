@@ -364,17 +364,17 @@ vn_open_vnode(struct vnode *vp, int fmode, struct ucred *cred,
 		if (vp->v_type == VDIR)
 			return (EISDIR);
 		if (fmode & O_CREAT) {
-			error = sysfil_check(td, SYF_PLEDGE_CPATH);
+			error = sysfil_require(td, SYSFIL_CPATH);
 			if (error)
 				return (error);
 		}
-		error = sysfil_check(td, SYF_PLEDGE_WPATH);
+		error = sysfil_require(td, SYSFIL_WPATH);
 		if (error)
 			return (error);
 		accmode |= VWRITE;
 	}
 	if (fmode & FREAD) {
-		error = sysfil_check(td, SYF_PLEDGE_RPATH);
+		error = sysfil_require(td, SYSFIL_RPATH);
 		if (error)
 			return (error);
 		accmode |= VREAD;

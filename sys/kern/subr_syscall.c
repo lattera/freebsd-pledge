@@ -115,29 +115,12 @@ syscallenter(struct thread *td)
 
 #ifdef CAPABILITY_MODE
 	/*
-	 * In capability mode, we only allow access to system calls
-	 * flagged with SYF_CAPENABLED.
+	 * Check if syscall is denied by Capsicum or pledge restrictions.
 	 */
-	if (__predict_false(IN_CAPABILITY_MODE(td) &&
-	    !(sa->callp->sy_fflags & SYF_CAPENABLED))) {
+	if (__predict_false(!SYSFILSET_MATCH(&td->td_ucred->cr_sysfilset,
+	    sa->callp->sy_flags & SYSFIL_MASK))) {
 		td->td_errno = error = ECAPMODE;
-		goto retval;
-	}
-#endif
-
-#ifdef SYSFIL
-	/*
-	 * Only allow access to system calls marked with at least one filter
-	 * bit that is also enabled in the process's credentials filter bits.
-	 * This is checked on top of the above check so that restrictions
-	 * imposed by Capsicum and pledge(2) can stack.
-	 *
-	 * XXX: Access to p_sysfil might be improperly synchronized.  The
-	 * per-thread CoW cache protects' Capsicum flags better.
-	 */
-	if (__predict_false(((sa->callp->sy_fflags | SYF_DEFAULT) &
-	    p->p_sysfil) == 0)) {
-		td->td_errno = error = ECAPMODE; /* XXX OpenBSD uses ENOSYS */
+		sysfil_violation(td, sa->callp->sy_flags & SYSFIL_MASK);
 		goto retval;
 	}
 #endif
@@ -212,10 +195,8 @@ syscallret(struct thread *td)
 	sa = &td->td_sa;
 	if (__predict_false(td->td_errno == ENOTCAPABLE ||
 	    td->td_errno == ECAPMODE)) {
-		if (IN_CAPABILITY_MODE(td) ?
-		    (trap_enotcap || (p->p_flag2 & P2_TRAPCAP) != 0) :
-		    sysfil_check(td, SYF_PLEDGE_ERROR) != 0) {
-			/* XXX: OpenBSD uses an "uncatchable" SIGABRT */
+		if ((trap_enotcap ||
+		    (p->p_flag2 & P2_TRAPCAP) != 0) && IN_CAPABILITY_MODE(td)) {
 			ksiginfo_init_trap(&ksi);
 			ksi.ksi_signo = SIGTRAP;
 			ksi.ksi_errno = td->td_errno;

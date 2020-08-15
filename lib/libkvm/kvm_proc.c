@@ -155,7 +155,9 @@ kvm_proclist(kvm_t *kd, int what, int arg, struct proc *p,
 			kp->ki_rgid = ucred.cr_rgid;
 			kp->ki_svgid = ucred.cr_svgid;
 			/* XXX should probably use the KI_CRF_* flags instead */
+#if 0 /* double XXX */
 			kp->ki_cr_flags = ucred.cr_flags;
+#endif
 			if (ucred.cr_ngroups > KI_NGROUPS) {
 				kp->ki_ngroups = KI_NGROUPS;
 				kp->ki_cr_flags |= KI_CRF_GRP_OVERFLOW;

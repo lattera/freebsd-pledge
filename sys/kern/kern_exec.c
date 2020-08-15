@@ -451,7 +451,7 @@ interpret:
 			goto exec_fail;
 		}
 #endif
-		error = sysfil_check(td, SYF_PLEDGE_EXEC);
+		error = sysfil_require(td, SYSFIL_EXEC);
 		if (error)
 			goto exec_fail;
 		error = namei(&nd);
@@ -529,7 +529,8 @@ interpret:
 
 	if (credential_changing &&
 #ifdef CAPABILITY_MODE
-	    ((oldcred->cr_flags & CRED_FLAG_CAPMODE) == 0) &&
+	    !CRED_IN_CAPABILITY_MODE(oldcred) &&
+	    !CRED_IN_SANDBOX_EXEC_MODE(oldcred) &&
 #endif
 	    (imgp->vp->v_mount->mnt_flag & MNT_NOSUID) == 0 &&
 	    (p->p_flag & P_TRACED) == 0) {
@@ -574,6 +575,17 @@ interpret:
 			change_svgid(imgp->newcred, imgp->newcred->cr_gid);
 		}
 	}
+
+#ifdef SYSFIL
+	/*
+	 * Switch to on-exec sysfils.
+	 */
+	if (sysfil_cred_need_exec_switch(oldcred)) {
+		if (!imgp->newcred)
+			imgp->newcred = crdup(oldcred);
+		sysfil_cred_exec_switch(imgp->newcred);
+	}
+#endif
 
 	/* The new credentials are installed into the process later. */
 
@@ -831,12 +843,6 @@ interpret:
 		crfree(oldcred);
 		oldcred = NULL;
 	}
-	/*
-	 * Switch sysfil to the process' on-execute sysfil.
-	 */
-#ifdef SYSFIL
-	p->p_sysfil = p->p_sysfilexec;
-#endif
 
 
 	/*

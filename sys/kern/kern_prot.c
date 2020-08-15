@@ -72,7 +72,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/socketvar.h>
 #include <sys/syscallsubr.h>
 #include <sys/sysctl.h>
-#include <sys/capsicum.h>
+#include <sys/sysfil.h>
 
 #ifdef REGRESSION
 FEATURE(regression,
@@ -1950,6 +1950,9 @@ crget(void)
 #ifdef MAC
 	mac_cred_init(cr);
 #endif
+//#ifdef SYSFIL
+	sysfil_cred_init(cr);
+//#endif
 	cr->cr_groups = cr->cr_smallgroups;
 	cr->cr_agroups =
 	    sizeof(cr->cr_smallgroups) / sizeof(cr->cr_smallgroups[0]);

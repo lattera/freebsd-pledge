@@ -145,6 +145,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/unpcb.h>
 #include <sys/jail.h>
 #include <sys/syslog.h>
+#include <sys/sysfil.h>
 #include <netinet/in.h>
 #include <netinet/in_pcb.h>
 #include <netinet/tcp.h>
@@ -527,6 +528,10 @@ socreate(int dom, struct socket **aso, int type, int proto,
 	if (prp->pr_usrreqs->pru_attach == NULL ||
 	    prp->pr_usrreqs->pru_attach == pru_attach_notsupp)
 		return (EPROTONOSUPPORT);
+
+	error = sysfil_require_af(td, prp->pr_domain->dom_family);
+	if (error)
+		return (error);
 
 	if (prison_check_af(cred, prp->pr_domain->dom_family) != 0)
 		return (EPROTONOSUPPORT);

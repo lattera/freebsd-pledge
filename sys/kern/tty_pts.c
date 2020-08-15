@@ -266,7 +266,7 @@ ptsdev_ioctl(struct file *fp, u_long cmd, void *data,
 	struct pts_softc *psc = tty_softc(tp);
 	int error = 0, sig;
 
-	error = sysfil_check_ioctl(td, SYF_PLEDGE_TTY, cmd);
+	error = sysfil_require_ioctl(td, SYSFIL_TTY, cmd);
 	if (error)
 		return (error);
 

@@ -2011,7 +2011,7 @@ sysctl_rtsock(SYSCTL_HANDLER_ARGS)
 	u_char	af;
 	struct	walkarg w;
 
-	error = sysfil_check(req->td, SYF_PLEDGE_INET);
+	error = sysfil_require(req->td, SYSFIL_INET);
 	if (error)
 		return (error);
 
