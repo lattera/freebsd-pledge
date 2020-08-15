@@ -2,3 +2,4 @@ ident	PLEDGE
 include	GENERIC
 options	SYSFIL
 options	UNVEIL
+options	COMPAT_43
