@@ -51,6 +51,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/capsicum.h>
+#include <sys/sysfil.h>
 #include <sys/kernel.h>
 #include <sys/lock.h>
 #include <sys/mutex.h>
@@ -149,6 +150,15 @@ ogetpagesize(struct thread *td, struct ogetpagesize_args *uap)
 #endif				/* COMPAT_43 */
 
 
+static int
+sysfil_check_vm_prot(struct thread *td, vm_prot_t prot)
+{
+	if (prot & PROT_EXEC)
+		return (sysfil_require(td, SYSFIL_PROT_EXEC));
+	return (0);
+}
+
+
 /*
  * Memory Map (mmap) system call.  Note that the file offset
  * and address are allowed to be NOT page aligned, though if
@@ -239,6 +249,10 @@ kern_mmap_req(struct thread *td, const struct mmap_req *mrp)
 	prot = PROT_EXTRACT(prot);
 	if (max_prot != 0 && (max_prot & prot) != prot)
 		return (ENOTSUP);
+
+	error = sysfil_check_vm_prot(td, prot);
+	if (error)
+		return (error);
 
 	p = td->td_proc;
 
@@ -650,7 +664,7 @@ kern_mprotect(struct thread *td, uintptr_t addr0, size_t size, int prot)
 {
 	vm_offset_t addr;
 	vm_size_t pageoff;
-	int vm_error, max_prot;
+	int vm_error, error, max_prot;
 
 	addr = addr0;
 	if ((prot & ~(_PROT_ALL | PROT_MAX(_PROT_ALL))) != 0)
@@ -669,6 +683,10 @@ kern_mprotect(struct thread *td, uintptr_t addr0, size_t size, int prot)
 #endif
 	if (addr + size < addr)
 		return (EINVAL);
+
+	error = sysfil_check_vm_prot(td, prot);
+	if (error)
+		return (error);
 
 	vm_error = KERN_SUCCESS;
 	if (max_prot != 0) {

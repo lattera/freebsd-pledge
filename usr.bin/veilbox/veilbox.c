@@ -21,7 +21,8 @@ static const mode_t tmpdir_mode = S_IWUSR|S_IXUSR;
 
 static const char *default_promises =
     "error stdio "
-    "rpath wpath cpath dpath tmppath exec "
+    "rpath wpath cpath dpath tmppath "
+    "exec prot_exec "
     "flock fattr chown id "
     "proc thread "
     "tty "

@@ -295,6 +295,16 @@ sysfil_cred_update(struct ucred *cr,
 		MPASS(CRED_IN_RESTRICTED_MODE(cr));
 	}
 	if (flags & SYSFILCTL_FOR_EXEC) {
+		if (SYSFILSET_MATCH(&cr->cr_sysfilset, SYSFIL_EXEC) ||
+		    SYSFILSET_MATCH(&sysfilset, SYSFIL_EXEC))
+			/*
+			 * On OpenBSD, executing dynamically linked binaries
+			 * works with just the "exec" pledge (the "prot_exec"
+			 * pledge is only enforced after the dynamic linker has
+			 * done its job).  Not so for us, so implicitly allow
+			 * PROT_EXEC for now. XXX
+			 */
+			SYSFILSET_FILL(&sysfilset, SYSFIL_PROT_EXEC);
 		SYSFILSET_MASK(&cr->cr_sysfilset_exec, &sysfilset);
 		MPASS(SYSFILSET_IS_RESTRICTED(&cr->cr_sysfilset_exec));
 		MPASS(CRED_IN_RESTRICTED_EXEC_MODE(cr));
