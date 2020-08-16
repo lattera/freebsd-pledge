@@ -977,8 +977,8 @@ sys_chroot(struct thread *td, struct chroot_args *uap)
 	error = priv_check(td, PRIV_VFS_CHROOT);
 	if (error != 0)
 		return (error);
-	NDINIT(&nd, LOOKUP, FOLLOW | LOCKSHARED | LOCKLEAF | AUDITVNODE1,
-	    UIO_USERSPACE, uap->path, td);
+	NDINIT_ATRIGHTS(&nd, LOOKUP, FOLLOW | LOCKSHARED | LOCKLEAF | AUDITVNODE1,
+	    UIO_USERSPACE, uap->path, AT_FDCWD, &cap_fchdir_rights, td);
 	error = namei(&nd);
 	if (error != 0)
 		goto error;
