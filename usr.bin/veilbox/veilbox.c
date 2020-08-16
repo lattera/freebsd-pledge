@@ -35,7 +35,7 @@ struct unveil_entry {
 };
 
 static const struct unveil_entry default_unveils[] = {
-	{ "/dev/fd", "rwc" }, /* not included by "stdio" */
+	{ _PATH_DEV "/fd", "rwc" }, /* not included by "stdio" */
 	{ "/lib", "rx" },
 	{ "/usr/lib", "rx" },
 	{ "/usr/local/lib", "rx" },
