@@ -205,13 +205,14 @@ sysfil_require_debug(struct thread *td)
 }
 
 static void
-sysfil_log_violation(struct thread *td, int sf)
+sysfil_log_violation(struct thread *td, int sf, bool signaled)
 {
 #ifdef SYSFIL
 	struct proc *p = td->td_proc;
 	struct ucred *cr = td->td_ucred;
-	log(LOG_ERR, "pid %d (%s), jid %d, uid %d: violated sysfil #%d restrictions\n",
-	    p->p_pid, p->p_comm, cr->cr_prison->pr_id, cr->cr_uid, sf);
+	log(LOG_ERR, "pid %d (%s), jid %d, uid %d: violated sysfil #%d restrictions%s\n",
+	    p->p_pid, p->p_comm, cr->cr_prison->pr_id, cr->cr_uid, sf,
+	    signaled ? " and was signaled" : "");
 #endif
 }
 
@@ -219,12 +220,13 @@ void
 sysfil_violation(struct thread *td, int sf, int error)
 {
 #ifdef SYSFIL
-	if (sysfil_violation_log_level >= 2)
-		sysfil_log_violation(td, sf);
-	if (sysfil_check(td, SYSFIL_ERROR) != 0) {
+	bool trap = sysfil_check(td, SYSFIL_ERROR) != 0;
+	if (sysfil_violation_log_level >= 2 ? true :
+	    sysfil_violation_log_level >= 1 ? trap :
+	                                      false)
+		sysfil_log_violation(td, sf, trap);
+	if (trap) {
 		ksiginfo_t ksi;
-		if (sysfil_violation_log_level == 1)
-			sysfil_log_violation(td, sf);
 		/*
 		 * OpenBSD sends an "uncatchable" SIGABRT.  Not sure how to
 		 * correctly do that, so instead we restrict the ability to
