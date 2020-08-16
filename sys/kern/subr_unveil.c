@@ -184,7 +184,7 @@ unveil_lookup_check(struct nameidata *ndp)
 		return (failed);
 
 	unveil_perms_to_rights(&haverights, uperms);
-	if (!cap_rights_contains(&haverights, &ndp->ni_rightsneeded))
+	if (!cap_rights_contains(&haverights, ndp->ni_rightsneeded))
 		return (failed);
 
 	return (0);

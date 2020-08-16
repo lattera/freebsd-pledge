@@ -62,11 +62,14 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysproto.h>
 #include <sys/ucontext.h>
 #include <sys/vdso.h>
+#include <sys/vmmeter.h>
 
 #include <vm/vm.h>
+#include <vm/vm_param.h>
 #include <vm/vm_kern.h>
 #include <vm/vm_object.h>
 #include <vm/vm_page.h>
+#include <vm/vm_phys.h>
 #include <vm/pmap.h>
 #include <vm/vm_map.h>
 #include <vm/vm_pager.h>
@@ -129,6 +132,8 @@ void pagezero_cache(void *);
 /* pagezero_simple is default pagezero */
 void (*pagezero)(void *p) = pagezero_simple;
 
+int (*apei_nmi)(void);
+
 static void
 pan_setup(void)
 {
@@ -170,9 +175,28 @@ has_hyp(void)
 static void
 cpu_startup(void *dummy)
 {
+	vm_paddr_t size;
+	int i;
+
+	printf("real memory  = %ju (%ju MB)\n", ptoa((uintmax_t)realmem),
+	    ptoa((uintmax_t)realmem) / 1024 / 1024);
+
+	if (bootverbose) {
+		printf("Physical memory chunk(s):\n");
+		for (i = 0; phys_avail[i + 1] != 0; i += 2) {
+			size = phys_avail[i + 1] - phys_avail[i];
+			printf("%#016jx - %#016jx, %ju bytes (%ju pages)\n",
+			    (uintmax_t)phys_avail[i],
+			    (uintmax_t)phys_avail[i + 1] - 1,
+			    (uintmax_t)size, (uintmax_t)size / PAGE_SIZE);
+		}
+	}
+
+	printf("avail memory = %ju (%ju MB)\n",
+	    ptoa((uintmax_t)vm_free_count()),
+	    ptoa((uintmax_t)vm_free_count()) / 1024 / 1024);
 
 	undef_init();
-	identify_cpu();
 	install_cpu_errata();
 
 	vm_ksubmap_init(&kmi);
@@ -181,6 +205,13 @@ cpu_startup(void *dummy)
 }
 
 SYSINIT(cpu, SI_SUB_CPU, SI_ORDER_FIRST, cpu_startup, NULL);
+
+static void
+late_ifunc_resolve(void *dummy __unused)
+{
+	link_elf_late_ireloc();
+}
+SYSINIT(late_ifunc_resolve, SI_SUB_CPU, SI_ORDER_ANY, late_ifunc_resolve, NULL);
 
 int
 cpu_idle_wakeup(int cpu)
@@ -1138,6 +1169,9 @@ initarm(struct arm64_bootparams *abp)
 	if (kmdp == NULL)
 		kmdp = preload_search_by_type("elf64 kernel");
 
+	identify_cpu(0);
+	update_special_regs(0);
+
 	link_elf_ireloc(kmdp);
 	try_load_dtb(kmdp);
 
@@ -1181,6 +1215,7 @@ initarm(struct arm64_bootparams *abp)
 	    "msr tpidr_el1, %0" :: "r"(pcpup));
 
 	PCPU_SET(curthread, &thread0);
+	PCPU_SET(midr, get_midr());
 
 	/* Do basic tuning, hz etc */
 	init_param1();

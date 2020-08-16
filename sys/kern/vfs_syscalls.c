@@ -89,13 +89,11 @@ __FBSDID("$FreeBSD$");
 #include <vm/vm_page.h>
 #include <vm/uma.h>
 
+#include <fs/devfs/devfs.h>
+
 #include <ufs/ufs/quota.h>
 
 MALLOC_DEFINE(M_FADVISE, "fadvise", "posix_fadvise(2) information");
-
-SDT_PROVIDER_DEFINE(vfs);
-SDT_PROBE_DEFINE2(vfs, , stat, mode, "char *", "int");
-SDT_PROBE_DEFINE2(vfs, , stat, reg, "char *", "int");
 
 static int kern_chflagsat(struct thread *td, int fd, const char *path,
     enum uio_seg pathseg, u_long flags, int atflag);
@@ -443,7 +441,46 @@ restart:
 		tofree = sfsp = *buf = malloc(maxcount * sizeof(struct statfs),
 		    M_STATFS, M_WAITOK);
 	}
+
 	count = 0;
+
+	/*
+	 * If there is no target buffer they only want the count.
+	 *
+	 * This could be TAILQ_FOREACH but it is open-coded to match the original
+	 * code below.
+	 */
+	if (sfsp == NULL) {
+		mtx_lock(&mountlist_mtx);
+		for (mp = TAILQ_FIRST(&mountlist); mp != NULL; mp = nmp) {
+			if (prison_canseemount(td->td_ucred, mp) != 0) {
+				nmp = TAILQ_NEXT(mp, mnt_list);
+				continue;
+			}
+#ifdef MAC
+			if (mac_mount_check_stat(td->td_ucred, mp) != 0) {
+				nmp = TAILQ_NEXT(mp, mnt_list);
+				continue;
+			}
+#endif
+			count++;
+			nmp = TAILQ_NEXT(mp, mnt_list);
+		}
+		mtx_unlock(&mountlist_mtx);
+		*countp = count;
+		return (0);
+	}
+
+	/*
+	 * They want the entire thing.
+	 *
+	 * Short-circuit the corner case of no room for anything, avoids
+	 * relocking below.
+	 */
+	if (maxcount < 1) {
+		goto out;
+	}
+
 	mtx_lock(&mountlist_mtx);
 	for (mp = TAILQ_FIRST(&mountlist); mp != NULL; mp = nmp) {
 		if (prison_canseemount(td->td_ucred, mp) != 0) {
@@ -475,53 +512,55 @@ restart:
 				continue;
 			}
 		}
-		if (sfsp != NULL && count < maxcount) {
-			sp = &mp->mnt_stat;
-			/*
-			 * If MNT_NOWAIT is specified, do not refresh
-			 * the fsstat cache.
-			 */
-			if (mode != MNT_NOWAIT) {
-				error = VFS_STATFS(mp, sp);
-				if (error != 0) {
-					mtx_lock(&mountlist_mtx);
-					nmp = TAILQ_NEXT(mp, mnt_list);
-					vfs_unbusy(mp);
-					continue;
-				}
+		sp = &mp->mnt_stat;
+		/*
+		 * If MNT_NOWAIT is specified, do not refresh
+		 * the fsstat cache.
+		 */
+		if (mode != MNT_NOWAIT) {
+			error = VFS_STATFS(mp, sp);
+			if (error != 0) {
+				mtx_lock(&mountlist_mtx);
+				nmp = TAILQ_NEXT(mp, mnt_list);
+				vfs_unbusy(mp);
+				continue;
 			}
-			if (priv_check_cred_vfs_generation(td->td_ucred)) {
-				sptmp = malloc(sizeof(struct statfs), M_STATFS,
-				    M_WAITOK);
-				*sptmp = *sp;
-				sptmp->f_fsid.val[0] = sptmp->f_fsid.val[1] = 0;
-				prison_enforce_statfs(td->td_ucred, mp, sptmp);
-				sp = sptmp;
-			} else
-				sptmp = NULL;
-			if (bufseg == UIO_SYSSPACE) {
-				bcopy(sp, sfsp, sizeof(*sp));
-				free(sptmp, M_STATFS);
-			} else /* if (bufseg == UIO_USERSPACE) */ {
-				error = copyout(sp, sfsp, sizeof(*sp));
-				free(sptmp, M_STATFS);
-				if (error != 0) {
-					vfs_unbusy(mp);
-					return (error);
-				}
-			}
-			sfsp++;
 		}
+		if (priv_check_cred_vfs_generation(td->td_ucred)) {
+			sptmp = malloc(sizeof(struct statfs), M_STATFS,
+			    M_WAITOK);
+			*sptmp = *sp;
+			sptmp->f_fsid.val[0] = sptmp->f_fsid.val[1] = 0;
+			prison_enforce_statfs(td->td_ucred, mp, sptmp);
+			sp = sptmp;
+		} else
+			sptmp = NULL;
+		if (bufseg == UIO_SYSSPACE) {
+			bcopy(sp, sfsp, sizeof(*sp));
+			free(sptmp, M_STATFS);
+		} else /* if (bufseg == UIO_USERSPACE) */ {
+			error = copyout(sp, sfsp, sizeof(*sp));
+			free(sptmp, M_STATFS);
+			if (error != 0) {
+				vfs_unbusy(mp);
+				return (error);
+			}
+		}
+		sfsp++;
 		count++;
+
+		if (count == maxcount) {
+			vfs_unbusy(mp);
+			goto out;
+		}
+
 		mtx_lock(&mountlist_mtx);
 		nmp = TAILQ_NEXT(mp, mnt_list);
 		vfs_unbusy(mp);
 	}
 	mtx_unlock(&mountlist_mtx);
-	if (sfsp != NULL && count > maxcount)
-		*countp = maxcount;
-	else
-		*countp = count;
+out:
+	*countp = count;
 	return (0);
 }
 
@@ -1860,7 +1899,7 @@ restart:
 	if (vp->v_type == VDIR && oldinum == 0) {
 		error = EPERM;		/* POSIX */
 	} else if (oldinum != 0 &&
-		  ((error = vn_stat(vp, &sb, td->td_ucred, NOCRED, td)) == 0) &&
+		  ((error = VOP_STAT(vp, &sb, td->td_ucred, NOCRED, td)) == 0) &&
 		  sb.st_ino != oldinum) {
 		error = EIDRM;	/* Identifier removed */
 	} else if (fp != NULL && fp->f_vnode != vp) {
@@ -2374,11 +2413,8 @@ kern_statat(struct thread *td, int flag, int fd, const char *path,
 
 	if ((error = namei(&nd)) != 0)
 		return (error);
-	error = vn_stat(nd.ni_vp, sbp, td->td_ucred, NOCRED, td);
+	error = VOP_STAT(nd.ni_vp, sbp, td->td_ucred, NOCRED, td);
 	if (error == 0) {
-		SDT_PROBE2(vfs, , stat, mode, path, sbp->st_mode);
-		if (S_ISREG(sbp->st_mode))
-			SDT_PROBE2(vfs, , stat, reg, path, pathseg);
 		if (__predict_false(hook != NULL))
 			hook(nd.ni_vp, sbp);
 	}
@@ -3538,6 +3574,33 @@ sys_renameat(struct thread *td, struct renameat_args *uap)
 	    UIO_USERSPACE));
 }
 
+#ifdef MAC
+static int
+kern_renameat_mac(struct thread *td, int oldfd, const char *old, int newfd,
+    const char *new, enum uio_seg pathseg, struct nameidata *fromnd)
+{
+	int error;
+
+	NDINIT_ATRIGHTS(fromnd, DELETE, LOCKPARENT | LOCKLEAF | SAVESTART |
+	    AUDITVNODE1, pathseg, old, oldfd, &cap_renameat_source_rights, td);
+	if ((error = namei(fromnd)) != 0)
+		return (error);
+	error = mac_vnode_check_rename_from(td->td_ucred, fromnd->ni_dvp,
+	    fromnd->ni_vp, &fromnd->ni_cnd);
+	VOP_UNLOCK(fromnd->ni_dvp);
+	if (fromnd->ni_dvp != fromnd->ni_vp)
+		VOP_UNLOCK(fromnd->ni_vp);
+	if (error != 0) {
+		NDFREE(fromnd, NDF_ONLY_PNBUF);
+		vrele(fromnd->ni_dvp);
+		vrele(fromnd->ni_vp);
+		if (fromnd->ni_startdir)
+			vrele(fromnd->ni_startdir);
+	}
+	return (error);
+}
+#endif
+
 int
 kern_renameat(struct thread *td, int oldfd, const char *old, int newfd,
     const char *new, enum uio_seg pathseg)
@@ -3550,23 +3613,19 @@ kern_renameat(struct thread *td, int oldfd, const char *old, int newfd,
 again:
 	bwillwrite();
 #ifdef MAC
-	NDINIT_ATRIGHTS(&fromnd, DELETE, LOCKPARENT | LOCKLEAF | SAVESTART |
-	    AUDITVNODE1, pathseg, old, oldfd,
-	    &cap_renameat_source_rights, td);
-#else
-	NDINIT_ATRIGHTS(&fromnd, DELETE, WANTPARENT | SAVESTART | AUDITVNODE1,
-	    pathseg, old, oldfd,
-	    &cap_renameat_source_rights, td);
+	if (mac_vnode_check_rename_from_enabled()) {
+		error = kern_renameat_mac(td, oldfd, old, newfd, new, pathseg,
+		    &fromnd);
+		if (error != 0)
+			return (error);
+	} else {
 #endif
-
+	NDINIT_ATRIGHTS(&fromnd, DELETE, WANTPARENT | SAVESTART | AUDITVNODE1,
+	    pathseg, old, oldfd, &cap_renameat_source_rights, td);
 	if ((error = namei(&fromnd)) != 0)
 		return (error);
 #ifdef MAC
-	error = mac_vnode_check_rename_from(td->td_ucred, fromnd.ni_dvp,
-	    fromnd.ni_vp, &fromnd.ni_cnd);
-	VOP_UNLOCK(fromnd.ni_dvp);
-	if (fromnd.ni_dvp != fromnd.ni_vp)
-		VOP_UNLOCK(fromnd.ni_vp);
+	}
 #endif
 	fvp = fromnd.ni_vp;
 	NDINIT_ATRIGHTS(&tond, RENAME, LOCKPARENT | LOCKLEAF | NOCACHE |
@@ -4194,7 +4253,7 @@ sys_revoke(struct thread *td, struct revoke_args *uap)
 		if (error != 0)
 			goto out;
 	}
-	if (vp->v_usecount > 1 || vcount(vp) > 1)
+	if (devfs_usecount(vp) > 0)
 		VOP_REVOKE(vp, REVOKEALL);
 out:
 	vput(vp);
@@ -4540,7 +4599,7 @@ kern_fhstat(struct thread *td, struct fhandle fh, struct stat *sb)
 	vfs_unbusy(mp);
 	if (error != 0)
 		return (error);
-	error = vn_stat(vp, sb, td->td_ucred, NOCRED, td);
+	error = VOP_STAT(vp, sb, td->td_ucred, NOCRED, td);
 	vput(vp);
 	return (error);
 }
