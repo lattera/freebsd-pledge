@@ -90,7 +90,9 @@ unveil_perms_to_rights(cap_rights_t *rights, unveil_perms_t uperms)
 		    CAP_FSTATFS,
 		    CAP_RENAMEAT_SOURCE,
 		    CAP_LINKAT_SOURCE,
-		    CAP_MAC_GET);
+		    CAP_MAC_GET,
+		    CAP_EXTATTR_GET,
+		    CAP_EXTATTR_LIST);
 	if (uperms & UNVEIL_PERM_WPATH)
 		cap_rights_set(rights,
 		    CAP_WRITE,
@@ -108,7 +110,9 @@ unveil_perms_to_rights(cap_rights_t *rights, unveil_perms_t uperms)
 		    CAP_FUTIMES,
 		    CAP_FUTIMESAT,
 		    CAP_MAC_SET,
-		    CAP_REVOKEAT);
+		    CAP_REVOKEAT,
+		    CAP_EXTATTR_SET,
+		    CAP_EXTATTR_DELETE);
 	if (uperms & UNVEIL_PERM_CPATH)
 		cap_rights_set(rights,
 		    CAP_CREATE,

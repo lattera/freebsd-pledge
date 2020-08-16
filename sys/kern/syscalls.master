@@ -1865,7 +1865,7 @@
 		    _In_ struct acl *aclp
 		);
 	}
-355	AUE_EXTATTRCTL	STD|SYSFIL_EXTATTR {
+355	AUE_EXTATTRCTL	STD {
 		int extattrctl(
 		    _In_z_ const char *path,
 		    int cmd,

@@ -34,6 +34,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/capsicum.h>
+#include <sys/capsicum.h>
 #include <sys/lock.h>
 #include <sys/mount.h>
 #include <sys/mutex.h>
@@ -302,7 +303,8 @@ kern_extattr_set_path(struct thread *td, const char *path, int attrnamespace,
 		return (error);
 	AUDIT_ARG_TEXT(attrname);
 
-	NDINIT(&nd, LOOKUP, follow | AUDITVNODE1, UIO_USERSPACE, path, td);
+	NDINIT_ATRIGHTS(&nd, LOOKUP, follow | AUDITVNODE1, UIO_USERSPACE, path,
+	    AT_FDCWD, &cap_extattr_set_rights, td);
 	error = namei(&nd);
 	if (error)
 		return (error);
@@ -467,7 +469,8 @@ kern_extattr_get_path(struct thread *td, const char *path, int attrnamespace,
 		return (error);
 	AUDIT_ARG_TEXT(attrname);
 
-	NDINIT(&nd, LOOKUP, follow | AUDITVNODE1, UIO_USERSPACE, path, td);
+	NDINIT_ATRIGHTS(&nd, LOOKUP, follow | AUDITVNODE1, UIO_USERSPACE, path,
+	    AT_FDCWD, &cap_extattr_get_rights, td);
 	error = namei(&nd);
 	if (error)
 		return (error);
@@ -599,7 +602,8 @@ kern_extattr_delete_path(struct thread *td, const char *path, int attrnamespace,
 		return(error);
 	AUDIT_ARG_TEXT(attrname);
 
-	NDINIT(&nd, LOOKUP, follow | AUDITVNODE1, UIO_USERSPACE, path, td);
+	NDINIT_ATRIGHTS(&nd, LOOKUP, follow | AUDITVNODE1, UIO_USERSPACE, path,
+	    AT_FDCWD, &cap_extattr_delete_rights, td);
 	error = namei(&nd);
 	if (error)
 		return(error);
@@ -742,7 +746,8 @@ kern_extattr_list_path(struct thread *td, const char *path, int attrnamespace,
 	int error;
 
 	AUDIT_ARG_VALUE(attrnamespace);
-	NDINIT(&nd, LOOKUP, follow | AUDITVNODE1, UIO_USERSPACE, path, td);
+	NDINIT_ATRIGHTS(&nd, LOOKUP, follow | AUDITVNODE1, UIO_USERSPACE, path,
+	    AT_FDCWD, &cap_extattr_list_rights, td);
 	error = namei(&nd);
 	if (error)
 		return (error);
