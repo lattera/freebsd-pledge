@@ -372,7 +372,9 @@ do_pledge_unveils(const bool *req_promises, bool for_exec, int *sysfils)
 	return (sysfils - orig_sysfils);
 }
 
-static int do_pledge(const bool *promises, bool for_exec) {
+static int
+do_pledge(const bool *promises, bool for_exec)
+{
 	int sysfils[nitems(sysfils_table) + 1];
 	size_t count;
 	int r;
