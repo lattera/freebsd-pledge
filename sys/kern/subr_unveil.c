@@ -1,6 +1,8 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
+#include "opt_kdb.h"
+
 #include <sys/param.h>
 #include <sys/filedesc.h>
 #include <sys/kernel.h>
@@ -10,6 +12,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysctl.h>
 #include <sys/unveil.h>
 #include <sys/capsicum.h>
+#include <sys/kdb.h>
 
 #ifdef UNVEIL
 
@@ -195,17 +198,22 @@ unveil_lookup_check(struct nameidata *ndp)
 		failed = ENOENT;
 	}
 
+	unveil_perms_to_rights(&haverights, uperms);
+	if (!cap_rights_contains(&haverights, ndp->ni_rightsneeded))
+		return (failed);
+
 	/*
 	 * This should not be necessary, but it could catch some namei() calls
 	 * that have the wrong rights.
 	 */
 	if ((cnp->cn_nameiop == DELETE || cnp->cn_nameiop == CREATE) &&
-	    !(uperms & UNVEIL_PERM_CPATH))
+	    !(uperms & UNVEIL_PERM_CPATH)) {
+		printf("namei DELETE/CREATE blocked despite rights.\n");
+#ifdef KDB
+		kdb_backtrace();
+#endif
 		return (failed);
-
-	unveil_perms_to_rights(&haverights, uperms);
-	if (!cap_rights_contains(&haverights, ndp->ni_rightsneeded))
-		return (failed);
+	}
 
 	return (0);
 }
