@@ -98,6 +98,8 @@ __read_mostly cap_rights_t cap_shutdown_rights;
 __read_mostly cap_rights_t cap_symlinkat_rights;
 __read_mostly cap_rights_t cap_unlinkat_rights;
 __read_mostly cap_rights_t cap_write_rights;
+__read_mostly cap_rights_t cap_mac_get_rights;
+__read_mostly cap_rights_t cap_mac_set_rights;
 __read_mostly cap_rights_t cap_no_rights;
 
 static void
@@ -147,6 +149,8 @@ cap_rights_sysinit(void *arg)
 	cap_rights_init_one(&cap_symlinkat_rights, CAP_SYMLINKAT);
 	cap_rights_init_one(&cap_unlinkat_rights, CAP_UNLINKAT);
 	cap_rights_init_one(&cap_write_rights, CAP_WRITE);
+	cap_rights_init_one(&cap_mac_get_rights, CAP_MAC_GET);
+	cap_rights_init_one(&cap_mac_set_rights, CAP_MAC_SET);
 	cap_rights_init(&cap_no_rights);
 }
 SYSINIT(cap_rights_sysinit, SI_SUB_COPYRIGHT, SI_ORDER_ANY, cap_rights_sysinit,

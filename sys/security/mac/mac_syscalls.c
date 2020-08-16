@@ -360,7 +360,8 @@ kern___mac_get_path(struct thread *td, const char *path_p, struct mac *mac_p,
 	}
 
 	buffer = malloc(mac.m_buflen, M_MACTEMP, M_WAITOK | M_ZERO);
-	NDINIT(&nd, LOOKUP, LOCKLEAF | follow, UIO_USERSPACE, path_p, td);
+	NDINIT_ATRIGHTS(&nd, LOOKUP, LOCKLEAF | follow, UIO_USERSPACE, path_p,
+	    AT_FDCWD, &cap_mac_get_rights, td);
 	error = namei(&nd);
 	if (error)
 		goto out;
@@ -532,7 +533,8 @@ kern___mac_set_path(struct thread *td, const char *path_p, struct mac *mac_p,
 	if (error)
 		goto out;
 
-	NDINIT(&nd, LOOKUP, LOCKLEAF | follow, UIO_USERSPACE, path_p, td);
+	NDINIT_ATRIGHTS(&nd, LOOKUP, LOCKLEAF | follow, UIO_USERSPACE, path_p,
+	    AT_FDCWD, &cap_mac_set_rights, td);
 	error = namei(&nd);
 	if (error == 0) {
 		error = vn_start_write(nd.ni_vp, &mp, V_WAIT | PCATCH);
