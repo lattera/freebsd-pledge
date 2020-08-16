@@ -196,15 +196,6 @@ unveil_lookup_check(struct nameidata *ndp)
 	}
 
 	/*
-	 * When unveil checking is enabled, only allow namei() calls that were
-	 * given a set of needed capability rights (NDINIT_ATRIGHTS()).
-	 * Otherwise those calls would always pass the permission check.  Some
-	 * calls haven't been converted to use capability rights yet.
-	 */
-	if (!(ndp->ni_intflags & NI_INT_HASRIGHTS))
-		return (failed);
-
-	/*
 	 * This should not be necessary, but it could catch some namei() calls
 	 * that have the wrong rights.
 	 */

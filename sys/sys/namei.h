@@ -93,10 +93,6 @@ struct nameidata {
 	struct	vnode *ni_vp;		/* vnode of result */
 	struct	vnode *ni_dvp;		/* vnode of intermediate directory */
 	/*
-	 * Internal flags, not intended to be manipulated by user
-	 */
-	u_int	ni_intflags;
-	/*
 	 * Results: flags returned from namei
 	 */
 	u_int	ni_resflags;
@@ -193,12 +189,6 @@ int	cache_fplookup(struct nameidata *ndp, enum cache_fpl_status *status,
 #define	NIRES_ABS		0x00000001 /* Path was absolute */
 
 /*
- * Internal flags
- */
-
-#define	NI_INT_HASRIGHTS	0x00000001 /* was initialized with capability rights */
-
-/*
  * Flags in ni_lcf, valid for the duration of the namei call.
  */
 #define	NI_LCF_STRICTRELATIVE	0x0001	/* relative lookup only */
@@ -231,7 +221,6 @@ int	cache_fplookup(struct nameidata *ndp, enum cache_fpl_status *status,
 
 #ifdef UNVEIL
 #define	NDINIT_UNVEIL(_ndp) do { \
-	_ndp->ni_intflags |= NI_INT_HASRIGHTS; /* XXX */ \
 	_ndp->ni_unveil = NULL; \
 	_ndp->ni_unveil_data = NULL; \
 } while (0)
@@ -251,7 +240,6 @@ do {										\
 	_ndp->ni_dirp = namep;							\
 	_ndp->ni_dirfd = dirfd;							\
 	_ndp->ni_startdir = startdir;						\
-	_ndp->ni_intflags = 0;							\
 	_ndp->ni_resflags = 0;							\
 	filecaps_init(&_ndp->ni_filecaps);					\
 	_ndp->ni_cnd.cn_thread = td;						\
