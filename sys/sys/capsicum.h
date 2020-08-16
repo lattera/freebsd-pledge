@@ -49,7 +49,6 @@
 #include <sys/fcntl.h>
 
 #include <sys/_sysfil.h>
-#include <sys/bitset.h>
 
 #ifndef _KERNEL
 #include <stdbool.h>
