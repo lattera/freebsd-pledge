@@ -1772,12 +1772,14 @@ sys_undelete(struct thread *td, struct undelete_args *uap)
 {
 	struct mount *mp;
 	struct nameidata nd;
+	cap_rights_t rights;
 	int error;
 
 restart:
 	bwillwrite();
-	NDINIT(&nd, DELETE, LOCKPARENT | DOWHITEOUT | AUDITVNODE1,
-	    UIO_USERSPACE, uap->path, td);
+	NDINIT_ATRIGHTS(&nd, DELETE, LOCKPARENT | DOWHITEOUT | AUDITVNODE1,
+	    UIO_USERSPACE, uap->path,
+	    AT_FDCWD, cap_rights_init_one(&rights, CAP_UNDELETEAT), td);
 	error = namei(&nd);
 	if (error != 0)
 		return (error);
@@ -4228,10 +4230,12 @@ sys_revoke(struct thread *td, struct revoke_args *uap)
 	struct vnode *vp;
 	struct vattr vattr;
 	struct nameidata nd;
+	cap_rights_t rights;
 	int error;
 
-	NDINIT(&nd, LOOKUP, FOLLOW | LOCKLEAF | AUDITVNODE1, UIO_USERSPACE,
-	    uap->path, td);
+	NDINIT_ATRIGHTS(&nd, LOOKUP, FOLLOW | LOCKLEAF | AUDITVNODE1,
+	    UIO_USERSPACE, uap->path,
+	    AT_FDCWD, cap_rights_init_one(&rights, CAP_REVOKEAT), td);
 	if ((error = namei(&nd)) != 0)
 		return (error);
 	vp = nd.ni_vp;

@@ -89,7 +89,8 @@ unveil_perms_to_rights(cap_rights_t *rights, unveil_perms_t uperms)
 		    CAP_FSTATAT,
 		    CAP_FSTATFS,
 		    CAP_RENAMEAT_SOURCE,
-		    CAP_LINKAT_SOURCE);
+		    CAP_LINKAT_SOURCE,
+		    CAP_MAC_GET);
 	if (uperms & UNVEIL_PERM_WPATH)
 		cap_rights_set(rights,
 		    CAP_WRITE,
@@ -105,7 +106,9 @@ unveil_perms_to_rights(cap_rights_t *rights, unveil_perms_t uperms)
 		    CAP_FCHOWN,
 		    CAP_FCHOWNAT,
 		    CAP_FUTIMES,
-		    CAP_FUTIMESAT);
+		    CAP_FUTIMESAT,
+		    CAP_MAC_SET,
+		    CAP_REVOKEAT);
 	if (uperms & UNVEIL_PERM_CPATH)
 		cap_rights_set(rights,
 		    CAP_CREATE,
@@ -118,7 +121,8 @@ unveil_perms_to_rights(cap_rights_t *rights, unveil_perms_t uperms)
 		    CAP_UNLINKAT,
 		    CAP_BINDAT,
 		    CAP_CONNECTAT,
-		    CAP_RENAMEAT_TARGET);
+		    CAP_RENAMEAT_TARGET,
+		    CAP_UNDELETEAT);
 	if (uperms & UNVEIL_PERM_XPATH)
 		cap_rights_set(rights,
 		    CAP_FEXECVE,
