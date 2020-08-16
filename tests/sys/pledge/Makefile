@@ -22,6 +22,7 @@ PLAIN_TESTS_C+= pledge_tmppath
 PLAIN_TESTS_C+= pledge_fcntl
 PLAIN_TESTS_C+= pledge_getaddrinfo
 PLAIN_TESTS_C+= pledge_chown_own
+PLAIN_TESTS_C+= pledge_prot_exec
 
 PLAIN_TESTS_C+= unveil_simple0
 PLAIN_TESTS_C+= unveil_simple1
