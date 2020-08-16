@@ -292,12 +292,12 @@ sysfil_cred_update(struct ucred *cr,
 	if (flags & SYSFILCTL_FOR_CURR) {
 		SYSFILSET_MASK(&cr->cr_sysfilset, &sysfilset);
 		MPASS(SYSFILSET_IS_RESTRICTED(&cr->cr_sysfilset));
-		MPASS(CRED_IN_SANDBOX_MODE(cr));
+		MPASS(CRED_IN_RESTRICTED_MODE(cr));
 	}
 	if (flags & SYSFILCTL_FOR_EXEC) {
 		SYSFILSET_MASK(&cr->cr_sysfilset_exec, &sysfilset);
 		MPASS(SYSFILSET_IS_RESTRICTED(&cr->cr_sysfilset_exec));
-		MPASS(CRED_IN_SANDBOX_EXEC_MODE(cr));
+		MPASS(CRED_IN_RESTRICTED_EXEC_MODE(cr));
 	}
 	return (0);
 }
@@ -317,10 +317,10 @@ do_sysfilctl(struct thread *td, int flags, size_t count, const int *sysfils)
 	error = sysfil_cred_update(newcred, flags, count, sysfils);
 	if (!error) {
 		proc_set_cred(p, newcred);
-		if (flags & SYSFILCTL_FOR_CURR && !PROC_IN_SANDBOX_MODE(p))
-			panic("PROC_IN_SANDBOX_MODE() bogus after sysfil(2)");
-		if (flags & SYSFILCTL_FOR_EXEC && !PROC_IN_SANDBOX_EXEC_MODE(p))
-			panic("PROC_IN_SANDBOX_EXEC_MODE() bogus after sysfil(2)");
+		if (flags & SYSFILCTL_FOR_CURR && !PROC_IN_RESTRICTED_MODE(p))
+			panic("PROC_IN_RESTRICTED_MODE() bogus after sysfil(2)");
+		if (flags & SYSFILCTL_FOR_EXEC && !PROC_IN_RESTRICTED_EXEC_MODE(p))
+			panic("PROC_IN_RESTRICTED_EXEC_MODE() bogus after sysfil(2)");
 	}
 	PROC_UNLOCK(p);
 	crfree(error ? newcred : oldcred);

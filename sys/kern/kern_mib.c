@@ -103,7 +103,7 @@ SYSCTL_INT(_kern, KERN_OSREV, osrevision, CTLFLAG_RD|CTLFLAG_CAPRD,
     SYSCTL_NULL_INT_PTR, BSD, "Operating system revision");
 
 SYSCTL_STRING(_kern, KERN_VERSION, version,
-    CTLFLAG_RD|CTLFLAG_SANDRD|CTLFLAG_MPSAFE,
+    CTLFLAG_RD|CTLFLAG_RESTRICT|CTLFLAG_MPSAFE,
     version, 0, "Kernel version");
 
 SYSCTL_STRING(_kern, OID_AUTO, compiler_version, CTLFLAG_RD|CTLFLAG_MPSAFE,
@@ -223,7 +223,7 @@ SYSCTL_PROC(_hw, HW_USERMEM, usermem,
     sysctl_hw_usermem, "LU",
     "Amount of memory (in bytes) which is not wired");
 
-SYSCTL_LONG(_hw, OID_AUTO, availpages, CTLFLAG_RD|CTLFLAG_SANDRD, &physmem, 0,
+SYSCTL_LONG(_hw, OID_AUTO, availpages, CTLFLAG_RD|CTLFLAG_RESTRICT, &physmem, 0,
     "Amount of physical memory (in pages)");
 
 u_long pagesizes[MAXPAGESIZES] = { PAGE_SIZE };
@@ -295,7 +295,7 @@ sysctl_hw_machine_arch(SYSCTL_HANDLER_ARGS)
 	return (SYSCTL_OUT(req, machine_arch, strlen(machine_arch) + 1));
 }
 SYSCTL_PROC(_hw, HW_MACHINE_ARCH, machine_arch,
-    CTLTYPE_STRING | CTLFLAG_RD | CTLFLAG_SANDRD | CTLFLAG_MPSAFE,
+    CTLTYPE_STRING | CTLFLAG_RD | CTLFLAG_RESTRICT | CTLFLAG_MPSAFE,
     NULL, 0, sysctl_hw_machine_arch, "A",
     "System architecture");
 

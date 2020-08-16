@@ -1801,7 +1801,7 @@ kern_kill(struct thread *td, pid_t pid, int signum)
 	 * Similarly for pledged processes without SYSFIL_PROC, except
 	 * signaling the process group is allowed by OpenBSD.
 	 */
-	if (IN_SANDBOX_MODE(td) &&
+	if (IN_RESTRICTED_MODE(td) &&
 	    pid != 0 && pid != td->td_proc->p_pid &&
 	    (error = sysfil_require(td, SYSFIL_PROC)) != 0)
 		return (error);

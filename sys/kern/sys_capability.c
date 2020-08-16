@@ -116,13 +116,13 @@ sys_cap_enter(struct thread *td, struct cap_enter_args *uap)
 #ifdef SYSFIL
 	sysfil_cred_sandbox(newcred);
 #endif
-	KASSERT(CRED_IN_SANDBOX_MODE(newcred), ("CRED_IN_SANDBOX_MODE() bogus"));
+	KASSERT(CRED_IN_RESTRICTED_MODE(newcred), ("CRED_IN_RESTRICTED_MODE() bogus"));
 	KASSERT(CRED_IN_CAPABILITY_MODE(newcred), ("CRED_IN_CAPABILITY_MODE() bogus"));
 	proc_set_cred(p, newcred);
-	if (!PROC_IN_SANDBOX_MODE(p))
-		panic("PROC_IN_SANDBOX_MODE() bogus after cap_enter(2)");
-	if (!PROC_IN_SANDBOX_EXEC_MODE(p))
-		panic("PROC_IN_SANDBOX_EXEC_MODE() bogus after cap_enter(2)");
+	if (!PROC_IN_RESTRICTED_MODE(p))
+		panic("PROC_IN_RESTRICTED_MODE() bogus after cap_enter(2)");
+	if (!PROC_IN_RESTRICTED_EXEC_MODE(p))
+		panic("PROC_IN_RESTRICTED_EXEC_MODE() bogus after cap_enter(2)");
 	if (!PROC_IN_CAPABILITY_MODE(p))
 		panic("PROC_IN_CAPABILITY_MODE() bogus after cap_enter(2)");
 	PROC_UNLOCK(p);

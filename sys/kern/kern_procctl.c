@@ -590,7 +590,7 @@ sys_procctl(struct thread *td, struct procctl_args *uap)
 	} x;
 	int error, error1, flags, signum;
 
-	if (IN_SANDBOX_MODE(td)) {
+	if (IN_RESTRICTED_MODE(td)) {
 		/* when sandboxed, only allow operations on self */
 		if (uap->idtype != P_PID || uap->id != td->td_proc->p_pid)
 			return sysfil_failed(td, SYSFIL_DEFAULT);

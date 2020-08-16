@@ -793,15 +793,15 @@ struct proc {
 #define	P_TREE_REAPER		0x00000004	/* Reaper of subtree */
 
 /*
- * The general notion of a process being "sandboxed" is used for checks that
+ * The general notion of a process being "restricted" is used for checks that
  * should be done for both Capsicum and pledge().
  */
-#define	PROC_IN_SANDBOX_MODE(p)		CRED_IN_SANDBOX_MODE(p->p_ucred)
-#define	PROC_IN_SANDBOX_EXEC_MODE(p)	CRED_IN_SANDBOX_EXEC_MODE(p->p_ucred)
+#define	PROC_IN_RESTRICTED_MODE(p)	CRED_IN_RESTRICTED_MODE(p->p_ucred)
+#define	PROC_IN_RESTRICTED_EXEC_MODE(p)	CRED_IN_RESTRICTED_EXEC_MODE(p->p_ucred)
 #define	PROC_IN_CAPABILITY_MODE(p)	CRED_IN_CAPABILITY_MODE(p->p_ucred)
 
-#define	IN_SANDBOX_MODE(td)		PROC_IN_SANDBOX_MODE((td)->td_proc)
-#define	IN_SANDBOX_EXEC_MODE(td)	PROC_IN_SANDBOX_EXEC_MODE((td)->td_proc)
+#define	IN_RESTRICTED_MODE(td)		PROC_IN_RESTRICTED_MODE((td)->td_proc)
+#define	IN_RESTRICTED_EXEC_MODE(td)	PROC_IN_RESTRICTED_EXEC_MODE((td)->td_proc)
 #define	IN_CAPABILITY_MODE(td)		PROC_IN_CAPABILITY_MODE((td)->td_proc)
 
 /*

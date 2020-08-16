@@ -115,9 +115,7 @@ struct ctlname {
 /*
  * Keeping pledge(2) exemptions separate from Capsicum.
  */
-#define	CTLFLAG_SANDRD	0x00000400	/* Can be read under pledge */
-#define	CTLFLAG_SANDWR	0x00000200	/* Can be written under pledge */
-#define	CTLFLAG_SANDRW	(CTLFLAG_SANDRD|CTLFLAG_SANDWR)
+#define	CTLFLAG_RESTRICT 0x00000400	/* Can be accessed under pledge */
 
 /*
  * Secure level.   Note that CTLFLAG_SECURE == CTLFLAG_SECURE1.

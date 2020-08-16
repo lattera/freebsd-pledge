@@ -530,7 +530,7 @@ interpret:
 	if (credential_changing &&
 #ifdef CAPABILITY_MODE
 	    !CRED_IN_CAPABILITY_MODE(oldcred) &&
-	    !CRED_IN_SANDBOX_EXEC_MODE(oldcred) &&
+	    !CRED_IN_RESTRICTED_EXEC_MODE(oldcred) &&
 #endif
 	    (imgp->vp->v_mount->mnt_flag & MNT_NOSUID) == 0 &&
 	    (p->p_flag & P_TRACED) == 0) {

@@ -55,7 +55,7 @@ __FBSDID("$FreeBSD$");
 
 char machine[] = "arm";
 
-SYSCTL_STRING(_hw, HW_MACHINE, machine, CTLFLAG_RD | CTLFLAG_SANDRD,
+SYSCTL_STRING(_hw, HW_MACHINE, machine, CTLFLAG_RD | CTLFLAG_RESTRICT,
 	machine, 0, "Machine class");
 
 static const char * const generic_steppings[16] = {

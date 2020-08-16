@@ -1023,7 +1023,7 @@ fill_kinfo_proc_only(struct proc *p, struct kinfo_proc *kp)
 		kp->ki_cr_flags = 0;
 		if (CRED_IN_CAPABILITY_MODE(cred))
 			kp->ki_cr_flags |= KI_CRF_CAPABILITY_MODE;
-		if (CRED_IN_SANDBOX_MODE(cred))
+		if (CRED_IN_RESTRICTED_MODE(cred))
 			kp->ki_cr_flags |= KI_CRF_RESTRICTED_MODE;
 		/* XXX bde doesn't like KI_NGROUPS */
 		if (cred->cr_ngroups > KI_NGROUPS) {

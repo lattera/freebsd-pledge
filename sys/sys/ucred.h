@@ -98,13 +98,13 @@ struct ucred {
 #define	CRED_IN_CAPABILITY_MODE(cr) (((cr)->cr_flags & CRED_FLAG_CAPMODE) != 0)
 
 #ifdef SYSFIL
-#define	CRED_IN_SANDBOX_MODE(cr) \
+#define	CRED_IN_RESTRICTED_MODE(cr) \
 	SYSFILSET_IS_RESTRICTED(&(cr)->cr_sysfilset)
-#define	CRED_IN_SANDBOX_EXEC_MODE(cr) \
+#define	CRED_IN_RESTRICTED_EXEC_MODE(cr) \
 	SYSFILSET_IS_RESTRICTED(&(cr)->cr_sysfilset_exec)
 #else
-#define	CRED_IN_SANDBOX_MODE(cr)	CRED_IN_CAPABILITY_MODE(cr)
-#define	CRED_IN_SANDBOX_EXEC_MODE(cr)	CRED_IN_CAPABILITY_MODE(cr)
+#define	CRED_IN_RESTRICTED_MODE(cr)		CRED_IN_CAPABILITY_MODE(cr)
+#define	CRED_IN_RESTRICTED_EXEC_MODE(cr)	CRED_IN_CAPABILITY_MODE(cr)
 #endif
 
 #endif /* _KERNEL || _WANT_UCRED */
