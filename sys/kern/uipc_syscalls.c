@@ -42,6 +42,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/capsicum.h>
+#include <sys/sysfil.h>
 #include <sys/kernel.h>
 #include <sys/lock.h>
 #include <sys/mutex.h>
@@ -685,6 +686,9 @@ sendit(struct thread *td, int s, struct msghdr *mp, int flags)
 			to = NULL;
 			goto bad;
 		}
+		error = sysfil_require_af(td, to->sa_family);
+		if (error)
+			goto bad;
 		mp->msg_name = to;
 	} else {
 		to = NULL;
