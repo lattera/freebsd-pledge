@@ -1469,6 +1469,12 @@ p_cansee(struct thread *td, struct proc *p)
 	/* Wrap cr_cansee() for all functionality. */
 	KASSERT(td == curthread, ("%s: td not curthread", __func__));
 	PROC_LOCK_ASSERT(p, MA_OWNED);
+	if (td->td_proc != p) {
+		int error;
+		error = sysfil_require(td, SYSFIL_PROC);
+		if (error)
+			return (error);
+	}
 	return (cr_cansee(td->td_ucred, p->p_ucred));
 }
 
