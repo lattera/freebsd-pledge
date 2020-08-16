@@ -68,7 +68,9 @@
 #define	SYSFIL_MOUNT		45
 #define	SYSFIL_QUOTA		46
 #define	SYSFIL_FH		47
-#define	SYSFIL_LAST		SYSFIL_FH
+#define	SYSFIL_RECVFD		48
+#define	SYSFIL_SENDFD		49
+#define	SYSFIL_LAST		SYSFIL_SENDFD
 
 #define	SYSFIL_VALID(i)		((i) >= 0 && (i) <= SYSFIL_LAST)
 #define	SYSFIL_USER_VALID(i)	(SYSFIL_VALID(i) && (i) >= SYSFIL_STDIO)

@@ -25,7 +25,7 @@ static const char *default_promises =
     "flock fattr chown id "
     "proc thread "
     "tty "
-    "unix ";
+    "unix recvfd sendfd ";
 static const char *network_promises =
     "ssl dns inet ";
 

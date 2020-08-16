@@ -64,6 +64,7 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
 #include <sys/capsicum.h>
+#include <sys/sysfil.h>
 #include <sys/domain.h>
 #include <sys/fcntl.h>
 #include <sys/malloc.h>		/* XXX must be before <sys/file.h> */
@@ -2060,6 +2061,8 @@ unp_externalize(struct mbuf *control, struct mbuf **controlp, int flags)
 			newfds = datalen / sizeof(*fdep);
 			if (newfds == 0)
 				goto next;
+			if (error == 0)
+				error = sysfil_require(td, SYSFIL_RECVFD);
 			fdep = data;
 
 			/* If we're not outputting the descriptors free them. */
@@ -2257,6 +2260,9 @@ unp_internalize(struct mbuf **controlp, struct thread *td)
 			oldfds = datalen / sizeof (int);
 			if (oldfds == 0)
 				break;
+			error = sysfil_require(td, SYSFIL_SENDFD);
+			if (error)
+				goto out;
 			/*
 			 * Check that all the FDs passed in refer to legal
 			 * files.  If not, reject the entire operation.
