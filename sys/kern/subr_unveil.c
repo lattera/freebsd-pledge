@@ -49,13 +49,6 @@ sysfil_namei_check(struct nameidata *ndp, struct thread *td)
 #ifdef UNVEIL
 
 void
-unveil_ndinit(struct nameidata *ndp, struct thread *td)
-{
-	ndp->ni_unveil = NULL;
-	ndp->ni_unveil_data = NULL;
-}
-
-void
 unveil_namei_start(struct nameidata *ndp, struct thread *td)
 {
 	struct filedesc *fdp = td->td_proc->p_fd;
