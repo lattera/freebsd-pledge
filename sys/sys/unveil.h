@@ -97,6 +97,7 @@ void unveil_fd_free(struct filedesc *);
 void unveil_proc_exec_switch(struct thread *);
 
 struct nameidata;
+int sysfil_namei_check(struct nameidata *, struct thread *);
 void unveil_ndinit(struct nameidata *, struct thread *);
 void unveil_namei_start(struct nameidata *, struct thread *);
 int unveil_lookup_update(struct nameidata *, struct vnode *);

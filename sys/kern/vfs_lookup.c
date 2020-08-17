@@ -46,6 +46,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/systm.h>
 #include <sys/kernel.h>
 #include <sys/capsicum.h>
+#include <sys/sysfil.h>
 #include <sys/fcntl.h>
 #include <sys/jail.h>
 #include <sys/lock.h>
@@ -556,6 +557,12 @@ namei(struct nameidata *ndp)
 #endif
 
 	cnp->cn_nameptr = cnp->cn_pnbuf;
+
+#ifdef SYSFIL
+	error = sysfil_namei_check(ndp, td);
+	if (error)
+		return (error);
+#endif
 
 	/*
 	 * First try looking up the target without locking any vnodes.

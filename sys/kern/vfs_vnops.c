@@ -78,7 +78,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/syslog.h>
 #include <sys/unistd.h>
 #include <sys/user.h>
-#include <sys/sysfil.h>
 
 #include <security/audit/audit.h>
 #include <security/mac/mac_framework.h>
@@ -213,7 +212,7 @@ restart:
 	if ((fmode & (O_CREAT | O_EXCL | O_DIRECTORY)) == (O_CREAT |
 	    O_EXCL | O_DIRECTORY))
 		return (EINVAL);
-	if ((fmode & (O_CREAT | O_DIRECTORY)) == O_CREAT) {
+	else if ((fmode & (O_CREAT | O_DIRECTORY)) == O_CREAT) {
 		ndp->ni_cnd.cn_nameiop = CREATE;
 		/*
 		 * Set NOCACHE to avoid flushing the cache when
@@ -363,22 +362,10 @@ vn_open_vnode(struct vnode *vp, int fmode, struct ucred *cred,
 	if (fmode & (FWRITE | O_TRUNC)) {
 		if (vp->v_type == VDIR)
 			return (EISDIR);
-		if (fmode & O_CREAT) {
-			error = sysfil_require(td, SYSFIL_CPATH);
-			if (error)
-				return (error);
-		}
-		error = sysfil_require(td, SYSFIL_WPATH);
-		if (error)
-			return (error);
 		accmode |= VWRITE;
 	}
-	if (fmode & FREAD) {
-		error = sysfil_require(td, SYSFIL_RPATH);
-		if (error)
-			return (error);
+	if (fmode & FREAD)
 		accmode |= VREAD;
-	}
 	if (fmode & FEXEC)
 		accmode |= VEXEC;
 	if ((fmode & O_APPEND) && (fmode & FWRITE))

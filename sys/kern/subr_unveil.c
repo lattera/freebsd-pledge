@@ -15,8 +15,35 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysfil.h>
 #include <sys/kdb.h>
 
-#ifdef UNVEIL
+#if defined(UNVEIL) || defined(SYSFIL)
 static cap_rights_t __read_mostly unveil_merged_rights[1 << 5];
+#endif
+
+#ifdef SYSFIL
+
+static inline const cap_rights_t *
+sysfil_to_rights(struct thread *td)
+{
+	int i = 0;
+	i |= (sysfil_check(td, SYSFIL_RPATH) == 0) << 1;
+	i |= (sysfil_check(td, SYSFIL_WPATH) == 0) << 2;
+	i |= (sysfil_check(td, SYSFIL_CPATH) == 0) << 3;
+	i |= (sysfil_check(td, SYSFIL_EXEC ) == 0) << 4;
+	return (&unveil_merged_rights[i]);
+}
+
+int
+sysfil_namei_check(struct nameidata *ndp, struct thread *td)
+{
+	const cap_rights_t *haverights;
+	if (!IN_RESTRICTED_MODE(td))
+		return (0);
+	haverights = sysfil_to_rights(td);
+	if (cap_rights_contains(haverights, ndp->ni_rightsneeded))
+		return (0);
+	return (EPERM);
+}
+
 #endif
 
 #ifdef UNVEIL
@@ -150,7 +177,7 @@ unveil_lookup_check(struct nameidata *ndp)
 
 #endif
 
-#ifdef UNVEIL
+#if defined(UNVEIL) || defined(SYSFIL)
 
 static void
 unveil_rights_sysinit(void __unused *data)
