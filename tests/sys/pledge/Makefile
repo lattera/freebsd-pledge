@@ -40,6 +40,8 @@ PLAIN_TESTS_C+= unveil_pledge_limit
 PLAIN_TESTS_C+= unveilctl_sweep
 PLAIN_TESTS_C+= unveilctl_restrict
 
+PLAIN_TESTS_C+= sysfilctl_path_open
+
 WARNS?=		3
 
 .include <bsd.test.mk>
