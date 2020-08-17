@@ -12,14 +12,11 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysctl.h>
 #include <sys/unveil.h>
 #include <sys/capsicum.h>
+#include <sys/sysfil.h>
 #include <sys/kdb.h>
 
 #ifdef UNVEIL
-static cap_rights_t __read_mostly unveil_inspect_rights;
-static cap_rights_t __read_mostly unveil_rpath_rights;
-static cap_rights_t __read_mostly unveil_wpath_rights;
-static cap_rights_t __read_mostly unveil_cpath_rights;
-static cap_rights_t __read_mostly unveil_xpath_rights;
+static cap_rights_t __read_mostly unveil_merged_rights[1 << 5];
 #endif
 
 #ifdef UNVEIL
@@ -78,20 +75,16 @@ unveil_lookup_update_dotdot(struct nameidata *ndp, struct vnode *vp)
 		ndp->ni_unveil = node->cover;
 }
 
-static void
-unveil_perms_to_rights(cap_rights_t *rights, unveil_perms_t uperms)
+static inline const cap_rights_t *
+unveil_perms_to_rights(unveil_perms_t uperms)
 {
-	cap_rights_init(rights);
-	if (uperms & UNVEIL_PERM_INSPECT)
-		cap_rights_merge(rights, &unveil_inspect_rights);
-	if (uperms & UNVEIL_PERM_RPATH)
-		cap_rights_merge(rights, &unveil_rpath_rights);
-	if (uperms & UNVEIL_PERM_WPATH)
-		cap_rights_merge(rights, &unveil_wpath_rights);
-	if (uperms & UNVEIL_PERM_CPATH)
-		cap_rights_merge(rights, &unveil_cpath_rights);
-	if (uperms & UNVEIL_PERM_XPATH)
-		cap_rights_merge(rights, &unveil_xpath_rights);
+	int i = 0;
+	i |= ((uperms & UNVEIL_PERM_INSPECT) != 0) << 0;
+	i |= ((uperms & UNVEIL_PERM_RPATH)   != 0) << 1;
+	i |= ((uperms & UNVEIL_PERM_WPATH)   != 0) << 2;
+	i |= ((uperms & UNVEIL_PERM_CPATH)   != 0) << 3;
+	i |= ((uperms & UNVEIL_PERM_XPATH)   != 0) << 4;
+	return (&unveil_merged_rights[i]);
 }
 
 int
@@ -102,7 +95,7 @@ unveil_lookup_check(struct nameidata *ndp)
 	struct unveil_base *base = &fdp->fd_unveil;
 	struct unveil_node *node;
 	unveil_perms_t uperms;
-	cap_rights_t haverights;
+	const cap_rights_t *haverights;
 	int failed;
 	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
 		return (0);
@@ -135,8 +128,8 @@ unveil_lookup_check(struct nameidata *ndp)
 		failed = ENOENT;
 	}
 
-	unveil_perms_to_rights(&haverights, uperms);
-	if (!cap_rights_contains(&haverights, ndp->ni_rightsneeded))
+	haverights = unveil_perms_to_rights(uperms);
+	if (!cap_rights_contains(haverights, ndp->ni_rightsneeded))
 		return (failed);
 
 	/*
@@ -158,15 +151,24 @@ unveil_lookup_check(struct nameidata *ndp)
 #endif
 
 #ifdef UNVEIL
+
 static void
 unveil_rights_sysinit(void __unused *data)
 {
-	cap_rights_init(&unveil_inspect_rights,
+	cap_rights_t null_rights;
+	cap_rights_t inspect_rights;
+	cap_rights_t rpath_rights;
+	cap_rights_t wpath_rights;
+	cap_rights_t cpath_rights;
+	cap_rights_t xpath_rights;
+
+	cap_rights_init(&null_rights);
+	cap_rights_init(&inspect_rights,
 	    CAP_LOOKUP,
 	    CAP_FPATHCONF,
 	    CAP_FSTAT,
 	    CAP_FSTATAT);
-	cap_rights_init(&unveil_rpath_rights,
+	cap_rights_init(&rpath_rights,
 	    CAP_LOOKUP,
 	    CAP_READ,
 	    CAP_SEEK,
@@ -181,7 +183,7 @@ unveil_rights_sysinit(void __unused *data)
 	    CAP_MAC_GET,
 	    CAP_EXTATTR_GET,
 	    CAP_EXTATTR_LIST);
-	cap_rights_init(&unveil_wpath_rights,
+	cap_rights_init(&wpath_rights,
 	    CAP_LOOKUP,
 	    CAP_WRITE,
 	    CAP_SEEK,
@@ -201,7 +203,7 @@ unveil_rights_sysinit(void __unused *data)
 	    CAP_REVOKEAT,
 	    CAP_EXTATTR_SET,
 	    CAP_EXTATTR_DELETE);
-	cap_rights_init(&unveil_cpath_rights,
+	cap_rights_init(&cpath_rights,
 	    CAP_LOOKUP,
 	    CAP_CREATE,
 	    CAP_FPATHCONF,
@@ -215,11 +217,24 @@ unveil_rights_sysinit(void __unused *data)
 	    CAP_CONNECTAT,
 	    CAP_RENAMEAT_TARGET,
 	    CAP_UNDELETEAT);
-	cap_rights_init(&unveil_xpath_rights,
+	cap_rights_init(&xpath_rights,
 	    CAP_LOOKUP,
 	    CAP_FEXECVE,
 	    CAP_EXECAT);
+
+	/* Pre-merge rights for every possible set of unveil permissions. */
+	for (int i = 0; i < nitems(unveil_merged_rights); i++) {
+		cap_rights_t *rights = &unveil_merged_rights[i];
+		cap_rights_init(rights);
+		cap_rights_merge(rights, i & (1 << 0) ? &inspect_rights : &null_rights);
+		cap_rights_merge(rights, i & (1 << 1) ? &rpath_rights   : &null_rights);
+		cap_rights_merge(rights, i & (1 << 2) ? &wpath_rights   : &null_rights);
+		cap_rights_merge(rights, i & (1 << 3) ? &cpath_rights   : &null_rights);
+		cap_rights_merge(rights, i & (1 << 4) ? &xpath_rights   : &null_rights);
+	}
 }
+
 SYSINIT(unveil_rights_sysinit, SI_SUB_COPYRIGHT, SI_ORDER_ANY,
     unveil_rights_sysinit, NULL);
+
 #endif
