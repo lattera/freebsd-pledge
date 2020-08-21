@@ -12,10 +12,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/capsicum.h>
 #include <sys/sysfil.h>
 
-#if defined(UNVEIL) || defined(SYSFIL)
-static cap_rights_t __read_mostly unveil_merged_rights[1 << 5];
-#endif
-
 #ifdef SYSFIL
 
 static inline const cap_rights_t *
@@ -26,7 +22,7 @@ sysfil_to_rights(struct thread *td)
 	i |= (sysfil_check(td, SYSFIL_WPATH) == 0) << 2;
 	i |= (sysfil_check(td, SYSFIL_CPATH) == 0) << 3;
 	i |= (sysfil_check(td, SYSFIL_EXEC ) == 0) << 4;
-	return (&unveil_merged_rights[i]);
+	return (&cap_unveil_merged_rights[i]);
 }
 
 int
@@ -107,7 +103,7 @@ unveil_perms_to_rights(unveil_perms_t uperms)
 	i |= ((uperms & UNVEIL_PERM_WPATH)   != 0) << 2;
 	i |= ((uperms & UNVEIL_PERM_CPATH)   != 0) << 3;
 	i |= ((uperms & UNVEIL_PERM_XPATH)   != 0) << 4;
-	return (&unveil_merged_rights[i]);
+	return (&cap_unveil_merged_rights[i]);
 }
 
 int
@@ -151,91 +147,3 @@ unveil_lookup_check(struct nameidata *ndp)
 
 #endif
 
-#if defined(UNVEIL) || defined(SYSFIL)
-
-static void
-unveil_rights_sysinit(void __unused *data)
-{
-	cap_rights_t null_rights;
-	cap_rights_t inspect_rights;
-	cap_rights_t rpath_rights;
-	cap_rights_t wpath_rights;
-	cap_rights_t cpath_rights;
-	cap_rights_t xpath_rights;
-
-	cap_rights_init(&null_rights);
-	cap_rights_init(&inspect_rights,
-	    CAP_LOOKUP,
-	    CAP_FPATHCONF,
-	    CAP_FSTAT,
-	    CAP_FSTATAT);
-	cap_rights_init(&rpath_rights,
-	    CAP_LOOKUP,
-	    CAP_READ,
-	    CAP_SEEK,
-	    CAP_FPATHCONF,
-	    CAP_MMAP,
-	    CAP_FCHDIR,
-	    CAP_FSTAT,
-	    CAP_FSTATAT,
-	    CAP_FSTATFS,
-	    CAP_RENAMEAT_SOURCE,
-	    CAP_LINKAT_SOURCE,
-	    CAP_MAC_GET,
-	    CAP_EXTATTR_GET,
-	    CAP_EXTATTR_LIST);
-	cap_rights_init(&wpath_rights,
-	    CAP_LOOKUP,
-	    CAP_WRITE,
-	    CAP_SEEK,
-	    CAP_FPATHCONF,
-	    CAP_MMAP,
-	    CAP_FSYNC,
-	    CAP_FTRUNCATE,
-	    CAP_FCHFLAGS,
-	    CAP_CHFLAGSAT,
-	    CAP_FCHMOD,
-	    CAP_FCHMODAT,
-	    CAP_FCHOWN,
-	    CAP_FCHOWNAT,
-	    CAP_FUTIMES,
-	    CAP_FUTIMESAT,
-	    CAP_MAC_SET,
-	    CAP_REVOKEAT,
-	    CAP_EXTATTR_SET,
-	    CAP_EXTATTR_DELETE);
-	cap_rights_init(&cpath_rights,
-	    CAP_LOOKUP,
-	    CAP_CREATE,
-	    CAP_FPATHCONF,
-	    CAP_LINKAT_TARGET,
-	    CAP_MKDIRAT,
-	    CAP_MKFIFOAT,
-	    CAP_MKNODAT,
-	    CAP_SYMLINKAT,
-	    CAP_UNLINKAT,
-	    CAP_BINDAT,
-	    CAP_CONNECTAT,
-	    CAP_RENAMEAT_TARGET,
-	    CAP_UNDELETEAT);
-	cap_rights_init(&xpath_rights,
-	    CAP_LOOKUP,
-	    CAP_FEXECVE,
-	    CAP_EXECAT);
-
-	/* Pre-merge rights for every possible set of unveil permissions. */
-	for (int i = 0; i < nitems(unveil_merged_rights); i++) {
-		cap_rights_t *rights = &unveil_merged_rights[i];
-		cap_rights_init(rights);
-		cap_rights_merge(rights, i & (1 << 0) ? &inspect_rights : &null_rights);
-		cap_rights_merge(rights, i & (1 << 1) ? &rpath_rights   : &null_rights);
-		cap_rights_merge(rights, i & (1 << 2) ? &wpath_rights   : &null_rights);
-		cap_rights_merge(rights, i & (1 << 3) ? &cpath_rights   : &null_rights);
-		cap_rights_merge(rights, i & (1 << 4) ? &xpath_rights   : &null_rights);
-	}
-}
-
-SYSINIT(unveil_rights_sysinit, SI_SUB_COPYRIGHT, SI_ORDER_ANY,
-    unveil_rights_sysinit, NULL);
-
-#endif

@@ -112,6 +112,9 @@ extern cap_rights_t cap_extattr_delete_rights;
 extern cap_rights_t cap_extattr_get_rights;
 extern cap_rights_t cap_extattr_list_rights;
 extern cap_rights_t cap_extattr_set_rights;
+#if defined(UNVEIL) || defined(SYSFIL)
+extern cap_rights_t cap_unveil_merged_rights[1 << 5];
+#endif
 #endif
 
 #endif /* !_SYS_CAPRIGHTS_H_ */
