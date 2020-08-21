@@ -293,15 +293,13 @@ unveil_namei_start(struct nameidata *ndp, struct thread *td)
 	FILEDESC_SUNLOCK(fdp);
 }
 
-static int
-unveil_lookup_update(struct nameidata *ndp, struct vnode *vp, bool last)
+static inline int
+unveil_lookup_update_1(struct nameidata *ndp, struct vnode *vp, bool last)
 {
 	struct componentname *cnp = &ndp->ni_cnd;
 	struct filedesc *fdp = cnp->cn_thread->td_proc->p_fd;
 	struct unveil_base *base = &fdp->fd_unveil;
 	int error;
-	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
-		return (0);
 	/* NOTE: vp and ndp->ni_dvp may be NULL and may both be equal */
 	if (ndp->ni_unveil_save) {
 		FILEDESC_XLOCK(fdp);
@@ -317,6 +315,14 @@ unveil_lookup_update(struct nameidata *ndp, struct vnode *vp, bool last)
 		FILEDESC_SUNLOCK(fdp);
 	}
 	return (error);
+}
+
+static int
+unveil_lookup_update(struct nameidata *ndp, struct vnode *vp, bool last)
+{
+	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
+		return (0);
+	return (unveil_lookup_update_1(ndp, vp, last));
 }
 
 static void
@@ -348,7 +354,6 @@ unveil_lookup_check(struct nameidata *ndp)
 	struct unveil_node *node;
 	unveil_perms_t uperms;
 	const cap_rights_t *haverights;
-	int failed;
 	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
 		return (0);
 
@@ -366,17 +371,14 @@ unveil_lookup_check(struct nameidata *ndp)
 		if (node->vp != ndp->ni_vp)
 			/* The unveil covered a parent directory. */
 			uperms &= ~UNVEIL_PERM_NONINHERITED_MASK;
-		failed = uperms & ~UNVEIL_PERM_INSPECT ? EACCES : ENOENT;
-	} else {
+	} else
 		uperms = UNVEIL_PERM_NONE;
-		failed = ENOENT;
-	}
 
 	haverights = unveil_perms_to_rights(uperms);
-	if (!cap_rights_contains(haverights, ndp->ni_rightsneeded))
-		return (failed);
+	if (cap_rights_contains(haverights, ndp->ni_rightsneeded))
+		return (0);
 
-	return (0);
+	return (uperms & ~UNVEIL_PERM_INSPECT ? EACCES : ENOENT);
 }
 
 #endif
