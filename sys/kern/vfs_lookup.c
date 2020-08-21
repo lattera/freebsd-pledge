@@ -293,7 +293,7 @@ unveil_namei_start(struct nameidata *ndp, struct thread *td)
 	FILEDESC_SUNLOCK(fdp);
 }
 
-static inline int
+static int
 unveil_lookup_update_1(struct nameidata *ndp, struct vnode *vp, bool last)
 {
 	struct componentname *cnp = &ndp->ni_cnd;
@@ -317,7 +317,7 @@ unveil_lookup_update_1(struct nameidata *ndp, struct vnode *vp, bool last)
 	return (error);
 }
 
-static int
+static inline int
 unveil_lookup_update(struct nameidata *ndp, struct vnode *vp, bool last)
 {
 	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
