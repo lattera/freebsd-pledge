@@ -117,14 +117,6 @@ void unveil_fd_free(struct filedesc *);
 
 void unveil_proc_exec_switch(struct thread *);
 
-struct nameidata;
-int sysfil_namei_check(struct nameidata *, struct thread *);
-void unveil_namei_start(struct nameidata *, struct thread *);
-bool unveil_lookup_tolerate_error(struct nameidata *, int error);
-int unveil_lookup_update(struct nameidata *, struct vnode *, bool last);
-void unveil_lookup_update_dotdot(struct nameidata *, struct vnode *);
-int unveil_lookup_check(struct nameidata *);
-
 #endif /* _KERNEL */
 
 #endif

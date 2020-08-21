@@ -3854,7 +3854,6 @@ kern/subr_trap.c		standard
 kern/subr_turnstile.c		standard
 kern/subr_uio.c			standard
 kern/subr_unit.c		standard
-kern/subr_unveil.c		standard
 kern/subr_vmem.c		standard
 kern/subr_witness.c		optional witness
 kern/sys_capability.c		standard
