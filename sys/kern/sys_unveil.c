@@ -334,26 +334,30 @@ do_unveil_sweep(struct unveil_base *base, int flags)
 			node->wanted_perms[i][j] = UNVEIL_PERM_NONE;
 }
 
-static int
-do_unveil(struct thread *td, int atfd, const char *path,
-    int flags, unveil_perms_t perms)
+#endif /* UNVEIL */
+
+int
+sys_unveilctl(struct thread *td, struct unveilctl_args *uap)
 {
+#ifdef UNVEIL
 	struct filedesc *fdp = td->td_proc->p_fd;
 	struct unveil_base *base = &fdp->fd_unveil;
+	int flags = uap->flags;
+	unveil_perms_t perms = uap->perms;
 
 	perms &= ~(unveil_perms_t)UNVEIL_PERM_FINAL;
 
 	if (!unveil_enabled)
 		return (EPERM);
 
-	if (path != NULL) {
+	if (uap->path != NULL) {
 		struct unveil_namei_data data = { flags, perms };
 		struct nameidata nd;
 		int error;
 		int nd_flags;
 		nd_flags = flags & UNVEIL_FLAG_NOFOLLOW ? 0 : FOLLOW;
 		NDINIT_ATRIGHTS(&nd, LOOKUP, nd_flags,
-		    UIO_SYSSPACE, path, atfd, &cap_no_rights, td);
+		    UIO_USERSPACE, uap->path, uap->atfd, &cap_no_rights, td);
 		/* this will cause namei() to call unveil_traverse_save() */
 		nd.ni_unveil_save = &data;
 		error = namei(&nd);
@@ -379,29 +383,6 @@ do_unveil(struct thread *td, int atfd, const char *path,
 
 	FILEDESC_XUNLOCK(fdp);
 	return (0);
-}
-
-#endif /* UNVEIL */
-
-int
-sys_unveilctl(struct thread *td, struct unveilctl_args *uap)
-{
-#ifdef UNVEIL
-	char *path;
-	int error;
-	if (uap->path) {
-		path = malloc(MAXPATHLEN, M_TEMP, M_WAITOK);
-		error = copyinstr(uap->path, path, MAXPATHLEN, NULL);
-		if (error) {
-			free(path, M_TEMP);
-			return (error);
-		}
-	} else
-		path = NULL;
-	error = do_unveil(td, uap->atfd, path, uap->flags, uap->perms);
-	if (path)
-		free(path, M_TEMP);
-	return (error);
 #else
 	return (ENOSYS);
 #endif /* UNVEIL */
