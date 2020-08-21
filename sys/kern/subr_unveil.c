@@ -140,9 +140,11 @@ unveil_lookup_check(struct nameidata *ndp)
 		FILEDESC_SLOCK(fdp);
 		uperms = unveil_node_soft_perms(node, UNVEIL_ROLE_CURR);
 		FILEDESC_SUNLOCK(fdp);
+		uperms &= UNVEIL_PERM_ALL; /* drop internal bit */
 		if (node->vp != ndp->ni_vp)
-			uperms &= UNVEIL_PERM_INHERITABLE_MASK;
-		failed = uperms ? EACCES : ENOENT;
+			/* The unveil covered a parent directory. */
+			uperms &= ~UNVEIL_PERM_NONINHERITED_MASK;
+		failed = uperms & ~UNVEIL_PERM_INSPECT ? EACCES : ENOENT;
 	} else {
 		uperms = UNVEIL_PERM_NONE;
 		failed = ENOENT;

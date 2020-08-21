@@ -57,7 +57,7 @@ unveil_node_soft_perms(struct unveil_node *node, enum unveil_role role)
 			if (!(inherited_perms[i] & UNVEIL_PERM_FINAL))
 				all_final = false;
 		}
-		mask = UNVEIL_PERM_INHERITABLE_MASK;
+		mask &= ~UNVEIL_PERM_NONINHERITED_MASK;
 	} while (!all_final && (node1 = node1->cover));
 	/*
 	 * Merge wanted permissions and mask them with the frozen permissions.

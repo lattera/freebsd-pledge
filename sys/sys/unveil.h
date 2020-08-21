@@ -17,10 +17,12 @@ enum {
 	UNVEIL_PERM_XPATH = 1 << 4,
 	/* NOTE: last bit used internally */
 	UNVEIL_PERM_ALL = (1 << (8 - 1)) - 1,
+	UNVEIL_PERM_NONINHERITED_MASK = UNVEIL_PERM_INSPECT,
+#ifdef _KERNEL
 	UNVEIL_PERM_FINAL = 1 << 7,
-	/* NOTE: the internal last bit is included in the masks */
+	/* NOTE: the internal last bit is included in the "full" mask */
 	UNVEIL_PERM_FULL_MASK = (1 << 8) - 1,
-	UNVEIL_PERM_INHERITABLE_MASK = UNVEIL_PERM_FULL_MASK & ~UNVEIL_PERM_INSPECT,
+#endif
 };
 
 enum {
