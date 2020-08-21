@@ -17,12 +17,12 @@ __FBSDID("$FreeBSD$");
 static inline const cap_rights_t *
 sysfil_to_rights(struct thread *td)
 {
-	int i = 0;
-	i |= (sysfil_check(td, SYSFIL_RPATH) == 0) << 1;
-	i |= (sysfil_check(td, SYSFIL_WPATH) == 0) << 2;
-	i |= (sysfil_check(td, SYSFIL_CPATH) == 0) << 3;
-	i |= (sysfil_check(td, SYSFIL_EXEC ) == 0) << 4;
-	return (&cap_unveil_merged_rights[i]);
+	return (CAP_UNVEIL_MERGED_RIGHTS(
+	    0,
+	    sysfil_check(td, SYSFIL_RPATH) == 0,
+	    sysfil_check(td, SYSFIL_WPATH) == 0,
+	    sysfil_check(td, SYSFIL_CPATH) == 0,
+	    sysfil_check(td, SYSFIL_EXEC)  == 0));
 }
 
 int
@@ -97,13 +97,12 @@ unveil_lookup_update_dotdot(struct nameidata *ndp, struct vnode *vp)
 static inline const cap_rights_t *
 unveil_perms_to_rights(unveil_perms_t uperms)
 {
-	int i = 0;
-	i |= ((uperms & UNVEIL_PERM_INSPECT) != 0) << 0;
-	i |= ((uperms & UNVEIL_PERM_RPATH)   != 0) << 1;
-	i |= ((uperms & UNVEIL_PERM_WPATH)   != 0) << 2;
-	i |= ((uperms & UNVEIL_PERM_CPATH)   != 0) << 3;
-	i |= ((uperms & UNVEIL_PERM_XPATH)   != 0) << 4;
-	return (&cap_unveil_merged_rights[i]);
+	return (CAP_UNVEIL_MERGED_RIGHTS(
+	    uperms & UNVEIL_PERM_INSPECT,
+	    uperms & UNVEIL_PERM_RPATH,
+	    uperms & UNVEIL_PERM_WPATH,
+	    uperms & UNVEIL_PERM_CPATH,
+	    uperms & UNVEIL_PERM_XPATH));
 }
 
 int
