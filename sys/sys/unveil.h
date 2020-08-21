@@ -7,6 +7,10 @@
 #include <sys/queue.h>
 #include <sys/tree.h>
 #include <sys/_unveil.h>
+#ifdef _KERNEL
+#include <sys/systm.h>
+#include <sys/limits.h>
+#endif
 
 enum {
 	UNVEIL_PERM_NONE = 0,
@@ -34,6 +38,7 @@ enum {
 	UNVEIL_FLAG_NOINHERIT = 1 << 9,
 	UNVEIL_FLAG_INTERMEDIATE = 1 << 10,
 	UNVEIL_FLAG_INSPECTABLE = 1 << 11,
+	UNVEIL_FLAG_NONDIRBYNAME = 1 << 12,
 	UNVEIL_FLAG_ROLE_SHIFT = 16,
 	UNVEIL_FLAG_ROLE_WIDTH = 8,
 	UNVEIL_FLAG_FOR_CURR = 1 << 16,
@@ -71,10 +76,19 @@ enum {
 struct unveil_node {
 	struct unveil_node *cover;
 	RB_ENTRY(unveil_node) entry;
+	/*
+	 * If name_len is 0, the node is not name-based and vp is a directly
+	 * unveiled vnode.  Otherwise, vp is the vnode of a parent directory
+	 * under which the name is unveiled.
+	 */
 	struct vnode *vp;
 	unveil_perms_t frozen_perms[UNVEIL_ROLE_COUNT];
 	unveil_perms_t wanted_perms[UNVEIL_ROLE_COUNT][UNVEIL_SLOT_COUNT];
+	u_char name_len;
+	char *name; /* must not be NULL (to simplify comparisons) */
 };
+
+CTASSERT(NAME_MAX <= UCHAR_MAX);
 
 unveil_perms_t unveil_node_soft_perms(struct unveil_node *, enum unveil_role);
 
@@ -83,14 +97,19 @@ void unveil_merge(struct unveil_base *dst, struct unveil_base *src);
 void unveil_clear(struct unveil_base *);
 void unveil_free(struct unveil_base *);
 
-struct unveil_node *unveil_lookup(struct unveil_base *, struct vnode *);
-struct unveil_node *unveil_insert(struct unveil_base *, struct vnode *,
-    struct unveil_node *cover);
+struct unveil_node *unveil_lookup(struct unveil_base *,
+    struct vnode *, const char *name, size_t name_len);
+struct unveil_node *unveil_insert(struct unveil_base *,
+    struct vnode *, const char *name, size_t name_len, struct unveil_node *cover);
 
 struct unveil_namei_data;
 
-int unveil_save(struct unveil_base *, struct unveil_namei_data *,
-    bool last, struct vnode *, struct unveil_node **);
+int unveil_traverse_remember(struct unveil_base *,
+    struct unveil_namei_data *, struct unveil_node **cover,
+    struct vnode *dvp, const char *name, size_t name_len, struct vnode *vp, bool last);
+int unveil_traverse(struct unveil_base *,
+    struct unveil_namei_data *, struct unveil_node **cover,
+    struct vnode *dvp, const char *name, size_t name_len, struct vnode *vp, bool last);
 
 void unveil_fd_init(struct filedesc *);
 void unveil_fd_merge(struct filedesc *dst, struct filedesc *src);
@@ -101,7 +120,8 @@ void unveil_proc_exec_switch(struct thread *);
 struct nameidata;
 int sysfil_namei_check(struct nameidata *, struct thread *);
 void unveil_namei_start(struct nameidata *, struct thread *);
-int unveil_lookup_update(struct nameidata *, struct vnode *);
+bool unveil_lookup_tolerate_error(struct nameidata *, int error);
+int unveil_lookup_update(struct nameidata *, struct vnode *, bool last);
 void unveil_lookup_update_dotdot(struct nameidata *, struct vnode *);
 int unveil_lookup_check(struct nameidata *);
 

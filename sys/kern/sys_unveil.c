@@ -85,11 +85,22 @@ unveil_node_exec_to_curr(struct unveil_node *node)
 }
 
 
-static int
-unveil_node_cmp(struct unveil_node *a, struct unveil_node *b)
+static inline int
+memcmplen(const char *p0, size_t l0, const char *p1, size_t l1)
 {
-	uintptr_t ak = (uintptr_t)a->vp, bk = (uintptr_t)b->vp;
-	return (ak > bk ? 1 : ak < bk ? -1 : 0);
+	int r;
+	r = memcmp(p0, p1, MIN(l0, l1));
+	if (r != 0)
+		return (r);
+	return (l0 > l1 ? 1 : l0 < l1 ? -1 : 0);
+}
+
+static int
+unveil_node_cmp(struct unveil_node *n0, struct unveil_node *n1)
+{
+	uintptr_t p0 = (uintptr_t)n0->vp, p1 = (uintptr_t)n1->vp;
+	return (p0 > p1 ? 1 : p0 < p1 ? -1 :
+	    memcmplen(n0->name, n0->name_len, n1->name, n1->name_len));
 }
 
 RB_GENERATE_STATIC(unveil_node_tree, unveil_node, entry, unveil_node_cmp);
@@ -111,7 +122,8 @@ unveil_merge(struct unveil_base *dst, struct unveil_base *src)
 	dst->exec_active = src->exec_active;
 	/* first pass, copy the nodes without cover links */
 	RB_FOREACH(src_node, unveil_node_tree, &src->root) {
-		dst_node = unveil_insert(dst, src_node->vp, NULL);
+		dst_node = unveil_insert(dst, src_node->vp,
+		    src_node->name, src_node->name_len, NULL);
 		memcpy(dst_node->frozen_perms, src_node->frozen_perms,
 		    sizeof (dst_node->frozen_perms));
 		memcpy(dst_node->wanted_perms, src_node->wanted_perms,
@@ -121,9 +133,11 @@ unveil_merge(struct unveil_base *dst, struct unveil_base *src)
 	RB_FOREACH(src_node, unveil_node_tree, &src->root) {
 		if (!src_node->cover)
 			continue;
-		dst_node = unveil_lookup(dst, src_node->vp);
+		dst_node = unveil_lookup(dst, src_node->vp,
+		    src_node->name, src_node->name_len);
 		KASSERT(dst_node, ("unveil node missing"));
-		dst_node->cover = unveil_lookup(dst, src_node->cover->vp);
+		dst_node->cover = unveil_lookup(dst, src_node->cover->vp,
+		    src_node->cover->name, src_node->cover->name_len);
 		KASSERT(dst_node->cover, ("cover unveil node missing"));
 	}
 }
@@ -153,15 +167,20 @@ unveil_free(struct unveil_base *base)
 }
 
 struct unveil_node *
-unveil_insert(struct unveil_base *base, struct vnode *vp, struct unveil_node *cover)
+unveil_insert(struct unveil_base *base,
+    struct vnode *vp, const char *name, size_t name_len, struct unveil_node *cover)
 {
 	struct unveil_node *new, *old;
 	int i;
-	new = malloc(sizeof *new, M_UNVEIL, M_WAITOK);
+	new = malloc(sizeof *new + name_len + 1, M_UNVEIL, M_WAITOK);
 	*new = (struct unveil_node){
 		.cover = cover,
 		.vp = vp,
+		.name_len = name_len,
+		.name = (char *)(new + 1),
 	};
+	memcpy(new->name, name, name_len);
+	new->name[name_len] = '\0'; /* not required by this code */
 	old = RB_INSERT(unveil_node_tree, &base->root, new);
 	if (old) {
 		free(new, M_UNVEIL);
@@ -177,9 +196,12 @@ unveil_insert(struct unveil_base *base, struct vnode *vp, struct unveil_node *co
 }
 
 struct unveil_node *
-unveil_lookup(struct unveil_base *base, struct vnode *vp)
+unveil_lookup(struct unveil_base *base, struct vnode *vp, const char *name, size_t name_len)
 {
-	struct unveil_node key = { .vp = vp };
+	struct unveil_node key;
+	key.vp = vp;
+	key.name = __DECONST(char *, name);
+	key.name_len = name_len;
 	return (RB_FIND(unveil_node_tree, &base->root, &key));
 }
 
@@ -226,22 +248,30 @@ struct unveil_namei_data {
 };
 
 int
-unveil_save(struct unveil_base *base, struct unveil_namei_data *data,
-    bool last, struct vnode *vp, struct unveil_node **cover)
+unveil_traverse_remember(struct unveil_base *base,
+    struct unveil_namei_data *data, struct unveil_node **cover,
+    struct vnode *dvp, const char *name, size_t name_len, struct vnode *vp, bool last)
 {
-	int flags = data->flags, i, j;
+	int flags = data->flags;
+	unveil_perms_t perms = data->perms;
 	struct unveil_node *node;
-	if (!last && !(flags & UNVEIL_FLAG_INTERMEDIATE))
-		return (0);
-	if (*cover && (*cover)->vp == vp) {
-		node = *cover;
-	} else {
-		if (base->node_count >= unveil_max_nodes_per_process)
-			return (E2BIG);
-		node = unveil_insert(base, vp, *cover);
-	}
+	int i, j;
+	if (!(last || (flags & UNVEIL_FLAG_INTERMEDIATE)))
+		return (unveil_traverse(base, data, cover, dvp, name, name_len, vp, last));
+
+	if (name_len > NAME_MAX)
+		return (ENAMETOOLONG);
+	if (base->node_count >= unveil_max_nodes_per_process)
+		return (E2BIG);
+
+	if ((flags & UNVEIL_FLAG_NONDIRBYNAME) && last && dvp && (!vp || vp->v_type != VDIR))
+		node = unveil_insert(base, dvp, name, name_len, *cover);
+	else if (vp)
+		node = unveil_insert(base, vp, "", 0, *cover);
+	else
+		return (ENOTDIR); /* XXX */
+
 	if (last) {
-		unveil_perms_t perms = data->perms;
 		if (flags & UNVEIL_FLAG_NOINHERIT)
 			perms |= UNVEIL_PERM_FINAL;
 		FOREACH_SLOT_FLAGS(flags, i, j)
@@ -251,6 +281,23 @@ unveil_save(struct unveil_base *base, struct unveil_namei_data *data,
 			node->wanted_perms[i][j] |= UNVEIL_PERM_INSPECT;
 	}
 	*cover = node;
+	return (0);
+}
+
+int
+unveil_traverse(struct unveil_base *base,
+    struct unveil_namei_data *data, struct unveil_node **cover,
+    struct vnode *dvp, const char *name, size_t name_len, struct vnode *vp, bool last)
+{
+	struct unveil_node *node;
+	if (vp)
+		node = unveil_lookup(base, vp, "", 0);
+	else
+		node = NULL;
+	if (!node && last && dvp && (!vp || vp->v_type != VDIR))
+		node = unveil_lookup(base, dvp, name, name_len);
+	if (node)
+		*cover = node;
 	return (0);
 }
 
@@ -302,14 +349,12 @@ do_unveil(struct thread *td, int atfd, const char *path,
 	if (path != NULL) {
 		struct unveil_namei_data data = { flags, perms };
 		struct nameidata nd;
-		cap_rights_t rights;
 		int error;
-		int nd_flags = LOCKLEAF;
-		if (!(flags & UNVEIL_FLAG_NOFOLLOW))
-			nd_flags |= FOLLOW;
-		NDINIT_ATRIGHTS(&nd, LOOKUP, nd_flags, UIO_SYSSPACE,
-		    path, atfd, cap_rights_init_zero(&rights), td);
-		/* setting this will cause namei() to call unveil_save() */
+		int nd_flags;
+		nd_flags = flags & UNVEIL_FLAG_NOFOLLOW ? 0 : FOLLOW;
+		NDINIT_ATRIGHTS(&nd, LOOKUP, nd_flags,
+		    UIO_SYSSPACE, path, atfd, &cap_no_rights, td);
+		/* setting this will cause namei() to call unveil_traverse_remember() */
 		nd.ni_unveil_data = &data;
 		error = namei(&nd);
 		if (error)

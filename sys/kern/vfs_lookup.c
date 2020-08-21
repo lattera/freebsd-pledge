@@ -421,7 +421,7 @@ namei_setup(struct nameidata *ndp, struct vnode **dpp, struct pwd **pwdp)
 			error = ENOTDIR;
 #ifdef UNVEIL
 		if (cover)
-			unveil_lookup_update(ndp, cover);
+			error = unveil_lookup_update(ndp, cover, false);
 #endif
 	}
 	if (error == 0 && (cnp->cn_flags & BENEATH) != 0) {
@@ -822,11 +822,6 @@ lookup(struct nameidata *ndp)
 	vn_lock(dp,
 	    compute_cn_lkflags(dp->v_mount, cnp->cn_lkflags | LK_RETRY,
 	    cnp->cn_flags));
-#ifdef UNVEIL
-	error = unveil_lookup_update(ndp, dp);
-	if (error)
-		goto bad;
-#endif
 
 dirloop:
 	/*
@@ -910,6 +905,11 @@ dirloop:
 			error = EISDIR;
 			goto bad;
 		}
+#ifdef UNVEIL
+		error = unveil_lookup_update(ndp, dp, true);
+		if (error)
+			goto bad;
+#endif
 		if (wantparent) {
 			ndp->ni_dvp = dp;
 			VREF(dp);
@@ -931,6 +931,12 @@ dirloop:
 			panic("lookup: SAVESTART");
 		goto success;
 	}
+
+#ifdef UNVEIL
+	error = unveil_lookup_update(ndp, dp, false);
+	if (error)
+		goto bad;
+#endif
 
 	/*
 	 * Handle "..": five special cases.
@@ -963,13 +969,6 @@ dirloop:
 			error = ENOTCAPABLE;
 			goto bad;
 		}
-#ifdef UNVEIL
-		/*
-		 * This is to be done on the directory we are looking up ".."
-		 * from, not the result of this lookup.
-		 */
-		unveil_lookup_update_dotdot(ndp, dp);
-#endif
 		if ((cnp->cn_flags & ISLASTCN) != 0 &&
 		    (cnp->cn_nameiop == DELETE || cnp->cn_nameiop == RENAME)) {
 			error = EINVAL;
@@ -1012,6 +1011,11 @@ dirloop:
 #endif
 				goto bad;
 			}
+#ifdef UNVEIL
+			error = unveil_lookup_update(ndp, dp, false);
+			if (error)
+				goto bad;
+#endif
 		}
 	}
 
@@ -1068,6 +1072,11 @@ unionlookup:
 			    compute_cn_lkflags(dp->v_mount, cnp->cn_lkflags |
 			    LK_RETRY, cnp->cn_flags));
 			nameicap_tracker_add(ndp, dp);
+#ifdef UNVEIL
+			error = unveil_lookup_update(ndp, dp, false);
+			if (error)
+				goto bad;
+#endif
 			goto unionlookup;
 		}
 
@@ -1079,7 +1088,11 @@ unionlookup:
 			goto good;
 		}
 
-		if (error != EJUSTRETURN)
+		if (error != EJUSTRETURN
+#ifdef UNVEIL
+		    && !unveil_lookup_tolerate_error(ndp, error)
+#endif
+		    )
 			goto bad;
 		/*
 		 * At this point, we know we're at the end of the
@@ -1097,10 +1110,16 @@ unionlookup:
 			error = ENOENT;
 			goto bad;
 		}
-		if ((cnp->cn_flags & LOCKPARENT) == 0)
+#ifdef UNVEIL
+		error = unveil_lookup_update(ndp, NULL, true);
+		if (error)
+			goto bad;
+#endif
+		ni_dvp_unlocked = 2; /* cleanup code should only deal with dp */
+		if ((cnp->cn_flags & LOCKPARENT) == 0) {
 			VOP_UNLOCK(dp);
-		/* cleanup code should ignore ni_dvp and only deal with dp */
-		ni_dvp_unlocked = 2;
+			dpunlocked = 1;
+		}
 		/*
 		 * We return with ni_vp NULL to indicate that the entry
 		 * doesn't currently exist, leaving a pointer to the
@@ -1112,6 +1131,11 @@ unionlookup:
 		}
 		goto success;
 	}
+
+#ifdef UNVEIL
+	if (cnp->cn_flags & ISDOTDOT && ndp->ni_vp != ndp->ni_dvp)
+		unveil_lookup_update_dotdot(ndp, ndp->ni_dvp);
+#endif
 
 good:
 #ifdef NAMEI_DIAGNOSTIC
@@ -1127,6 +1151,11 @@ good:
 	       (cnp->cn_flags & NOCROSSMOUNT) == 0) {
 		if (vfs_busy(mp, 0))
 			continue;
+#ifdef UNVEIL
+		error = unveil_lookup_update(ndp, dp, false);
+		if (error)
+			goto bad2;
+#endif
 		vput(dp);
 		if (dp != ndp->ni_dvp)
 			vput(ndp->ni_dvp);
@@ -1145,12 +1174,6 @@ good:
 		}
 		ndp->ni_vp = dp = tdp;
 	}
-
-#ifdef UNVEIL
-	error = unveil_lookup_update(ndp, dp);
-	if (error)
-		goto bad2;
-#endif
 
 	/*
 	 * Check for symbolic link
@@ -1171,6 +1194,11 @@ good:
 			error = EACCES;
 			goto bad2;
 		}
+#ifdef UNVEIL
+		error = unveil_lookup_update(ndp, dp, true);
+		if (error)
+			goto bad;
+#endif
 		/*
 		 * Symlink code always expects an unlocked dvp.
 		 */
@@ -1236,6 +1264,12 @@ nextname:
 		error = EROFS;
 		goto bad2;
 	}
+
+#ifdef UNVEIL
+	error = unveil_lookup_update(ndp, dp, true);
+	if (error)
+		goto bad;
+#endif
 	if (cnp->cn_flags & SAVESTART) {
 		ndp->ni_startdir = ndp->ni_dvp;
 		VREF(ndp->ni_startdir);

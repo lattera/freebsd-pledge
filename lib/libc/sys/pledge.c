@@ -225,6 +225,9 @@ static struct promise_unveil {
 };
 
 
+static const int unveil_global_flags =
+    UNVEIL_FLAG_INTERMEDIATE | UNVEIL_FLAG_INSPECTABLE | UNVEIL_FLAG_NONDIRBYNAME;
+
 enum {
 	UNVEIL_FLAG_FOR_PLEDGE = UNVEIL_FLAG_FOR_SLOT0,
 	UNVEIL_FLAG_FOR_CUSTOM = UNVEIL_FLAG_FOR_SLOT1,
@@ -291,7 +294,7 @@ do_pledge_unveils(const bool *req_promises, bool for_exec, int *sysfils)
 	/*
 	 * Do unveils for the promises added or removed.
 	 */
-	flags1 |= UNVEIL_FLAG_INTERMEDIATE | UNVEIL_FLAG_INSPECTABLE;
+	flags1 |= unveil_global_flags;
 	need_uperms = UNVEIL_PERM_NONE;
 	for (pu = unveils_table; (*(path = pu->path)); ) {
 		unveil_perms_t uperms = UNVEIL_PERM_NONE;
@@ -513,7 +516,7 @@ do_unveil(const char *path, int flags, unveil_perms_t perms)
 		return (0);
 	}
 
-	flags1 |= UNVEIL_FLAG_INTERMEDIATE | UNVEIL_FLAG_INSPECTABLE;
+	flags1 |= unveil_global_flags;
 	return (unveilctl(AT_FDCWD, path, flags1 | UNVEIL_FLAG_NOINHERIT, perms));
 }
 

@@ -1,8 +1,6 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
-#include "opt_kdb.h"
-
 #include <sys/param.h>
 #include <sys/filedesc.h>
 #include <sys/kernel.h>
@@ -13,7 +11,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/unveil.h>
 #include <sys/capsicum.h>
 #include <sys/sysfil.h>
-#include <sys/kdb.h>
 
 #if defined(UNVEIL) || defined(SYSFIL)
 static cap_rights_t __read_mostly unveil_merged_rights[1 << 5];
@@ -48,6 +45,12 @@ sysfil_namei_check(struct nameidata *ndp, struct thread *td)
 
 #ifdef UNVEIL
 
+bool
+unveil_lookup_tolerate_error(struct nameidata *ndp, int error)
+{
+	return (error == ENOENT && ndp->ni_unveil_data);
+}
+
 void
 unveil_namei_start(struct nameidata *ndp, struct thread *td)
 {
@@ -60,29 +63,29 @@ unveil_namei_start(struct nameidata *ndp, struct thread *td)
 }
 
 int
-unveil_lookup_update(struct nameidata *ndp, struct vnode *vp)
+unveil_lookup_update(struct nameidata *ndp, struct vnode *vp, bool last)
 {
 	struct componentname *cnp = &ndp->ni_cnd;
 	struct filedesc *fdp = cnp->cn_thread->td_proc->p_fd;
 	struct unveil_base *base = &fdp->fd_unveil;
-	struct unveil_node *node;
+	int error;
 	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
 		return (0);
-	FILEDESC_SLOCK(fdp);
-	node = unveil_lookup(base, vp);
-	FILEDESC_SUNLOCK(fdp);
-	if (node)
-		ndp->ni_unveil = node;
+	/* NOTE: vp and ndp->ni_dvp may be NULL and may both be equal */
 	if (ndp->ni_unveil_data) {
-		int error;
 		FILEDESC_XLOCK(fdp);
-		error = unveil_save(base, ndp->ni_unveil_data, false,
-		    vp, &ndp->ni_unveil);
+		error = unveil_traverse_remember(base,
+		    ndp->ni_unveil_data, &ndp->ni_unveil,
+		    ndp->ni_dvp, cnp->cn_nameptr, cnp->cn_namelen, vp, last);
 		FILEDESC_XUNLOCK(fdp);
-		if (error)
-			return (error);
+	} else {
+		FILEDESC_SLOCK(fdp);
+		error = unveil_traverse(base,
+		    ndp->ni_unveil_data, &ndp->ni_unveil,
+		    ndp->ni_dvp, cnp->cn_nameptr, cnp->cn_namelen, vp, last);
+		FILEDESC_SUNLOCK(fdp);
 	}
-	return (0);
+	return (error);
 }
 
 void
@@ -112,23 +115,12 @@ unveil_lookup_check(struct nameidata *ndp)
 {
 	struct componentname *cnp = &ndp->ni_cnd;
 	struct filedesc *fdp = cnp->cn_thread->td_proc->p_fd;
-	struct unveil_base *base = &fdp->fd_unveil;
 	struct unveil_node *node;
 	unveil_perms_t uperms;
 	const cap_rights_t *haverights;
 	int failed;
 	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
 		return (0);
-
-	if (ndp->ni_unveil_data) {
-		int error;
-		FILEDESC_XLOCK(fdp);
-		error = unveil_save(base, ndp->ni_unveil_data, true,
-		    ndp->ni_vp, &ndp->ni_unveil);
-		FILEDESC_XUNLOCK(fdp);
-		if (error)
-			return (error);
-	}
 
 #if 0
 	if ((cnp->cn_flags & FOLLOW) &&
@@ -153,19 +145,6 @@ unveil_lookup_check(struct nameidata *ndp)
 	haverights = unveil_perms_to_rights(uperms);
 	if (!cap_rights_contains(haverights, ndp->ni_rightsneeded))
 		return (failed);
-
-	/*
-	 * This should not be necessary, but it could catch some namei() calls
-	 * that have the wrong rights.
-	 */
-	if ((cnp->cn_nameiop == DELETE || cnp->cn_nameiop == CREATE) &&
-	    !(uperms & UNVEIL_PERM_CPATH)) {
-		printf("namei DELETE/CREATE blocked despite rights.\n");
-#ifdef KDB
-		kdb_backtrace();
-#endif
-		return (failed);
-	}
 
 	return (0);
 }
