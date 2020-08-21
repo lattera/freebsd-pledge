@@ -48,7 +48,7 @@ sysfil_namei_check(struct nameidata *ndp, struct thread *td)
 bool
 unveil_lookup_tolerate_error(struct nameidata *ndp, int error)
 {
-	return (error == ENOENT && ndp->ni_unveil_data);
+	return (error == ENOENT && ndp->ni_unveil_save);
 }
 
 void
@@ -57,7 +57,7 @@ unveil_namei_start(struct nameidata *ndp, struct thread *td)
 	struct filedesc *fdp = td->td_proc->p_fd;
 	struct unveil_base *base = &fdp->fd_unveil;
 	FILEDESC_SLOCK(fdp);
-	if (!ndp->ni_unveil_data && (!base->active || ndp->ni_startdir))
+	if (!ndp->ni_unveil_save && (!base->active || ndp->ni_startdir))
 		ndp->ni_lcf |= NI_LCF_UNVEIL_DISABLED;
 	FILEDESC_SUNLOCK(fdp);
 }
@@ -72,16 +72,16 @@ unveil_lookup_update(struct nameidata *ndp, struct vnode *vp, bool last)
 	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
 		return (0);
 	/* NOTE: vp and ndp->ni_dvp may be NULL and may both be equal */
-	if (ndp->ni_unveil_data) {
+	if (ndp->ni_unveil_save) {
 		FILEDESC_XLOCK(fdp);
-		error = unveil_traverse_remember(base,
-		    ndp->ni_unveil_data, &ndp->ni_unveil,
+		error = unveil_traverse_save(
+		    base, ndp->ni_unveil_save, &ndp->ni_unveil,
 		    ndp->ni_dvp, cnp->cn_nameptr, cnp->cn_namelen, vp, last);
 		FILEDESC_XUNLOCK(fdp);
 	} else {
 		FILEDESC_SLOCK(fdp);
-		error = unveil_traverse(base,
-		    ndp->ni_unveil_data, &ndp->ni_unveil,
+		error = unveil_traverse(
+		    base, ndp->ni_unveil_save, &ndp->ni_unveil,
 		    ndp->ni_dvp, cnp->cn_nameptr, cnp->cn_namelen, vp, last);
 		FILEDESC_SUNLOCK(fdp);
 	}

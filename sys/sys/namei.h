@@ -81,7 +81,7 @@ struct nameidata {
 	int	ni_lcf;			/* local call flags */
 #if defined(UNVEIL)
 	struct	unveil_node *ni_unveil;	/* last unveil encountered */
-	void	*ni_unveil_data;	/* used internally by unveil callbacks */
+	void	*ni_unveil_save;	/* used by unveil callbacks */
 #endif
 	/*
 	 * Results: returned from namei
@@ -222,7 +222,7 @@ int	cache_fplookup(struct nameidata *ndp, enum cache_fpl_status *status,
 #ifdef UNVEIL
 #define	NDINIT_UNVEIL(_ndp) do { \
 	_ndp->ni_unveil = NULL; \
-	_ndp->ni_unveil_data = NULL; \
+	_ndp->ni_unveil_save = NULL; \
 } while (0)
 #else
 #define	NDINIT_UNVEIL(ndp) do { } while (0)

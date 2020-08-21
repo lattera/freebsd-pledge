@@ -248,7 +248,7 @@ struct unveil_namei_data {
 };
 
 int
-unveil_traverse_remember(struct unveil_base *base,
+unveil_traverse_save(struct unveil_base *base,
     struct unveil_namei_data *data, struct unveil_node **cover,
     struct vnode *dvp, const char *name, size_t name_len, struct vnode *vp, bool last)
 {
@@ -354,8 +354,8 @@ do_unveil(struct thread *td, int atfd, const char *path,
 		nd_flags = flags & UNVEIL_FLAG_NOFOLLOW ? 0 : FOLLOW;
 		NDINIT_ATRIGHTS(&nd, LOOKUP, nd_flags,
 		    UIO_SYSSPACE, path, atfd, &cap_no_rights, td);
-		/* setting this will cause namei() to call unveil_traverse_remember() */
-		nd.ni_unveil_data = &data;
+		/* this will cause namei() to call unveil_traverse_save() */
+		nd.ni_unveil_save = &data;
 		error = namei(&nd);
 		if (error)
 			return (error);

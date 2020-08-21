@@ -104,7 +104,7 @@ struct unveil_node *unveil_insert(struct unveil_base *,
 
 struct unveil_namei_data;
 
-int unveil_traverse_remember(struct unveil_base *,
+int unveil_traverse_save(struct unveil_base *,
     struct unveil_namei_data *, struct unveil_node **cover,
     struct vnode *dvp, const char *name, size_t name_len, struct vnode *vp, bool last);
 int unveil_traverse(struct unveil_base *,
