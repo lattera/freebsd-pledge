@@ -2091,6 +2091,7 @@ kern_accessat(struct thread *td, int fd, const char *path,
 	struct ucred *cred, *usecred;
 	struct vnode *vp;
 	struct nameidata nd;
+	cap_rights_t *rightsp;
 	int error;
 
 	if ((flag & ~(AT_EACCESS | AT_BENEATH)) != 0)
@@ -2113,9 +2114,15 @@ kern_accessat(struct thread *td, int fd, const char *path,
 	} else
 		usecred = cred;
 	AUDIT_ARG_VALUE(amode);
+#ifdef UNVEIL
+	rightsp = CAP_UNVEIL_MERGED_RIGHTS(
+	    amode == F_OK, amode & R_OK, amode & W_OK, 0, amode & X_OK);
+#else
+	rightsp = &cap_fstat_rights;
+#endif
 	NDINIT_ATRIGHTS(&nd, LOOKUP, FOLLOW | LOCKSHARED | LOCKLEAF |
 	    AUDITVNODE1 | ((flag & AT_BENEATH) != 0 ? BENEATH : 0),
-	    pathseg, path, fd, &cap_fstat_rights, td);
+	    pathseg, path, fd, rightsp, td);
 	if ((error = namei(&nd)) != 0)
 		goto out;
 	vp = nd.ni_vp;
