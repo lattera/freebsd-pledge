@@ -263,6 +263,28 @@ parse_promises(bool *promises, const char *promises_str)
 }
 
 
+static const char *
+pledge_unveil_fixup_path(bool for_exec, const char *path)
+{
+	if (path == root_path) {
+		/*
+		 * The unveil on "/" is only there to
+		 * compensate for the other unveils that might
+		 * be needed for certain promises.  Once the
+		 * user does an explicit unveil(), filesystem
+		 * access must be restricted to what has been
+		 * explicitly unveiled.
+		 */
+		if (has_custom_unveils[for_exec])
+			path = NULL;
+	} else if (path == tmp_path) {
+		char *tmpdir;
+		if ((tmpdir = getenv("TMPDIR")))
+			path = tmpdir;
+	}
+	return (path);
+}
+
 static size_t
 do_pledge_unveils(const bool *req_promises, bool for_exec, int *sysfils)
 {
@@ -307,23 +329,7 @@ do_pledge_unveils(const bool *req_promises, bool for_exec, int *sysfils)
 			pu++;
 		} while (strcmp(pu->path, path) == 0);
 		need_uperms |= uperms; /* maximum permissions we'll need */
-		if (modified) {
-			if (path == root_path) {
-				/*
-				 * The unveil on "/" is only there to
-				 * compensate for the other unveils that might
-				 * be needed for certain promises.  Once the
-				 * user does an explicit unveil(), filesystem
-				 * access must be restricted to what has been
-				 * explicitly unveiled.
-				 */
-				if (has_custom_unveils[for_exec])
-					continue;
-			} else if (path == tmp_path) {
-				char *tmpdir;
-				if ((tmpdir = getenv("TMPDIR")))
-					path = tmpdir;
-			}
+		if (modified && (path = pledge_unveil_fixup_path(for_exec, path))) {
 			r = unveilctl(AT_FDCWD, path, flags1, uperms);
 			if (r < 0 && errno != ENOENT) /* XXX */
 				warn("unveil: %s", path);
@@ -371,14 +377,43 @@ do_pledge_unveils(const bool *req_promises, bool for_exec, int *sysfils)
 	/*
 	 * Permanently drop permissions that aren't explicitly requested.
 	 */
-	flags1 = flags | UNVEIL_FLAG_FOR_PLEDGE | UNVEIL_FLAG_FOR_CUSTOM;
-	flags1 |= UNVEIL_FLAG_ACTIVATE; /* also a good time to activate */
-	r = unveilctl(-1, NULL, flags1 | UNVEIL_FLAG_FREEZE, req_uperms);
+	flags1 = flags | UNVEIL_FLAG_ACTIVATE;
+	r = unveilctl(-1, NULL, flags1 | UNVEIL_FLAG_FREEZE, UNVEIL_PERM_NONE);
 	if (r < 0)
 		err(EX_OSERR, "unveilctl freeze");
 
 	has_pledge_unveils[for_exec] = true;
 	return (sysfils - orig_sysfils);
+}
+
+static void
+reserve_pledge_unveils(bool for_exec)
+{
+	const struct promise_unveil *pu;
+	const char *path;
+	int r, i, flags, flags1;
+	flags = (for_exec ? UNVEIL_FLAG_FOR_EXEC : UNVEIL_FLAG_FOR_CURR) |
+	    UNVEIL_FLAG_FOR_PLEDGE;
+	r = unveilctl(-1, NULL, flags | UNVEIL_FLAG_SWEEP, -1);
+	if (r < 0)
+		err(EX_OSERR, "unveilctl sweep");
+	flags1 = flags | unveil_global_flags;
+	for (pu = unveils_table; (*(path = pu->path)); ) {
+		unveil_perms_t uperms = UNVEIL_PERM_NONE;
+		do {
+			uperms |= pu->perms;
+			pu++;
+		} while (strcmp(pu->path, path) == 0);
+		if ((path = pledge_unveil_fixup_path(for_exec, path))) {
+			r = unveilctl(AT_FDCWD, path, flags1, uperms);
+			if (r < 0 && errno != ENOENT) /* XXX */
+				warn("unveil: %s", path);
+		}
+	}
+	for (i = 0; i < PROMISE_COUNT; i++)
+		cur_promises[for_exec][i] = true;
+	has_pledge_unveils[for_exec] = true;
+	/* NOTE: caller expected to do the UNVEIL_FLAG_FREEZE */
 }
 
 static int
@@ -465,7 +500,7 @@ unveil_parse_perms(unveil_perms_t *perms, const char *s)
 static int
 do_unveil(const char *path, int flags, unveil_perms_t perms)
 {
-	int r, flags1, req_custom_flags, has_pledge_flags, has_custom_flags;
+	int r, flags1, flags2, req_custom_flags, has_pledge_flags, has_custom_flags;
 
 	has_pledge_flags =
 	    (has_pledge_unveils[false] ? UNVEIL_FLAG_FOR_CURR : 0) |
@@ -502,21 +537,24 @@ do_unveil(const char *path, int flags, unveil_perms_t perms)
 	if (flags & UNVEIL_FLAG_FOR_EXEC)
 		has_custom_unveils[true] = true;
 
-	flags1 = flags | UNVEIL_FLAG_FOR_CUSTOM;
-	flags1 |= UNVEIL_FLAG_ACTIVATE;
+	flags1 = flags | UNVEIL_FLAG_ACTIVATE;
 
 	if (!path) {
-		/*
-		 * XXX If unveil(NULL, NULL) is done before pledge(), pledge()
-		 * won't be able to add its unveils.
-		 */
+		/* Make calling pledge() after unveil(NULL, NULL) work. */
+		if ((flags2 = req_custom_flags & ~has_pledge_flags)) {
+			if (flags2 & UNVEIL_FLAG_FOR_CURR)
+				reserve_pledge_unveils(false);
+			if (flags2 & UNVEIL_FLAG_FOR_EXEC)
+				reserve_pledge_unveils(true);
+		}
+		/* Forbid ever raising unveil permissions. */
 		r = unveilctl(-1, NULL, flags1 | UNVEIL_FLAG_FREEZE, UNVEIL_PERM_NONE);
 		if (r < 0)
 			err(EX_OSERR, "unveilctl freeze");
 		return (0);
 	}
 
-	flags1 |= unveil_global_flags;
+	flags1 |= UNVEIL_FLAG_FOR_CUSTOM | unveil_global_flags;
 	return (unveilctl(AT_FDCWD, path, flags1 | UNVEIL_FLAG_NOINHERIT, perms));
 }
 
