@@ -60,18 +60,20 @@ int
 sysfil_require_af(struct thread *td, int af)
 {
 #ifdef SYSFIL
+	int sf;
 	switch (af) {
 	case AF_UNIX:
-		if (sysfil_check(td, SYSFIL_UNIX) == 0)
-			return (0);
+		sf = SYSFIL_UNIX;
 		break;
 	case AF_INET:
 	case AF_INET6:
-		if (sysfil_check(td, SYSFIL_INET) == 0)
-			return (0);
+		sf = SYSFIL_INET;
+		break;
+	default:
+		sf = SYSFIL_ANY_AF;
 		break;
 	}
-	return (sysfil_check(td, SYSFIL_ANY_AF));
+	return (sysfil_require(td, sf));
 #else
 	return (0);
 #endif
