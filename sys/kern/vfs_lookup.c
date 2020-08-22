@@ -279,7 +279,8 @@ sysfil_namei_check(struct nameidata *ndp, struct thread *td)
 static inline bool
 unveil_lookup_tolerate_error(struct nameidata *ndp, int error)
 {
-	return (error == ENOENT && ndp->ni_unveil_save);
+	return (error == ENOENT && ndp->ni_unveil_save &&
+	    (ndp->ni_cnd.cn_flags & ISLASTCN));
 }
 
 static void
