@@ -1455,6 +1455,26 @@ cr_cansee(struct ucred *u1, struct ucred *u2)
 	return (0);
 }
 
+static inline int
+p_cansysfil(struct thread *td, struct proc *p)
+{
+	if (IN_RESTRICTED_MODE(td) && td->td_proc != p) {
+		int error;
+		error = sysfil_require(td, SYSFIL_PROC);
+		if (error)
+			return (error);
+		if (td->td_proc->p_session != p->p_session) {
+			if (sysfil_check(td, SYSFIL_PS) == 0)
+				error = sysfil_check(td, SYSFIL_ANY_SESSION);
+			else
+				error = sysfil_require(td, SYSFIL_ANY_SESSION);
+			if (error)
+				return (error);
+		}
+	}
+	return (0);
+}
+
 /*-
  * Determine if td "can see" the subject specified by p.
  * Returns: 0 for permitted, an errno value otherwise
@@ -1466,15 +1486,13 @@ int
 p_cansee(struct thread *td, struct proc *p)
 {
 
+	int error;
 	/* Wrap cr_cansee() for all functionality. */
 	KASSERT(td == curthread, ("%s: td not curthread", __func__));
 	PROC_LOCK_ASSERT(p, MA_OWNED);
-	if (td->td_proc != p) {
-		int error;
-		error = sysfil_require(td, SYSFIL_PROC);
-		if (error)
-			return (error);
-	}
+	error = p_cansysfil(td, p);
+	if (error)
+		return (error);
 	return (cr_cansee(td->td_ucred, p->p_ucred));
 }
 
@@ -1580,6 +1598,7 @@ int
 p_cansignal(struct thread *td, struct proc *p, int signum)
 {
 
+	int error;
 	KASSERT(td == curthread, ("%s: td not curthread", __func__));
 	PROC_LOCK_ASSERT(p, MA_OWNED);
 	if (td->td_proc == p)
@@ -1605,6 +1624,10 @@ p_cansignal(struct thread *td, struct proc *p, int signum)
 	if (td->td_proc->p_leader != NULL && signum >= SIGTHR &&
 	    signum < SIGTHR + 4 && td->td_proc->p_leader == p->p_leader)
 		return (0);
+
+	error = p_cansysfil(td, p);
+	if (error)
+		return (error);
 
 	return (cr_cansignal(td->td_ucred, p, signum));
 }

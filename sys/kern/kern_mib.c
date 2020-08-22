@@ -690,7 +690,7 @@ sysctl_kern_pid_max(SYSCTL_HANDLER_ARGS)
 	return (error);
 }
 SYSCTL_PROC(_kern, OID_AUTO, pid_max, CTLTYPE_INT |
-    CTLFLAG_RWTUN | CTLFLAG_NOFETCH | CTLFLAG_MPSAFE,
+    CTLFLAG_RWTUN | CTLFLAG_NOFETCH | CTLFLAG_RESTRICT | CTLFLAG_MPSAFE,
     0, 0, sysctl_kern_pid_max, "I", "Maximum allowed pid");
 
 #include <sys/bio.h>
