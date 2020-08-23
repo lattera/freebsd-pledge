@@ -25,7 +25,7 @@ static const char *default_promises =
     "rpath wpath cpath dpath tmppath "
     "exec prot_exec "
     "flock fattr chown id "
-    "proc thread "
+    "proc_session thread "
     "tty "
     "unix recvfd sendfd ";
 static const char *network_promises =
