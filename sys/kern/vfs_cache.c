@@ -97,6 +97,10 @@ SDT_PROBE_DEFINE2(vfs, namecache, lookup, hit__negative,
     "struct vnode *", "char *");
 SDT_PROBE_DEFINE2(vfs, namecache, lookup, miss, "struct vnode *",
     "char *");
+SDT_PROBE_DEFINE2(vfs, namecache, removecnp, hit, "struct vnode *",
+    "struct componentname *");
+SDT_PROBE_DEFINE2(vfs, namecache, removecnp, miss, "struct vnode *",
+    "struct componentname *");
 SDT_PROBE_DEFINE1(vfs, namecache, purge, done, "struct vnode *");
 SDT_PROBE_DEFINE1(vfs, namecache, purge_negative, done, "struct vnode *");
 SDT_PROBE_DEFINE1(vfs, namecache, purgevfs, done, "struct mount *");
@@ -513,7 +517,7 @@ cache_assert_vnode_locked(struct vnode *vp)
 
 /*
  * TODO: With the value stored we can do better than computing the hash based
- * on the address and the choice of FNV should also be revisisted.
+ * on the address. The choice of FNV should also be revisited.
  */
 static void
 cache_prehash(struct vnode *vp)
@@ -1306,8 +1310,7 @@ cache_lookup_dot(struct vnode *dvp, struct vnode **vpp, struct componentname *cn
 }
 
 static __noinline int
-cache_lookup_nomakeentry(struct vnode *dvp, struct vnode **vpp,
-    struct componentname *cnp, struct timespec *tsp, int *ticksp)
+cache_remove_cnp(struct vnode *dvp, struct componentname *cnp)
 {
 	struct namecache *ncp;
 	struct rwlock *blp;
@@ -1317,18 +1320,16 @@ cache_lookup_nomakeentry(struct vnode *dvp, struct vnode **vpp,
 
 	if (cnp->cn_namelen == 2 &&
 	    cnp->cn_nameptr[0] == '.' && cnp->cn_nameptr[1] == '.') {
-		counter_u64_add(dotdothits, 1);
 		dvlp = VP2VNODELOCK(dvp);
 		dvlp2 = NULL;
 		mtx_lock(dvlp);
 retry_dotdot:
 		ncp = dvp->v_cache_dd;
 		if (ncp == NULL) {
-			SDT_PROBE3(vfs, namecache, lookup, miss, dvp,
-			    "..", NULL);
 			mtx_unlock(dvlp);
 			if (dvlp2 != NULL)
 				mtx_unlock(dvlp2);
+			SDT_PROBE2(vfs, namecache, removecnp, miss, dvp, cnp);
 			return (0);
 		}
 		if ((ncp->nc_flag & NCF_ISDOTDOT) != 0) {
@@ -1350,7 +1351,8 @@ retry_dotdot:
 			if (dvlp2 != NULL)
 				mtx_unlock(dvlp2);
 		}
-		return (0);
+		SDT_PROBE2(vfs, namecache, removecnp, hit, dvp, cnp);
+		return (1);
 	}
 
 	hash = cache_get_hash(cnp->cn_nameptr, cnp->cn_namelen, dvp);
@@ -1381,9 +1383,10 @@ retry:
 	}
 	counter_u64_add(numposzaps, 1);
 	cache_free(ncp);
-	return (0);
+	SDT_PROBE2(vfs, namecache, removecnp, hit, dvp, cnp);
+	return (1);
 out_no_entry:
-	SDT_PROBE3(vfs, namecache, lookup, miss, dvp, cnp->cn_nameptr, NULL);
+	SDT_PROBE2(vfs, namecache, removecnp, miss, dvp, cnp);
 	counter_u64_add(nummisszap, 1);
 	return (0);
 }
@@ -1448,8 +1451,10 @@ cache_lookup(struct vnode *dvp, struct vnode **vpp, struct componentname *cnp,
 	if (__predict_false(cnp->cn_namelen == 1 && cnp->cn_nameptr[0] == '.'))
 		return (cache_lookup_dot(dvp, vpp, cnp, tsp, ticksp));
 
-	if ((cnp->cn_flags & MAKEENTRY) == 0)
-		return (cache_lookup_nomakeentry(dvp, vpp, cnp, tsp, ticksp));
+	if ((cnp->cn_flags & MAKEENTRY) == 0) {
+		cache_remove_cnp(dvp, cnp);
+		return (0);
+	}
 
 	try_smr = true;
 	if (cnp->cn_nameiop == CREATE)
@@ -1887,10 +1892,12 @@ cache_enter_time(struct vnode *dvp, struct vnode *vp, struct componentname *cnp,
 	u_long lnumcache;
 
 	CTR3(KTR_VFS, "cache_enter(%p, %p, %s)", dvp, vp, cnp->cn_nameptr);
-	VNASSERT(vp == NULL || !VN_IS_DOOMED(vp), vp,
-	    ("cache_enter: Adding a doomed vnode"));
-	VNASSERT(dvp == NULL || !VN_IS_DOOMED(dvp), dvp,
-	    ("cache_enter: Doomed vnode used as src"));
+	VNPASS(!VN_IS_DOOMED(dvp), dvp);
+	VNPASS(dvp->v_type != VNON, dvp);
+	if (vp != NULL) {
+		VNPASS(!VN_IS_DOOMED(vp), vp);
+		VNPASS(vp->v_type != VNON, vp);
+	}
 
 #ifdef DEBUG_CACHE
 	if (__predict_false(!doingcache))
@@ -1957,6 +1964,15 @@ cache_enter_time(struct vnode *dvp, struct vnode *vp, struct componentname *cnp,
 		if (n2->nc_dvp == dvp &&
 		    n2->nc_nlen == cnp->cn_namelen &&
 		    !bcmp(n2->nc_name, cnp->cn_nameptr, n2->nc_nlen)) {
+			MPASS(cache_ncp_canuse(n2));
+			if ((n2->nc_flag & NCF_NEGATIVE) != 0)
+				KASSERT(vp == NULL,
+				    ("%s: found entry pointing to a different vnode (%p != %p)",
+				    __func__, NULL, vp));
+			else
+				KASSERT(n2->nc_vp == vp,
+				    ("%s: found entry pointing to a different vnode (%p != %p)",
+				    __func__, n2->nc_vp, vp));
 			if (tsp != NULL) {
 				KASSERT((n2->nc_flag & NCF_TS) != 0,
 				    ("no NCF_TS"));
@@ -2325,6 +2341,27 @@ cache_purge_negative(struct vnode *vp)
 	}
 }
 
+void
+cache_rename(struct vnode *fdvp, struct vnode *fvp, struct vnode *tdvp,
+    struct vnode *tvp, struct componentname *fcnp, struct componentname *tcnp)
+{
+
+	ASSERT_VOP_IN_SEQC(fdvp);
+	ASSERT_VOP_IN_SEQC(fvp);
+	ASSERT_VOP_IN_SEQC(tdvp);
+	if (tvp != NULL)
+		ASSERT_VOP_IN_SEQC(tvp);
+
+	cache_purge(fvp);
+	if (tvp != NULL) {
+		cache_purge(tvp);
+		KASSERT(!cache_remove_cnp(tdvp, tcnp),
+		    ("%s: lingering negative entry", __func__));
+	} else {
+		cache_remove_cnp(tdvp, tcnp);
+	}
+}
+
 /*
  * Flush all entries referencing a particular filesystem.
  */
@@ -2427,11 +2464,11 @@ sys___getcwd(struct thread *td, struct __getcwd_args *uap)
 	if (buflen > MAXPATHLEN)
 		buflen = MAXPATHLEN;
 
-	buf = malloc(buflen, M_TEMP, M_WAITOK);
+	buf = uma_zalloc(namei_zone, M_WAITOK);
 	error = vn_getcwd(td, buf, &retbuf, &buflen);
 	if (error == 0)
 		error = copyout(retbuf, uap->buf, buflen);
-	free(buf, M_TEMP);
+	uma_zfree(namei_zone, buf);
 	return (error);
 }
 
@@ -2776,6 +2813,7 @@ vn_fullpath_hardlink(struct thread *td, struct nameidata *ndp, char **retbuf,
 	size_t addend;
 	int error;
 	bool slash_prefixed;
+	enum vtype type;
 
 	if (*buflen < 2)
 		return (EINVAL);
@@ -2789,7 +2827,31 @@ vn_fullpath_hardlink(struct thread *td, struct nameidata *ndp, char **retbuf,
 
 	addend = 0;
 	vp = ndp->ni_vp;
-	if (vp->v_type != VDIR) {
+	/*
+	 * Check for VBAD to work around the vp_crossmp bug in lookup().
+	 *
+	 * For example consider tmpfs on /tmp and realpath /tmp. ni_vp will be
+	 * set to mount point's root vnode while ni_dvp will be vp_crossmp.
+	 * If the type is VDIR (like in this very case) we can skip looking
+	 * at ni_dvp in the first place. However, since vnodes get passed here
+	 * unlocked the target may transition to doomed state (type == VBAD)
+	 * before we get to evaluate the condition. If this happens, we will
+	 * populate part of the buffer and descend to vn_fullpath_dir with
+	 * vp == vp_crossmp. Prevent the problem by checking for VBAD.
+	 *
+	 * This should be atomic_load(&vp->v_type) but it is ilegal to take
+	 * an address of a bit field, even if said field is sized to char.
+	 * Work around the problem by reading the value into a full-sized enum
+	 * and then re-reading it with atomic_load which will still prevent
+	 * the compiler from re-reading down the road.
+	 */
+	type = vp->v_type;
+	type = atomic_load_int(&type);
+	if (type == VBAD) {
+		error = ENOENT;
+		goto out_bad;
+	}
+	if (type != VDIR) {
 		cnp = &ndp->ni_cnd;
 		addend = cnp->cn_namelen + 2;
 		if (*buflen < addend) {
@@ -2983,8 +3045,6 @@ DB_SHOW_COMMAND(vpath, db_show_vpath)
 
 #endif
 
-extern uma_zone_t namei_zone;
-
 static bool __read_frequently cache_fast_lookup = true;
 SYSCTL_BOOL(_vfs, OID_AUTO, cache_fast_lookup, CTLFLAG_RW,
     &cache_fast_lookup, 0, "");
@@ -3146,7 +3206,7 @@ cache_fpl_handled_impl(struct cache_fpl *fpl, int error, int line)
 
 #define CACHE_FPL_SUPPORTED_CN_FLAGS \
 	(LOCKLEAF | LOCKPARENT | WANTPARENT | NOCACHE | FOLLOW | LOCKSHARED | SAVENAME | \
-	 SAVESTART | WILLBEDIR | ISOPEN | NOMACCHECK | AUDITVNODE1 | AUDITVNODE2)
+	 SAVESTART | WILLBEDIR | ISOPEN | NOMACCHECK | AUDITVNODE1 | AUDITVNODE2 | NOCAPCHECK)
 
 #define CACHE_FPL_INTERNAL_CN_FLAGS \
 	(ISDOTDOT | MAKEENTRY | ISLASTCN)

@@ -791,6 +791,7 @@ struct proc {
 #define	P_TREE_FIRST_ORPHAN	0x00000002	/* First element of orphan
 						   list */
 #define	P_TREE_REAPER		0x00000004	/* Reaper of subtree */
+#define	P_TREE_GRPEXITED	0x00000008	/* exit1() done with job ctl */
 
 /*
  * The general notion of a process being "restricted" is used for checks that
@@ -1058,7 +1059,6 @@ int	enterpgrp(struct proc *p, pid_t pgid, struct pgrp *pgrp,
 	    struct session *sess);
 int	enterthispgrp(struct proc *p, struct pgrp *pgrp);
 void	faultin(struct proc *p);
-void	fixjobc(struct proc *p, struct pgrp *pgrp, int entering);
 int	fork1(struct thread *, struct fork_req *);
 void	fork_rfppwait(struct thread *);
 void	fork_exit(void (*)(void *, struct trapframe *), void *,
