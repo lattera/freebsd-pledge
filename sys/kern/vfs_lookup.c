@@ -284,14 +284,26 @@ unveil_lookup_tolerate_error(struct nameidata *ndp, int error)
 }
 
 static void
-unveil_namei_start(struct nameidata *ndp, struct thread *td)
+unveil_namei_start(struct nameidata *ndp)
 {
-	struct filedesc *fdp = td->td_proc->p_fd;
+	struct filedesc *fdp = ndp->ni_cnd.cn_thread->td_proc->p_fd;
 	struct unveil_base *base = &fdp->fd_unveil;
 	FILEDESC_SLOCK(fdp);
 	if (!ndp->ni_unveil_save && (!base->active || ndp->ni_startdir))
 		ndp->ni_lcf |= NI_LCF_UNVEIL_DISABLED;
 	FILEDESC_SUNLOCK(fdp);
+}
+
+static int
+unveil_namei_update(struct nameidata *ndp, struct vnode *vp)
+{
+	struct filedesc *fdp = ndp->ni_cnd.cn_thread->td_proc->p_fd;
+	struct unveil_base *base = &fdp->fd_unveil;
+	int error;
+	FILEDESC_SLOCK(fdp);
+	error = unveil_traverse(base, NULL, &ndp->ni_unveil, NULL, NULL, 0, vp, false);
+	FILEDESC_SUNLOCK(fdp);
+	return (error);
 }
 
 static int
@@ -442,7 +454,7 @@ namei_setup(struct nameidata *ndp, struct vnode **dpp, struct pwd **pwdp)
 	*dpp = NULL;
 
 #ifdef UNVEIL
-	unveil_namei_start(ndp, td);
+	unveil_namei_start(ndp);
 #endif
 
 #ifdef CAPABILITY_MODE
@@ -558,7 +570,7 @@ namei_setup(struct nameidata *ndp, struct vnode **dpp, struct pwd **pwdp)
 			error = ENOTDIR;
 #ifdef UNVEIL
 		if (cover)
-			error = unveil_lookup_update(ndp, cover, false);
+			error = unveil_namei_update(ndp, cover);
 #endif
 	}
 	if (error == 0 && (cnp->cn_flags & BENEATH) != 0) {
