@@ -279,8 +279,8 @@ state(KINFO *k, VARENT *ve __unused)
 		*cp++ = 'L';
 	if ((k->ki_p->ki_cr_flags & KI_CRF_CAPABILITY_MODE) != 0)
 		*cp++ = 'C';
-	if ((k->ki_p->ki_cr_flags & KI_CRF_RESTRICTED_MODE) != 0)
-		*cp++ = 'R';
+	else if ((k->ki_p->ki_cr_flags & KI_CRF_RESTRICTED_MODE) != 0)
+		*cp++ = 'c';
 	if (k->ki_p->ki_kiflag & KI_SLEADER)
 		*cp++ = 's';
 	if ((flag & P_CONTROLT) && k->ki_p->ki_pgid == k->ki_p->ki_tpgid)
