@@ -9,7 +9,7 @@ main()
 {
 	int fd1, fd2, fd;
 
-	EXPECT(unveil("/etc", "rx")); /* XXX 'x' */
+	EXPECT(unveil("/etc", "r"));
 	EXPECT(unveil(NULL, NULL));
 
 	EXPECT(fd1 = open("/etc", O_SEARCH));

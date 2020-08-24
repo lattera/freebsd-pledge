@@ -387,6 +387,11 @@ unveil_lookup_check(struct nameidata *ndp)
 	} else
 		uperms = UNVEIL_PERM_NONE;
 
+	/* Kludge for O_EXEC/O_SEARCH opens. */
+	if (ndp->ni_vp && ndp->ni_vp->v_type == VDIR &&
+	    (uperms & UNVEIL_PERM_RPATH))
+		uperms |= UNVEIL_PERM_XPATH;
+
 	haverights = unveil_perms_to_rights(uperms);
 	if (cap_rights_contains(haverights, ndp->ni_rightsneeded))
 		return (0);
