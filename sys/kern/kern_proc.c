@@ -2082,11 +2082,14 @@ sysctl_kern_proc_args(SYSCTL_HANDLER_ARGS)
 	if (namelen != 1)
 		return (EINVAL);
 
-	error = sysfil_require(req->td, SYSFIL_PS);
-	if (error)
-		return (error);
-
 	pid = (pid_t)name[0];
+
+	if (pid != req->td->td_proc->p_pid) {
+		error = sysfil_require(req->td, SYSFIL_PS);
+		if (error)
+			return (error);
+	}
+
 	/*
 	 * If the query is for this process and it is single-threaded, there
 	 * is nobody to modify pargs, thus we can just read.
@@ -2246,11 +2249,12 @@ sysctl_kern_proc_pathname(SYSCTL_HANDLER_ARGS)
 		error = pget(*pidp, PGET_CANSEE, &p);
 		if (error != 0)
 			return (error);
-		if (p->p_pid != req->td->td_proc->p_pid) {
-			error = sysfil_require(req->td, SYSFIL_PS);
-			if (error)
-				return (error);
-		}
+	}
+
+	if (p != req->td->td_proc) {
+		error = sysfil_require(req->td, SYSFIL_PS);
+		if (error)
+			return (error);
 	}
 
 	vp = p->p_textvp;
