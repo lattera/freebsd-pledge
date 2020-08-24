@@ -29,7 +29,7 @@ static bool unveil_enabled = true;
 SYSCTL_BOOL(_kern, OID_AUTO, unveil_enabled, CTLFLAG_RW,
 	&unveil_enabled, 0, "Allow unveil usage");
 
-static unsigned int unveil_max_nodes_per_process = 100;
+static unsigned int unveil_max_nodes_per_process = 128;
 SYSCTL_UINT(_kern, OID_AUTO, maxunveilsperproc, CTLFLAG_RW,
 	&unveil_max_nodes_per_process, 0, "Maximum unveils allowed per process");
 
