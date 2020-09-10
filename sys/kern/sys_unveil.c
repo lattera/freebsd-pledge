@@ -81,7 +81,8 @@ unveil_node_exec_to_curr(struct unveil_node *node)
 	int i;
 	node->frozen_perms[UNVEIL_ROLE_CURR] = node->frozen_perms[UNVEIL_ROLE_EXEC];
 	for (i = 0; i < UNVEIL_SLOT_COUNT; i++)
-		node->wanted_perms[UNVEIL_ROLE_CURR][i] = node->wanted_perms[UNVEIL_ROLE_EXEC][i];
+		node->wanted_perms[UNVEIL_ROLE_CURR][i] =
+		    node->wanted_perms[UNVEIL_ROLE_EXEC][i];
 }
 
 
@@ -331,6 +332,10 @@ do_unveil_sweep(struct unveil_base *base, int flags)
 	int i, j;
 	RB_FOREACH(node, unveil_node_tree, &base->root)
 		FOREACH_SLOT_FLAGS(flags, i, j)
+			/*
+			 * NOTE: This also makes all nodes inherit their
+			 * permissions from their parent nodes.
+			 */
 			node->wanted_perms[i][j] = UNVEIL_PERM_NONE;
 }
 
