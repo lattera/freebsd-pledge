@@ -144,7 +144,7 @@ main(int argc, char *argv[])
 			if (path[0] != '/') {
 				size_t n, m;
 				if (!abspath_len) {
-					if (!getcwd(abspath, sizeof abspath))
+					if (!getcwd(abspath, sizeof abspath - 1))
 						err(EX_OSERR, "getcwd");
 					abspath_len = strlen(abspath);
 					abspath[abspath_len++] = '/';
