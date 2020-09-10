@@ -169,6 +169,8 @@ main(int argc, char *argv[])
 	if (!argc)
 		usage();
 
+	closefrom(3); /* Prevent potentially unintended FD passing. */
+
 	new_tmpdir();
 
 	r = pledge(NULL, promises);
