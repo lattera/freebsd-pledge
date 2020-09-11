@@ -117,6 +117,8 @@ void unveil_fd_free(struct filedesc *);
 
 void unveil_proc_exec_switch(struct thread *);
 
+int unveil_find_cover(struct thread *, struct vnode *, struct unveil_node **);
+
 #endif /* _KERNEL */
 
 #endif

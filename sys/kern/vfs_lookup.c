@@ -284,7 +284,7 @@ unveil_lookup_tolerate_error(struct nameidata *ndp, int error)
 }
 
 static void
-unveil_namei_start(struct nameidata *ndp)
+unveil_namei_setup(struct nameidata *ndp)
 {
 	struct filedesc *fdp = ndp->ni_cnd.cn_thread->td_proc->p_fd;
 	struct unveil_base *base = &fdp->fd_unveil;
@@ -295,14 +295,26 @@ unveil_namei_start(struct nameidata *ndp)
 }
 
 static int
-unveil_namei_update(struct nameidata *ndp, struct vnode *vp)
+unveil_namei_start(struct nameidata *ndp, struct vnode *cp, struct vnode *dp)
 {
-	struct filedesc *fdp = ndp->ni_cnd.cn_thread->td_proc->p_fd;
+	struct thread *td = ndp->ni_cnd.cn_thread;
+	struct filedesc *fdp = td->td_proc->p_fd;
 	struct unveil_base *base = &fdp->fd_unveil;
-	int error;
-	FILEDESC_SLOCK(fdp);
-	error = unveil_traverse(base, NULL, &ndp->ni_unveil, NULL, NULL, 0, vp, false);
-	FILEDESC_SUNLOCK(fdp);
+	int error = 0;
+	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
+		return (0);
+	if (!ndp->ni_unveil && cp) {
+		FILEDESC_SLOCK(fdp);
+		ndp->ni_unveil = unveil_lookup(base, cp, "", 0);
+		FILEDESC_SUNLOCK(fdp);
+	}
+	if (!ndp->ni_unveil && dp) {
+		error = unveil_find_cover(td, dp, &ndp->ni_unveil);
+		if (error) {
+			printf("unveil_find_cover() error %d\n", error);
+			error = 0;
+		}
+	}
 	return (error);
 }
 
@@ -459,7 +471,7 @@ namei_setup(struct nameidata *ndp, struct vnode **dpp, struct pwd **pwdp)
 	*dpp = NULL;
 
 #ifdef UNVEIL
-	unveil_namei_start(ndp);
+	unveil_namei_setup(ndp);
 #endif
 
 #ifdef CAPABILITY_MODE
@@ -574,8 +586,7 @@ namei_setup(struct nameidata *ndp, struct vnode **dpp, struct pwd **pwdp)
 		if (error == 0 && (*dpp)->v_type != VDIR)
 			error = ENOTDIR;
 #ifdef UNVEIL
-		if (cover)
-			error = unveil_namei_update(ndp, cover);
+		error = unveil_namei_start(ndp, cover, *dpp);
 #endif
 	}
 	if (error == 0 && (cnp->cn_flags & BENEATH) != 0) {

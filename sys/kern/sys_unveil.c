@@ -19,6 +19,8 @@ __FBSDID("$FreeBSD$");
 #include <sys/syslog.h>
 #include <sys/jail.h>
 #include <sys/namei.h>
+#include <sys/vnode.h>
+#include <sys/mount.h>
 #include <sys/unveil.h>
 
 #ifdef UNVEIL
@@ -300,6 +302,77 @@ unveil_traverse(struct unveil_base *base,
 	if (node)
 		*cover = node;
 	return (0);
+}
+
+
+int
+unveil_find_cover(struct thread *td, struct vnode *dp, struct unveil_node **cover)
+{
+	struct filedesc *fdp = td->td_proc->p_fd;
+	struct unveil_base *base = &fdp->fd_unveil;
+	int error = 0;
+	struct vnode *vp;
+	struct componentname cn;
+
+	error = vget(dp, LK_RETRY | LK_SHARED);
+	if (error)
+		return (error);
+
+	while (true) {
+		/* At the start of the loop, dp is locked (and referenced). */
+
+		FILEDESC_SLOCK(fdp);
+		*cover = unveil_lookup(base, dp, NULL, 0);
+		FILEDESC_SUNLOCK(fdp);
+		if (*cover)
+			break; /* found unveil node */
+
+		if (dp->v_vflag & VV_ROOT) {
+			/*
+			 * This is a mountpoint.  Before doing a ".." lookup,
+			 * find the underlying directory it is mounted onto.
+			 */
+			if (!dp->v_mount || !(vp = dp->v_mount->mnt_vnodecovered))
+				break;
+			/* Must not lock parent while child lock is held. */
+			vref(vp);
+			vput(dp);
+			error = vn_lock(vp, LK_RETRY | LK_SHARED);
+			if (error) {
+				vrele(vp);
+				return (error); /* must not try to unlock */
+			}
+			dp = vp;
+			/*
+			 * The underlying directory could also be a mountpoint,
+			 * and should be checked for unveils as well.
+			 */
+			continue;
+		}
+
+		cn = (struct componentname){
+			.cn_nameiop = LOOKUP,
+			.cn_flags = ISLASTCN | ISDOTDOT | RDONLY,
+			.cn_lkflags = LK_SHARED,
+			.cn_thread = td,
+			.cn_cred = td->td_ucred,
+			.cn_nameptr = "..",
+			.cn_namelen = 2,
+		};
+		error = VOP_LOOKUP(dp, &vp, &cn);
+		if (error)
+			break;
+		/* Now vp is the parent directory and dp the child directory. */
+		if (dp == vp) {
+			vrele(dp);
+			break;
+		}
+		vput(dp);
+		dp = vp;
+	}
+
+	vput(dp);
+	return (error);
 }
 
 
