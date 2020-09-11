@@ -353,11 +353,10 @@ unveil_lookup_update(struct nameidata *ndp, struct vnode *vp, bool last)
 static void
 unveil_lookup_update_dotdot(struct nameidata *ndp, struct vnode *vp)
 {
-	struct unveil_node *node;
+	struct filedesc *fdp = ndp->ni_cnd.cn_thread->td_proc->p_fd;
 	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
 		return;
-	if ((node = ndp->ni_unveil) && node->vp == vp)
-		ndp->ni_unveil = node->cover;
+	unveil_traverse_dotdot(&fdp->fd_unveil, ndp->ni_unveil_save, &ndp->ni_unveil, vp);
 }
 
 static inline const cap_rights_t *
@@ -390,12 +389,8 @@ unveil_lookup_check(struct nameidata *ndp)
 
 	if ((node = ndp->ni_unveil)) {
 		FILEDESC_SLOCK(fdp);
-		uperms = unveil_node_soft_perms(node, UNVEIL_ROLE_CURR);
+		uperms = unveil_node_effective_perms(node, ndp->ni_vp);
 		FILEDESC_SUNLOCK(fdp);
-		uperms &= UNVEIL_PERM_ALL; /* drop internal bit */
-		if (node->vp != ndp->ni_vp)
-			/* The unveil covered a parent directory. */
-			uperms &= ~UNVEIL_PERM_NONINHERITED_MASK;
 	} else
 		uperms = UNVEIL_PERM_NONE;
 

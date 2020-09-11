@@ -91,6 +91,7 @@ struct unveil_node {
 CTASSERT(NAME_MAX <= UCHAR_MAX);
 
 unveil_perms_t unveil_node_soft_perms(struct unveil_node *, enum unveil_role);
+unveil_perms_t unveil_node_effective_perms(struct unveil_node *, struct vnode *vp);
 
 void unveil_init(struct unveil_base *);
 void unveil_merge(struct unveil_base *dst, struct unveil_base *src);
@@ -110,6 +111,9 @@ int unveil_traverse_save(struct unveil_base *,
 int unveil_traverse(struct unveil_base *,
     struct unveil_namei_data *, struct unveil_node **cover,
     struct vnode *dvp, const char *name, size_t name_len, struct vnode *vp, bool last);
+void unveil_traverse_dotdot(struct unveil_base *,
+    struct unveil_namei_data *, struct unveil_node **cover,
+    struct vnode *dvp);
 
 void unveil_fd_init(struct filedesc *);
 void unveil_fd_merge(struct filedesc *dst, struct filedesc *src);

@@ -71,6 +71,19 @@ unveil_node_soft_perms(struct unveil_node *node, enum unveil_role role)
 	return (soft_perms);
 }
 
+unveil_perms_t
+unveil_node_effective_perms(struct unveil_node *node, struct vnode *vp)
+{
+	unveil_perms_t perms;
+	perms = unveil_node_soft_perms(node, UNVEIL_ROLE_CURR);
+	if (node->vp != vp)
+		/* The unveil covered a parent directory. */
+		perms &= ~UNVEIL_PERM_NONINHERITED_MASK;
+	perms &= UNVEIL_PERM_ALL; /* drop internal bit */
+	return (perms);
+}
+
+
 static void
 unveil_node_freeze(struct unveil_node *node, enum unveil_role role, unveil_perms_t keep)
 {
@@ -307,6 +320,15 @@ unveil_traverse(struct unveil_base *base,
 	if (node)
 		*cover = node;
 	return (0);
+}
+
+void
+unveil_traverse_dotdot(struct unveil_base *base,
+    struct unveil_namei_data *data, struct unveil_node **cover,
+    struct vnode *dvp)
+{
+	if (*cover && (*cover)->vp == dvp)
+		*cover = (*cover)->cover;
 }
 
 
