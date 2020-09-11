@@ -92,6 +92,8 @@ static inline int
 memcmplen(const char *p0, size_t l0, const char *p1, size_t l1)
 {
 	int r;
+	if (!(p0 && p1))
+		return (p0 ? 1 : p1 ? -1 : 0);
 	r = memcmp(p0, p1, MIN(l0, l1));
 	if (r != 0)
 		return (r);
@@ -175,19 +177,22 @@ unveil_insert(struct unveil_base *base,
 {
 	struct unveil_node *new, *old;
 	int i;
-	new = malloc(sizeof *new + name_len + 1, M_UNVEIL, M_WAITOK);
+	new = malloc(sizeof *new + (name ? name_len + 1 : 0), M_UNVEIL, M_WAITOK);
 	*new = (struct unveil_node){
 		.cover = cover,
 		.vp = vp,
+		.name = __DECONST(char *, name),
 		.name_len = name_len,
-		.name = (char *)(new + 1),
 	};
-	memcpy(new->name, name, name_len);
-	new->name[name_len] = '\0'; /* not required by this code */
 	old = RB_INSERT(unveil_node_tree, &base->root, new);
 	if (old) {
 		free(new, M_UNVEIL);
 		return (old);
+	}
+	if (name) {
+		new->name = (char *)(new + 1);
+		memcpy(new->name, name, name_len);
+		new->name[name_len] = '\0'; /* not required by this code */
 	}
 	for (i = 0; i < UNVEIL_ROLE_COUNT; i++)
 		new->frozen_perms[i] = cover ? cover->frozen_perms[i] :
@@ -270,7 +275,7 @@ unveil_traverse_save(struct unveil_base *base,
 	if ((flags & UNVEIL_FLAG_NONDIRBYNAME) && last && dvp && (!vp || vp->v_type != VDIR))
 		node = unveil_insert(base, dvp, name, name_len, *cover);
 	else if (vp)
-		node = unveil_insert(base, vp, "", 0, *cover);
+		node = unveil_insert(base, vp, NULL, 0, *cover);
 	else
 		return (ENOTDIR); /* XXX */
 
@@ -294,7 +299,7 @@ unveil_traverse(struct unveil_base *base,
 {
 	struct unveil_node *node;
 	if (vp)
-		node = unveil_lookup(base, vp, "", 0);
+		node = unveil_lookup(base, vp, NULL, 0);
 	else
 		node = NULL;
 	if (!node && last && dvp && (!vp || vp->v_type != VDIR))

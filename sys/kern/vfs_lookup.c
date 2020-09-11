@@ -305,7 +305,7 @@ unveil_namei_start(struct nameidata *ndp, struct vnode *cp, struct vnode *dp)
 		return (0);
 	if (!ndp->ni_unveil && cp) {
 		FILEDESC_SLOCK(fdp);
-		ndp->ni_unveil = unveil_lookup(base, cp, "", 0);
+		ndp->ni_unveil = unveil_lookup(base, cp, NULL, 0);
 		FILEDESC_SUNLOCK(fdp);
 	}
 	if (!ndp->ni_unveil && dp) {

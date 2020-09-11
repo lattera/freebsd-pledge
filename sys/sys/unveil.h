@@ -77,7 +77,7 @@ struct unveil_node {
 	struct unveil_node *cover;
 	RB_ENTRY(unveil_node) entry;
 	/*
-	 * If name_len is 0, the node is not name-based and vp is a directly
+	 * If name is NULL, the node is not name-based and vp is a directly
 	 * unveiled vnode.  Otherwise, vp is the vnode of a parent directory
 	 * under which the name is unveiled.
 	 */
@@ -85,7 +85,7 @@ struct unveil_node {
 	unveil_perms_t frozen_perms[UNVEIL_ROLE_COUNT];
 	unveil_perms_t wanted_perms[UNVEIL_ROLE_COUNT][UNVEIL_SLOT_COUNT];
 	u_char name_len;
-	char *name; /* must not be NULL (to simplify comparisons) */
+	char *name;
 };
 
 CTASSERT(NAME_MAX <= UCHAR_MAX);
