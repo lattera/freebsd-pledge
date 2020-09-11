@@ -128,7 +128,7 @@ int	cache_fplookup(struct nameidata *ndp, enum cache_fpl_status *status,
  * If modifying the list make sure to check whether NDVALIDATE needs updating.
  */
 /*
- * namei operational modifier flags, stored in ni_cnd.flags
+ * namei operational modifier flags, stored in ni_cnd.cn_flags
  */
 #define	LOCKLEAF	0x0004	/* lock vnode on return */
 #define	LOCKPARENT	0x0008	/* want parent vnode returned locked */
