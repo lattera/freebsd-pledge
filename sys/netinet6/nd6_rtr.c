@@ -177,7 +177,8 @@ nd6_rs_input(struct mbuf *m, int off, int icmp6len)
 
 	/* Sanity checks */
 	ip6 = mtod(m, struct ip6_hdr *);
-	if (ip6->ip6_hlim != 255) {
+	if (__predict_false(ip6->ip6_hlim != 255)) {
+		ICMP6STAT_INC(icp6s_invlhlim);
 		nd6log((LOG_ERR,
 		    "%s: invalid hlim (%d) from %s to %s on %s\n", __func__,
 		    ip6->ip6_hlim, ip6_sprintf(ip6bufs, &ip6->ip6_src),
@@ -376,7 +377,8 @@ nd6_ra_input(struct mbuf *m, int off, int icmp6len)
 		goto freeit;
 
 	ip6 = mtod(m, struct ip6_hdr *);
-	if (ip6->ip6_hlim != 255) {
+	if (__predict_false(ip6->ip6_hlim != 255)) {
+		ICMP6STAT_INC(icp6s_invlhlim);
 		nd6log((LOG_ERR,
 		    "%s: invalid hlim (%d) from %s to %s on %s\n", __func__,
 		    ip6->ip6_hlim, ip6_sprintf(ip6bufs, &ip6->ip6_src),
@@ -668,7 +670,6 @@ pfxrtr_del(struct nd_pfxrouter *pfr)
 	free(pfr, M_IP6NDP);
 }
 
-
 /* Default router list processing sub routines. */
 static void
 defrouter_addreq(struct nd_defrouter *new)
@@ -792,7 +793,6 @@ defrouter_del(struct nd_defrouter *dr)
 	 */
 	defrouter_rele(dr);
 }
-
 
 struct nd_defrouter *
 defrouter_lookup_locked(const struct in6_addr *addr, struct ifnet *ifp)

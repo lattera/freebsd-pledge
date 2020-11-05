@@ -266,14 +266,14 @@ smbfs_reclaim(ap)
 	struct vnode *dvp;
 	struct smbnode *np = VTOSMB(vp);
 	struct smbmount *smp = VTOSMBFS(vp);
-	
+
 	SMBVDEBUG("%s,%d\n", np->n_name, vrefcnt(vp));
 
 	KASSERT((np->n_flag & NOPEN) == 0, ("file not closed before reclaim"));
 
 	dvp = (np->n_parent && (np->n_flag & NREFPARENT)) ?
 	    np->n_parent : NULL;
-	
+
 	/*
 	 * Remove the vnode from its hash chain.
 	 */
@@ -299,10 +299,9 @@ int
 smbfs_inactive(ap)
 	struct vop_inactive_args /* {
 		struct vnode *a_vp;
-		struct thread *a_td;
 	} */ *ap;
 {
-	struct thread *td = ap->a_td;
+	struct thread *td = curthread;
 	struct ucred *cred = td->td_ucred;
 	struct vnode *vp = ap->a_vp;
 	struct smbnode *np = VTOSMB(vp);

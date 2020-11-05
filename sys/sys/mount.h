@@ -365,6 +365,9 @@ struct mntoptnames {
 #define	MNT_EXPORTANON	0x0000000000000400ULL	/* anon uid mapping for all */
 #define	MNT_EXKERB	0x0000000000000800ULL	/* exported with Kerberos */
 #define	MNT_EXPUBLIC	0x0000000020000000ULL	/* public export (WebNFS) */
+#define	MNT_EXTLS	0x0000004000000000ULL /* require TLS */
+#define	MNT_EXTLSCERT	0x0000008000000000ULL /* require TLS with client cert */
+#define	MNT_EXTLSCERTUSER 0x0000010000000000ULL /* require TLS with user cert */
 
 /*
  * Flags set by internal operations,
@@ -460,6 +463,7 @@ struct mntoptnames {
 #define	MNTK_VMSETSIZE_BUG	0x00010000
 #define	MNTK_UNIONFS	0x00020000	/* A hack for F_ISUNIONSTACK */
 #define	MNTK_FPLOOKUP	0x00040000	/* fast path lookup is supported */
+#define	MNTK_SUSPEND_ALL	0x00080000 /* Suspended by all-fs suspension */
 #define MNTK_NOASYNC	0x00800000	/* disable async */
 #define MNTK_UNMOUNT	0x01000000	/* unmount in progress */
 #define	MNTK_MWAIT	0x02000000	/* waiting for unmount to finish */
@@ -994,7 +998,7 @@ int	vfs_suser(struct mount *, struct thread *);
 void	vfs_unbusy(struct mount *);
 void	vfs_unmountall(void);
 extern	TAILQ_HEAD(mntlist, mount) mountlist;	/* mounted filesystem list */
-extern	struct mtx mountlist_mtx;
+extern	struct mtx_padalign mountlist_mtx;
 extern	struct nfs_public nfs_pub;
 extern	struct sx vfsconf_sx;
 #define	vfsconf_lock()		sx_xlock(&vfsconf_sx)
@@ -1044,6 +1048,9 @@ void	vfs_dump_mount_counters(struct mount *);
 
 enum mount_counter { MNT_COUNT_REF, MNT_COUNT_LOCKREF, MNT_COUNT_WRITEOPCOUNT };
 int	vfs_mount_fetch_counter(struct mount *, enum mount_counter);
+
+void suspend_all_fs(void);
+void resume_all_fs(void);
 
 /*
  * Code transitioning mnt_vfs_ops to > 0 issues IPIs until it observes

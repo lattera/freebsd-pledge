@@ -93,7 +93,6 @@ SYSCTL_PROC(_kern_geom_cache, OID_AUTO, used_hi,
     sysctl_handle_pct, "IU",
     "");
 
-
 static int g_cache_destroy(struct g_cache_softc *sc, boolean_t force);
 static g_ctl_destroy_geom_t g_cache_destroy_geom;
 
@@ -111,7 +110,6 @@ struct g_class g_cache_class = {
 
 #define	OFF2BNO(off, sc)	((off) >> (sc)->sc_bshift)
 #define	BNO2OFF(bno, sc)	((bno) << (sc)->sc_bshift)
-
 
 static struct g_cache_desc *
 g_cache_alloc(struct g_cache_softc *sc)
@@ -675,9 +673,11 @@ g_cache_taste(struct g_class *mp, struct g_provider *pp, int flags __unused)
 	gp->orphan = g_cache_orphan;
 	gp->access = g_cache_access;
 	cp = g_new_consumer(gp);
-	g_attach(cp, pp);
-	error = g_cache_read_metadata(cp, &md);
-	g_detach(cp);
+	error = g_attach(cp, pp);
+	if (error == 0) {
+		error = g_cache_read_metadata(cp, &md);
+		g_detach(cp);
+	}
 	g_destroy_consumer(cp);
 	g_destroy_geom(gp);
 	if (error != 0)

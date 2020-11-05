@@ -498,7 +498,7 @@ ufs_stat(struct vop_stat_args *ap)
 	}
 	VI_UNLOCK(vp);
 
-	sb->st_dev = vp->v_mount->mnt_stat.f_fsid.val[0];
+	sb->st_dev = dev2udev(ITOUMP(ip)->um_dev);
 	sb->st_ino = ip->i_number;
 	sb->st_mode = (ip->i_mode & ~IFMT) | VTTOIF(vp->v_type);
 	sb->st_nlink = ip->i_effnlink;
@@ -1629,7 +1629,7 @@ relock:
 	 * name that references the old i-node if it has other links
 	 * or open file descriptors.
 	 */
-	cache_rename(fdvp, fvp, tdvp, tvp, fcnp, tcnp);
+	cache_vop_rename(fdvp, fvp, tdvp, tvp, fcnp, tcnp);
 
 unlockout:
 	if (want_seqc_end) {
@@ -1741,7 +1741,7 @@ ufs_do_posix1e_acl_inheritance_dir(struct vnode *dvp, struct vnode *tvp,
 		DIP_SET(ip, i_mode, dmode);
 		error = 0;
 		goto out;
-	
+
 	default:
 		goto out;
 	}
@@ -2108,7 +2108,7 @@ ufs_mkdir(ap)
 		goto bad;
 	ufs_makedirentry(ip, cnp, &newdir);
 	error = ufs_direnter(dvp, tvp, &newdir, cnp, bp, 0);
-	
+
 bad:
 	if (error == 0) {
 		*ap->a_vpp = tvp;
@@ -2204,7 +2204,6 @@ ufs_rmdir(ap)
 			softdep_revert_rmdir(dp, ip);
 		goto out;
 	}
-	cache_purge(dvp);
 	/*
 	 * The only stuff left in the directory is "." and "..". The "."
 	 * reference is inconsequential since we are quashing it. The soft
@@ -2221,7 +2220,7 @@ ufs_rmdir(ap)
 		DIP_SET(ip, i_nlink, ip->i_nlink);
 		UFS_INODE_SET_FLAG(ip, IN_CHANGE);
 	}
-	cache_purge(vp);
+	cache_vop_rmdir(dvp, vp);
 #ifdef UFS_DIRHASH
 	/* Kill any active hash; i_effnlink == 0, so it will not come back. */
 	if (ip->i_dirhash != NULL)
@@ -2874,6 +2873,22 @@ ufs_ioctl(struct vop_ioctl_args *ap)
 	}
 }
 
+static int
+ufs_read_pgcache(struct vop_read_pgcache_args *ap)
+{
+	struct uio *uio;
+	struct vnode *vp;
+
+	uio = ap->a_uio;
+	vp = ap->a_vp;
+	MPASS((vp->v_irflag & VIRF_PGREAD) != 0);
+
+	if (uio->uio_resid > ptoa(io_hold_cnt) || uio->uio_offset < 0 ||
+	    (ap->a_ioflag & IO_DIRECT) != 0)
+		return (EJUSTRETURN);
+	return (vn_read_from_obj(vp, uio));
+}
+
 /* Global vfs data structures for ufs. */
 struct vop_vector ufs_vnodeops = {
 	.vop_default =		&default_vnodeops,
@@ -2901,6 +2916,7 @@ struct vop_vector ufs_vnodeops = {
 	.vop_pathconf =		ufs_pathconf,
 	.vop_poll =		vop_stdpoll,
 	.vop_print =		ufs_print,
+	.vop_read_pgcache =	ufs_read_pgcache,
 	.vop_readdir =		ufs_readdir,
 	.vop_readlink =		ufs_readlink,
 	.vop_reclaim =		ufs_reclaim,

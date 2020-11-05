@@ -426,7 +426,7 @@ linprocfs_domtab(PFS_FILL_ARGS)
 	error = namei(&nd);
 	lep = linux_emul_path;
 	if (error == 0) {
-		if (vn_fullpath(td, nd.ni_vp, &dlep, &flep) == 0)
+		if (vn_fullpath(nd.ni_vp, &dlep, &flep) == 0)
 			lep = dlep;
 		vrele(nd.ni_vp);
 	}
@@ -1041,7 +1041,6 @@ linprocfs_doprocstatus(PFS_FILL_ARGS)
 	return (0);
 }
 
-
 /*
  * Filler function for proc/pid/cwd
  */
@@ -1053,7 +1052,7 @@ linprocfs_doproccwd(PFS_FILL_ARGS)
 	char *freepath = NULL;
 
 	pwd = pwd_hold(td);
-	vn_fullpath(td, pwd->pwd_cdir, &fullpath, &freepath);
+	vn_fullpath(pwd->pwd_cdir, &fullpath, &freepath);
 	sbuf_printf(sb, "%s", fullpath);
 	if (freepath)
 		free(freepath, M_TEMP);
@@ -1074,7 +1073,7 @@ linprocfs_doprocroot(PFS_FILL_ARGS)
 
 	pwd = pwd_hold(td);
 	vp = jailed(p->p_ucred) ? pwd->pwd_jdir : pwd->pwd_rdir;
-	vn_fullpath(td, vp, &fullpath, &freepath);
+	vn_fullpath(vp, &fullpath, &freepath);
 	sbuf_printf(sb, "%s", fullpath);
 	if (freepath)
 		free(freepath, M_TEMP);
@@ -1219,7 +1218,7 @@ linprocfs_doprocmaps(PFS_FILL_ARGS)
 			shadow_count = obj->shadow_count;
 			VM_OBJECT_RUNLOCK(obj);
 			if (vp != NULL) {
-				vn_fullpath(td, vp, &name, &freename);
+				vn_fullpath(vp, &name, &freename);
 				vn_lock(vp, LK_SHARED | LK_RETRY);
 				VOP_GETATTR(vp, &vat, td->td_ucred);
 				ino = vat.va_fileid;
@@ -1250,7 +1249,7 @@ linprocfs_doprocmaps(PFS_FILL_ARGS)
 		    0,
 		    0,
 		    (u_long)ino,
-		    *name ? "     " : "",
+		    *name ? "     " : " ",
 		    name
 		    );
 		if (freename)
@@ -1272,6 +1271,27 @@ linprocfs_doprocmaps(PFS_FILL_ARGS)
 	}
 	vm_map_unlock_read(map);
 	vmspace_free(vm);
+
+	return (error);
+}
+
+/*
+ * Filler function for proc/pid/mem
+ */
+static int
+linprocfs_doprocmem(PFS_FILL_ARGS)
+{
+	ssize_t resid;
+	int error;
+
+	resid = uio->uio_resid;
+	error = procfs_doprocmem(PFS_FILL_ARGNAMES);
+
+	if (uio->uio_rw == UIO_READ && resid != uio->uio_resid)
+		return (0);
+
+	if (error == EFAULT)
+		error = EIO;
 
 	return (error);
 }
@@ -1429,6 +1449,19 @@ linprocfs_domsgmnb(PFS_FILL_ARGS)
 {
 
 	sbuf_printf(sb, "%d\n", msginfo.msgmnb);
+	return (0);
+}
+
+/*
+ * Filler function for proc/sys/kernel/ngroups_max
+ *
+ * Note that in Linux it defaults to 65536, not 1023.
+ */
+static int
+linprocfs_dongroups_max(PFS_FILL_ARGS)
+{
+
+	sbuf_printf(sb, "%d\n", ngroups_max);
 	return (0);
 }
 
@@ -1853,8 +1886,8 @@ linprocfs_init(PFS_INIT_ARGS)
 	pfs_create_link(dir, "exe", &procfs_doprocfile,
 	    NULL, &procfs_notsystem, NULL, 0);
 	pfs_create_file(dir, "maps", &linprocfs_doprocmaps,
-	    NULL, NULL, NULL, PFS_RD);
-	pfs_create_file(dir, "mem", &procfs_doprocmem,
+	    NULL, NULL, NULL, PFS_RD | PFS_AUTODRAIN);
+	pfs_create_file(dir, "mem", &linprocfs_doprocmem,
 	    procfs_attr_rw, &procfs_candebug, NULL, PFS_RDWR | PFS_RAW);
 	pfs_create_file(dir, "mounts", &linprocfs_domtab,
 	    NULL, NULL, NULL, PFS_RD);
@@ -1901,6 +1934,8 @@ linprocfs_init(PFS_INIT_ARGS)
 	pfs_create_file(dir, "msgmni", &linprocfs_domsgmni,
 	    NULL, NULL, NULL, PFS_RD);
 	pfs_create_file(dir, "msgmnb", &linprocfs_domsgmnb,
+	    NULL, NULL, NULL, PFS_RD);
+	pfs_create_file(dir, "ngroups_max", &linprocfs_dongroups_max,
 	    NULL, NULL, NULL, PFS_RD);
 	pfs_create_file(dir, "pid_max", &linprocfs_dopid_max,
 	    NULL, NULL, NULL, PFS_RD);

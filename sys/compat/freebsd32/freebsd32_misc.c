@@ -323,7 +323,6 @@ freebsd4_freebsd32_getfsstat(struct thread *td,
 int
 freebsd10_freebsd32_pipe(struct thread *td,
     struct freebsd10_freebsd32_pipe_args *uap) {
-	
 	return (freebsd10_pipe(td, (struct freebsd10_pipe_args*)uap));
 }
 #endif
@@ -441,8 +440,9 @@ freebsd32_execve(struct thread *td, struct freebsd32_execve_args *uap)
 	error = freebsd32_exec_copyin_args(&eargs, uap->fname, UIO_USERSPACE,
 	    uap->argv, uap->envv);
 	if (error == 0)
-		error = kern_execve(td, &eargs, NULL);
+		error = kern_execve(td, &eargs, NULL, oldvmspace);
 	post_execve(td, error, oldvmspace);
+	AUDIT_SYSCALL_EXIT(error == EJUSTRETURN ? 0 : error, td);
 	return (error);
 }
 
@@ -460,12 +460,12 @@ freebsd32_fexecve(struct thread *td, struct freebsd32_fexecve_args *uap)
 	    uap->argv, uap->envv);
 	if (error == 0) {
 		eargs.fd = uap->fd;
-		error = kern_execve(td, &eargs, NULL);
+		error = kern_execve(td, &eargs, NULL, oldvmspace);
 	}
 	post_execve(td, error, oldvmspace);
+	AUDIT_SYSCALL_EXIT(error == EJUSTRETURN ? 0 : error, td);
 	return (error);
 }
-
 
 int
 freebsd32_mknodat(struct thread *td, struct freebsd32_mknodat_args *uap)

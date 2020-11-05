@@ -305,7 +305,7 @@ g_io_zonecmd(struct disk_zone_args *zone_args, struct g_consumer *cp)
 {
 	struct bio *bp;
 	int error;
-	
+
 	g_trace(G_T_BIO, "bio_zone(%d)", zone_args->zone_cmd);
 	bp = g_alloc_bio();
 	bp->bio_cmd = BIO_ZONE;
@@ -552,9 +552,9 @@ g_io_request(struct bio *bp, struct g_consumer *cp)
 	else
 		getbinuptime(&bp->bio_t0);
 	if (g_collectstats & G_STATS_CONSUMERS)
-		devstat_start_transaction(cp->stat, &bp->bio_t0);
+		devstat_start_transaction_bio_t0(cp->stat, bp);
 	if (g_collectstats & G_STATS_PROVIDERS)
-		devstat_start_transaction(pp->stat, &bp->bio_t0);
+		devstat_start_transaction_bio_t0(pp->stat, bp);
 #ifdef INVARIANTS
 	atomic_add_int(&cp->nstart, 1);
 #endif

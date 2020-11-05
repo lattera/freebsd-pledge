@@ -248,7 +248,6 @@ uiomove_faultflag(void *cp, int n, struct uio *uio, int nofault)
 			cnt = n;
 
 		switch (uio->uio_segflg) {
-
 		case UIO_USERSPACE:
 			maybe_yield();
 			if (uio->uio_rw == UIO_READ)
@@ -325,7 +324,6 @@ again:
 		goto again;
 	}
 	switch (uio->uio_segflg) {
-
 	case UIO_USERSPACE:
 		if (subyte(iov->iov_base, c) < 0)
 			return (EFAULT);

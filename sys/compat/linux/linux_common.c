@@ -60,7 +60,6 @@ static eventhandler_tag linux_exec_tag;
 static eventhandler_tag linux_thread_dtor_tag;
 static eventhandler_tag	linux_exit_tag;
 
-
 static int
 linux_common_modevent(module_t mod, int type, void *data)
 {
@@ -68,6 +67,9 @@ linux_common_modevent(module_t mod, int type, void *data)
 
 	switch(type) {
 	case MOD_LOAD:
+#ifdef INVARIANTS
+		linux_check_errtbl();
+#endif
 		linux_dev_shm_create();
 		linux_osd_jail_register();
 		linux_exit_tag = EVENTHANDLER_REGISTER(process_exit,

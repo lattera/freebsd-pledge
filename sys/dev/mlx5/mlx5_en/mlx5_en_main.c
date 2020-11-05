@@ -1073,7 +1073,7 @@ mlx5e_update_stats(void *arg)
 
 	queue_work(priv->wq, &priv->update_stats_work);
 
-	callout_reset(&priv->watchdog, hz, &mlx5e_update_stats, priv);
+	callout_reset(&priv->watchdog, hz / 4, &mlx5e_update_stats, priv);
 }
 
 static void
@@ -2141,8 +2141,7 @@ mlx5e_chan_static_init(struct mlx5e_priv *priv, struct mlx5e_channel *c, int ix)
 	c->ix = ix;
 
 	/* setup send tag */
-	c->tag.type = IF_SND_TAG_TYPE_UNLIMITED;
-	m_snd_tag_init(&c->tag.m_snd_tag, c->priv->ifp);
+	m_snd_tag_init(&c->tag, c->priv->ifp, IF_SND_TAG_TYPE_UNLIMITED);
 
 	init_completion(&c->completion);
 
@@ -2166,7 +2165,7 @@ static void
 mlx5e_chan_wait_for_completion(struct mlx5e_channel *c)
 {
 
-	m_snd_tag_rele(&c->tag.m_snd_tag);
+	m_snd_tag_rele(&c->tag);
 	wait_for_completion(&c->completion);
 }
 
@@ -3233,6 +3232,7 @@ mlx5e_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 {
 	struct mlx5e_priv *priv;
 	struct ifreq *ifr;
+	struct ifdownreason *ifdr;
 	struct ifi2creq i2c;
 	int error = 0;
 	int mask = 0;
@@ -3349,6 +3349,10 @@ mlx5e_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 			ifp->if_capenable ^= IFCAP_TXTLS4;
 		if (mask & IFCAP_TXTLS6)
 			ifp->if_capenable ^= IFCAP_TXTLS6;
+#ifdef RATELIMIT
+		if (mask & IFCAP_TXTLS_RTLMT)
+			ifp->if_capenable ^= IFCAP_TXTLS_RTLMT;
+#endif
 		if (mask & IFCAP_RXCSUM)
 			ifp->if_capenable ^= IFCAP_RXCSUM;
 		if (mask & IFCAP_RXCSUM_IPV6)
@@ -3500,6 +3504,16 @@ out:
 		error = copyout(&i2c, ifr_data_get_ptr(ifr), sizeof(i2c));
 err_i2c:
 		PRIV_UNLOCK(priv);
+		break;
+	case SIOCGIFDOWNREASON:
+		ifdr = (struct ifdownreason *)data;
+		bzero(ifdr->ifdr_msg, sizeof(ifdr->ifdr_msg));
+		PRIV_LOCK(priv);
+		error = -mlx5_query_pddr_troubleshooting_info(priv->mdev, NULL,
+		    ifdr->ifdr_msg, sizeof(ifdr->ifdr_msg));
+		PRIV_UNLOCK(priv);
+		if (error == 0)
+			ifdr->ifdr_reason = IFDR_REASON_MSG;
 		break;
 
 	default:
@@ -4076,8 +4090,8 @@ mlx5e_ul_snd_tag_alloc(struct ifnet *ifp,
 		/* check if send queue is not running */
 		if (unlikely(pch->sq[0].running == 0))
 			return (ENXIO);
-		m_snd_tag_ref(&pch->tag.m_snd_tag);
-		*ppmt = &pch->tag.m_snd_tag;
+		m_snd_tag_ref(&pch->tag);
+		*ppmt = &pch->tag;
 		return (0);
 	}
 }
@@ -4086,7 +4100,7 @@ int
 mlx5e_ul_snd_tag_query(struct m_snd_tag *pmt, union if_snd_tag_query_params *params)
 {
 	struct mlx5e_channel *pch =
-	    container_of(pmt, struct mlx5e_channel, tag.m_snd_tag);
+	    container_of(pmt, struct mlx5e_channel, tag);
 
 	params->unlimited.max_rate = -1ULL;
 	params->unlimited.queue_level = mlx5e_sq_queue_level(&pch->sq[0]);
@@ -4097,7 +4111,7 @@ void
 mlx5e_ul_snd_tag_free(struct m_snd_tag *pmt)
 {
 	struct mlx5e_channel *pch =
-	    container_of(pmt, struct mlx5e_channel, tag.m_snd_tag);
+	    container_of(pmt, struct mlx5e_channel, tag);
 
 	complete(&pch->completion);
 }
@@ -4112,7 +4126,7 @@ mlx5e_snd_tag_alloc(struct ifnet *ifp,
 #ifdef RATELIMIT
 	case IF_SND_TAG_TYPE_RATE_LIMIT:
 		return (mlx5e_rl_snd_tag_alloc(ifp, params, ppmt));
-#if defined(KERN_TLS) && defined(IF_SND_TAG_TYPE_TLS_RATE_LIMIT)
+#ifdef KERN_TLS
 	case IF_SND_TAG_TYPE_TLS_RATE_LIMIT:
 		return (mlx5e_tls_snd_tag_alloc(ifp, params, ppmt));
 #endif
@@ -4131,14 +4145,12 @@ mlx5e_snd_tag_alloc(struct ifnet *ifp,
 static int
 mlx5e_snd_tag_modify(struct m_snd_tag *pmt, union if_snd_tag_modify_params *params)
 {
-	struct mlx5e_snd_tag *tag =
-	    container_of(pmt, struct mlx5e_snd_tag, m_snd_tag);
 
-	switch (tag->type) {
+	switch (pmt->type) {
 #ifdef RATELIMIT
 	case IF_SND_TAG_TYPE_RATE_LIMIT:
 		return (mlx5e_rl_snd_tag_modify(pmt, params));
-#if defined(KERN_TLS) && defined(IF_SND_TAG_TYPE_TLS_RATE_LIMIT)
+#ifdef KERN_TLS
 	case IF_SND_TAG_TYPE_TLS_RATE_LIMIT:
 		return (mlx5e_tls_snd_tag_modify(pmt, params));
 #endif
@@ -4155,14 +4167,12 @@ mlx5e_snd_tag_modify(struct m_snd_tag *pmt, union if_snd_tag_modify_params *para
 static int
 mlx5e_snd_tag_query(struct m_snd_tag *pmt, union if_snd_tag_query_params *params)
 {
-	struct mlx5e_snd_tag *tag =
-	    container_of(pmt, struct mlx5e_snd_tag, m_snd_tag);
 
-	switch (tag->type) {
+	switch (pmt->type) {
 #ifdef RATELIMIT
 	case IF_SND_TAG_TYPE_RATE_LIMIT:
 		return (mlx5e_rl_snd_tag_query(pmt, params));
-#if defined(KERN_TLS) && defined(IF_SND_TAG_TYPE_TLS_RATE_LIMIT)
+#ifdef KERN_TLS
 	case IF_SND_TAG_TYPE_TLS_RATE_LIMIT:
 		return (mlx5e_tls_snd_tag_query(pmt, params));
 #endif
@@ -4225,15 +4235,13 @@ mlx5e_ratelimit_query(struct ifnet *ifp __unused, struct if_ratelimit_query_resu
 static void
 mlx5e_snd_tag_free(struct m_snd_tag *pmt)
 {
-	struct mlx5e_snd_tag *tag =
-	    container_of(pmt, struct mlx5e_snd_tag, m_snd_tag);
 
-	switch (tag->type) {
+	switch (pmt->type) {
 #ifdef RATELIMIT
 	case IF_SND_TAG_TYPE_RATE_LIMIT:
 		mlx5e_rl_snd_tag_free(pmt);
 		break;
-#if defined(KERN_TLS) && defined(IF_SND_TAG_TYPE_TLS_RATE_LIMIT)
+#ifdef KERN_TLS
 	case IF_SND_TAG_TYPE_TLS_RATE_LIMIT:
 		mlx5e_tls_snd_tag_free(pmt);
 		break;
@@ -4316,7 +4324,9 @@ mlx5e_create_ifp(struct mlx5_core_dev *mdev)
 	ifp->if_capabilities |= IFCAP_HWSTATS | IFCAP_HWRXTSTMP;
 	ifp->if_capabilities |= IFCAP_NOMAP;
 	ifp->if_capabilities |= IFCAP_TXTLS4 | IFCAP_TXTLS6;
-	ifp->if_capabilities |= IFCAP_TXRTLMT;
+#ifdef RATELIMIT
+	ifp->if_capabilities |= IFCAP_TXRTLMT | IFCAP_TXTLS_RTLMT;
+#endif
 	ifp->if_snd_tag_alloc = mlx5e_snd_tag_alloc;
 	ifp->if_snd_tag_free = mlx5e_snd_tag_free;
 	ifp->if_snd_tag_modify = mlx5e_snd_tag_modify;

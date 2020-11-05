@@ -44,7 +44,7 @@ enum intr_map_data_type {
 	INTR_MAP_DATA_FDT,
 	INTR_MAP_DATA_GPIO,
 	INTR_MAP_DATA_MSI,
-	
+
 	/* Placeholders for platform specific types */
 	INTR_MAP_DATA_PLAT_1 = 1000,
 	INTR_MAP_DATA_PLAT_2,
@@ -94,6 +94,8 @@ struct intr_irqsrc {
 	intr_irq_filter_t *	isrc_filter;
 	void *			isrc_arg;
 #endif
+	/* Used by MSI interrupts to store the iommu details */
+	void *			isrc_iommu;
 };
 
 /* Intr interface for PIC. */

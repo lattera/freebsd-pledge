@@ -109,6 +109,7 @@ static void	syncer_shutdown(void *arg, int howto);
 static int	vtryrecycle(struct vnode *vp);
 static void	v_init_counters(struct vnode *);
 static void	vgonel(struct vnode *);
+static bool	vhold_recycle_free(struct vnode *);
 static void	vfs_knllock(void *arg);
 static void	vfs_knlunlock(void *arg);
 static void	vfs_knl_assert_locked(void *arg);
@@ -227,7 +228,7 @@ static smr_t buf_trie_smr;
 
 /* Zone for allocation of new vnodes - used exclusively by getnewvnode() */
 static uma_zone_t vnode_zone;
-static uma_zone_t vnodepoll_zone;
+MALLOC_DEFINE(M_VNODEPOLL, "VN POLL", "vnode poll");
 
 __read_frequently smr_t vfs_smr;
 
@@ -560,6 +561,11 @@ vnode_init(void *mem, int size, int flags)
 
 	vp->v_dbatchcpu = NOCPU;
 
+	/*
+	 * Check vhold_recycle_free for an explanation.
+	 */
+	vp->v_holdcnt = VHOLD_NO_SMR;
+	vp->v_type = VNON;
 	mtx_lock(&vnode_list_mtx);
 	TAILQ_INSERT_BEFORE(vnode_list_free_marker, vp, v_vnodelist);
 	mtx_unlock(&vnode_list_mtx);
@@ -654,8 +660,6 @@ vntblinit(void *dummy __unused)
 	vnode_zone = uma_zcreate("VNODE", sizeof (struct vnode), NULL, NULL,
 	    vnode_init, vnode_fini, UMA_ALIGN_PTR, 0);
 	uma_zone_set_smr(vnode_zone, vfs_smr);
-	vnodepoll_zone = uma_zcreate("VNODEPOLL", sizeof (struct vpollinfo),
-	    NULL, NULL, NULL, NULL, UMA_ALIGN_PTR, 0);
 	/*
 	 * Preallocate enough nodes to support one-per buf so that
 	 * we can not fail an insert.  reassignbuf() callers can not
@@ -1121,22 +1125,28 @@ restart:
 		if (vp->v_type == VBAD || vp->v_type == VNON)
 			goto next_iter;
 
-		if (!VI_TRYLOCK(vp))
-			goto next_iter;
-
-		if (vp->v_usecount > 0 || vp->v_holdcnt == 0 ||
-		    (!reclaim_nc_src && !LIST_EMPTY(&vp->v_cache_src)) ||
-		    VN_IS_DOOMED(vp) || vp->v_type == VNON) {
-			VI_UNLOCK(vp);
-			goto next_iter;
-		}
-
 		object = atomic_load_ptr(&vp->v_object);
 		if (object == NULL || object->resident_page_count > trigger) {
-			VI_UNLOCK(vp);
 			goto next_iter;
 		}
 
+		/*
+		 * Handle races against vnode allocation. Filesystems lock the
+		 * vnode some time after it gets returned from getnewvnode,
+		 * despite type and hold count being manipulated earlier.
+		 * Resorting to checking v_mount restores guarantees present
+		 * before the global list was reworked to contain all vnodes.
+		 */
+		if (!VI_TRYLOCK(vp))
+			goto next_iter;
+		if (__predict_false(vp->v_type == VBAD || vp->v_type == VNON)) {
+			VI_UNLOCK(vp);
+			goto next_iter;
+		}
+		if (vp->v_mount == NULL) {
+			VI_UNLOCK(vp);
+			goto next_iter;
+		}
 		vholdl(vp);
 		VI_UNLOCK(vp);
 		TAILQ_REMOVE(&vnode_list, mvp, v_vnodelist);
@@ -1214,9 +1224,11 @@ vnlru_free_locked(int count, struct vfsops *mnt_op)
 		count = max_vnlru_free;
 	ocount = count;
 	mvp = vnode_list_free_marker;
-restart:
 	vp = mvp;
-	while (count > 0) {
+	for (;;) {
+		if (count == 0) {
+			break;
+		}
 		vp = TAILQ_NEXT(vp, v_vnodelist);
 		if (__predict_false(vp == NULL)) {
 			TAILQ_REMOVE(&vnode_list, mvp, v_vnodelist);
@@ -1225,33 +1237,30 @@ restart:
 		}
 		if (__predict_false(vp->v_type == VMARKER))
 			continue;
-
+		if (vp->v_holdcnt > 0)
+			continue;
 		/*
 		 * Don't recycle if our vnode is from different type
 		 * of mount point.  Note that mp is type-safe, the
 		 * check does not reach unmapped address even if
 		 * vnode is reclaimed.
-		 * Don't recycle if we can't get the interlock without
-		 * blocking.
 		 */
-		if (vp->v_holdcnt > 0 || (mnt_op != NULL && (mp = vp->v_mount) != NULL &&
-		    mp->mnt_op != mnt_op) || !VI_TRYLOCK(vp)) {
+		if (mnt_op != NULL && (mp = vp->v_mount) != NULL &&
+		    mp->mnt_op != mnt_op) {
 			continue;
 		}
+		if (__predict_false(vp->v_type == VBAD || vp->v_type == VNON)) {
+			continue;
+		}
+		if (!vhold_recycle_free(vp))
+			continue;
 		TAILQ_REMOVE(&vnode_list, mvp, v_vnodelist);
 		TAILQ_INSERT_AFTER(&vnode_list, vp, mvp, v_vnodelist);
-		if (__predict_false(vp->v_type == VBAD || vp->v_type == VNON)) {
-			VI_UNLOCK(vp);
-			continue;
-		}
-		vholdl(vp);
-		count--;
 		mtx_unlock(&vnode_list_mtx);
-		VI_UNLOCK(vp);
-		vtryrecycle(vp);
-		vdrop(vp);
+		if (vtryrecycle(vp) == 0)
+			count--;
 		mtx_lock(&vnode_list_mtx);
-		goto restart;
+		vp = mvp;
 	}
 	return (ocount - count);
 }
@@ -1520,6 +1529,7 @@ vtryrecycle(struct vnode *vp)
 		CTR2(KTR_VFS,
 		    "%s: impossible to recycle, vp %p lock is already held",
 		    __func__, vp);
+		vdrop(vp);
 		return (EWOULDBLOCK);
 	}
 	/*
@@ -1530,6 +1540,7 @@ vtryrecycle(struct vnode *vp)
 		CTR2(KTR_VFS,
 		    "%s: impossible to recycle, cannot start the write for %p",
 		    __func__, vp);
+		vdrop(vp);
 		return (EBUSY);
 	}
 	/*
@@ -1541,7 +1552,7 @@ vtryrecycle(struct vnode *vp)
 	VI_LOCK(vp);
 	if (vp->v_usecount) {
 		VOP_UNLOCK(vp);
-		VI_UNLOCK(vp);
+		vdropl(vp);
 		vn_finished_write(vnmp);
 		CTR2(KTR_VFS,
 		    "%s: impossible to recycle, %p is already referenced",
@@ -1553,7 +1564,7 @@ vtryrecycle(struct vnode *vp)
 		vgonel(vp);
 	}
 	VOP_UNLOCK(vp);
-	VI_UNLOCK(vp);
+	vdropl(vp);
 	vn_finished_write(vnmp);
 	return (0);
 }
@@ -1794,6 +1805,8 @@ freevnode(struct vnode *vp)
 	VNASSERT(vp->v_cache_dd == NULL, vp, ("vp has namecache for .."));
 	VNASSERT(TAILQ_EMPTY(&vp->v_rl.rl_waiters), vp,
 	    ("Dangling rangelock waiters"));
+	VNASSERT((vp->v_iflag & (VI_DOINGINACT | VI_OWEINACT)) == 0, vp,
+	    ("Leaked inactivation"));
 	VI_UNLOCK(vp);
 #ifdef MAC
 	mac_vnode_destroy(vp);
@@ -2625,7 +2638,6 @@ sched_sync(void)
 				wdog_kern_pat(WD_LASTVAL);
 				mtx_lock(&sync_mtx);
 			}
-
 		}
 		if (syncer_state == SYNCER_FINAL_DELAY && syncer_final_iter > 0)
 			syncer_final_iter--;
@@ -3228,15 +3240,6 @@ vhold(struct vnode *vp)
 }
 
 void
-vholdl(struct vnode *vp)
-{
-
-	ASSERT_VI_LOCKED(vp, __func__);
-	CTR2(KTR_VFS, "%s: vp %p", __func__, vp);
-	vhold(vp);
-}
-
-void
 vholdnz(struct vnode *vp)
 {
 
@@ -3283,11 +3286,51 @@ vhold_smr(struct vnode *vp)
 			    ("non-zero hold count with flags %d\n", count));
 			return (false);
 		}
-
 		VNASSERT(count >= 0, vp, ("invalid hold count %d\n", count));
 		if (atomic_fcmpset_int(&vp->v_holdcnt, &count, count + 1)) {
 			if (count == 0)
 				vn_freevnodes_dec();
+			return (true);
+		}
+	}
+}
+
+/*
+ * Hold a free vnode for recycling.
+ *
+ * Note: vnode_init references this comment.
+ *
+ * Attempts to recycle only need the global vnode list lock and have no use for
+ * SMR.
+ *
+ * However, vnodes get inserted into the global list before they get fully
+ * initialized and stay there until UMA decides to free the memory. This in
+ * particular means the target can be found before it becomes usable and after
+ * it becomes recycled. Picking up such vnodes is guarded with v_holdcnt set to
+ * VHOLD_NO_SMR.
+ *
+ * Note: the vnode may gain more references after we transition the count 0->1.
+ */
+static bool
+vhold_recycle_free(struct vnode *vp)
+{
+	int count;
+
+	mtx_assert(&vnode_list_mtx, MA_OWNED);
+
+	count = atomic_load_int(&vp->v_holdcnt);
+	for (;;) {
+		if (count & VHOLD_NO_SMR) {
+			VNASSERT((count & ~VHOLD_NO_SMR) == 0, vp,
+			    ("non-zero hold count with flags %d\n", count));
+			return (false);
+		}
+		VNASSERT(count >= 0, vp, ("invalid hold count %d\n", count));
+		if (count > 0) {
+			return (false);
+		}
+		if (atomic_fcmpset_int(&vp->v_holdcnt, &count, count + 1)) {
+			vn_freevnodes_dec();
 			return (true);
 		}
 	}
@@ -3532,7 +3575,7 @@ vinactivef(struct vnode *vp)
 		vm_object_page_clean(obj, 0, 0, 0);
 		VM_OBJECT_WUNLOCK(obj);
 	}
-	VOP_INACTIVE(vp, curthread);
+	VOP_INACTIVE(vp);
 	VI_LOCK(vp);
 	VNASSERT(vp->v_iflag & VI_DOINGINACT, vp,
 	    ("vinactive: lost VI_DOINGINACT"));
@@ -3813,7 +3856,7 @@ vgonel(struct vnode *vp)
 	struct thread *td;
 	struct mount *mp;
 	vm_object_t object;
-	bool active, oweinact;
+	bool active, doinginact, oweinact;
 
 	ASSERT_VOP_ELOCKED(vp, "vgonel");
 	ASSERT_VI_LOCKED(vp, "vgonel");
@@ -3835,11 +3878,17 @@ vgonel(struct vnode *vp)
 	vp->v_irflag |= VIRF_DOOMED;
 
 	/*
-	 * Check to see if the vnode is in use.  If so, we have to call
-	 * VOP_CLOSE() and VOP_INACTIVE().
+	 * Check to see if the vnode is in use.  If so, we have to
+	 * call VOP_CLOSE() and VOP_INACTIVE().
+	 *
+	 * It could be that VOP_INACTIVE() requested reclamation, in
+	 * which case we should avoid recursion, so check
+	 * VI_DOINGINACT.  This is not precise but good enough.
 	 */
 	active = vp->v_usecount > 0;
 	oweinact = (vp->v_iflag & VI_OWEINACT) != 0;
+	doinginact = (vp->v_iflag & VI_DOINGINACT) != 0;
+
 	/*
 	 * If we need to do inactive VI_OWEINACT will be set.
 	 */
@@ -3851,6 +3900,7 @@ vgonel(struct vnode *vp)
 		VNASSERT(vp->v_holdcnt > 0, vp, ("vnode without hold count"));
 		VI_UNLOCK(vp);
 	}
+	cache_purge_vgone(vp);
 	vfs_notify_upper(vp, VFS_NOTIFY_UPPER_RECLAIM);
 
 	/*
@@ -3859,7 +3909,7 @@ vgonel(struct vnode *vp)
 	 */
 	if (active)
 		VOP_CLOSE(vp, FNONBLOCK, NOCRED, td);
-	if (oweinact || active) {
+	if ((oweinact || active) && !doinginact) {
 		VI_LOCK(vp);
 		vinactivef(vp);
 		VI_UNLOCK(vp);
@@ -3924,7 +3974,6 @@ vgonel(struct vnode *vp)
 	 * Delete from old mount point vnode list.
 	 */
 	delmntque(vp);
-	cache_purge_vgone(vp);
 	/*
 	 * Done with purge, reset to the standard lock and invalidate
 	 * the vnode.
@@ -4678,11 +4727,8 @@ vfs_periodic_msync_inactive(struct mount *mp, int flags)
 {
 	struct vnode *vp, *mvp;
 	struct vm_object *obj;
-	struct thread *td;
 	int lkflags, objflags;
 	bool seen_defer;
-
-	td = curthread;
 
 	lkflags = LK_EXCLUSIVE | LK_INTERLOCK;
 	if (flags != MNT_WAIT) {
@@ -4740,7 +4786,7 @@ destroy_vpollinfo_free(struct vpollinfo *vi)
 
 	knlist_destroy(&vi->vpi_selinfo.si_note);
 	mtx_destroy(&vi->vpi_lock);
-	uma_zfree(vnodepoll_zone, vi);
+	free(vi, M_VNODEPOLL);
 }
 
 static void
@@ -4762,7 +4808,7 @@ v_addpollinfo(struct vnode *vp)
 
 	if (vp->v_pollinfo != NULL)
 		return;
-	vi = uma_zalloc(vnodepoll_zone, M_WAITOK | M_ZERO);
+	vi = malloc(sizeof(*vi), M_VNODEPOLL, M_WAITOK | M_ZERO);
 	mtx_init(&vi->vpi_lock, "vnode pollinfo", NULL, MTX_DEF);
 	knlist_init(&vi->vpi_selinfo.si_note, vp, vfs_knllock,
 	    vfs_knlunlock, vfs_knl_assert_locked, vfs_knl_assert_unlocked);
@@ -5045,6 +5091,7 @@ vn_isdisk(struct vnode *vp)
 int
 vaccess_vexec_smr(mode_t file_mode, uid_t file_uid, gid_t file_gid, struct ucred *cred)
 {
+	int error;
 
 	VFS_SMR_ASSERT_ENTERED();
 
@@ -5067,7 +5114,9 @@ vaccess_vexec_smr(mode_t file_mode, uid_t file_uid, gid_t file_gid, struct ucred
 		return (0);
 out_error:
 	/*
-	 * Permission check failed.
+	 * Permission check failed, but it is possible denial will get overwritten
+	 * (e.g., when root is traversing through a 700 directory owned by someone
+	 * else).
 	 *
 	 * vaccess() calls priv_check_cred which in turn can descent into MAC
 	 * modules overriding this result. It's quite unclear what semantics
@@ -5075,9 +5124,20 @@ out_error:
 	 * from within the SMR section. This also means if any such modules
 	 * are present, we have to let the regular lookup decide.
 	 */
-	if (__predict_false(mac_priv_check_fp_flag || mac_priv_grant_fp_flag))
+	error = priv_check_cred_vfs_lookup_nomac(cred);
+	switch (error) {
+	case 0:
+		return (0);
+	case EAGAIN:
+		/*
+		 * MAC modules present.
+		 */
 		return (EAGAIN);
-	return (EACCES);
+	case EPERM:
+		return (EACCES);
+	default:
+		return (error);
+	}
 }
 
 /*
@@ -5578,6 +5638,18 @@ vop_mkdir_post(void *ap, int rc)
 		VFS_KNOTE_LOCKED(dvp, NOTE_WRITE | NOTE_LINK);
 }
 
+#ifdef DEBUG_VFS_LOCKS
+void
+vop_mkdir_debugpost(void *ap, int rc)
+{
+	struct vop_mkdir_args *a;
+
+	a = ap;
+	if (!rc)
+		cache_validate(a->a_dvp, *a->a_vpp, a->a_cnp);
+}
+#endif
+
 void
 vop_mknod_pre(void *ap)
 {
@@ -5835,6 +5907,15 @@ vop_read_post(void *ap, int rc)
 
 	if (!rc)
 		VFS_KNOTE_LOCKED(a->a_vp, NOTE_READ);
+}
+
+void
+vop_read_pgcache_post(void *ap, int rc)
+{
+	struct vop_read_pgcache_args *a = ap;
+
+	if (!rc)
+		VFS_KNOTE_UNLOCKED(a->a_vp, NOTE_READ);
 }
 
 void

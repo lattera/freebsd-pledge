@@ -398,6 +398,7 @@ MAN=	aac.4 \
 	ocs_fc.4\
 	ohci.4 \
 	orm.4 \
+	${_ossl.4} \
 	ow.4 \
 	ow_temp.4 \
 	owc.4 \
@@ -430,6 +431,7 @@ MAN=	aac.4 \
 	pty.4 \
 	puc.4 \
 	pwmc.4 \
+	${_qat.4} \
 	${_qlxge.4} \
 	${_qlxgb.4} \
 	${_qlxgbe.4} \
@@ -514,6 +516,7 @@ MAN=	aac.4 \
 	ste.4 \
 	stf.4 \
 	stge.4 \
+	${_sume.4} \
 	${_superio.4} \
 	sym.4 \
 	syncache.4 \
@@ -523,6 +526,7 @@ MAN=	aac.4 \
 	tap.4 \
 	targ.4 \
 	tcp.4 \
+	tcp_bbr.4 \
 	tdfx.4 \
 	terasic_mtl.4 \
 	termios.4 \
@@ -817,8 +821,10 @@ _ntb_transport.4=ntb_transport.4
 _nvd.4=		nvd.4
 _nvme.4=	nvme.4
 _nvram.4=	nvram.4
+_ossl.4=	ossl.4
 _padlock.4=	padlock.4
 _pchtherm.4=	pchtherm.4
+_qat.4=		qat.4
 _rr232x.4=	rr232x.4
 _speaker.4=	speaker.4
 _spkr.4=	spkr.4
@@ -851,6 +857,7 @@ _qlxgbe.4=	qlxgbe.4
 _qlnxe.4=	qlnxe.4
 _sfxge.4=	sfxge.4
 _smartpqi.4=	smartpqi.4
+_sume.4=	sume.4
 _vmd.4=		vmd.4
 
 MLINKS+=qlxge.4 if_qlxge.4
@@ -858,6 +865,7 @@ MLINKS+=qlxgb.4 if_qlxgb.4
 MLINKS+=qlxgbe.4 if_qlxgbe.4
 MLINKS+=qlnxe.4 if_qlnxe.4
 MLINKS+=sfxge.4 if_sfxge.4
+MLINKS+=sume.4 if_sume.4
 
 .if ${MK_BHYVE} != "no"
 _bhyve.4=	bhyve.4

@@ -397,7 +397,6 @@ virstor_ctl_add(struct gctl_req *req, struct g_class *cp)
 		 * incremented */
 		sc->n_components++;
 		added++;
-
 	}
 	/* This call to update_metadata() is critical. In case there's a
 	 * power failure in the middle of it and some components are updated
@@ -683,7 +682,7 @@ g_virstor_destroy_geom(struct gctl_req *req __unused, struct g_class *mp,
 
 	sc = gp->softc;
 	KASSERT(sc != NULL, ("%s: NULL sc", __func__));
-	
+
 	exitval = 0;
 	LOG_MSG(LVL_DEBUG, "%s called for %s, sc=%p", __func__, gp->name,
 	    gp->softc);
@@ -781,9 +780,11 @@ g_virstor_taste(struct g_class *mp, struct g_provider *pp, int flags)
 	gp->orphan = (void *)invalid_call;	/* I really want these to fail. */
 
 	cp = g_new_consumer(gp);
-	g_attach(cp, pp);
-	error = read_metadata(cp, &md);
-	g_detach(cp);
+	error = g_attach(cp, pp);
+	if (error == 0) {
+		error = read_metadata(cp, &md);
+		g_detach(cp);
+	}
 	g_destroy_consumer(cp);
 	g_destroy_geom(gp);
 

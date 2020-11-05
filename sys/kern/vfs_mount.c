@@ -96,7 +96,7 @@ static uma_zone_t mount_zone;
 struct mntlist mountlist = TAILQ_HEAD_INITIALIZER(mountlist);
 
 /* For any iteration/modification of mountlist */
-struct mtx mountlist_mtx;
+struct mtx_padalign __exclusive_cache_line mountlist_mtx;
 MTX_SYSINIT(mountlist, &mountlist_mtx, "mountlist", MTX_DEF);
 
 EVENTHANDLER_LIST_DEFINE(vfs_mounted);
@@ -127,13 +127,13 @@ mount_init(void *mem, int size, int flags)
 	mtx_init(&mp->mnt_mtx, "struct mount mtx", NULL, MTX_DEF);
 	mtx_init(&mp->mnt_listmtx, "struct mount vlist mtx", NULL, MTX_DEF);
 	lockinit(&mp->mnt_explock, PVFS, "explock", 0, 0);
-	mp->mnt_thread_in_ops_pcpu = uma_zalloc_pcpu(pcpu_zone_int,
+	mp->mnt_thread_in_ops_pcpu = uma_zalloc_pcpu(pcpu_zone_4,
 	    M_WAITOK | M_ZERO);
-	mp->mnt_ref_pcpu = uma_zalloc_pcpu(pcpu_zone_int,
+	mp->mnt_ref_pcpu = uma_zalloc_pcpu(pcpu_zone_4,
 	    M_WAITOK | M_ZERO);
-	mp->mnt_lockref_pcpu = uma_zalloc_pcpu(pcpu_zone_int,
+	mp->mnt_lockref_pcpu = uma_zalloc_pcpu(pcpu_zone_4,
 	    M_WAITOK | M_ZERO);
-	mp->mnt_writeopcount_pcpu = uma_zalloc_pcpu(pcpu_zone_int,
+	mp->mnt_writeopcount_pcpu = uma_zalloc_pcpu(pcpu_zone_4,
 	    M_WAITOK | M_ZERO);
 	mp->mnt_ref = 0;
 	mp->mnt_vfs_ops = 1;
@@ -147,10 +147,10 @@ mount_fini(void *mem, int size)
 	struct mount *mp;
 
 	mp = (struct mount *)mem;
-	uma_zfree_pcpu(pcpu_zone_int, mp->mnt_writeopcount_pcpu);
-	uma_zfree_pcpu(pcpu_zone_int, mp->mnt_lockref_pcpu);
-	uma_zfree_pcpu(pcpu_zone_int, mp->mnt_ref_pcpu);
-	uma_zfree_pcpu(pcpu_zone_int, mp->mnt_thread_in_ops_pcpu);
+	uma_zfree_pcpu(pcpu_zone_4, mp->mnt_writeopcount_pcpu);
+	uma_zfree_pcpu(pcpu_zone_4, mp->mnt_lockref_pcpu);
+	uma_zfree_pcpu(pcpu_zone_4, mp->mnt_ref_pcpu);
+	uma_zfree_pcpu(pcpu_zone_4, mp->mnt_thread_in_ops_pcpu);
 	lockdestroy(&mp->mnt_explock);
 	mtx_destroy(&mp->mnt_listmtx);
 	mtx_destroy(&mp->mnt_mtx);
@@ -969,11 +969,14 @@ vfs_domount_first(
 	if ((error = VFS_MOUNT(mp)) != 0 ||
 	    (error1 = VFS_STATFS(mp, &mp->mnt_stat)) != 0 ||
 	    (error1 = VFS_ROOT(mp, LK_EXCLUSIVE, &newdp)) != 0) {
+		rootvp = NULL;
 		if (error1 != 0) {
 			error = error1;
 			rootvp = vfs_cache_root_clear(mp);
-			if (rootvp != NULL)
+			if (rootvp != NULL) {
+				vhold(rootvp);
 				vrele(rootvp);
+			}
 			if ((error1 = VFS_UNMOUNT(mp, 0)) != 0)
 				printf("VFS_UNMOUNT returned %d\n", error1);
 		}
@@ -983,6 +986,10 @@ vfs_domount_first(
 		VI_LOCK(vp);
 		vp->v_iflag &= ~VI_MOUNT;
 		VI_UNLOCK(vp);
+		if (rootvp != NULL) {
+			vn_seqc_write_end(rootvp);
+			vdrop(rootvp);
+		}
 		vn_seqc_write_end(vp);
 		vrele(vp);
 		return (error);
@@ -1801,7 +1808,6 @@ dounmount(struct mount *mp, int flags, struct thread *td)
 	mp->mnt_flag &= ~MNT_ASYNC;
 	mp->mnt_kern_flag &= ~MNTK_ASYNC;
 	MNT_IUNLOCK(mp);
-	cache_purgevfs(mp, false); /* remove cache entries for this file sys */
 	vfs_deallocate_syncvnode(mp);
 	error = VFS_UNMOUNT(mp, flags);
 	vn_finished_write(mp);
@@ -2500,4 +2506,68 @@ mount_devctl_event(const char *type, struct mount *mp, bool donew)
 		devctl_notify("VFS", "FS", type, sbuf_data(&sb));
 	sbuf_delete(&sb);
 	free(buf, M_MOUNT);
+}
+
+/*
+ * Suspend write operations on all local writeable filesystems.  Does
+ * full sync of them in the process.
+ *
+ * Iterate over the mount points in reverse order, suspending most
+ * recently mounted filesystems first.  It handles a case where a
+ * filesystem mounted from a md(4) vnode-backed device should be
+ * suspended before the filesystem that owns the vnode.
+ */
+void
+suspend_all_fs(void)
+{
+	struct mount *mp;
+	int error;
+
+	mtx_lock(&mountlist_mtx);
+	TAILQ_FOREACH_REVERSE(mp, &mountlist, mntlist, mnt_list) {
+		error = vfs_busy(mp, MBF_MNTLSTLOCK | MBF_NOWAIT);
+		if (error != 0)
+			continue;
+		if ((mp->mnt_flag & (MNT_RDONLY | MNT_LOCAL)) != MNT_LOCAL ||
+		    (mp->mnt_kern_flag & MNTK_SUSPEND) != 0) {
+			mtx_lock(&mountlist_mtx);
+			vfs_unbusy(mp);
+			continue;
+		}
+		error = vfs_write_suspend(mp, 0);
+		if (error == 0) {
+			MNT_ILOCK(mp);
+			MPASS((mp->mnt_kern_flag & MNTK_SUSPEND_ALL) == 0);
+			mp->mnt_kern_flag |= MNTK_SUSPEND_ALL;
+			MNT_IUNLOCK(mp);
+			mtx_lock(&mountlist_mtx);
+		} else {
+			printf("suspend of %s failed, error %d\n",
+			    mp->mnt_stat.f_mntonname, error);
+			mtx_lock(&mountlist_mtx);
+			vfs_unbusy(mp);
+		}
+	}
+	mtx_unlock(&mountlist_mtx);
+}
+
+void
+resume_all_fs(void)
+{
+	struct mount *mp;
+
+	mtx_lock(&mountlist_mtx);
+	TAILQ_FOREACH(mp, &mountlist, mnt_list) {
+		if ((mp->mnt_kern_flag & MNTK_SUSPEND_ALL) == 0)
+			continue;
+		mtx_unlock(&mountlist_mtx);
+		MNT_ILOCK(mp);
+		MPASS((mp->mnt_kern_flag & MNTK_SUSPEND) != 0);
+		mp->mnt_kern_flag &= ~MNTK_SUSPEND_ALL;
+		MNT_IUNLOCK(mp);
+		vfs_write_resume(mp, 0);
+		mtx_lock(&mountlist_mtx);
+		vfs_unbusy(mp);
+	}
+	mtx_unlock(&mountlist_mtx);
 }
