@@ -112,13 +112,21 @@ unveil_node_freeze(struct unveil_node *node, enum unveil_role role, unveil_perms
 }
 
 static void
-unveil_node_exec_to_curr(struct unveil_node *node)
+unveil_node_exec_to_curr(struct unveil_node *node, bool simplify)
 {
+	const int s = UNVEIL_ROLE_EXEC, d = UNVEIL_ROLE_CURR;
 	int i;
-	node->frozen_perms[UNVEIL_ROLE_CURR] = node->frozen_perms[UNVEIL_ROLE_EXEC];
+	if (simplify) {
+		unveil_perms_t perms;
+		perms = unveil_node_soft_perms(node, s);
+		for (i = 0; i < UNVEIL_SLOT_COUNT; i++) {
+			node->wanted_perms[s][i] = perms;
+			node->wanted_final[s][i] = true;
+		}
+	}
+	node->frozen_perms[d] = node->frozen_perms[s];
 	for (i = 0; i < UNVEIL_SLOT_COUNT; i++)
-		node->wanted_perms[UNVEIL_ROLE_CURR][i] =
-		    node->wanted_perms[UNVEIL_ROLE_EXEC][i];
+		node->wanted_perms[d][i] = node->wanted_perms[s][i];
 }
 
 
@@ -169,12 +177,13 @@ unveil_merge(struct unveil_base *dst, struct unveil_base *src)
 		dst_node = unveil_insert(dst, src_node->vp,
 		    src_node->name, src_node->name_len, NULL);
 		dst_node->fully_covered = src_node->fully_covered;
-		memcpy(dst_node->frozen_perms, src_node->frozen_perms,
-		    sizeof (dst_node->frozen_perms));
-		memcpy(dst_node->wanted_perms, src_node->wanted_perms,
-		    sizeof (dst_node->wanted_perms));
-		memcpy(dst_node->wanted_final, src_node->wanted_final,
-		    sizeof (dst_node->wanted_final));
+		for (int i = 0; i < UNVEIL_ROLE_COUNT; i++) {
+			dst_node->frozen_perms[i] = src_node->frozen_perms[i];
+			for (int j = 0; j < UNVEIL_SLOT_COUNT; j++) {
+				dst_node->wanted_perms[i][j] = src_node->wanted_perms[i][j];
+				dst_node->wanted_final[i][j] = src_node->wanted_final[i][j];
+			}
+		}
 	}
 	/* second pass, fixup the cover links */
 	RB_FOREACH(src_node, unveil_node_tree, &src->root) {
@@ -280,7 +289,7 @@ unveil_proc_exec_switch(struct thread *td)
 	struct unveil_node *node, *node_tmp;
 	base->active = base->exec_active;
 	RB_FOREACH_SAFE(node, unveil_node_tree, &base->root, node_tmp)
-		unveil_node_exec_to_curr(node);
+		unveil_node_exec_to_curr(node, false);
 }
 
 
@@ -296,7 +305,7 @@ unveil_remember(struct unveil_base *base,
     int flags, unveil_perms_t perms,
     struct vnode *dvp, const char *name, size_t name_len, struct vnode *vp)
 {
-	struct unveil_node *node;
+	struct unveil_node *node, *iter;
 	bool inserted;
 	int i, j;
 
@@ -309,30 +318,35 @@ unveil_remember(struct unveil_base *base,
 	else
 		return (ENOENT);
 
-	if (inserted) {
-		/*
-		 * While filesystem directory loops are forbidden, a process
-		 * might still be able to create a cover loop by moving
-		 * directories around while adding unveils.
-		 */
-		const struct unveil_node *iter;
-		for (iter = *cover; iter; iter = iter->cover)
-			if (iter == node)
-				break;
-		if (!iter) /* prevent loops */
-			node->cover = *cover;
-		/*
-		 * Newly added unveil nodes can inherit frozen permissions from
-		 * their most immediate covering node (if any).
-		 */
+	/*
+	 * Update the cover link of the node.  If directories move around, the
+	 * cover hierarchy might become out of date.  This is only updated when
+	 * adding unveils for now.
+	 *
+	 * Note how allowing each process to potentially have its own "view" of
+	 * the covering hierarchy has security implications on how the cover
+	 * links are to be trusted.
+	 */
+	for (iter = *cover; iter; iter = iter->cover)
+		if (iter == node)
+			break;
+	if (!iter) /* prevent loops */
+		node->cover = *cover;
+
+	/*
+	 * Newly added unveil nodes can inherit frozen permissions from their
+	 * most immediate covering node (if any).  Note that this is the
+	 * covering node that was discovered while traversing the path, it does
+	 * not come from a node's cover link.
+	 */
+	if (inserted)
 		for (int i = 0; i < UNVEIL_ROLE_COUNT; i++)
 			node->frozen_perms[i] = node->cover ? node->cover->frozen_perms[i] :
 			                       base->active ? UNVEIL_PERM_NONE :
 			                                      UNVEIL_PERM_ALL;
-	}
 
 	if (flags & UNVEIL_FLAG_INTERMEDIATE)
-		node->fully_covered = true;
+		node->fully_covered = true; /* cannot be turned off */
 
 	if (name) {
 		FOREACH_SLOT_FLAGS(flags, i, j) {
@@ -478,8 +492,8 @@ unveil_traverse(struct thread *td, struct unveil_traversal *trav,
 			node = unveil_lookup(base, dvp, name, name_len);
 		FILEDESC_SUNLOCK(fdp);
 		if (node) {
-			trav->descended = false;
 			trav->cover = node;
+			trav->descended = false;
 		} else
 			trav->descended = true;
 	}
@@ -492,12 +506,10 @@ unveil_traverse_dotdot(struct thread *td, struct unveil_traversal *trav,
     struct vnode *dvp)
 {
 	struct filedesc *fdp = td->td_proc->p_fd;
-	if (trav->cover) {
+	if (trav->cover && !trav->descended) {
 		FILEDESC_SLOCK(fdp);
-		if (trav->cover->fully_covered && !trav->descended)
-			trav->cover = NULL;
-		else if (trav->cover->vp == dvp)
-			trav->cover = trav->cover->cover;
+		trav->cover = trav->cover->fully_covered ? NULL : trav->cover->cover;
+		trav->descended = trav->cover && trav->cover->vp != dvp;
 		FILEDESC_SUNLOCK(fdp);
 	}
 }
