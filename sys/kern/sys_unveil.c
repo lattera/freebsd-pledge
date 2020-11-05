@@ -60,6 +60,7 @@ struct unveil_node {
 	bool fully_covered;
 	unveil_perms_t frozen_perms[UNVEIL_ROLE_COUNT];
 	unveil_perms_t wanted_perms[UNVEIL_ROLE_COUNT][UNVEIL_SLOT_COUNT];
+	bool wanted_final[UNVEIL_ROLE_COUNT][UNVEIL_SLOT_COUNT];
 };
 
 CTASSERT(NAME_MAX <= UCHAR_MAX);
@@ -69,25 +70,28 @@ static unveil_perms_t
 unveil_node_soft_perms(struct unveil_node *node, enum unveil_role role)
 {
 	struct unveil_node *node1;
+	bool inherited_final[UNVEIL_SLOT_COUNT];
 	unveil_perms_t inherited_perms[UNVEIL_SLOT_COUNT], soft_perms, mask;
 	bool all_final;
 	int i;
-	for (i = 0; i < UNVEIL_SLOT_COUNT; i++)
+	for (i = 0; i < UNVEIL_SLOT_COUNT; i++) {
+		inherited_final[i] = false;
 		inherited_perms[i] = UNVEIL_PERM_NONE;
+	}
 	/*
 	 * Go up the node chain until all wanted permissions have been found
 	 * without any more inheritance required.
 	 */
 	node1 = node;
-	mask = UNVEIL_PERM_FULL_MASK;
+	mask = UNVEIL_PERM_ALL;
 	do {
 		all_final = true;
-		for (i = 0; i < UNVEIL_SLOT_COUNT; i++) {
-			if (!(inherited_perms[i] & UNVEIL_PERM_FINAL))
+		for (i = 0; i < UNVEIL_SLOT_COUNT; i++)
+			if (!inherited_final[i]) {
 				inherited_perms[i] |= node1->wanted_perms[role][i] & mask;
-			if (!(inherited_perms[i] & UNVEIL_PERM_FINAL))
-				all_final = false;
-		}
+				if (!(inherited_final[i] = node1->wanted_final[role][i]))
+					all_final = false;
+			}
 		mask &= ~UNVEIL_PERM_NONINHERITED_MASK;
 	} while (!all_final && (node1 = node1->cover));
 	/*
@@ -169,6 +173,8 @@ unveil_merge(struct unveil_base *dst, struct unveil_base *src)
 		    sizeof (dst_node->frozen_perms));
 		memcpy(dst_node->wanted_perms, src_node->wanted_perms,
 		    sizeof (dst_node->wanted_perms));
+		memcpy(dst_node->wanted_final, src_node->wanted_final,
+		    sizeof (dst_node->wanted_final));
 	}
 	/* second pass, fixup the cover links */
 	RB_FOREACH(src_node, unveil_node_tree, &src->root) {
@@ -329,10 +335,10 @@ unveil_remember(struct unveil_base *base,
 		node->fully_covered = true;
 
 	if (name) {
-		if (flags & UNVEIL_FLAG_NOINHERIT)
-			perms |= UNVEIL_PERM_FINAL;
-		FOREACH_SLOT_FLAGS(flags, i, j)
+		FOREACH_SLOT_FLAGS(flags, i, j) {
 			node->wanted_perms[i][j] = perms;
+			node->wanted_final[i][j] = flags & UNVEIL_FLAG_NOINHERIT;
+		}
 	} else if (flags & UNVEIL_FLAG_INSPECTABLE) {
 		FOREACH_SLOT_FLAGS(flags, i, j)
 			node->wanted_perms[i][j] |= UNVEIL_PERM_INSPECT;
@@ -505,7 +511,6 @@ unveil_traverse_effective_perms(struct thread *td, struct unveil_traversal *trav
 	perms = unveil_node_soft_perms(trav->cover, UNVEIL_ROLE_CURR);
 	if (trav->descended) /* the unveil covered a parent directory */
 		perms &= ~UNVEIL_PERM_NONINHERITED_MASK;
-	perms &= UNVEIL_PERM_ALL; /* drop internal bit */
 	return (perms);
 }
 
@@ -515,7 +520,6 @@ do_unveil_limit(struct unveil_base *base, int flags, unveil_perms_t perms)
 {
 	struct unveil_node *node;
 	int i, j;
-	perms |= UNVEIL_PERM_FINAL;
 	RB_FOREACH(node, unveil_node_tree, &base->root)
 		FOREACH_SLOT_FLAGS(flags, i, j)
 			node->wanted_perms[i][j] &= perms;
@@ -538,12 +542,10 @@ do_unveil_sweep(struct unveil_base *base, int flags)
 	struct unveil_node *node;
 	int i, j;
 	RB_FOREACH(node, unveil_node_tree, &base->root)
-		FOREACH_SLOT_FLAGS(flags, i, j)
-			/*
-			 * NOTE: This also makes all nodes inherit their
-			 * permissions from their parent nodes.
-			 */
+		FOREACH_SLOT_FLAGS(flags, i, j) {
 			node->wanted_perms[i][j] = UNVEIL_PERM_NONE;
+			node->wanted_final[i][j] = false;
+		}
 }
 
 #endif /* UNVEIL */
@@ -556,8 +558,6 @@ sys_unveilctl(struct thread *td, struct unveilctl_args *uap)
 	struct unveil_base *base = &fdp->fd_unveil;
 	int flags = uap->flags;
 	unveil_perms_t perms = uap->perms;
-
-	perms &= ~(unveil_perms_t)UNVEIL_PERM_FINAL;
 
 	if (!unveil_enabled)
 		return (EPERM);
