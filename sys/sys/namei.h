@@ -83,8 +83,7 @@ struct nameidata {
 	int	ni_dirfd;		/* starting directory for *at functions */
 	int	ni_lcf;			/* local call flags */
 #if defined(UNVEIL)
-	struct	unveil_node *ni_unveil;	/* last unveil encountered */
-	void	*ni_unveil_save;	/* used by unveil callbacks */
+	struct unveil_traversal ni_unveil;
 #endif
 	/*
 	 * Results: returned from namei
@@ -197,7 +196,7 @@ int	cache_fplookup(struct nameidata *ndp, enum cache_fpl_status *status,
 #define	NI_LCF_BENEATH_ABS	0x0004	/* BENEATH with absolute path */
 #define	NI_LCF_BENEATH_LATCHED	0x0008	/* BENEATH_ABS traversed starting dir */
 #define	NI_LCF_LATCH		0x0010	/* ni_beneath_latch valid */
-#define	NI_LCF_UNVEIL_DISABLED	0x0020 /* unveil restrictions not enforced */
+#define	NI_LCF_UNVEIL_DISABLED	0x0020	/* unveil restrictions not enforced */
 
 /*
  * Initialization of a nameidata structure.
@@ -222,8 +221,7 @@ int	cache_fplookup(struct nameidata *ndp, enum cache_fpl_status *status,
 
 #ifdef UNVEIL
 #define	NDINIT_UNVEIL(_ndp) do { \
-	_ndp->ni_unveil = NULL; \
-	_ndp->ni_unveil_save = NULL; \
+	_ndp->ni_unveil.save = NULL; \
 } while (0)
 #else
 #define	NDINIT_UNVEIL(ndp) do { } while (0)

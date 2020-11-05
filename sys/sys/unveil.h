@@ -63,65 +63,25 @@ int unveilctl(int atfd, const char *path, int flags, int perms);
 MALLOC_DECLARE(M_UNVEIL);
 #endif
 
-enum unveil_role {
-	UNVEIL_ROLE_CURR,
-	UNVEIL_ROLE_EXEC,
-};
+static bool
+unveil_is_active(struct thread *td)
+{
+	return (td->td_proc->p_fd->fd_unveil.active);
+}
 
-enum {
-	UNVEIL_ROLE_COUNT = 2,
-	UNVEIL_SLOT_COUNT = 2,
-};
-
-struct unveil_node {
-	struct unveil_node *cover;
-	RB_ENTRY(unveil_node) entry;
-	/*
-	 * If name is NULL, the node is not name-based and vp is a directly
-	 * unveiled vnode.  Otherwise, vp is the vnode of a parent directory
-	 * under which the name is unveiled.
-	 */
-	struct vnode *vp;
-	unveil_perms_t frozen_perms[UNVEIL_ROLE_COUNT];
-	unveil_perms_t wanted_perms[UNVEIL_ROLE_COUNT][UNVEIL_SLOT_COUNT];
-	u_char name_len;
-	char *name;
-};
-
-CTASSERT(NAME_MAX <= UCHAR_MAX);
-
-unveil_perms_t unveil_node_soft_perms(struct unveil_node *, enum unveil_role);
-unveil_perms_t unveil_node_effective_perms(struct unveil_node *, struct vnode *vp);
-
-void unveil_init(struct unveil_base *);
-void unveil_merge(struct unveil_base *dst, struct unveil_base *src);
-void unveil_clear(struct unveil_base *);
-void unveil_free(struct unveil_base *);
-
-struct unveil_node *unveil_lookup(struct unveil_base *,
-    struct vnode *, const char *name, size_t name_len);
-struct unveil_node *unveil_insert(struct unveil_base *,
-    struct vnode *, const char *name, size_t name_len, struct unveil_node *cover);
-
-struct unveil_namei_data;
-
-int unveil_traverse_save(struct unveil_base *,
-    struct unveil_namei_data *, struct unveil_node **cover,
-    struct vnode *dvp, const char *name, size_t name_len, struct vnode *vp, bool last);
-int unveil_traverse(struct unveil_base *,
-    struct unveil_namei_data *, struct unveil_node **cover,
-    struct vnode *dvp, const char *name, size_t name_len, struct vnode *vp, bool last);
-void unveil_traverse_dotdot(struct unveil_base *,
-    struct unveil_namei_data *, struct unveil_node **cover,
-    struct vnode *dvp);
+int unveil_traverse_begin(struct thread *, struct unveil_traversal *,
+    struct vnode *);
+int unveil_traverse(struct thread *, struct unveil_traversal *,
+    struct vnode *dvp, const char *name, size_t name_len, struct vnode *vp);
+void unveil_traverse_dotdot(struct thread *, struct unveil_traversal *,
+    struct vnode *);
+unveil_perms_t unveil_traverse_effective_perms(struct thread *, struct unveil_traversal *);
 
 void unveil_fd_init(struct filedesc *);
 void unveil_fd_merge(struct filedesc *dst, struct filedesc *src);
 void unveil_fd_free(struct filedesc *);
 
 void unveil_proc_exec_switch(struct thread *);
-
-int unveil_find_cover(struct thread *, struct vnode *, struct unveil_node **);
 
 #endif /* _KERNEL */
 

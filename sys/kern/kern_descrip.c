@@ -3339,16 +3339,6 @@ pwd_fill(struct pwd *oldpwd, struct pwd *newpwd)
 		vrefact(oldpwd->pwd_cdir);
 		newpwd->pwd_cdir = oldpwd->pwd_cdir;
 	}
-#ifdef UNVEIL
-	if (newpwd->pwd_cdir_cover == NULL && oldpwd->pwd_cdir_cover != NULL) {
-		/*
-		 * No need to acquire a new vnode reference since the unveil
-		 * node's vnode reference is guaranteed to last until the
-		 * descriptor table is freed.
-		 */
-		newpwd->pwd_cdir_cover = oldpwd->pwd_cdir_cover;
-	}
-#endif
 
 	if (newpwd->pwd_rdir == NULL && oldpwd->pwd_rdir != NULL) {
 		vrefact(oldpwd->pwd_rdir);
@@ -3424,7 +3414,6 @@ pwd_drop(struct pwd *pwd)
 	if (!refcount_release(&pwd->pwd_refcount))
 		return;
 
-	/* NOTE: no reference owned to pwd_cdir_cover */
 	if (pwd->pwd_cdir != NULL)
 		vrele(pwd->pwd_cdir);
 	if (pwd->pwd_rdir != NULL)
@@ -3475,7 +3464,7 @@ pwd_chroot(struct thread *td, struct vnode *vp)
 }
 
 void
-pwd_chdir_cover(struct thread *td, struct vnode *vp, struct vnode *cvp)
+pwd_chdir(struct thread *td, struct vnode *vp)
 {
 	struct filedesc *fdp;
 	struct pwd *newpwd, *oldpwd;
@@ -3487,19 +3476,10 @@ pwd_chdir_cover(struct thread *td, struct vnode *vp, struct vnode *cvp)
 	FILEDESC_XLOCK(fdp);
 	oldpwd = FILEDESC_XLOCKED_LOAD_PWD(fdp);
 	newpwd->pwd_cdir = vp;
-#ifdef UNVEIL
-	newpwd->pwd_cdir_cover = cvp;
-#endif
 	pwd_fill(oldpwd, newpwd);
 	pwd_set(fdp, newpwd);
 	FILEDESC_XUNLOCK(fdp);
 	pwd_drop(oldpwd);
-}
-
-void
-pwd_chdir(struct thread *td, struct vnode *vp)
-{
-	pwd_chdir_cover(td, vp, NULL);
 }
 
 void

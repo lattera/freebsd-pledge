@@ -274,140 +274,6 @@ sysfil_namei_check(struct nameidata *ndp, struct thread *td)
 
 #endif
 
-#ifdef UNVEIL
-
-static inline bool
-unveil_lookup_tolerate_error(struct nameidata *ndp, int error)
-{
-	return (error == ENOENT && ndp->ni_unveil_save &&
-	    (ndp->ni_cnd.cn_flags & ISLASTCN));
-}
-
-static void
-unveil_namei_setup(struct nameidata *ndp)
-{
-	struct filedesc *fdp = ndp->ni_cnd.cn_thread->td_proc->p_fd;
-	struct unveil_base *base = &fdp->fd_unveil;
-	FILEDESC_SLOCK(fdp);
-	if (!ndp->ni_unveil_save && (!base->active || ndp->ni_startdir))
-		ndp->ni_lcf |= NI_LCF_UNVEIL_DISABLED;
-	FILEDESC_SUNLOCK(fdp);
-}
-
-static int
-unveil_namei_start(struct nameidata *ndp, struct vnode *cp, struct vnode *dp)
-{
-	struct thread *td = ndp->ni_cnd.cn_thread;
-	struct filedesc *fdp = td->td_proc->p_fd;
-	struct unveil_base *base = &fdp->fd_unveil;
-	int error = 0;
-	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
-		return (0);
-	if (!ndp->ni_unveil && cp) {
-		FILEDESC_SLOCK(fdp);
-		ndp->ni_unveil = unveil_lookup(base, cp, NULL, 0);
-		FILEDESC_SUNLOCK(fdp);
-	}
-	if (!ndp->ni_unveil && dp) {
-		error = unveil_find_cover(td, dp, &ndp->ni_unveil);
-		if (error) {
-			printf("unveil_find_cover() error %d\n", error);
-			error = 0;
-		}
-	}
-	return (error);
-}
-
-static int
-unveil_lookup_update_1(struct nameidata *ndp, struct vnode *vp, bool last)
-{
-	struct componentname *cnp = &ndp->ni_cnd;
-	struct filedesc *fdp = cnp->cn_thread->td_proc->p_fd;
-	struct unveil_base *base = &fdp->fd_unveil;
-	int error;
-	/* NOTE: vp and ndp->ni_dvp may be NULL and may both be equal */
-	if (ndp->ni_unveil_save) {
-		FILEDESC_XLOCK(fdp);
-		error = unveil_traverse_save(
-		    base, ndp->ni_unveil_save, &ndp->ni_unveil,
-		    ndp->ni_dvp, cnp->cn_nameptr, cnp->cn_namelen, vp, last);
-		FILEDESC_XUNLOCK(fdp);
-	} else {
-		FILEDESC_SLOCK(fdp);
-		error = unveil_traverse(
-		    base, ndp->ni_unveil_save, &ndp->ni_unveil,
-		    ndp->ni_dvp, cnp->cn_nameptr, cnp->cn_namelen, vp, last);
-		FILEDESC_SUNLOCK(fdp);
-	}
-	return (error);
-}
-
-static inline int
-unveil_lookup_update(struct nameidata *ndp, struct vnode *vp, bool last)
-{
-	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
-		return (0);
-	return (unveil_lookup_update_1(ndp, vp, last));
-}
-
-static void
-unveil_lookup_update_dotdot(struct nameidata *ndp, struct vnode *vp)
-{
-	struct filedesc *fdp = ndp->ni_cnd.cn_thread->td_proc->p_fd;
-	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
-		return;
-	unveil_traverse_dotdot(&fdp->fd_unveil, ndp->ni_unveil_save, &ndp->ni_unveil, vp);
-}
-
-static inline const cap_rights_t *
-unveil_perms_to_rights(unveil_perms_t uperms)
-{
-	return (CAP_UNVEIL_MERGED_RIGHTS(
-	    uperms & UNVEIL_PERM_INSPECT,
-	    uperms & UNVEIL_PERM_RPATH,
-	    uperms & UNVEIL_PERM_WPATH,
-	    uperms & UNVEIL_PERM_CPATH,
-	    uperms & UNVEIL_PERM_XPATH));
-}
-
-static int
-unveil_lookup_check(struct nameidata *ndp)
-{
-	struct componentname *cnp = &ndp->ni_cnd;
-	struct filedesc *fdp = cnp->cn_thread->td_proc->p_fd;
-	struct unveil_node *node;
-	unveil_perms_t uperms;
-	const cap_rights_t *haverights;
-	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
-		return (0);
-
-#if 0
-	if ((cnp->cn_flags & FOLLOW) &&
-	    ndp->ni_vp && ndp->ni_vp->v_type == VLNK)
-		return (0);
-#endif
-
-	if ((node = ndp->ni_unveil)) {
-		FILEDESC_SLOCK(fdp);
-		uperms = unveil_node_effective_perms(node, ndp->ni_vp);
-		FILEDESC_SUNLOCK(fdp);
-	} else
-		uperms = UNVEIL_PERM_NONE;
-
-	/* Kludge for O_EXEC/O_SEARCH opens. */
-	if (ndp->ni_vp && ndp->ni_vp->v_type == VDIR &&
-	    (uperms & UNVEIL_PERM_RPATH))
-		uperms |= UNVEIL_PERM_XPATH;
-
-	haverights = unveil_perms_to_rights(uperms);
-	if (cap_rights_contains(haverights, ndp->ni_rightsneeded))
-		return (0);
-
-	return (uperms & ~UNVEIL_PERM_INSPECT ? EACCES : ENOENT);
-}
-
-#endif
-
 static void
 namei_cleanup_cnp(struct componentname *cnp)
 {
@@ -465,10 +331,6 @@ namei_setup(struct nameidata *ndp, struct vnode **dpp, struct pwd **pwdp)
 	*pwdp = NULL;
 	*dpp = NULL;
 
-#ifdef UNVEIL
-	unveil_namei_setup(ndp);
-#endif
-
 #ifdef CAPABILITY_MODE
 	/*
 	 * In capability mode, lookups must be restricted to happen in
@@ -511,20 +373,11 @@ namei_setup(struct nameidata *ndp, struct vnode **dpp, struct pwd **pwdp)
 		ndp->ni_resflags |= NIRES_ABS;
 		error = namei_handle_root(ndp, dpp);
 	} else {
-#ifdef UNVEIL
-		struct vnode *cover;
-#endif
 		if (ndp->ni_startdir != NULL) {
 			*dpp = ndp->ni_startdir;
 			startdir_used = true;
-#ifdef UNVEIL
-			cover = NULL;
-#endif
 		} else if (ndp->ni_dirfd == AT_FDCWD) {
 			*dpp = pwd->pwd_cdir;
-#ifdef UNVEIL
-			cover = pwd->pwd_cdir_cover;
-#endif
 			vrefact(*dpp);
 		} else {
 			rights = *ndp->ni_rightsneeded;
@@ -574,15 +427,9 @@ namei_setup(struct nameidata *ndp, struct vnode **dpp, struct pwd **pwdp)
 				ndp->ni_lcf |= NI_LCF_STRICTRELATIVE;
 			}
 #endif
-#ifdef UNVEIL
-			cover = ndp->ni_filecaps.fc_cover;
-#endif
 		}
 		if (error == 0 && (*dpp)->v_type != VDIR)
 			error = ENOTDIR;
-#ifdef UNVEIL
-		error = unveil_namei_start(ndp, cover, *dpp);
-#endif
 	}
 	if (error == 0 && (cnp->cn_flags & BENEATH) != 0) {
 		if (ndp->ni_dirfd == AT_FDCWD) {
@@ -863,6 +710,100 @@ out:
 	return (error);
 }
 
+#ifdef UNVEIL
+
+static inline bool
+unveil_lookup_tolerate_error(struct nameidata *ndp, int error)
+{
+	return (error == ENOENT && ndp->ni_unveil.save &&
+	    (ndp->ni_cnd.cn_flags & ISLASTCN));
+}
+
+static int
+unveil_lookup_start(struct nameidata *ndp, struct vnode *dp)
+{
+	struct thread *td = ndp->ni_cnd.cn_thread;
+	if (!unveil_is_active(td) && !ndp->ni_unveil.save) {
+		ndp->ni_lcf |= NI_LCF_UNVEIL_DISABLED;
+		return (0);
+	}
+	return (unveil_traverse_begin(td, &ndp->ni_unveil, dp));
+}
+
+static inline int
+unveil_lookup_descend(struct nameidata *ndp, struct vnode *dvp)
+{
+	struct componentname *cnp = &ndp->ni_cnd;
+	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
+		return (0);
+	return (unveil_traverse(cnp->cn_thread, &ndp->ni_unveil,
+	    dvp, NULL, 0, NULL));
+}
+
+static inline int
+unveil_lookup_final(struct nameidata *ndp,
+    struct vnode *dvp, struct vnode *vp)
+{
+	struct componentname *cnp = &ndp->ni_cnd;
+	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
+		return (0);
+	return (unveil_traverse(cnp->cn_thread, &ndp->ni_unveil,
+	    dvp, cnp->cn_nameptr, cnp->cn_namelen, vp));
+}
+
+static void
+unveil_lookup_dotdot(struct nameidata *ndp,
+    struct vnode *pdvp, struct vnode *dvp)
+{
+	struct componentname *cnp = &ndp->ni_cnd;
+	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
+		return;
+	unveil_traverse_dotdot(cnp->cn_thread, &ndp->ni_unveil, pdvp);
+}
+
+static inline const cap_rights_t *
+unveil_perms_to_rights(unveil_perms_t uperms)
+{
+	return (CAP_UNVEIL_MERGED_RIGHTS(
+	    uperms & UNVEIL_PERM_INSPECT,
+	    uperms & UNVEIL_PERM_RPATH,
+	    uperms & UNVEIL_PERM_WPATH,
+	    uperms & UNVEIL_PERM_CPATH,
+	    uperms & UNVEIL_PERM_XPATH));
+}
+
+static int
+unveil_lookup_check(struct nameidata *ndp)
+{
+	struct componentname *cnp = &ndp->ni_cnd;
+	unveil_perms_t uperms;
+	const cap_rights_t *haverights;
+	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
+		return (0);
+
+#if 0
+	if ((cnp->cn_flags & FOLLOW) &&
+	    ndp->ni_vp && ndp->ni_vp->v_type == VLNK)
+		return (0);
+#endif
+
+	uperms = unveil_traverse_effective_perms(
+	    cnp->cn_thread, &ndp->ni_unveil);
+
+	/* Kludge for O_EXEC/O_SEARCH opens. */
+	if (ndp->ni_vp && ndp->ni_vp->v_type == VDIR &&
+	    (uperms & UNVEIL_PERM_RPATH))
+		uperms |= UNVEIL_PERM_XPATH;
+
+	haverights = unveil_perms_to_rights(uperms);
+	if (cap_rights_contains(haverights, ndp->ni_rightsneeded))
+		return (0);
+
+	return (uperms & ~UNVEIL_PERM_INSPECT ? EACCES : ENOENT);
+}
+
+#endif
+
 static int
 compute_cn_lkflags(struct mount *mp, int lkflags, int cnflags)
 {
@@ -980,6 +921,11 @@ lookup(struct nameidata *ndp)
 	rdonly = cnp->cn_flags & RDONLY;
 	cnp->cn_flags &= ~ISSYMLINK;
 	ndp->ni_dvp = NULL;
+#ifdef UNVEIL
+	error = unveil_lookup_start(ndp, ndp->ni_startdir);
+	if (error)
+		return (error);
+#endif
 	/*
 	 * We use shared locks until we hit the parent of the last cn then
 	 * we adjust based on the requesting flags.
@@ -1074,7 +1020,11 @@ dirloop:
 			goto bad;
 		}
 #ifdef UNVEIL
-		error = unveil_lookup_update(ndp, dp, true);
+		/*
+		 * These arguments are going to be a bit weird, but not a
+		 * problem for unveil_traverse() since it's a directory.
+		 */
+		error = unveil_lookup_final(ndp, dp, dp);
 		if (error)
 			goto bad;
 #endif
@@ -1101,7 +1051,7 @@ dirloop:
 	}
 
 #ifdef UNVEIL
-	error = unveil_lookup_update(ndp, dp, false);
+	error = unveil_lookup_descend(ndp, dp);
 	if (error)
 		goto bad;
 #endif
@@ -1180,7 +1130,7 @@ dirloop:
 				goto bad;
 			}
 #ifdef UNVEIL
-			error = unveil_lookup_update(ndp, dp, false);
+			error = unveil_lookup_descend(ndp, dp);
 			if (error)
 				goto bad;
 #endif
@@ -1241,7 +1191,7 @@ unionlookup:
 			    LK_RETRY, cnp->cn_flags));
 			nameicap_tracker_add(ndp, dp);
 #ifdef UNVEIL
-			error = unveil_lookup_update(ndp, dp, false);
+			error = unveil_lookup_descend(ndp, dp);
 			if (error)
 				goto bad;
 #endif
@@ -1279,7 +1229,7 @@ unionlookup:
 			goto bad;
 		}
 #ifdef UNVEIL
-		error = unveil_lookup_update(ndp, NULL, true);
+		error = unveil_lookup_final(ndp, dp, NULL);
 		if (error)
 			goto bad;
 #endif
@@ -1301,8 +1251,8 @@ unionlookup:
 	}
 
 #ifdef UNVEIL
-	if (cnp->cn_flags & ISDOTDOT && ndp->ni_vp != ndp->ni_dvp)
-		unveil_lookup_update_dotdot(ndp, ndp->ni_dvp);
+	if ((cnp->cn_flags & ISDOTDOT) && dp != ndp->ni_vp)
+		unveil_lookup_dotdot(ndp, ndp->ni_vp, dp);
 #endif
 
 good:
@@ -1320,7 +1270,7 @@ good:
 		if (vfs_busy(mp, 0))
 			continue;
 #ifdef UNVEIL
-		error = unveil_lookup_update(ndp, dp, false);
+		error = unveil_lookup_descend(ndp, dp);
 		if (error)
 			goto bad2;
 #endif
@@ -1363,7 +1313,7 @@ good:
 			goto bad2;
 		}
 #ifdef UNVEIL
-		error = unveil_lookup_update(ndp, dp, true);
+		error = unveil_lookup_final(ndp, ndp->ni_dvp, dp);
 		if (error)
 			goto bad;
 #endif
@@ -1434,7 +1384,7 @@ nextname:
 	}
 
 #ifdef UNVEIL
-	error = unveil_lookup_update(ndp, dp, true);
+	error = unveil_lookup_final(ndp, ndp->ni_dvp, dp);
 	if (error)
 		goto bad;
 #endif

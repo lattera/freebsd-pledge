@@ -36,7 +36,36 @@ SYSCTL_UINT(_kern, OID_AUTO, maxunveilsperproc, CTLFLAG_RW,
 	&unveil_max_nodes_per_process, 0, "Maximum unveils allowed per process");
 
 
-unveil_perms_t
+enum unveil_role {
+	UNVEIL_ROLE_CURR,
+	UNVEIL_ROLE_EXEC,
+};
+
+enum {
+	UNVEIL_ROLE_COUNT = 2,
+	UNVEIL_SLOT_COUNT = 2,
+};
+
+struct unveil_node {
+	struct unveil_node *cover;
+	RB_ENTRY(unveil_node) entry;
+	/*
+	 * If name is NULL, the node is not name-based and vp is a directly
+	 * unveiled vnode.  Otherwise, vp is the vnode of a parent directory
+	 * under which the name is unveiled.
+	 */
+	struct vnode *vp;
+	char *name;
+	u_char name_len;
+	bool fully_covered;
+	unveil_perms_t frozen_perms[UNVEIL_ROLE_COUNT];
+	unveil_perms_t wanted_perms[UNVEIL_ROLE_COUNT][UNVEIL_SLOT_COUNT];
+};
+
+CTASSERT(NAME_MAX <= UCHAR_MAX);
+
+
+static unveil_perms_t
 unveil_node_soft_perms(struct unveil_node *node, enum unveil_role role)
 {
 	struct unveil_node *node1;
@@ -69,18 +98,6 @@ unveil_node_soft_perms(struct unveil_node *node, enum unveil_role role)
 		soft_perms |= inherited_perms[i];
 	soft_perms &= node->frozen_perms[role];
 	return (soft_perms);
-}
-
-unveil_perms_t
-unveil_node_effective_perms(struct unveil_node *node, struct vnode *vp)
-{
-	unveil_perms_t perms;
-	perms = unveil_node_soft_perms(node, UNVEIL_ROLE_CURR);
-	if (node->vp != vp)
-		/* The unveil covered a parent directory. */
-		perms &= ~UNVEIL_PERM_NONINHERITED_MASK;
-	perms &= UNVEIL_PERM_ALL; /* drop internal bit */
-	return (perms);
 }
 
 
@@ -124,7 +141,7 @@ unveil_node_cmp(struct unveil_node *n0, struct unveil_node *n1)
 RB_GENERATE_STATIC(unveil_node_tree, unveil_node, entry, unveil_node_cmp);
 
 
-void
+static void
 unveil_init(struct unveil_base *base)
 {
 	*base = (struct unveil_base){
@@ -132,7 +149,12 @@ unveil_init(struct unveil_base *base)
 	};
 }
 
-void
+static struct unveil_node *unveil_insert(struct unveil_base *, struct vnode *,
+    const char *name, size_t name_len, bool *inserted);
+static struct unveil_node *unveil_lookup(struct unveil_base *, struct vnode *,
+    const char *name, size_t name_len);
+
+static void
 unveil_merge(struct unveil_base *dst, struct unveil_base *src)
 {
 	struct unveil_node *dst_node, *src_node;
@@ -142,6 +164,7 @@ unveil_merge(struct unveil_base *dst, struct unveil_base *src)
 	RB_FOREACH(src_node, unveil_node_tree, &src->root) {
 		dst_node = unveil_insert(dst, src_node->vp,
 		    src_node->name, src_node->name_len, NULL);
+		dst_node->fully_covered = src_node->fully_covered;
 		memcpy(dst_node->frozen_perms, src_node->frozen_perms,
 		    sizeof (dst_node->frozen_perms));
 		memcpy(dst_node->wanted_perms, src_node->wanted_perms,
@@ -169,7 +192,7 @@ unveil_node_remove(struct unveil_base *base, struct unveil_node *node)
 	free(node, M_UNVEIL);
 }
 
-void
+static void
 unveil_clear(struct unveil_base *base)
 {
 	struct unveil_node *node, *node_tmp;
@@ -178,21 +201,19 @@ unveil_clear(struct unveil_base *base)
 	MPASS(base->node_count == 0);
 }
 
-void
+static void
 unveil_free(struct unveil_base *base)
 {
 	unveil_clear(base);
 }
 
-struct unveil_node *
-unveil_insert(struct unveil_base *base,
-    struct vnode *vp, const char *name, size_t name_len, struct unveil_node *cover)
+static struct unveil_node *
+unveil_insert(struct unveil_base *base, struct vnode *vp,
+    const char *name, size_t name_len, bool *inserted)
 {
 	struct unveil_node *new, *old;
-	int i;
 	new = malloc(sizeof *new + (name ? name_len + 1 : 0), M_UNVEIL, M_WAITOK);
 	*new = (struct unveil_node){
-		.cover = cover,
 		.vp = vp,
 		.name = __DECONST(char *, name),
 		.name_len = name_len,
@@ -200,6 +221,8 @@ unveil_insert(struct unveil_base *base,
 	old = RB_INSERT(unveil_node_tree, &base->root, new);
 	if (old) {
 		free(new, M_UNVEIL);
+		if (inserted)
+			*inserted = false;
 		return (old);
 	}
 	if (name) {
@@ -207,16 +230,14 @@ unveil_insert(struct unveil_base *base,
 		memcpy(new->name, name, name_len);
 		new->name[name_len] = '\0'; /* not required by this code */
 	}
-	for (i = 0; i < UNVEIL_ROLE_COUNT; i++)
-		new->frozen_perms[i] = cover ? cover->frozen_perms[i] :
-		                       base->active ? UNVEIL_PERM_NONE :
-		                                      UNVEIL_PERM_ALL;
 	vref(vp);
 	base->node_count++;
+	if (inserted)
+		*inserted = true;
 	return (new);
 }
 
-struct unveil_node *
+static struct unveil_node *
 unveil_lookup(struct unveil_base *base, struct vnode *vp, const char *name, size_t name_len)
 {
 	struct unveil_node key;
@@ -263,36 +284,51 @@ unveil_proc_exec_switch(struct thread *td)
 			for (j = 0; j < UNVEIL_SLOT_COUNT; j++) \
 				if ((flags) & (1 << (UNVEIL_FLAG_SLOT_SHIFT + j)))
 
-struct unveil_namei_data {
-	int flags;
-	unveil_perms_t perms;
-};
-
-int
-unveil_traverse_save(struct unveil_base *base,
-    struct unveil_namei_data *data, struct unveil_node **cover,
-    struct vnode *dvp, const char *name, size_t name_len, struct vnode *vp, bool last)
+static int
+unveil_remember(struct unveil_base *base,
+    struct unveil_node **cover,
+    int flags, unveil_perms_t perms,
+    struct vnode *dvp, const char *name, size_t name_len, struct vnode *vp)
 {
-	int flags = data->flags;
-	unveil_perms_t perms = data->perms;
 	struct unveil_node *node;
+	bool inserted;
 	int i, j;
-	if (!(last || (flags & UNVEIL_FLAG_INTERMEDIATE)))
-		return (unveil_traverse(base, data, cover, dvp, name, name_len, vp, last));
 
-	if (name_len > NAME_MAX)
-		return (ENAMETOOLONG);
-	if (base->node_count >= unveil_max_nodes_per_process)
-		return (E2BIG);
-
-	if ((flags & UNVEIL_FLAG_NONDIRBYNAME) && last && dvp && (!vp || vp->v_type != VDIR))
-		node = unveil_insert(base, dvp, name, name_len, *cover);
+	if (!name)
+		node = unveil_insert(base, dvp, NULL, 0, &inserted);
+	else if ((flags & UNVEIL_FLAG_NONDIRBYNAME) && (!vp || vp->v_type != VDIR))
+		node = unveil_insert(base, dvp, name, name_len, &inserted);
 	else if (vp)
-		node = unveil_insert(base, vp, NULL, 0, *cover);
+		node = unveil_insert(base, vp, NULL, 0, &inserted);
 	else
-		return (ENOTDIR); /* XXX */
+		return (ENOENT);
 
-	if (last) {
+	if (inserted) {
+		/*
+		 * While filesystem directory loops are forbidden, a process
+		 * might still be able to create a cover loop by moving
+		 * directories around while adding unveils.
+		 */
+		const struct unveil_node *iter;
+		for (iter = *cover; iter; iter = iter->cover)
+			if (iter == node)
+				break;
+		if (!iter) /* prevent loops */
+			node->cover = *cover;
+		/*
+		 * Newly added unveil nodes can inherit frozen permissions from
+		 * their most immediate covering node (if any).
+		 */
+		for (int i = 0; i < UNVEIL_ROLE_COUNT; i++)
+			node->frozen_perms[i] = node->cover ? node->cover->frozen_perms[i] :
+			                       base->active ? UNVEIL_PERM_NONE :
+			                                      UNVEIL_PERM_ALL;
+	}
+
+	if (flags & UNVEIL_FLAG_INTERMEDIATE)
+		node->fully_covered = true;
+
+	if (name) {
 		if (flags & UNVEIL_FLAG_NOINHERIT)
 			perms |= UNVEIL_PERM_FINAL;
 		FOREACH_SLOT_FLAGS(flags, i, j)
@@ -305,34 +341,7 @@ unveil_traverse_save(struct unveil_base *base,
 	return (0);
 }
 
-int
-unveil_traverse(struct unveil_base *base,
-    struct unveil_namei_data *data, struct unveil_node **cover,
-    struct vnode *dvp, const char *name, size_t name_len, struct vnode *vp, bool last)
-{
-	struct unveil_node *node;
-	if (vp)
-		node = unveil_lookup(base, vp, NULL, 0);
-	else
-		node = NULL;
-	if (!node && last && dvp && (!vp || vp->v_type != VDIR))
-		node = unveil_lookup(base, dvp, name, name_len);
-	if (node)
-		*cover = node;
-	return (0);
-}
-
-void
-unveil_traverse_dotdot(struct unveil_base *base,
-    struct unveil_namei_data *data, struct unveil_node **cover,
-    struct vnode *dvp)
-{
-	if (*cover && (*cover)->vp == dvp)
-		*cover = (*cover)->cover;
-}
-
-
-int
+static int
 unveil_find_cover(struct thread *td, struct vnode *dp, struct unveil_node **cover)
 {
 	struct filedesc *fdp = td->td_proc->p_fd;
@@ -403,6 +412,104 @@ unveil_find_cover(struct thread *td, struct vnode *dp, struct unveil_node **cove
 }
 
 
+struct unveil_save {
+	int flags;
+	unveil_perms_t perms;
+};
+
+int
+unveil_traverse_begin(struct thread *td, struct unveil_traversal *trav,
+    struct vnode *dvp)
+{
+	int error;
+	/* TODO: caching */
+	trav->cover = NULL;
+	trav->descended = false;
+	error = unveil_find_cover(td, dvp, &trav->cover);
+	if (error)
+		return (error);
+	trav->descended = trav->cover && trav->cover->vp != dvp;
+	return (error);
+}
+
+/*
+ * dvp is a directory pointer (which may not be NULL).  If name is NULL, it
+ * means that dvp is being descended into while looking up a path.  If name is
+ * non-NULL, it means that the final path component has been located under dvp
+ * with the given name.  vp may point to its vnode if it exists.  It's possible
+ * for dvp and vp to be equal (in which case name should be "." or "").
+ */
+
+int
+unveil_traverse(struct thread *td, struct unveil_traversal *trav,
+    struct vnode *dvp, const char *name, size_t name_len, struct vnode *vp)
+{
+	struct filedesc *fdp = td->td_proc->p_fd;
+	struct unveil_base *base = &fdp->fd_unveil;
+	int error = 0;
+
+	if (trav->save && (name || (trav->save->flags & UNVEIL_FLAG_INTERMEDIATE))) {
+		if (name_len > NAME_MAX)
+			return (ENAMETOOLONG);
+		if (base->node_count >= unveil_max_nodes_per_process)
+			return (E2BIG);
+
+		FILEDESC_XLOCK(fdp);
+		error = unveil_remember(base, &trav->cover,
+		    trav->save->flags, trav->save->perms,
+		    dvp, name, name_len, vp);
+		FILEDESC_XUNLOCK(fdp);
+		trav->descended = false;
+
+	} else {
+		struct unveil_node *node;
+		FILEDESC_SLOCK(fdp);
+		if (vp)
+			node = unveil_lookup(base, vp, NULL, 0);
+		else
+			node = NULL;
+		if (!node)
+			node = unveil_lookup(base, dvp, name, name_len);
+		FILEDESC_SUNLOCK(fdp);
+		if (node) {
+			trav->descended = false;
+			trav->cover = node;
+		} else
+			trav->descended = true;
+	}
+
+	return (error);
+}
+
+void
+unveil_traverse_dotdot(struct thread *td, struct unveil_traversal *trav,
+    struct vnode *dvp)
+{
+	struct filedesc *fdp = td->td_proc->p_fd;
+	if (trav->cover) {
+		FILEDESC_SLOCK(fdp);
+		if (trav->cover->fully_covered && !trav->descended)
+			trav->cover = NULL;
+		else if (trav->cover->vp == dvp)
+			trav->cover = trav->cover->cover;
+		FILEDESC_SUNLOCK(fdp);
+	}
+}
+
+unveil_perms_t
+unveil_traverse_effective_perms(struct thread *td, struct unveil_traversal *trav)
+{
+	unveil_perms_t perms;
+	if (!trav->cover)
+		return (UNVEIL_PERM_NONE);
+	perms = unveil_node_soft_perms(trav->cover, UNVEIL_ROLE_CURR);
+	if (trav->descended) /* the unveil covered a parent directory */
+		perms &= ~UNVEIL_PERM_NONINHERITED_MASK;
+	perms &= UNVEIL_PERM_ALL; /* drop internal bit */
+	return (perms);
+}
+
+
 static void
 do_unveil_limit(struct unveil_base *base, int flags, unveil_perms_t perms)
 {
@@ -456,7 +563,7 @@ sys_unveilctl(struct thread *td, struct unveilctl_args *uap)
 		return (EPERM);
 
 	if (uap->path != NULL) {
-		struct unveil_namei_data data = { flags, perms };
+		struct unveil_save save = { flags, perms };
 		struct nameidata nd;
 		int error;
 		int nd_flags;
@@ -464,7 +571,7 @@ sys_unveilctl(struct thread *td, struct unveilctl_args *uap)
 		NDINIT_ATRIGHTS(&nd, LOOKUP, nd_flags,
 		    UIO_USERSPACE, uap->path, uap->atfd, &cap_no_rights, td);
 		/* this will cause namei() to call unveil_traverse_save() */
-		nd.ni_unveil_save = &data;
+		nd.ni_unveil.save = &save;
 		error = namei(&nd);
 		if (error)
 			return (error);

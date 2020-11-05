@@ -870,27 +870,13 @@ sys_fchdir(struct thread *td, struct fchdir_args *uap)
 	struct vnode *vp, *tdp;
 	struct mount *mp;
 	struct file *fp;
-#ifdef UNVEIL
-	struct filecaps fcaps;
-#endif
 	int error;
 
 	AUDIT_ARG_FD(uap->fd);
-#ifdef UNVEIL
-	error = fget_cap(td, uap->fd, &cap_fchdir_rights, &fp, &fcaps);
-	if (error != 0)
-		return (error);
-	/* See comment in getvnode(). */
-	if (fp->f_vnode == NULL || fp->f_ops == &badfileops) {
-		fdrop(fp, td);
-		return (EINVAL);
-	}
-#else
 	error = getvnode(td, uap->fd, &cap_fchdir_rights,
 	    &fp);
 	if (error != 0)
 		return (error);
-#endif
 	vp = fp->f_vnode;
 	vrefact(vp);
 	fdrop(fp, td);
@@ -912,11 +898,7 @@ sys_fchdir(struct thread *td, struct fchdir_args *uap)
 		return (error);
 	}
 	VOP_UNLOCK(vp);
-#ifdef UNVEIL
-	pwd_chdir_cover(td, vp, fcaps.fc_cover);
-#else
 	pwd_chdir(td, vp);
-#endif
 	return (0);
 }
 
@@ -952,11 +934,7 @@ kern_chdir(struct thread *td, const char *path, enum uio_seg pathseg)
 	}
 	VOP_UNLOCK(nd.ni_vp);
 	NDFREE(&nd, NDF_ONLY_PNBUF);
-#ifdef UNVEIL
-	pwd_chdir_cover(td, nd.ni_vp, nd.ni_unveil ? nd.ni_unveil->vp : NULL);
-#else
 	pwd_chdir(td, nd.ni_vp);
-#endif
 	return (0);
 }
 
@@ -1205,23 +1183,13 @@ success:
 	 */
 	if (indx == -1) {
 		struct filecaps *fcaps;
-#ifdef UNVEIL
-		struct filecaps fcaps2;
-#endif
 
 #ifdef CAPABILITIES
 		if ((nd.ni_lcf & NI_LCF_STRICTRELATIVE) != 0)
 			fcaps = &nd.ni_filecaps;
 		else
 #endif
-#ifdef UNVEIL
-			filecaps_fill((fcaps = &fcaps2));
-#else
 			fcaps = NULL;
-#endif
-#ifdef UNVEIL
-		fcaps->fc_cover = nd.ni_unveil ? nd.ni_unveil->vp : NULL;
-#endif
 		error = finstall(td, fp, &indx, flags, fcaps);
 		/* On success finstall() consumes fcaps. */
 		if (error != 0) {
