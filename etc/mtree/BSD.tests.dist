@@ -854,6 +854,8 @@
             utimensat
             ..
         ..
+        pledge
+        ..
         posixshm
         ..
         sys
