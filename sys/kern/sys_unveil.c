@@ -125,8 +125,10 @@ unveil_node_exec_to_curr(struct unveil_node *node, bool simplify)
 		}
 	}
 	node->frozen_perms[d] = node->frozen_perms[s];
-	for (i = 0; i < UNVEIL_SLOT_COUNT; i++)
+	for (i = 0; i < UNVEIL_SLOT_COUNT; i++) {
 		node->wanted_perms[d][i] = node->wanted_perms[s][i];
+		node->wanted_final[d][i] = node->wanted_final[s][i];
+	}
 }
 
 
