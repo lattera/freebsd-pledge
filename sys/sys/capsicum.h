@@ -48,8 +48,6 @@
 #include <sys/file.h>
 #include <sys/fcntl.h>
 
-#include <sys/_sysfil.h>
-
 #ifndef _KERNEL
 #include <stdbool.h>
 #endif
