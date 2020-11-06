@@ -2,6 +2,7 @@
 #include <limits.h>
 #include <paths.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,16 +21,18 @@
 static const mode_t tmpdir_mode = S_IWUSR|S_IXUSR;
 
 static const char *default_promises =
-    "error stdio "
-    "sigtrap rlimit "
+    "stdio "
+    "rlimit "
     "rpath wpath cpath dpath tmppath "
     "exec prot_exec "
     "flock fattr chown id "
     "proc_session thread "
     "tty "
     "unix recvfd sendfd ";
-static const char *network_promises =
-    "ssl dns inet ";
+
+static const char *network_promises = "ssl dns inet";
+
+static const char *error_promises = "error sigtrap";
 
 struct unveil_entry {
 	const char *path;
@@ -67,7 +70,7 @@ static const size_t default_unveils_count =
 static void
 usage(void)
 {
-	fprintf(stderr, "usage: %s [-p promises] [-u unveil ...] cmd [arg ...]\n", getprogname());
+	fprintf(stderr, "usage: %s [-s] [-p promises] [-u unveil ...] cmd [arg ...]\n", getprogname());
 	exit(EX_USAGE);
 }
 
@@ -109,10 +112,13 @@ main(int argc, char *argv[])
 {
 	int ch, r;
 	char promises[1024] = "";
+	bool signaling = false;
 	char abspath[PATH_MAX];
 	size_t abspath_len = 0;
 
+	strlcat(promises, " ", sizeof promises);
 	strlcat(promises, default_promises, sizeof promises);
+	strlcat(promises, " ", sizeof promises);
 	strlcat(promises, network_promises, sizeof promises);
 
 	const struct unveil_entry *entry;
@@ -124,13 +130,17 @@ main(int argc, char *argv[])
 			err(EX_OSERR, "%s", entry->path);
 	}
 
-	while ((ch = getopt(argc, argv, "p:u:")) != -1)
+	while ((ch = getopt(argc, argv, "sp:u:")) != -1)
 		switch (ch) {
+		case 's':
+			signaling = true;
+			break;
 		case 'p': {
 			char *p;
 			for (p = optarg; *p; p++)
 				if (*p == ',')
 					*p = ' ';
+			strlcat(promises, " ", sizeof promises);
 			strlcat(promises, optarg, sizeof promises);
 			break;
 		}
@@ -172,6 +182,11 @@ main(int argc, char *argv[])
 	closefrom(3); /* Prevent potentially unintended FD passing. */
 
 	new_tmpdir();
+
+	if (!signaling) {
+		strlcat(promises, " ", sizeof promises);
+		strlcat(promises, error_promises, sizeof promises);
+	}
 
 	r = pledge(NULL, promises);
 	if (r < 0)
