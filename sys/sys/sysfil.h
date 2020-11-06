@@ -156,27 +156,36 @@ int sysfil_priv_check(struct ucred *, int priv);
 static inline void
 sysfil_cred_init(struct ucred *cr)
 {
+#ifdef SYSFIL
 	SYSFILSET_FILL_ALL(&cr->cr_sysfilset);
 	SYSFILSET_FILL_ALL(&cr->cr_sysfilset_exec);
+#endif
 }
 
 static inline bool
 sysfil_cred_need_exec_switch(const struct ucred *cr)
 {
+#ifdef SYSFIL
 	return (!SYSFILSET_EQUAL(&cr->cr_sysfilset, &cr->cr_sysfilset_exec));
+#endif
+	return (false);
 }
 
 static inline void
 sysfil_cred_exec_switch(struct ucred *cr)
 {
+#ifdef SYSFIL
 	cr->cr_sysfilset = cr->cr_sysfilset_exec;
+#endif
 }
 
 static inline void
 sysfil_cred_sandbox(struct ucred *cr)
 {
+#ifdef SYSFIL
 	SYSFILSET_CLEAR(&cr->cr_sysfilset, SYSFIL_DEFAULT);
 	SYSFILSET_CLEAR(&cr->cr_sysfilset_exec, SYSFIL_DEFAULT);
+#endif
 }
 
 #endif

@@ -60,7 +60,11 @@ MALLOC_DECLARE(M_UNVEIL);
 static bool
 unveil_is_active(struct thread *td)
 {
+#ifdef UNVEIL
 	return (td->td_proc->p_fd->fd_unveil.active);
+#else
+	return (false);
+#endif
 }
 
 int unveil_traverse_begin(struct thread *, struct unveil_traversal *,
