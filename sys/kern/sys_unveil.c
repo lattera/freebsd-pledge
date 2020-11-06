@@ -362,7 +362,7 @@ unveil_remember(struct unveil_base *base,
 	if (name && final) {
 		FOREACH_SLOT_FLAGS(flags, i, j) {
 			node->wanted_perms[i][j] = perms;
-			node->wanted_final[i][j] = flags & UNVEIL_FLAG_NOINHERIT;
+			node->wanted_final[i][j] = (flags & UNVEIL_FLAG_NOINHERIT) != 0;
 		}
 	} else if (flags & UNVEIL_FLAG_INSPECTABLE) {
 		FOREACH_SLOT_FLAGS(flags, i, j)
