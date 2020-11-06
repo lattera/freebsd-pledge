@@ -200,7 +200,7 @@ static struct promise_unveil {
 	{ _PATH_ETC "/localtime", R,		PROMISE_STDIO },
 	{ "/usr/share/zoneinfo/", R,		PROMISE_STDIO },
 	{ "/usr/share/nls/", R,			PROMISE_STDIO },
-	{ "/usr/local/share/nls/", R,		PROMISE_STDIO },
+	{ _PATH_LOCALBASE "/share/nls/", R,		PROMISE_STDIO },
 	/* Programs will often open /dev/null with O_CREAT.  TODO: Could have a
 	 * different unveil() permission just for that. */
 	{ _PATH_DEVNULL, R|W|C,			PROMISE_STDIO },

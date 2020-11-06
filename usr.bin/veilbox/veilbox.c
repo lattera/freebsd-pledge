@@ -46,18 +46,18 @@ static const struct unveil_entry default_unveils[] = {
 	{ _PATH_ETC "/termcap", "r" },
 	{ "/lib", "rx" },
 	{ "/usr/lib", "rx" },
-	{ "/usr/local/lib", "rx" },
+	{ _PATH_LOCALBASE "/lib", "rx" },
 	{ "/libexec", "rx" },
 	{ "/usr/libexec", "rx" },
-	{ "/usr/local/libexec", "rx" },
+	{ _PATH_LOCALBASE "/libexec", "rx" },
 	{ "/bin", "rx" },
 	{ "/sbin", "rx" },
 	{ "/usr/bin", "rx" },
 	{ "/usr/sbin", "rx" },
-	{ "/usr/local/bin", "rx" },
-	{ "/usr/local/sbin", "rx" },
+	{ _PATH_LOCALBASE "/bin", "rx" },
+	{ _PATH_LOCALBASE "/sbin", "rx" },
 	{ "/usr/share", "rx" },
-	{ "/usr/local/share", "rx" },
+	{ _PATH_LOCALBASE "/share", "rx" },
 };
 
 static const size_t default_unveils_count =
