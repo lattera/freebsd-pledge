@@ -301,11 +301,19 @@ unveil_proc_exec_switch(struct thread *td)
 			for (j = 0; j < UNVEIL_SLOT_COUNT; j++) \
 				if ((flags) & (1 << (UNVEIL_FLAG_SLOT_SHIFT + j)))
 
+static inline unveil_perms_t
+unveil_cover_frozen_perms(struct unveil_base *base, struct unveil_node *cover,
+    enum unveil_role role)
+{
+	return (cover ? cover->frozen_perms[role] :
+	    base->active ? UNVEIL_PERM_NONE : UNVEIL_PERM_ALL);
+}
+
 static int
 unveil_remember(struct unveil_base *base,
     struct unveil_node **cover,
     int flags, unveil_perms_t perms,
-    struct vnode *dvp, const char *name, size_t name_len, struct vnode *vp)
+    struct vnode *dvp, const char *name, size_t name_len, struct vnode *vp, bool final)
 {
 	struct unveil_node *node, *iter;
 	bool inserted;
@@ -329,11 +337,13 @@ unveil_remember(struct unveil_base *base,
 	 * the covering hierarchy has security implications on how the cover
 	 * links are to be trusted.
 	 */
-	for (iter = *cover; iter; iter = iter->cover)
-		if (iter == node)
-			break;
-	if (!iter) /* prevent loops */
-		node->cover = *cover;
+	if (*cover) {
+		for (iter = *cover; iter; iter = iter->cover)
+			if (iter == node)
+				break;
+		if (!iter) /* prevent loops */
+			node->cover = *cover;
+	}
 
 	/*
 	 * Newly added unveil nodes can inherit frozen permissions from their
@@ -343,14 +353,13 @@ unveil_remember(struct unveil_base *base,
 	 */
 	if (inserted)
 		for (int i = 0; i < UNVEIL_ROLE_COUNT; i++)
-			node->frozen_perms[i] = node->cover ? node->cover->frozen_perms[i] :
-			                       base->active ? UNVEIL_PERM_NONE :
-			                                      UNVEIL_PERM_ALL;
+			node->frozen_perms[i] = unveil_cover_frozen_perms(base, *cover, i);
+	*cover = node;
 
 	if (flags & UNVEIL_FLAG_INTERMEDIATE)
 		node->fully_covered = true; /* cannot be turned off */
 
-	if (name) {
+	if (name && final) {
 		FOREACH_SLOT_FLAGS(flags, i, j) {
 			node->wanted_perms[i][j] = perms;
 			node->wanted_final[i][j] = flags & UNVEIL_FLAG_NOINHERIT;
@@ -359,7 +368,6 @@ unveil_remember(struct unveil_base *base,
 		FOREACH_SLOT_FLAGS(flags, i, j)
 			node->wanted_perms[i][j] |= UNVEIL_PERM_INSPECT;
 	}
-	*cover = node;
 	return (0);
 }
 
@@ -457,20 +465,25 @@ unveil_traverse_begin(struct thread *td, struct unveil_traversal *trav,
 /*
  * dvp is a directory pointer (which may not be NULL).  If name is NULL, it
  * means that dvp is being descended into while looking up a path.  If name is
- * non-NULL, it means that the final path component has been located under dvp
+ * non-NULL, it means that the last path component has been located under dvp
  * with the given name.  vp may point to its vnode if it exists.  It's possible
  * for dvp and vp to be equal (in which case name should be "." or "").
+ *
+ * When following symlinks, there may be multiple "last" path components.  When
+ * encountering a symlink that is to be followed, name will be non-NULL and
+ * final will be false.  final will be true when the target file has been found
+ * (which may not be a symlink if symlinks are to be followed).
  */
 
 int
 unveil_traverse(struct thread *td, struct unveil_traversal *trav,
-    struct vnode *dvp, const char *name, size_t name_len, struct vnode *vp)
+    struct vnode *dvp, const char *name, size_t name_len, struct vnode *vp, bool final)
 {
 	struct filedesc *fdp = td->td_proc->p_fd;
 	struct unveil_base *base = &fdp->fd_unveil;
 	int error = 0;
 
-	if (trav->save && (name || (trav->save->flags & UNVEIL_FLAG_INTERMEDIATE))) {
+	if (trav->save && (final || (trav->save->flags & UNVEIL_FLAG_INTERMEDIATE))) {
 		if (name_len > NAME_MAX)
 			return (ENAMETOOLONG);
 		if (base->node_count >= unveil_max_nodes_per_process)
@@ -479,7 +492,7 @@ unveil_traverse(struct thread *td, struct unveil_traversal *trav,
 		FILEDESC_XLOCK(fdp);
 		error = unveil_remember(base, &trav->cover,
 		    trav->save->flags, trav->save->perms,
-		    dvp, name, name_len, vp);
+		    dvp, name, name_len, vp, final);
 		FILEDESC_XUNLOCK(fdp);
 		trav->descended = false;
 
@@ -519,12 +532,20 @@ unveil_traverse_dotdot(struct thread *td, struct unveil_traversal *trav,
 unveil_perms_t
 unveil_traverse_effective_perms(struct thread *td, struct unveil_traversal *trav)
 {
+	struct filedesc *fdp = td->td_proc->p_fd;
+	struct unveil_base *base = &fdp->fd_unveil;
 	unveil_perms_t perms;
-	if (!trav->cover)
-		return (UNVEIL_PERM_NONE);
-	perms = unveil_node_soft_perms(trav->cover, UNVEIL_ROLE_CURR);
-	if (trav->descended) /* the unveil covered a parent directory */
-		perms &= ~UNVEIL_PERM_NONINHERITED_MASK;
+	FILEDESC_SLOCK(fdp);
+	if (trav->save) {
+		perms = unveil_cover_frozen_perms(base, trav->cover, UNVEIL_ROLE_CURR);
+	} else if (trav->cover) {
+		perms = unveil_node_soft_perms(trav->cover, UNVEIL_ROLE_CURR);
+		if (trav->descended) /* the unveil covered a parent directory */
+			perms &= ~UNVEIL_PERM_NONINHERITED_MASK;
+	} else {
+		perms = UNVEIL_PERM_NONE;
+	}
+	FILEDESC_SUNLOCK(fdp);
 	return (perms);
 }
 
@@ -583,9 +604,8 @@ sys_unveilctl(struct thread *td, struct unveilctl_args *uap)
 		int nd_flags;
 		nd_flags = flags & UNVEIL_FLAG_NOFOLLOW ? 0 : FOLLOW;
 		NDINIT_ATRIGHTS(&nd, LOOKUP, nd_flags,
-		    UIO_USERSPACE, uap->path, uap->atfd, &cap_no_rights, td);
-		/* this will cause namei() to call unveil_traverse_save() */
-		nd.ni_unveil.save = &save;
+		    UIO_USERSPACE, uap->path, uap->atfd, &cap_fstat_rights, td);
+		nd.ni_unveil.save = &save; /* checked in unveil_traverse() */
 		error = namei(&nd);
 		if (error)
 			return (error);

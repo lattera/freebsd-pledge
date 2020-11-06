@@ -70,7 +70,8 @@ unveil_is_active(struct thread *td)
 int unveil_traverse_begin(struct thread *, struct unveil_traversal *,
     struct vnode *);
 int unveil_traverse(struct thread *, struct unveil_traversal *,
-    struct vnode *dvp, const char *name, size_t name_len, struct vnode *vp);
+    struct vnode *dvp, const char *name, size_t name_len, struct vnode *vp,
+    bool final);
 void unveil_traverse_dotdot(struct thread *, struct unveil_traversal *,
     struct vnode *);
 unveil_perms_t unveil_traverse_effective_perms(struct thread *, struct unveil_traversal *);

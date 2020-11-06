@@ -772,18 +772,19 @@ unveil_lookup_descend(struct nameidata *ndp, struct vnode *dvp)
 	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
 		return (0);
 	return (unveil_traverse(cnp->cn_thread, &ndp->ni_unveil,
-	    dvp, NULL, 0, NULL));
+	    dvp, NULL, 0, NULL, false));
 }
 
 static inline int
-unveil_lookup_final(struct nameidata *ndp,
+unveil_lookup_name(struct nameidata *ndp,
     struct vnode *dvp, struct vnode *vp)
 {
 	struct componentname *cnp = &ndp->ni_cnd;
 	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
 		return (0);
 	return (unveil_traverse(cnp->cn_thread, &ndp->ni_unveil,
-	    dvp, cnp->cn_nameptr, cnp->cn_namelen, vp));
+	    dvp, cnp->cn_nameptr, cnp->cn_namelen, vp,
+	    (cnp->cn_flags & ISSYMLINK) == 0));
 }
 
 static void
@@ -812,15 +813,14 @@ unveil_lookup_check(struct nameidata *ndp)
 {
 	struct componentname *cnp = &ndp->ni_cnd;
 	unveil_perms_t uperms;
-	const cap_rights_t *haverights;
+	const cap_rights_t *haverights, *needrights;
 	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
 		return (0);
 
-#if 0
-	if ((cnp->cn_flags & FOLLOW) &&
-	    ndp->ni_vp && ndp->ni_vp->v_type == VLNK)
-		return (0);
-#endif
+	if (cnp->cn_flags & ISSYMLINK)
+		needrights = &cap_fstat_rights;
+	else
+		needrights = ndp->ni_rightsneeded;
 
 	uperms = unveil_traverse_effective_perms(
 	    cnp->cn_thread, &ndp->ni_unveil);
@@ -831,7 +831,7 @@ unveil_lookup_check(struct nameidata *ndp)
 		uperms |= UNVEIL_PERM_XPATH;
 
 	haverights = unveil_perms_to_rights(uperms);
-	if (cap_rights_contains(haverights, ndp->ni_rightsneeded))
+	if (cap_rights_contains(haverights, needrights))
 		return (0);
 
 	return (uperms & ~UNVEIL_PERM_INSPECT ? EACCES : ENOENT);
@@ -1069,7 +1069,7 @@ dirloop:
 		 * These arguments are going to be a bit weird, but not a
 		 * problem for unveil_traverse() since it's a directory.
 		 */
-		error = unveil_lookup_final(ndp, dp, dp);
+		error = unveil_lookup_name(ndp, dp, dp);
 		if (error)
 			goto bad;
 #endif
@@ -1274,7 +1274,7 @@ unionlookup:
 			goto bad;
 		}
 #ifdef UNVEIL
-		error = unveil_lookup_final(ndp, dp, NULL);
+		error = unveil_lookup_name(ndp, dp, NULL);
 		if (error)
 			goto bad;
 #endif
@@ -1358,7 +1358,7 @@ good:
 			goto bad2;
 		}
 #ifdef UNVEIL
-		error = unveil_lookup_final(ndp, ndp->ni_dvp, dp);
+		error = unveil_lookup_name(ndp, ndp->ni_dvp, dp);
 		if (error)
 			goto bad;
 #endif
@@ -1429,7 +1429,7 @@ nextname:
 	}
 
 #ifdef UNVEIL
-	error = unveil_lookup_final(ndp, ndp->ni_dvp, dp);
+	error = unveil_lookup_name(ndp, ndp->ni_dvp, dp);
 	if (error)
 		goto bad;
 #endif

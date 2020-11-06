@@ -18,10 +18,6 @@ main(int argc, char *argv[])
 	int ch, r;
 	char *promises = NULL;
 
-	r = pledge("stdio exec", NULL);
-	if (r < 0)
-		err(EX_NOPERM, "pledge");
-
 	while ((ch = getopt(argc, argv, "p:u:")) != -1)
 		switch (ch) {
 		case 'p': {
@@ -52,7 +48,7 @@ main(int argc, char *argv[])
 	if (!argc)
 		usage();
 
-	r = pledge(NULL, promises);
+	r = pledge("stdio exec", promises);
 	if (r < 0)
 		err(EX_NOPERM, "pledge");
 
