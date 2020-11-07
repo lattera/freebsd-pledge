@@ -106,7 +106,7 @@ __read_mostly cap_rights_t cap_extattr_list_rights;
 __read_mostly cap_rights_t cap_extattr_set_rights;
 __read_mostly cap_rights_t cap_no_rights;
 #if defined(UNVEIL) || defined(SYSFIL)
-__read_mostly cap_rights_t cap_unveil_merged_rights[1 << 5];
+__read_mostly cap_rights_t cap_unveil_merged_rights[1 << 6];
 #endif
 
 static void
@@ -171,6 +171,7 @@ cap_rights_sysinit(void *arg)
 	cap_rights_t wpath_rights;
 	cap_rights_t cpath_rights;
 	cap_rights_t xpath_rights;
+	cap_rights_t apath_rights;
 
 	cap_rights_init(&null_rights);
 	cap_rights_init(&inspect_rights,
@@ -200,19 +201,7 @@ cap_rights_sysinit(void *arg)
 	    CAP_FPATHCONF,
 	    CAP_MMAP,
 	    CAP_FSYNC,
-	    CAP_FTRUNCATE,
-	    CAP_FCHFLAGS,
-	    CAP_CHFLAGSAT,
-	    CAP_FCHMOD,
-	    CAP_FCHMODAT,
-	    CAP_FCHOWN,
-	    CAP_FCHOWNAT,
-	    CAP_FUTIMES,
-	    CAP_FUTIMESAT,
-	    CAP_MAC_SET,
-	    CAP_REVOKEAT,
-	    CAP_EXTATTR_SET,
-	    CAP_EXTATTR_DELETE);
+	    CAP_FTRUNCATE);
 	cap_rights_init(&cpath_rights,
 	    CAP_LOOKUP,
 	    CAP_CREATE,
@@ -231,6 +220,20 @@ cap_rights_sysinit(void *arg)
 	    CAP_LOOKUP,
 	    CAP_FEXECVE,
 	    CAP_EXECAT);
+	cap_rights_init(&apath_rights,
+	    CAP_LOOKUP,
+	    CAP_FCHFLAGS,
+	    CAP_CHFLAGSAT,
+	    CAP_FCHMOD,
+	    CAP_FCHMODAT,
+	    CAP_FCHOWN,
+	    CAP_FCHOWNAT,
+	    CAP_FUTIMES,
+	    CAP_FUTIMESAT,
+	    CAP_MAC_SET,
+	    CAP_REVOKEAT,
+	    CAP_EXTATTR_SET,
+	    CAP_EXTATTR_DELETE);
 
 	/* Pre-merge rights for every possible set of unveil permissions. */
 	for (int i = 0; i < nitems(cap_unveil_merged_rights); i++) {
@@ -241,6 +244,7 @@ cap_rights_sysinit(void *arg)
 		cap_rights_merge(rights, i & (1 << 2) ? &wpath_rights   : &null_rights);
 		cap_rights_merge(rights, i & (1 << 3) ? &cpath_rights   : &null_rights);
 		cap_rights_merge(rights, i & (1 << 4) ? &xpath_rights   : &null_rights);
+		cap_rights_merge(rights, i & (1 << 5) ? &apath_rights   : &null_rights);
 	}
 #endif
 }

@@ -113,14 +113,15 @@ extern cap_rights_t cap_extattr_get_rights;
 extern cap_rights_t cap_extattr_list_rights;
 extern cap_rights_t cap_extattr_set_rights;
 #if defined(UNVEIL) || defined(SYSFIL)
-extern cap_rights_t cap_unveil_merged_rights[1 << 5];
-#define	CAP_UNVEIL_MERGED_RIGHTS(inspect, rpath, wpath, cpath, xpath)		\
+extern cap_rights_t cap_unveil_merged_rights[1 << 6];
+#define	CAP_UNVEIL_MERGED_RIGHTS(inspect, rpath, wpath, cpath, xpath, apath)	\
 	&cap_unveil_merged_rights[						\
 	    (((inspect) != 0) << 0 |						\
 	     ((rpath)   != 0) << 1 |						\
 	     ((wpath)   != 0) << 2 |						\
 	     ((cpath)   != 0) << 3 |						\
-	     ((xpath)   != 0) << 4)]
+	     ((xpath)   != 0) << 4 |						\
+	     ((apath)   != 0) << 5)]
 #endif
 #endif
 

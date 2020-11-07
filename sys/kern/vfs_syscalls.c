@@ -2106,7 +2106,7 @@ kern_accessat(struct thread *td, int fd, const char *path,
 	AUDIT_ARG_VALUE(amode);
 #ifdef UNVEIL
 	rightsp = CAP_UNVEIL_MERGED_RIGHTS(
-	    amode == F_OK, amode & R_OK, amode & W_OK, 0, amode & X_OK);
+	    amode == F_OK, amode & R_OK, amode & W_OK, 0, amode & X_OK, false);
 #else
 	rightsp = &cap_fstat_rights;
 #endif

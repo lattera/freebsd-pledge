@@ -262,7 +262,8 @@ sysfil_to_rights(struct thread *td)
 	    sysfil_check(td, SYSFIL_RPATH) == 0,
 	    sysfil_check(td, SYSFIL_WPATH) == 0,
 	    sysfil_check(td, SYSFIL_CPATH) == 0,
-	    sysfil_check(td, SYSFIL_EXEC)  == 0));
+	    sysfil_check(td, SYSFIL_EXEC)  == 0,
+	    sysfil_check(td, SYSFIL_FATTR) == 0));
 }
 
 static int
@@ -805,7 +806,8 @@ unveil_perms_to_rights(unveil_perms_t uperms)
 	    uperms & UNVEIL_PERM_RPATH,
 	    uperms & UNVEIL_PERM_WPATH,
 	    uperms & UNVEIL_PERM_CPATH,
-	    uperms & UNVEIL_PERM_XPATH));
+	    uperms & UNVEIL_PERM_XPATH,
+	    uperms & UNVEIL_PERM_APATH));
 }
 
 static int

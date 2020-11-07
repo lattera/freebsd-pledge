@@ -172,7 +172,13 @@ static const struct promise_uperms {
 	{ PROMISE_WPATH,	UNVEIL_PERM_WPATH },
 	{ PROMISE_CPATH,	UNVEIL_PERM_CPATH },
 	{ PROMISE_EXEC,		UNVEIL_PERM_XPATH },
+	{ PROMISE_FATTR,	UNVEIL_PERM_APATH },
 };
+
+/* The "fattr" promise is a bit special and shouldn't be enabled implicitly. */
+static const unveil_perms_t promise_no_implicit_uperms = UNVEIL_PERM_APATH;
+
+static const unveil_perms_t custom_keep_implicit_uperms = UNVEIL_PERM_INSPECT;
 
 static const char *const root_path = "/";
 static const char *const tmp_path = _PATH_TMP;
@@ -184,23 +190,23 @@ static struct promise_unveil {
 	unveil_perms_t perms;
 	enum promise_type type;
 } unveils_table[] = {
-
 #define	R UNVEIL_PERM_RPATH
 #define	W UNVEIL_PERM_WPATH
 #define	C UNVEIL_PERM_CPATH
 #define	X UNVEIL_PERM_XPATH
-
+#define	A UNVEIL_PERM_APATH
 	{ root_path, R,				PROMISE_RPATH },
 	{ root_path, W,				PROMISE_WPATH },
 	{ root_path, C,				PROMISE_CPATH },
 	{ root_path, X,				PROMISE_EXEC },
+	{ root_path, A,				PROMISE_FATTR },
 	{ _PATH_ETC "/malloc.conf", R,		PROMISE_STDIO },
 	{ _PATH_ETC "/libmap.conf", R,		PROMISE_STDIO },
 	{ _PATH_VARRUN "/ld-elf.so.hints", R,	PROMISE_STDIO },
 	{ _PATH_ETC "/localtime", R,		PROMISE_STDIO },
 	{ "/usr/share/zoneinfo/", R,		PROMISE_STDIO },
 	{ "/usr/share/nls/", R,			PROMISE_STDIO },
-	{ _PATH_LOCALBASE "/share/nls/", R,		PROMISE_STDIO },
+	{ _PATH_LOCALBASE "/share/nls/", R,	PROMISE_STDIO },
 	/* Programs will often open /dev/null with O_CREAT.  TODO: Could have a
 	 * different unveil() permission just for that. */
 	{ _PATH_DEVNULL, R|W|C,			PROMISE_STDIO },
@@ -214,7 +220,7 @@ static struct promise_unveil {
 	{ _PATH_ETC "/services", R,		PROMISE_DNS },
 	{ _PATH_VARDB "/services.db", R,	PROMISE_DNS },
 	{ _PATH_ETC "/protocols", R,		PROMISE_DNS },
-	{ _PATH_DEV "/tty", R|W,		PROMISE_TTY },
+	{ _PATH_DEV "/tty", R|W|A,		PROMISE_TTY },
 	{ _PATH_ETC "/nsswitch.conf", R,	PROMISE_GETPW },
 	{ _PATH_ETC "/pwd.db", R,		PROMISE_GETPW },
 	{ _PATH_ETC "/spwd.db", R,		PROMISE_GETPW },
@@ -223,9 +229,9 @@ static struct promise_unveil {
 	/* TODO: Ideally we wouldn't allow to read the directory itself (so
 	 * that a pledged process can't find the names of the temporary files
 	 * of other processes). */
-	{ tmp_path, R|W|C,			PROMISE_TMPPATH },
+	{ tmp_path, R|W|C|A,			PROMISE_TMPPATH },
 	{ "", 0,				PROMISE_NONE }
-
+#undef	A
 #undef	X
 #undef	C
 #undef	W
@@ -336,7 +342,8 @@ do_pledge_unveils(const bool *req_promises, bool for_exec, int *sysfils)
 				uperms |= pu->perms;
 			pu++;
 		} while (strcmp(pu->path, path) == 0);
-		need_uperms |= uperms; /* maximum permissions we'll need */
+		/* maximum unveil permissions we'll need for those promises */
+		need_uperms |= uperms & ~promise_no_implicit_uperms;
 		if (modified && (path = pledge_unveil_fixup_path(for_exec, path))) {
 			r = unveilctl(AT_FDCWD, path, flags1, uperms);
 			if (r < 0 && errno != ENOENT) /* XXX */
@@ -346,14 +353,14 @@ do_pledge_unveils(const bool *req_promises, bool for_exec, int *sysfils)
 
 	/*
 	 * Figure out which uperms equivalents were explicitly requested with
-	 * promises and which additional promises might need to be implicitly
-	 * enabled for the implcit uperms needed for their unveils to work.
+	 * promises and which additional promises must be implicitly enabled
+	 * for the implicit uperms needed for their unveils to work.
 	 */
 	memcpy(need_promises, req_promises, PROMISE_COUNT * sizeof *need_promises);
 	req_uperms = UNVEIL_PERM_NONE;
 	for (pp = uperms_table; pp != &uperms_table[nitems(uperms_table)]; pp++) {
 		if (req_promises[pp->type])
-			req_uperms |= pp->uperms;
+			req_uperms |= pp->uperms | custom_keep_implicit_uperms;
 		if (pp->uperms & need_uperms)
 			need_promises[pp->type] = true;
 	}
@@ -376,7 +383,7 @@ do_pledge_unveils(const bool *req_promises, bool for_exec, int *sysfils)
 	 * restrictions to the user's unveils to get a similar effect.
 	 */
 	flags1 = flags | UNVEIL_FLAG_FOR_CUSTOM;
-	if (need_uperms != req_uperms) {
+	if (need_uperms & ~req_uperms) {
 		r = unveilctl(-1, NULL, flags1 | UNVEIL_FLAG_LIMIT, req_uperms);
 		if (r < 0)
 			err(EX_OSERR, "unveilctl limit");
@@ -495,7 +502,8 @@ unveil_parse_perms(unveil_perms_t *perms, const char *s)
 	while (*s)
 		switch (*s++) {
 		case 'r': *perms |= UNVEIL_PERM_RPATH; break;
-		case 'w': *perms |= UNVEIL_PERM_WPATH; break;
+		case 'w': *perms |= UNVEIL_PERM_WPATH; /* FALLTHROUGH */
+		case 'a': *perms |= UNVEIL_PERM_APATH; break;
 		case 'c': *perms |= UNVEIL_PERM_CPATH; break;
 		case 'x': *perms |= UNVEIL_PERM_XPATH; break;
 		case 'i': *perms |= UNVEIL_PERM_INSPECT; break;
