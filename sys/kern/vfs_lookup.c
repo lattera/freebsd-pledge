@@ -802,12 +802,12 @@ static inline const cap_rights_t *
 unveil_perms_to_rights(unveil_perms_t uperms)
 {
 	return (CAP_UNVEIL_MERGED_RIGHTS(
-	    uperms & UNVEIL_PERM_INSPECT,
-	    uperms & UNVEIL_PERM_RPATH,
-	    uperms & UNVEIL_PERM_WPATH,
-	    uperms & UNVEIL_PERM_CPATH,
-	    uperms & UNVEIL_PERM_XPATH,
-	    uperms & UNVEIL_PERM_APATH));
+	    uperms & UPERM_INSPECT,
+	    uperms & UPERM_RPATH,
+	    uperms & UPERM_WPATH,
+	    uperms & UPERM_CPATH,
+	    uperms & UPERM_XPATH,
+	    uperms & UPERM_APATH));
 }
 
 static int
@@ -829,14 +829,14 @@ unveil_lookup_check(struct nameidata *ndp)
 
 	/* Kludge for O_EXEC/O_SEARCH opens. */
 	if (ndp->ni_vp && ndp->ni_vp->v_type == VDIR &&
-	    (uperms & UNVEIL_PERM_RPATH))
-		uperms |= UNVEIL_PERM_XPATH;
+	    (uperms & UPERM_RPATH))
+		uperms |= UPERM_XPATH;
 
 	haverights = unveil_perms_to_rights(uperms);
 	if (cap_rights_contains(haverights, needrights))
 		return (0);
 
-	return (uperms & ~UNVEIL_PERM_INSPECT ? EACCES : ENOENT);
+	return (uperms & ~UPERM_INSPECT ? EACCES : ENOENT);
 }
 
 #endif

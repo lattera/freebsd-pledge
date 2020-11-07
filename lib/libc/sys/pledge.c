@@ -168,17 +168,17 @@ static const struct promise_uperms {
 	enum promise_type type;
 	unveil_perms_t uperms;
 } uperms_table[] = {
-	{ PROMISE_RPATH,	UNVEIL_PERM_RPATH },
-	{ PROMISE_WPATH,	UNVEIL_PERM_WPATH },
-	{ PROMISE_CPATH,	UNVEIL_PERM_CPATH },
-	{ PROMISE_EXEC,		UNVEIL_PERM_XPATH },
-	{ PROMISE_FATTR,	UNVEIL_PERM_APATH },
+	{ PROMISE_RPATH,	UPERM_RPATH },
+	{ PROMISE_WPATH,	UPERM_WPATH },
+	{ PROMISE_CPATH,	UPERM_CPATH },
+	{ PROMISE_EXEC,		UPERM_XPATH },
+	{ PROMISE_FATTR,	UPERM_APATH },
 };
 
 /* The "fattr" promise is a bit special and shouldn't be enabled implicitly. */
-static const unveil_perms_t promise_no_implicit_uperms = UNVEIL_PERM_APATH;
+static const unveil_perms_t promise_no_implicit_uperms = UPERM_APATH;
 
-static const unveil_perms_t custom_keep_implicit_uperms = UNVEIL_PERM_INSPECT;
+static const unveil_perms_t custom_keep_implicit_uperms = UPERM_INSPECT;
 
 static const char *const root_path = "/";
 static const char *const tmp_path = _PATH_TMP;
@@ -190,11 +190,11 @@ static struct promise_unveil {
 	unveil_perms_t perms;
 	enum promise_type type;
 } unveils_table[] = {
-#define	R UNVEIL_PERM_RPATH
-#define	W UNVEIL_PERM_WPATH
-#define	C UNVEIL_PERM_CPATH
-#define	X UNVEIL_PERM_XPATH
-#define	A UNVEIL_PERM_APATH
+#define	R UPERM_RPATH
+#define	W UPERM_WPATH
+#define	C UPERM_CPATH
+#define	X UPERM_XPATH
+#define	A UPERM_APATH
 	{ root_path, R,				PROMISE_RPATH },
 	{ root_path, W,				PROMISE_WPATH },
 	{ root_path, C,				PROMISE_CPATH },
@@ -240,11 +240,11 @@ static struct promise_unveil {
 
 
 static const int unveil_global_flags =
-    UNVEIL_FLAG_INTERMEDIATE | UNVEIL_FLAG_INSPECTABLE | UNVEIL_FLAG_NONDIRBYNAME;
+    UNVEILCTL_INTERMEDIATE | UNVEILCTL_INSPECTABLE | UNVEILCTL_NONDIRBYNAME;
 
 enum {
-	UNVEIL_FLAG_FOR_PLEDGE = UNVEIL_FLAG_FOR_SLOT0,
-	UNVEIL_FLAG_FOR_CUSTOM = UNVEIL_FLAG_FOR_SLOT1,
+	UNVEILCTL_FOR_PLEDGE = UNVEILCTL_FOR_SLOT0,
+	UNVEILCTL_FOR_CUSTOM = UNVEILCTL_FOR_SLOT1,
 };
 
 /* Global state for not-on-exec and on-exec cases. */
@@ -311,8 +311,8 @@ do_pledge_unveils(const bool *req_promises, bool for_exec, int *sysfils)
 	int flags, flags1, r;
 	bool need_promises[PROMISE_COUNT];
 
-	flags = for_exec ? UNVEIL_FLAG_FOR_EXEC : UNVEIL_FLAG_FOR_CURR;
-	flags1 = flags | UNVEIL_FLAG_FOR_PLEDGE;
+	flags = for_exec ? UNVEILCTL_FOR_EXEC : UNVEILCTL_FOR_CURR;
+	flags1 = flags | UNVEILCTL_FOR_PLEDGE;
 
 	/*
 	 * If no unveiling has been done yet, do a "sweep" to get rid of any
@@ -322,7 +322,7 @@ do_pledge_unveils(const bool *req_promises, bool for_exec, int *sysfils)
 	 * with those permissions if needed.
 	 */
 	if (!has_pledge_unveils[for_exec]) {
-		r = unveilctl(-1, NULL, flags1 | UNVEIL_FLAG_SWEEP, -1);
+		r = unveilctl(-1, NULL, flags1 | UNVEILCTL_SWEEP, -1);
 		if (r < 0)
 			err(EX_OSERR, "unveilctl sweep");
 	}
@@ -331,9 +331,9 @@ do_pledge_unveils(const bool *req_promises, bool for_exec, int *sysfils)
 	 * Do unveils for the promises added or removed.
 	 */
 	flags1 |= unveil_global_flags;
-	need_uperms = UNVEIL_PERM_NONE;
+	need_uperms = UPERM_NONE;
 	for (pu = unveils_table; (*(path = pu->path)); ) {
-		unveil_perms_t uperms = UNVEIL_PERM_NONE;
+		unveil_perms_t uperms = UPERM_NONE;
 		bool modified = false;
 		do {
 			if (cur_promises[for_exec][pu->type] != req_promises[pu->type])
@@ -357,7 +357,7 @@ do_pledge_unveils(const bool *req_promises, bool for_exec, int *sysfils)
 	 * for the implicit uperms needed for their unveils to work.
 	 */
 	memcpy(need_promises, req_promises, PROMISE_COUNT * sizeof *need_promises);
-	req_uperms = UNVEIL_PERM_NONE;
+	req_uperms = UPERM_NONE;
 	for (pp = uperms_table; pp != &uperms_table[nitems(uperms_table)]; pp++) {
 		if (req_promises[pp->type])
 			req_uperms |= pp->uperms | custom_keep_implicit_uperms;
@@ -382,9 +382,9 @@ do_pledge_unveils(const bool *req_promises, bool for_exec, int *sysfils)
 	 * that.  Since we use unveils to implement these exceptions, add the
 	 * restrictions to the user's unveils to get a similar effect.
 	 */
-	flags1 = flags | UNVEIL_FLAG_FOR_CUSTOM;
+	flags1 = flags | UNVEILCTL_FOR_CUSTOM;
 	if (need_uperms & ~req_uperms) {
-		r = unveilctl(-1, NULL, flags1 | UNVEIL_FLAG_LIMIT, req_uperms);
+		r = unveilctl(-1, NULL, flags1 | UNVEILCTL_LIMIT, req_uperms);
 		if (r < 0)
 			err(EX_OSERR, "unveilctl limit");
 	}
@@ -392,8 +392,8 @@ do_pledge_unveils(const bool *req_promises, bool for_exec, int *sysfils)
 	/*
 	 * Permanently drop permissions that aren't explicitly requested.
 	 */
-	flags1 = flags | UNVEIL_FLAG_ACTIVATE;
-	r = unveilctl(-1, NULL, flags1 | UNVEIL_FLAG_FREEZE, UNVEIL_PERM_NONE);
+	flags1 = flags | UNVEILCTL_ACTIVATE;
+	r = unveilctl(-1, NULL, flags1 | UNVEILCTL_FREEZE, UPERM_NONE);
 	if (r < 0)
 		err(EX_OSERR, "unveilctl freeze");
 
@@ -407,14 +407,14 @@ reserve_pledge_unveils(bool for_exec)
 	const struct promise_unveil *pu;
 	const char *path;
 	int r, i, flags, flags1;
-	flags = (for_exec ? UNVEIL_FLAG_FOR_EXEC : UNVEIL_FLAG_FOR_CURR) |
-	    UNVEIL_FLAG_FOR_PLEDGE;
-	r = unveilctl(-1, NULL, flags | UNVEIL_FLAG_SWEEP, -1);
+	flags = (for_exec ? UNVEILCTL_FOR_EXEC : UNVEILCTL_FOR_CURR) |
+	    UNVEILCTL_FOR_PLEDGE;
+	r = unveilctl(-1, NULL, flags | UNVEILCTL_SWEEP, -1);
 	if (r < 0)
 		err(EX_OSERR, "unveilctl sweep");
 	flags1 = flags | unveil_global_flags;
 	for (pu = unveils_table; (*(path = pu->path)); ) {
-		unveil_perms_t uperms = UNVEIL_PERM_NONE;
+		unveil_perms_t uperms = UPERM_NONE;
 		do {
 			uperms |= pu->perms;
 			pu++;
@@ -428,7 +428,7 @@ reserve_pledge_unveils(bool for_exec)
 	for (i = 0; i < PROMISE_COUNT; i++)
 		cur_promises[for_exec][i] = true;
 	has_pledge_unveils[for_exec] = true;
-	/* NOTE: caller expected to do the UNVEIL_FLAG_FREEZE */
+	/* NOTE: caller expected to do the UNVEILCTL_FREEZE */
 }
 
 static int
@@ -498,15 +498,15 @@ pledge(const char *promises_str, const char *execpromises_str)
 static int
 unveil_parse_perms(unveil_perms_t *perms, const char *s)
 {
-	*perms = UNVEIL_PERM_NONE;
+	*perms = UPERM_NONE;
 	while (*s)
 		switch (*s++) {
-		case 'r': *perms |= UNVEIL_PERM_RPATH; break;
-		case 'w': *perms |= UNVEIL_PERM_WPATH; /* FALLTHROUGH */
-		case 'a': *perms |= UNVEIL_PERM_APATH; break;
-		case 'c': *perms |= UNVEIL_PERM_CPATH; break;
-		case 'x': *perms |= UNVEIL_PERM_XPATH; break;
-		case 'i': *perms |= UNVEIL_PERM_INSPECT; break;
+		case 'r': *perms |= UPERM_RPATH; break;
+		case 'w': *perms |= UPERM_WPATH; /* FALLTHROUGH */
+		case 'a': *perms |= UPERM_APATH; break;
+		case 'c': *perms |= UPERM_CPATH; break;
+		case 'x': *perms |= UPERM_XPATH; break;
+		case 'i': *perms |= UPERM_INSPECT; break;
 		default:
 			return (-1);
 		}
@@ -519,12 +519,12 @@ do_unveil(const char *path, int flags, unveil_perms_t perms)
 	int r, flags1, flags2, req_custom_flags, has_pledge_flags, has_custom_flags;
 
 	has_pledge_flags =
-	    (has_pledge_unveils[false] ? UNVEIL_FLAG_FOR_CURR : 0) |
-	    (has_pledge_unveils[true]  ? UNVEIL_FLAG_FOR_EXEC : 0);
+	    (has_pledge_unveils[false] ? UNVEILCTL_FOR_CURR : 0) |
+	    (has_pledge_unveils[true]  ? UNVEILCTL_FOR_EXEC : 0);
 	has_custom_flags =
-	    (has_custom_unveils[false] ? UNVEIL_FLAG_FOR_CURR : 0) |
-	    (has_custom_unveils[true]  ? UNVEIL_FLAG_FOR_EXEC : 0);
-	req_custom_flags = flags & (UNVEIL_FLAG_FOR_CURR | UNVEIL_FLAG_FOR_EXEC);
+	    (has_custom_unveils[false] ? UNVEILCTL_FOR_CURR : 0) |
+	    (has_custom_unveils[true]  ? UNVEILCTL_FOR_EXEC : 0);
+	req_custom_flags = flags & (UNVEILCTL_FOR_CURR | UNVEILCTL_FOR_EXEC);
 
 	if ((flags1 = has_pledge_flags & ~has_custom_flags & req_custom_flags)) {
 		/*
@@ -535,43 +535,43 @@ do_unveil(const char *path, int flags, unveil_perms_t perms)
 		 * The pledge() wrapper may have unveiled "/" for certain
 		 * promises.  This must be undone.
 		 */
-		flags1 |= UNVEIL_FLAG_FOR_PLEDGE;
-		r = unveilctl(AT_FDCWD, root_path, flags1, UNVEIL_PERM_NONE);
+		flags1 |= UNVEILCTL_FOR_PLEDGE;
+		r = unveilctl(AT_FDCWD, root_path, flags1, UPERM_NONE);
 		if (r < 0) /* XXX */
 			warn("unveil: %s", root_path);
 	}
 
 	if ((flags1 = ~has_custom_flags & req_custom_flags)) {
-		flags1 |= UNVEIL_FLAG_FOR_CUSTOM;
-		r = unveilctl(-1, NULL, flags1 | UNVEIL_FLAG_SWEEP, -1);
+		flags1 |= UNVEILCTL_FOR_CUSTOM;
+		r = unveilctl(-1, NULL, flags1 | UNVEILCTL_SWEEP, -1);
 		if (r < 0)
 			err(EX_OSERR, "unveilctl sweep");
 	}
 
-	if (flags & UNVEIL_FLAG_FOR_CURR)
+	if (flags & UNVEILCTL_FOR_CURR)
 		has_custom_unveils[false] = true;
-	if (flags & UNVEIL_FLAG_FOR_EXEC)
+	if (flags & UNVEILCTL_FOR_EXEC)
 		has_custom_unveils[true] = true;
 
-	flags1 = flags | UNVEIL_FLAG_ACTIVATE;
+	flags1 = flags | UNVEILCTL_ACTIVATE;
 
 	if (!path) {
 		/* Make calling pledge() after unveil(NULL, NULL) work. */
 		if ((flags2 = req_custom_flags & ~has_pledge_flags)) {
-			if (flags2 & UNVEIL_FLAG_FOR_CURR)
+			if (flags2 & UNVEILCTL_FOR_CURR)
 				reserve_pledge_unveils(false);
-			if (flags2 & UNVEIL_FLAG_FOR_EXEC)
+			if (flags2 & UNVEILCTL_FOR_EXEC)
 				reserve_pledge_unveils(true);
 		}
 		/* Forbid ever raising unveil permissions. */
-		r = unveilctl(-1, NULL, flags1 | UNVEIL_FLAG_FREEZE, UNVEIL_PERM_NONE);
+		r = unveilctl(-1, NULL, flags1 | UNVEILCTL_FREEZE, UPERM_NONE);
 		if (r < 0)
 			err(EX_OSERR, "unveilctl freeze");
 		return (0);
 	}
 
-	flags1 |= UNVEIL_FLAG_FOR_CUSTOM | unveil_global_flags;
-	return (unveilctl(AT_FDCWD, path, flags1 | UNVEIL_FLAG_NOINHERIT, perms));
+	flags1 |= UNVEILCTL_FOR_CUSTOM | unveil_global_flags;
+	return (unveilctl(AT_FDCWD, path, flags1 | UNVEILCTL_NOINHERIT, perms));
 }
 
 int
@@ -602,11 +602,11 @@ unveil(const char *path, const char *permissions)
 	 * does not have execpledges, unveils are not inherited and the
 	 * executed process can do its own unveiling.
 	 */
-	return (unveil_1(path, UNVEIL_FLAG_FOR_CURR | UNVEIL_FLAG_FOR_EXEC, permissions));
+	return (unveil_1(path, UNVEILCTL_FOR_CURR | UNVEILCTL_FOR_EXEC, permissions));
 }
 
 int
 unveilexec(const char *path, const char *permissions)
 {
-	return (unveil_1(path, UNVEIL_FLAG_FOR_EXEC, permissions));
+	return (unveil_1(path, UNVEILCTL_FOR_EXEC, permissions));
 }

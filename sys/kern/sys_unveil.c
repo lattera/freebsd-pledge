@@ -76,14 +76,14 @@ unveil_node_soft_perms(struct unveil_node *node, enum unveil_role role)
 	int i;
 	for (i = 0; i < UNVEIL_SLOT_COUNT; i++) {
 		inherited_final[i] = false;
-		inherited_perms[i] = UNVEIL_PERM_NONE;
+		inherited_perms[i] = UPERM_NONE;
 	}
 	/*
 	 * Go up the node chain until all wanted permissions have been found
 	 * without any more inheritance required.
 	 */
 	node1 = node;
-	mask = UNVEIL_PERM_ALL;
+	mask = UPERM_ALL;
 	do {
 		all_final = true;
 		for (i = 0; i < UNVEIL_SLOT_COUNT; i++)
@@ -92,12 +92,12 @@ unveil_node_soft_perms(struct unveil_node *node, enum unveil_role role)
 				if (!(inherited_final[i] = node1->wanted_final[role][i]))
 					all_final = false;
 			}
-		mask &= ~UNVEIL_PERM_NONINHERITED_MASK;
+		mask &= ~UPERM_NONINHERITED_MASK;
 	} while (!all_final && (node1 = node1->cover));
 	/*
 	 * Merge wanted permissions and mask them with the frozen permissions.
 	 */
-	soft_perms = UNVEIL_PERM_NONE;
+	soft_perms = UPERM_NONE;
 	for (i = 0; i < UNVEIL_SLOT_COUNT; i++)
 		soft_perms |= inherited_perms[i];
 	soft_perms &= node->frozen_perms[role];
@@ -297,16 +297,16 @@ unveil_proc_exec_switch(struct thread *td)
 
 #define	FOREACH_SLOT_FLAGS(flags, i, j) \
 	for (i = 0; i < UNVEIL_ROLE_COUNT; i++) \
-		if ((flags) & (1 << (UNVEIL_FLAG_ROLE_SHIFT + i))) \
+		if ((flags) & (1 << (UNVEILCTL_ROLE_SHIFT + i))) \
 			for (j = 0; j < UNVEIL_SLOT_COUNT; j++) \
-				if ((flags) & (1 << (UNVEIL_FLAG_SLOT_SHIFT + j)))
+				if ((flags) & (1 << (UNVEILCTL_SLOT_SHIFT + j)))
 
 static inline unveil_perms_t
 unveil_cover_frozen_perms(struct unveil_base *base, struct unveil_node *cover,
     enum unveil_role role)
 {
 	return (cover ? cover->frozen_perms[role] :
-	    base->active ? UNVEIL_PERM_NONE : UNVEIL_PERM_ALL);
+	    base->active ? UPERM_NONE : UPERM_ALL);
 }
 
 static int
@@ -321,7 +321,7 @@ unveil_remember(struct unveil_base *base,
 
 	if (!name)
 		node = unveil_insert(base, dvp, NULL, 0, &inserted);
-	else if ((flags & UNVEIL_FLAG_NONDIRBYNAME) && (!vp || vp->v_type != VDIR))
+	else if ((flags & UNVEILCTL_NONDIRBYNAME) && (!vp || vp->v_type != VDIR))
 		node = unveil_insert(base, dvp, name, name_len, &inserted);
 	else if (vp)
 		node = unveil_insert(base, vp, NULL, 0, &inserted);
@@ -356,17 +356,17 @@ unveil_remember(struct unveil_base *base,
 			node->frozen_perms[i] = unveil_cover_frozen_perms(base, *cover, i);
 	*cover = node;
 
-	if (flags & UNVEIL_FLAG_INTERMEDIATE)
+	if (flags & UNVEILCTL_INTERMEDIATE)
 		node->fully_covered = true; /* cannot be turned off */
 
 	if (name && final) {
 		FOREACH_SLOT_FLAGS(flags, i, j) {
 			node->wanted_perms[i][j] = perms;
-			node->wanted_final[i][j] = (flags & UNVEIL_FLAG_NOINHERIT) != 0;
+			node->wanted_final[i][j] = (flags & UNVEILCTL_NOINHERIT) != 0;
 		}
-	} else if (flags & UNVEIL_FLAG_INSPECTABLE) {
+	} else if (flags & UNVEILCTL_INSPECTABLE) {
 		FOREACH_SLOT_FLAGS(flags, i, j)
-			node->wanted_perms[i][j] |= UNVEIL_PERM_INSPECT;
+			node->wanted_perms[i][j] |= UPERM_INSPECT;
 	}
 	return (0);
 }
@@ -483,7 +483,7 @@ unveil_traverse(struct thread *td, struct unveil_traversal *trav,
 	struct unveil_base *base = &fdp->fd_unveil;
 	int error = 0;
 
-	if (trav->save && (final || (trav->save->flags & UNVEIL_FLAG_INTERMEDIATE))) {
+	if (trav->save && (final || (trav->save->flags & UNVEILCTL_INTERMEDIATE))) {
 		if (name_len > NAME_MAX)
 			return (ENAMETOOLONG);
 		if (base->node_count >= unveil_max_nodes_per_process)
@@ -541,9 +541,9 @@ unveil_traverse_effective_perms(struct thread *td, struct unveil_traversal *trav
 	} else if (trav->cover) {
 		perms = unveil_node_soft_perms(trav->cover, UNVEIL_ROLE_CURR);
 		if (trav->descended) /* the unveil covered a parent directory */
-			perms &= ~UNVEIL_PERM_NONINHERITED_MASK;
+			perms &= ~UPERM_NONINHERITED_MASK;
 	} else {
-		perms = UNVEIL_PERM_NONE;
+		perms = UPERM_NONE;
 	}
 	FILEDESC_SUNLOCK(fdp);
 	return (perms);
@@ -567,7 +567,7 @@ do_unveil_freeze(struct unveil_base *base, int flags, unveil_perms_t perms)
 	int i;
 	RB_FOREACH(node, unveil_node_tree, &base->root)
 		for (i = 0; i < UNVEIL_ROLE_COUNT; i++)
-			if (flags & (1 << (UNVEIL_FLAG_ROLE_SHIFT + i)))
+			if (flags & (1 << (UNVEILCTL_ROLE_SHIFT + i)))
 				unveil_node_freeze(node, i, perms);
 }
 
@@ -578,7 +578,7 @@ do_unveil_sweep(struct unveil_base *base, int flags)
 	int i, j;
 	RB_FOREACH(node, unveil_node_tree, &base->root)
 		FOREACH_SLOT_FLAGS(flags, i, j) {
-			node->wanted_perms[i][j] = UNVEIL_PERM_NONE;
+			node->wanted_perms[i][j] = UPERM_NONE;
 			node->wanted_final[i][j] = false;
 		}
 }
@@ -602,7 +602,7 @@ sys_unveilctl(struct thread *td, struct unveilctl_args *uap)
 		struct nameidata nd;
 		int error;
 		int nd_flags;
-		nd_flags = flags & UNVEIL_FLAG_NOFOLLOW ? 0 : FOLLOW;
+		nd_flags = flags & UNVEILCTL_NOFOLLOW ? 0 : FOLLOW;
 		NDINIT_ATRIGHTS(&nd, LOOKUP, nd_flags,
 		    UIO_USERSPACE, uap->path, uap->atfd, &cap_fstat_rights, td);
 		nd.ni_unveil.save = &save; /* checked in unveil_traverse() */
@@ -614,17 +614,17 @@ sys_unveilctl(struct thread *td, struct unveilctl_args *uap)
 
 	FILEDESC_XLOCK(fdp);
 
-	if (flags & UNVEIL_FLAG_ACTIVATE) {
-		if (flags & UNVEIL_FLAG_FOR_CURR)
+	if (flags & UNVEILCTL_ACTIVATE) {
+		if (flags & UNVEILCTL_FOR_CURR)
 			base->active = true;
-		if (flags & UNVEIL_FLAG_FOR_EXEC)
+		if (flags & UNVEILCTL_FOR_EXEC)
 			base->exec_active = true;
 	}
-	if (flags & UNVEIL_FLAG_LIMIT)
+	if (flags & UNVEILCTL_LIMIT)
 		do_unveil_limit(base, flags, perms);
-	if (flags & UNVEIL_FLAG_FREEZE)
+	if (flags & UNVEILCTL_FREEZE)
 		do_unveil_freeze(base, flags, perms);
-	if (flags & UNVEIL_FLAG_SWEEP)
+	if (flags & UNVEILCTL_SWEEP)
 		do_unveil_sweep(base, flags);
 
 	FILEDESC_XUNLOCK(fdp);
