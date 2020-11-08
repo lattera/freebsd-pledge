@@ -66,6 +66,7 @@ enum promise_type {
 	PROMISE_ANY_AF,
 	PROMISE_ANY_PRIV,
 	PROMISE_ANY_IOCTL,
+	PROMISE_ANY_SOCKOPT,
 	PROMISE_COUNT /* must be last */
 };
 
@@ -124,6 +125,7 @@ static const struct promise_name {
 	{ "any_af",		PROMISE_ANY_AF },
 	{ "any_priv",		PROMISE_ANY_PRIV },
 	{ "any_ioctl",		PROMISE_ANY_IOCTL },
+	{ "any_sockopt",	PROMISE_ANY_SOCKOPT },
 	{ "",			PROMISE_NONE },
 };
 
@@ -180,10 +182,11 @@ static const struct promise_sysfil {
 	{ PROMISE_ANY_AF,		SYSFIL_ANY_AF },
 	{ PROMISE_ANY_PRIV,		SYSFIL_ANY_PRIV },
 	{ PROMISE_ANY_IOCTL,		SYSFIL_ANY_IOCTL },
+	{ PROMISE_ANY_SOCKOPT,		SYSFIL_ANY_SOCKOPT },
 };
 
 static const struct promise_uperms {
-	enum promise_type type;
+	enum promise_type type : 8;
 	unveil_perms_t uperms;
 } uperms_table[] = {
 	{ PROMISE_RPATH,	UPERM_RPATH },

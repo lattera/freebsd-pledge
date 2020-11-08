@@ -73,6 +73,7 @@ __FBSDID("$FreeBSD$");
 
 #include <security/audit/audit.h>
 #include <security/mac/mac_framework.h>
+#include <sys/sysfil.h>
 
 static int sendit(struct thread *td, int s, struct msghdr *mp, int flags);
 static int recvit(struct thread *td, int s, struct msghdr *mp, void *namelenp);
@@ -1271,7 +1272,9 @@ kern_setsockopt(struct thread *td, int s, int level, int name, const void *val,
 	    &fp, NULL, NULL);
 	if (error == 0) {
 		so = fp->f_data;
-		error = sosetopt(so, &sopt);
+		error = sysfil_require_sockopt(td, sopt.sopt_level, sopt.sopt_name);
+		if (error == 0)
+			error = sosetopt(so, &sopt);
 		fdrop(fp, td);
 	}
 	return(error);
@@ -1336,8 +1339,11 @@ kern_getsockopt(struct thread *td, int s, int level, int name, void *val,
 	    &fp, NULL, NULL);
 	if (error == 0) {
 		so = fp->f_data;
-		error = sogetopt(so, &sopt);
-		*valsize = sopt.sopt_valsize;
+		error = sysfil_require_sockopt(td, sopt.sopt_level, sopt.sopt_name);
+		if (error == 0) {
+			error = sogetopt(so, &sopt);
+			*valsize = sopt.sopt_valsize;
+		}
 		fdrop(fp, td);
 	}
 	return (error);

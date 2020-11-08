@@ -77,7 +77,8 @@
 #define	SYSFIL_PROT_EXEC	50
 #define	SYSFIL_ANY_SESSION	51
 #define	SYSFIL_ANY_IOCTL	52
-#define	SYSFIL_LAST		SYSFIL_ANY_IOCTL
+#define	SYSFIL_ANY_SOCKOPT	53
+#define	SYSFIL_LAST		SYSFIL_ANY_SOCKOPT
 
 #define	SYSFIL_VALID(i)		((i) >= 0 && (i) <= SYSFIL_LAST)
 #define	SYSFIL_USER_VALID(i)	(SYSFIL_VALID(i) && (i) >= SYSFIL_STDIO)
@@ -153,6 +154,7 @@ sysfil_failed(struct thread *td, int sf)
 
 int sysfil_require_ioctl(struct thread *, int sf, u_long com);
 int sysfil_require_af(struct thread *, int af);
+int sysfil_require_sockopt(struct thread *, int level, int name);
 
 void sysfil_sysfil_violation(struct thread *, int sf);
 

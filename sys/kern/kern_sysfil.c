@@ -22,6 +22,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/filio.h>
 #include <sys/tty.h>
 #include <sys/socket.h>
+#include <netinet/in.h>
 
 static unsigned sysfil_violation_log_level = 1;
 SYSCTL_UINT(_kern, OID_AUTO, log_sysfil_violation,
@@ -34,7 +35,6 @@ sysfil_require_ioctl(struct thread *td, int sf, u_long com)
 	if (sysfil_check(td, SYSFIL_ANY_IOCTL) == 0)
 		return (0);
 	switch (com) {
-#ifdef SYSFIL
 	case FIOCLEX:
 	case FIONCLEX:
 	case FIONREAD:
@@ -45,24 +45,26 @@ sysfil_require_ioctl(struct thread *td, int sf, u_long com)
 	case FIOGETOWN:
 	case FIODTYPE:
 		/* always allowed ioctls */
-		return (0);
+		sf = SYSFIL_ALWAYS;
+		break;
 	case TIOCGETA:
 		/* needed for isatty(3) */
-		return (sysfil_require(td, SYSFIL_STDIO));
+		sf = SYSFIL_STDIO;
+		break;
 	case FIOSETOWN:
 		/* also checked in setown() */
-		return (sysfil_require(td, SYSFIL_PROC));
-#endif
-	default:
-		return (sysfil_require(td, sf));
+		sf = SYSFIL_PROC;
+		break;
 	}
+	return (sysfil_require(td, sf));
 }
 
 int
 sysfil_require_af(struct thread *td, int af)
 {
-#ifdef SYSFIL
-	int sf;
+	int sf = SYSFIL_ANY_AF;
+	if (sysfil_check(td, sf) == 0)
+		return (0);
 	switch (af) {
 	case AF_UNIX:
 		sf = SYSFIL_UNIX;
@@ -71,14 +73,38 @@ sysfil_require_af(struct thread *td, int af)
 	case AF_INET6:
 		sf = SYSFIL_INET;
 		break;
-	default:
-		sf = SYSFIL_ANY_AF;
+	}
+	return (sysfil_require(td, sf));
+}
+
+int
+sysfil_require_sockopt(struct thread *td, int level, int name)
+{
+	int sf = SYSFIL_ANY_SOCKOPT;
+	if (sysfil_check(td, sf) == 0)
+		return (0);
+	switch (level) {
+	case SOL_SOCKET:
+		switch (name) {
+		case SO_SETFIB:
+			break;
+		case SO_LABEL:
+		case SO_PEERLABEL:
+			sf = SYSFIL_MAC;
+			break;
+		default:
+			sf = SYSFIL_ALWAYS;
+			break;
+		}
+		break;
+	case IPPROTO_IP:
+	case IPPROTO_IPV6:
+	case IPPROTO_TCP:
+	case IPPROTO_UDP:
+		sf = SYSFIL_INET;
 		break;
 	}
 	return (sysfil_require(td, sf));
-#else
-	return (0);
-#endif
 }
 
 int
