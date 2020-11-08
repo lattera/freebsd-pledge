@@ -151,6 +151,9 @@ struct fileops {
 	fo_get_seals_t	*fo_get_seals;
 	fo_fallocate_t	*fo_fallocate;
 	fo_flags_t	fo_flags;	/* DFLAG_* below */
+#ifdef SYSFIL
+	int		fo_sysfil;	/* sysfil for ioctls */
+#endif
 };
 
 #define DFLAG_PASSABLE	0x01	/* may be passed via unix sockets. */

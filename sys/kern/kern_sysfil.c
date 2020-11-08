@@ -29,20 +29,22 @@ SYSCTL_UINT(_kern, OID_AUTO, log_sysfil_violation,
     "Log violations of sysfil restrictions");
 
 int
-sysfil_require_ioctl(struct thread *td, int sf, u_long cmd)
+sysfil_require_ioctl(struct thread *td, int sf, u_long com)
 {
-	switch (cmd) {
+	if (sysfil_check(td, SYSFIL_ANY_IOCTL) == 0)
+		return (0);
+	switch (com) {
 #ifdef SYSFIL
 	case FIOCLEX:
 	case FIONCLEX:
 	case FIONREAD:
+	case FIONWRITE:
+	case FIONSPACE:
 	case FIONBIO:
 	case FIOASYNC:
 	case FIOGETOWN:
 	case FIODTYPE:
-#if 0
-	case FIOGETLBA:
-#endif
+		/* always allowed ioctls */
 		return (0);
 	case TIOCGETA:
 		/* needed for isatty(3) */

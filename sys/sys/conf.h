@@ -197,6 +197,9 @@ typedef int dumper_hdr_t(struct dumperinfo *di, struct kerneldumpheader *kdh,
 struct cdevsw {
 	int			d_version;
 	u_int			d_flags;
+#ifdef SYSFIL
+	int			d_sysfil;
+#endif
 	const char		*d_name;
 	d_open_t		*d_open;
 	d_fdopen_t		*d_fdopen;

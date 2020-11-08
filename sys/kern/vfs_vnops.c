@@ -78,6 +78,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/syslog.h>
 #include <sys/unistd.h>
 #include <sys/user.h>
+#include <sys/sysfil.h>
 
 #include <security/audit/audit.h>
 #include <security/mac/mac_framework.h>
@@ -122,7 +123,15 @@ struct 	fileops vnops = {
 	.fo_fill_kinfo = vn_fill_kinfo,
 	.fo_mmap = vn_mmap,
 	.fo_fallocate = vn_fallocate,
-	.fo_flags = DFLAG_PASSABLE | DFLAG_SEEKABLE
+	.fo_flags = DFLAG_PASSABLE | DFLAG_SEEKABLE,
+#ifdef	SYSFIL
+	/*
+	 * This probably should be more restricted, but most filesystem ioctls
+	 * seem rather harmless.  In any case, ioctls to devfs (which does its
+	 * own checking) must be allowed.
+	 */
+	.fo_sysfil = SYSFIL_ALWAYS,
+#endif
 };
 
 const u_int io_hold_cnt = 16;

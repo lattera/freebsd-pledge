@@ -266,10 +266,6 @@ ptsdev_ioctl(struct file *fp, u_long cmd, void *data,
 	struct pts_softc *psc = tty_softc(tp);
 	int error = 0, sig;
 
-	error = sysfil_require_ioctl(td, SYSFIL_TTY, cmd);
-	if (error)
-		return (error);
-
 	switch (cmd) {
 	case FIODTYPE:
 		*(int *)data = D_TTY;
@@ -625,6 +621,9 @@ static struct fileops ptsdev_ops = {
 	.fo_sendfile	= invfo_sendfile,
 	.fo_fill_kinfo	= ptsdev_fill_kinfo,
 	.fo_flags	= DFLAG_PASSABLE,
+#ifdef	SYSFIL
+	.fo_sysfil	= SYSFIL_TTY,
+#endif
 };
 
 /*

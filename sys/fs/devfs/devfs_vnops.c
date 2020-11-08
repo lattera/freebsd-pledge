@@ -67,6 +67,7 @@
 #include <sys/ttycom.h>
 #include <sys/unistd.h>
 #include <sys/vnode.h>
+#include <sys/sysfil.h>
 
 static struct vop_vector devfs_vnodeops;
 static struct vop_vector devfs_specops;
@@ -869,7 +870,11 @@ devfs_ioctl_f(struct file *fp, u_long com, void *data, struct ucred *cred, struc
 {
 	struct file *fpop;
 	int error;
-
+#ifdef SYSFIL
+	error = sysfil_require_ioctl(td, vnops.fo_sysfil, com);
+	if (error)
+		return (error);
+#endif
 	fpop = td->td_fpop;
 	td->td_fpop = fp;
 	error = vnops.fo_ioctl(fp, com, data, cred, td);
@@ -922,6 +927,12 @@ devfs_ioctl(struct vop_ioctl_args *ap)
 		return (ENXIO);
 	KASSERT(dev->si_refcount > 0,
 	    ("devfs: un-referenced struct cdev *(%s)", devtoname(dev)));
+
+#ifdef SYSFIL
+	error = sysfil_require_ioctl(td, dsw->d_sysfil, com);
+	if (error)
+		return (error);
+#endif
 
 	switch (com) {
 	case FIODTYPE:
@@ -2037,7 +2048,10 @@ static struct fileops devfs_ops_f = {
 	.fo_seek =	vn_seek,
 	.fo_fill_kinfo = vn_fill_kinfo,
 	.fo_mmap =	devfs_mmap_f,
-	.fo_flags =	DFLAG_PASSABLE | DFLAG_SEEKABLE
+	.fo_flags =	DFLAG_PASSABLE | DFLAG_SEEKABLE,
+#ifdef	SYSFIL
+	.fo_sysfil =	SYSFIL_ALWAYS,
+#endif
 };
 
 /* Vops for non-CHR vnodes in /dev. */

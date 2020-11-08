@@ -19,8 +19,12 @@
  * applications with inherited pledges.  Others generally indicate that the
  * syscall is safe to allow under a certain category because it does its own
  * checks.
+ *
+ * SYSFIL_DEFAULT will be lost after the first pledge() and after entering
+ * Capsicum capability mode.  It must be zero for certain structures to
+ * correctly initialize with this value (struct fileops/cdevsw).
  */
-#define	SYSFIL_DEFAULT		1
+#define	SYSFIL_DEFAULT		0
 #define	SYSFIL_ALWAYS		2
 #define	SYSFIL_STDIO		3
 #define	SYSFIL_CAPCOMPAT	SYSFIL_STDIO
@@ -72,7 +76,8 @@
 #define	SYSFIL_SENDFD		49
 #define	SYSFIL_PROT_EXEC	50
 #define	SYSFIL_ANY_SESSION	51
-#define	SYSFIL_LAST		SYSFIL_ANY_SESSION
+#define	SYSFIL_ANY_IOCTL	52
+#define	SYSFIL_LAST		SYSFIL_ANY_IOCTL
 
 #define	SYSFIL_VALID(i)		((i) >= 0 && (i) <= SYSFIL_LAST)
 #define	SYSFIL_USER_VALID(i)	(SYSFIL_VALID(i) && (i) >= SYSFIL_STDIO)
@@ -146,7 +151,7 @@ sysfil_failed(struct thread *td, int sf)
 	return (SYSFIL_FAILED_ERRNO);
 }
 
-int sysfil_require_ioctl(struct thread *, int sf, u_long cmd);
+int sysfil_require_ioctl(struct thread *, int sf, u_long com);
 int sysfil_require_af(struct thread *, int af);
 
 void sysfil_sysfil_violation(struct thread *, int sf);

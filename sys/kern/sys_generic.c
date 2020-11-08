@@ -73,6 +73,7 @@ __FBSDID("$FreeBSD$");
 #ifdef KTRACE
 #include <sys/ktrace.h>
 #endif
+#include <sys/sysfil.h>
 
 #include <security/audit/audit.h>
 
@@ -770,6 +771,11 @@ kern_ioctl(struct thread *td, int fd, u_long com, caddr_t data)
 		fp = NULL;
 		goto out;
 	}
+#endif
+#ifdef SYSFIL
+	error = sysfil_require_ioctl(td, fp->f_ops->fo_sysfil, com);
+	if (error)
+		goto out;
 #endif
 	if ((fp->f_flag & (FREAD | FWRITE)) == 0) {
 		error = EBADF;

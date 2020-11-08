@@ -562,10 +562,6 @@ ttydev_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int fflag,
 	struct tty *tp = dev->si_drv1;
 	int error;
 
-	error = sysfil_require_ioctl(td, SYSFIL_TTY, cmd);
-	if (error)
-		return (error);
-
 	error = ttydev_enter(tp);
 	if (error)
 		return (error);
@@ -806,6 +802,9 @@ static struct cdevsw ttydev_cdevsw = {
 	.d_mmap		= ttydev_mmap,
 	.d_name		= "ttydev",
 	.d_flags	= D_TTY,
+#ifdef	SYSFIL
+	.d_sysfil	= SYSFIL_TTY,
+#endif
 };
 
 /*
@@ -898,6 +897,9 @@ static struct cdevsw ttyil_cdevsw = {
 	.d_ioctl	= ttyil_ioctl,
 	.d_name		= "ttyil",
 	.d_flags	= D_TTY,
+#ifdef	SYSFIL
+	.d_sysfil	= SYSFIL_TTY,
+#endif
 };
 
 static void
@@ -2217,6 +2219,9 @@ static struct cdevsw ttyconsdev_cdevsw = {
 	.d_mmap		= ttydev_mmap,
 	.d_name		= "ttyconsdev",
 	.d_flags	= D_TTY,
+#ifdef	SYSFIL
+	.d_sysfil	= SYSFIL_TTY,
+#endif
 };
 
 static void

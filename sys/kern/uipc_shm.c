@@ -88,6 +88,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/vnode.h>
 #include <sys/unistd.h>
 #include <sys/user.h>
+#include <sys/sysfil.h>
 
 #include <security/audit/audit.h>
 #include <security/mac/mac_framework.h>
@@ -167,6 +168,9 @@ struct fileops shm_ops = {
 	.fo_add_seals = shm_add_seals,
 	.fo_fallocate = shm_fallocate,
 	.fo_flags = DFLAG_PASSABLE | DFLAG_SEEKABLE,
+#ifdef	SYSFIL
+	.fo_sysfil = SYSFIL_POSIXIPC,
+#endif
 };
 
 FEATURE(posix_shm, "POSIX shared memory");
