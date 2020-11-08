@@ -60,6 +60,11 @@ enum promise_type {
 	PROMISE_DNS,
 	PROMISE_GETPW,
 	PROMISE_SSL,
+	PROMISE_MOUNT,
+	PROMISE_QUOTA,
+	PROMISE_FH,
+	PROMISE_ANY_AF,
+	PROMISE_ANY_PRIV,
 	PROMISE_COUNT /* must be last */
 };
 
@@ -112,6 +117,11 @@ static const struct promise_name {
 	{ "dns",		PROMISE_DNS },
 	{ "getpw",		PROMISE_GETPW },
 	{ "ssl",		PROMISE_SSL },
+	{ "mount",		PROMISE_MOUNT },
+	{ "quota",		PROMISE_QUOTA },
+	{ "fh",			PROMISE_FH },
+	{ "any_af",		PROMISE_ANY_AF },
+	{ "any_priv",		PROMISE_ANY_PRIV },
 	{ "",			PROMISE_NONE },
 };
 
@@ -162,6 +172,11 @@ static const struct promise_sysfil {
 	{ PROMISE_RECVFD,		SYSFIL_RECVFD },
 	{ PROMISE_SENDFD,		SYSFIL_SENDFD },
 	{ PROMISE_DNS,			SYSFIL_INET }, /* XXX */
+	{ PROMISE_MOUNT,		SYSFIL_MOUNT },
+	{ PROMISE_QUOTA,		SYSFIL_QUOTA },
+	{ PROMISE_FH,			SYSFIL_FH },
+	{ PROMISE_ANY_AF,		SYSFIL_ANY_AF },
+	{ PROMISE_ANY_PRIV,		SYSFIL_ANY_PRIV },
 };
 
 static const struct promise_uperms {
