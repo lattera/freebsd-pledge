@@ -59,6 +59,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/bus.h>
 #include <sys/user.h>
 #include <sys/sdt.h>
+#include <sys/sysfil.h>
 
 #include <opencrypto/cryptodev.h>
 #include <opencrypto/xform.h>
@@ -372,6 +373,9 @@ static struct fileops cryptofops = {
     .fo_chown = invfo_chown,
     .fo_sendfile = invfo_sendfile,
     .fo_fill_kinfo = cryptof_fill_kinfo,
+#ifdef SYSFIL
+    .fo_sysfil = SYSFIL_CRYPTODEV,
+#endif
 };
 
 static struct csession *csefind(struct fcrypt *, u_int);
@@ -1672,6 +1676,9 @@ static struct cdevsw crypto_cdevsw = {
 	.d_version =	D_VERSION,
 	.d_ioctl =	cryptoioctl,
 	.d_name =	"crypto",
+#ifdef	SYSFIL
+	.d_sysfil =	SYSFIL_CRYPTODEV,
+#endif
 };
 static struct cdev *crypto_dev;
 

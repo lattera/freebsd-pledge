@@ -60,6 +60,7 @@ enum promise_type {
 	PROMISE_DNS,
 	PROMISE_GETPW,
 	PROMISE_SSL,
+	PROMISE_CRYPTODEV,
 	PROMISE_MOUNT,
 	PROMISE_QUOTA,
 	PROMISE_FH,
@@ -119,6 +120,7 @@ static const struct promise_name {
 	{ "dns",		PROMISE_DNS },
 	{ "getpw",		PROMISE_GETPW },
 	{ "ssl",		PROMISE_SSL },
+	{ "cryptodev",		PROMISE_CRYPTODEV },
 	{ "mount",		PROMISE_MOUNT },
 	{ "quota",		PROMISE_QUOTA },
 	{ "fh",			PROMISE_FH },
@@ -130,8 +132,8 @@ static const struct promise_name {
 };
 
 static const struct promise_sysfil {
-	enum promise_type type;
-	int sysfil;
+	enum promise_type type : 8;
+	int sysfil : 8;
 } sysfils_table[] = {
 	{ PROMISE_ERROR,		SYSFIL_ERROR },
 	{ PROMISE_BASIC,		SYSFIL_STDIO },
@@ -176,6 +178,8 @@ static const struct promise_sysfil {
 	{ PROMISE_RECVFD,		SYSFIL_RECVFD },
 	{ PROMISE_SENDFD,		SYSFIL_SENDFD },
 	{ PROMISE_DNS,			SYSFIL_INET }, /* XXX */
+	{ PROMISE_CRYPTODEV,		SYSFIL_CRYPTODEV },
+	{ PROMISE_SSL,			SYSFIL_CRYPTODEV },
 	{ PROMISE_MOUNT,		SYSFIL_MOUNT },
 	{ PROMISE_QUOTA,		SYSFIL_QUOTA },
 	{ PROMISE_FH,			SYSFIL_FH },
@@ -228,13 +232,13 @@ static struct promise_unveil {
 	{ "/usr/share/zoneinfo/", R,		PROMISE_STDIO },
 	{ "/usr/share/nls/", R,			PROMISE_STDIO },
 	{ _PATH_LOCALBASE "/share/nls/", R,	PROMISE_STDIO },
-	/* Programs will often open /dev/null with O_CREAT.  TODO: Could have a
-	 * different unveil() permission just for that. */
+	/*
+	 * Programs will often open /dev/null with O_CREAT.  TODO: Could have a
+	 * different unveil() permission just for that.
+	 */
 	{ _PATH_DEVNULL, R|W|C,			PROMISE_STDIO },
 	{ _PATH_DEV "/random", R,		PROMISE_STDIO },
 	{ _PATH_DEV "/urandom", R,		PROMISE_STDIO },
-	/* XXX: Review /dev/crypto for safety. */
-	{ _PATH_DEV "/crypto", W,		PROMISE_STDIO },
 	{ _PATH_ETC "/nsswitch.conf", R,	PROMISE_DNS },
 	{ _PATH_ETC "/resolv.conf", R,		PROMISE_DNS },
 	{ _PATH_ETC "/hosts", R,		PROMISE_DNS },
@@ -246,10 +250,14 @@ static struct promise_unveil {
 	{ _PATH_ETC "/pwd.db", R,		PROMISE_GETPW },
 	{ _PATH_ETC "/spwd.db", R,		PROMISE_GETPW },
 	{ _PATH_ETC "/group", R,		PROMISE_GETPW },
+	{ _PATH_DEV "/crypto", R|W,		PROMISE_CRYPTODEV },
+	{ _PATH_DEV "/crypto", R|W,		PROMISE_SSL }, /* sysfil also enabled */
 	{ _PATH_ETC "/ssl/cert.pem", R,		PROMISE_SSL },
-	/* TODO: Ideally we wouldn't allow to read the directory itself (so
+	/*
+	 * TODO: Ideally we wouldn't allow to read the directory itself (so
 	 * that a pledged process can't find the names of the temporary files
-	 * of other processes). */
+	 * of other processes).
+	 */
 	{ tmp_path, R|W|C|A,			PROMISE_TMPPATH },
 	{ "", 0,				PROMISE_NONE }
 #undef	A
