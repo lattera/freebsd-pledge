@@ -118,6 +118,8 @@ main(int argc, char *argv[])
 	int ch, r;
 	char promises[1024] = "";
 	bool signaling = false;
+	char *cmd_arg0 = NULL;
+	char *cmd_name;
 	char abspath[PATH_MAX];
 	size_t abspath_len = 0;
 
@@ -135,7 +137,7 @@ main(int argc, char *argv[])
 			err(EX_OSERR, "%s", entry->path);
 	}
 
-	while ((ch = getopt(argc, argv, "sp:u:")) != -1)
+	while ((ch = getopt(argc, argv, "sp:u:0:")) != -1)
 		switch (ch) {
 		case 's':
 			signaling = true;
@@ -175,6 +177,9 @@ main(int argc, char *argv[])
 				err(EX_OSERR, "%s", optarg);
 			break;
 		}
+		case '0':
+			  cmd_arg0 = optarg;
+			  break;
 		default:
 			usage();
 		}
@@ -197,6 +202,9 @@ main(int argc, char *argv[])
 	if (r < 0)
 		err(EX_NOPERM, "pledge");
 
-	execvp(argv[0], argv);
-	err(EX_OSERR, "execvp");
+	cmd_name = argv[0];
+	if (cmd_arg0)
+		argv[0] = cmd_arg0;
+	execvp(cmd_name, argv);
+	err(EX_OSERR, "%s", cmd_name);
 }
