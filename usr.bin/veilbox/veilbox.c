@@ -92,10 +92,14 @@ new_tmpdir()
 		err(EX_SOFTWARE, "snprintf");
 	if ((size_t)r >= sizeof newtmpdir)
 		errx(EX_OSFILE, "new TMPDIR too long");
-	mkdir(newtmpdir, tmpdir_mode);
+	r = mkdir(newtmpdir, tmpdir_mode);
+	if (r < 0 && errno != EEXIST)
+		warn("%s", newtmpdir);
 	r = lstat(newtmpdir, &st);
 	if (r < 0)
 		err(EX_OSERR, "%s", newtmpdir);
+	if (!S_ISDIR(st.st_mode))
+		errc(EX_OSFILE, ENOTDIR, "%s", newtmpdir);
 	if (st.st_uid != uid)
 		errx(EX_OSFILE, "new TMPDIR owned by wrong user (%ju): %s",
 		    (uintmax_t)st.st_uid, newtmpdir);
