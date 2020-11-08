@@ -367,7 +367,7 @@ do_pledge_unveils(const bool *req_promises, bool for_exec, int *sysfils)
 		need_uperms |= uperms & ~promise_no_implicit_uperms;
 		if (modified && (path = pledge_unveil_fixup_path(for_exec, path))) {
 			r = unveilctl(AT_FDCWD, path, flags1, uperms);
-			if (r < 0 && errno != ENOENT) /* XXX */
+			if (r < 0 && errno != ENOENT && errno != EACCES)
 				warn("unveil: %s", path);
 		}
 	}
@@ -442,7 +442,7 @@ reserve_pledge_unveils(bool for_exec)
 		} while (strcmp(pu->path, path) == 0);
 		if ((path = pledge_unveil_fixup_path(for_exec, path))) {
 			r = unveilctl(AT_FDCWD, path, flags1, uperms);
-			if (r < 0 && errno != ENOENT) /* XXX */
+			if (r < 0 && errno != ENOENT && errno != EACCES)
 				warn("unveil: %s", path);
 		}
 	}
@@ -558,7 +558,7 @@ do_unveil(const char *path, int flags, unveil_perms_t perms)
 		 */
 		flags1 |= UNVEILCTL_FOR_PLEDGE;
 		r = unveilctl(AT_FDCWD, root_path, flags1, UPERM_NONE);
-		if (r < 0) /* XXX */
+		if (r < 0)
 			warn("unveil: %s", root_path);
 	}
 
