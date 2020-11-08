@@ -538,7 +538,7 @@ struct sysent sysent[] = {
 	{ .sy_narg = AS(truncate_args), .sy_call = (sy_call_t *)sys_truncate, .sy_auevent = AUE_TRUNCATE, .sy_flags = (SYSFIL_WPATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 479 = truncate */
 	{ .sy_narg = AS(ftruncate_args), .sy_call = (sy_call_t *)sys_ftruncate, .sy_auevent = AUE_FTRUNCATE, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 480 = ftruncate */
 	{ .sy_narg = AS(thr_kill2_args), .sy_call = (sy_call_t *)sys_thr_kill2, .sy_auevent = AUE_THR_KILL2, .sy_flags = (SYSFIL_THREAD << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 481 = thr_kill2 */
-	{ compat12(AS(freebsd12_shm_open_args),shm_open), .sy_auevent = AUE_SHMOPEN, .sy_flags = (SYSFIL_POSIXIPC << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 482 = freebsd12 shm_open */
+	{ compat12(AS(freebsd12_shm_open_args),shm_open), .sy_auevent = AUE_SHMOPEN, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 482 = freebsd12 shm_open */
 	{ .sy_narg = AS(shm_unlink_args), .sy_call = (sy_call_t *)sys_shm_unlink, .sy_auevent = AUE_SHMUNLINK, .sy_flags = (SYSFIL_POSIXIPC << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 483 = shm_unlink */
 	{ .sy_narg = AS(cpuset_args), .sy_call = (sy_call_t *)sys_cpuset, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_CPUSET << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 484 = cpuset */
 	{ .sy_narg = AS(cpuset_setid_args), .sy_call = (sy_call_t *)sys_cpuset_setid, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_CPUSET << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 485 = cpuset_setid */
@@ -627,7 +627,7 @@ struct sysent sysent[] = {
 	{ .sy_narg = AS(funlinkat_args), .sy_call = (sy_call_t *)sys_funlinkat, .sy_auevent = AUE_UNLINKAT, .sy_flags = (SYSFIL_CPATH << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 568 = funlinkat */
 	{ .sy_narg = AS(copy_file_range_args), .sy_call = (sy_call_t *)sys_copy_file_range, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 569 = copy_file_range */
 	{ .sy_narg = AS(__sysctlbyname_args), .sy_call = (sy_call_t *)sys___sysctlbyname, .sy_auevent = AUE_SYSCTL, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 570 = __sysctlbyname */
-	{ .sy_narg = AS(shm_open2_args), .sy_call = (sy_call_t *)sys_shm_open2, .sy_auevent = AUE_SHMOPEN, .sy_flags = (SYSFIL_POSIXIPC << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 571 = shm_open2 */
+	{ .sy_narg = AS(shm_open2_args), .sy_call = (sy_call_t *)sys_shm_open2, .sy_auevent = AUE_SHMOPEN, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 571 = shm_open2 */
 	{ .sy_narg = AS(shm_rename_args), .sy_call = (sy_call_t *)sys_shm_rename, .sy_auevent = AUE_SHMRENAME, .sy_flags = (SYSFIL_POSIXIPC << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 572 = shm_rename */
 	{ .sy_narg = AS(sigfastblock_args), .sy_call = (sy_call_t *)sys_sigfastblock, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 573 = sigfastblock */
 	{ .sy_narg = AS(__realpathat_args), .sy_call = (sy_call_t *)sys___realpathat, .sy_auevent = AUE_REALPATHAT, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 574 = __realpathat */

@@ -1053,13 +1053,18 @@ kern_shm_open2(struct thread *td, const char *userpath, int flags, mode_t mode,
 	if ((shmflags & SHM_ALLOW_SEALING) != 0)
 		initial_seals &= ~F_SEAL_SEAL;
 
+	if (userpath != SHM_ANON) {
 #ifdef CAPABILITY_MODE
-	/*
-	 * shm_open(2) is only allowed for anonymous objects.
-	 */
-	if (IN_CAPABILITY_MODE(td) && (userpath != SHM_ANON))
-		return (ECAPMODE);
+		/*
+		 * shm_open(2) is only allowed for anonymous objects.
+		 */
+		if (IN_CAPABILITY_MODE(td))
+			return (ECAPMODE);
 #endif
+		error = sysfil_require(td, SYSFIL_POSIXIPC);
+		if (error)
+			return (error);
+	}
 
 	AUDIT_ARG_FFLAGS(flags);
 	AUDIT_ARG_MODE(mode);

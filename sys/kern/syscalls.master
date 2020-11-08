@@ -2582,7 +2582,7 @@
 		    int sig
 		);
 	}
-482	AUE_SHMOPEN	COMPAT12|SYSFIL_POSIXIPC {
+482	AUE_SHMOPEN	COMPAT12|SYSFIL_STDIO {
 		int shm_open(
 		    _In_z_ const char *path,
 		    int flags,
@@ -3199,7 +3199,7 @@
 		    size_t newlen
 		);
 	}
-571	AUE_SHMOPEN	STD|SYSFIL_POSIXIPC {
+571	AUE_SHMOPEN	STD|SYSFIL_STDIO {
 		int shm_open2(
 		    _In_z_ const char *path,
 		    int flags,
