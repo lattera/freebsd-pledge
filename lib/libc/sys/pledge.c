@@ -72,8 +72,9 @@ enum promise_type {
 	PROMISE_COUNT /* must be last */
 };
 
+#define	PROMISE_NAME_SIZE 16
 static const struct promise_name {
-	const char name[16];
+	const char name[PROMISE_NAME_SIZE];
 } names_table[PROMISE_COUNT] = {
 	[PROMISE_NONE] =		{ "" },
 	[PROMISE_ERROR] =		{ "error" },
@@ -284,31 +285,37 @@ static bool has_pledge_unveils[2], has_custom_unveils[2];
 static bool cur_promises[2][PROMISE_COUNT];
 
 
-static int
+static int __noinline
 parse_promises(bool *promises, const char *promises_str)
 {
-	size_t len = strlen(promises_str);
-	char buf[len + 1], *str = buf;
-	const char *cur;
-	memcpy(buf, promises_str, len + 1);
-	while ((cur = strsep(&str, " ")))
-		if (*cur) {
-			const struct promise_name *pn;
-			enum promise_type type;
-			for (pn = names_table, type = PROMISE_NONE;
-			     pn != &names_table[nitems(names_table)];
-			     pn++)
-				if (0 == strcmp(pn->name, cur)) {
-					type = pn - names_table;
-					break;
-				}
-			if (type == PROMISE_NONE) {
-				errno = EINVAL;
-				return (-1);
-			}
-			promises[type] = true;
-		}
+	const char *p = promises_str;
+	do {
+		/* skip spaces */
+		while (*p == ' ')
+			p++;
+		if (!*p) /* whole string processed */
+			break;
+		/* get next promise name */
+		char name[PROMISE_NAME_SIZE] = { '\0' }, *q = name;
+		do {
+			if (q == &name[sizeof name])
+				goto inval; /* name too long */
+			*q++ = *p++;
+		} while (*p && *p != ' ');
+		/* search for name in table */
+		enum promise_type type = PROMISE_NONE + 1;
+		do {
+			if (type >= PROMISE_COUNT)
+				goto inval; /* not found */
+			if (memcmp(name, names_table[type].name, sizeof name) == 0)
+				break;
+			type++;
+		} while (true);
+		promises[type] = true; /* found */
+	} while (true);
 	return (0);
+inval:	errno = EINVAL;
+	return (-1);
 }
 
 
