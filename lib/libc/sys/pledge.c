@@ -73,64 +73,63 @@ enum promise_type {
 };
 
 static const struct promise_name {
-	const char name[15];
-	enum promise_type type : 8;
-} names_table[] = {
-	{ "error",		PROMISE_ERROR },
-	{ "capsicum",		PROMISE_CAPSICUM },
-	{ "basic",		PROMISE_BASIC },
-	{ "stdio",		PROMISE_STDIO },
-	{ "unveil",		PROMISE_UNVEIL },
-	{ "rpath",		PROMISE_RPATH },
-	{ "wpath",		PROMISE_WPATH },
-	{ "cpath",		PROMISE_CPATH },
-	{ "dpath",		PROMISE_DPATH },
-	{ "tmppath",		PROMISE_TMPPATH },
-	{ "flock",		PROMISE_FLOCK },
-	{ "fattr",		PROMISE_FATTR },
-	{ "chown",		PROMISE_CHOWN },
-	{ "id",			PROMISE_ID },
-	{ "proc",		PROMISE_PROC },
-	{ "proc_session",	PROMISE_PROC_SESSION },
-	{ "thread",		PROMISE_THREAD },
-	{ "exec",		PROMISE_EXEC },
-	{ "prot_exec",		PROMISE_PROT_EXEC },
-	{ "tty",		PROMISE_TTY },
-	{ "sigtrap",		PROMISE_SIGTRAP },
-	{ "rlimit",		PROMISE_RLIMIT },
-	{ "settime",		PROMISE_SETTIME },
-	{ "mlock",		PROMISE_MLOCK },
-	{ "aio",		PROMISE_AIO },
-	{ "extattr",		PROMISE_EXTATTR },
-	{ "acl",		PROMISE_ACL },
-	{ "mac",		PROMISE_MAC },
-	{ "cpuset",		PROMISE_CPUSET },
-	{ "sysvipc",		PROMISE_SYSVIPC },
-	{ "posixipc",		PROMISE_POSIXIPC },
-	{ "posixrt",		PROMISE_POSIXRT },
-	{ "chroot",		PROMISE_CHROOT },
-	{ "jail",		PROMISE_JAIL },
-	{ "ps",			PROMISE_PS },
-	{ "ps_session",		PROMISE_PS_SESSION },
-	{ "chmod_special",	PROMISE_CHMOD_SPECIAL },
-	{ "sysflags",		PROMISE_SYSFLAGS },
-	{ "sendfile",		PROMISE_SENDFILE },
-	{ "inet",		PROMISE_INET },
-	{ "unix",		PROMISE_UNIX },
-	{ "recvfd",		PROMISE_RECVFD },
-	{ "sendfd",		PROMISE_SENDFD },
-	{ "dns",		PROMISE_DNS },
-	{ "getpw",		PROMISE_GETPW },
-	{ "ssl",		PROMISE_SSL },
-	{ "cryptodev",		PROMISE_CRYPTODEV },
-	{ "mount",		PROMISE_MOUNT },
-	{ "quota",		PROMISE_QUOTA },
-	{ "fh",			PROMISE_FH },
-	{ "any_af",		PROMISE_ANY_AF },
-	{ "any_priv",		PROMISE_ANY_PRIV },
-	{ "any_ioctl",		PROMISE_ANY_IOCTL },
-	{ "any_sockopt",	PROMISE_ANY_SOCKOPT },
-	{ "",			PROMISE_NONE },
+	const char name[16];
+} names_table[PROMISE_COUNT] = {
+	[PROMISE_NONE] =		{ "" },
+	[PROMISE_ERROR] =		{ "error" },
+	[PROMISE_CAPSICUM] =		{ "capsicum" },
+	[PROMISE_BASIC] =		{ "basic" },
+	[PROMISE_STDIO] =		{ "stdio" },
+	[PROMISE_UNVEIL] =		{ "unveil" },
+	[PROMISE_RPATH] =		{ "rpath" },
+	[PROMISE_WPATH] =		{ "wpath" },
+	[PROMISE_CPATH] =		{ "cpath" },
+	[PROMISE_DPATH] =		{ "dpath" },
+	[PROMISE_TMPPATH] =		{ "tmppath" },
+	[PROMISE_FLOCK] =		{ "flock" },
+	[PROMISE_FATTR] =		{ "fattr" },
+	[PROMISE_CHOWN] =		{ "chown" },
+	[PROMISE_ID] =			{ "id" },
+	[PROMISE_PROC] =		{ "proc" },
+	[PROMISE_PROC_SESSION] =	{ "proc_session" },
+	[PROMISE_THREAD] =		{ "thread" },
+	[PROMISE_EXEC] =		{ "exec" },
+	[PROMISE_PROT_EXEC] =		{ "prot_exec" },
+	[PROMISE_TTY] =			{ "tty" },
+	[PROMISE_SIGTRAP] =		{ "sigtrap" },
+	[PROMISE_RLIMIT] =		{ "rlimit" },
+	[PROMISE_SETTIME] =		{ "settime" },
+	[PROMISE_MLOCK] =		{ "mlock" },
+	[PROMISE_AIO] =			{ "aio" },
+	[PROMISE_EXTATTR] =		{ "extattr" },
+	[PROMISE_ACL] =			{ "acl" },
+	[PROMISE_MAC] =			{ "mac" },
+	[PROMISE_CPUSET] =		{ "cpuset" },
+	[PROMISE_SYSVIPC] =		{ "sysvipc" },
+	[PROMISE_POSIXIPC] =		{ "posixipc" },
+	[PROMISE_POSIXRT] =		{ "posixrt" },
+	[PROMISE_CHROOT] =		{ "chroot" },
+	[PROMISE_JAIL] =		{ "jail" },
+	[PROMISE_PS] =			{ "ps" },
+	[PROMISE_PS_SESSION] =		{ "ps_session" },
+	[PROMISE_CHMOD_SPECIAL] =	{ "chmod_special" },
+	[PROMISE_SYSFLAGS] =		{ "sysflags" },
+	[PROMISE_SENDFILE] =		{ "sendfile" },
+	[PROMISE_INET] =		{ "inet" },
+	[PROMISE_UNIX] =		{ "unix" },
+	[PROMISE_RECVFD] =		{ "recvfd" },
+	[PROMISE_SENDFD] =		{ "sendfd" },
+	[PROMISE_DNS] =			{ "dns" },
+	[PROMISE_GETPW] =		{ "getpw" },
+	[PROMISE_SSL] =			{ "ssl" },
+	[PROMISE_CRYPTODEV] =		{ "cryptodev" },
+	[PROMISE_MOUNT] =		{ "mount" },
+	[PROMISE_QUOTA] =		{ "quota" },
+	[PROMISE_FH] =			{ "fh" },
+	[PROMISE_ANY_AF] =		{ "any_af" },
+	[PROMISE_ANY_PRIV] =		{ "any_priv" },
+	[PROMISE_ANY_IOCTL] =		{ "any_ioctl" },
+	[PROMISE_ANY_SOCKOPT] =		{ "any_sockopt" },
 };
 
 static const struct promise_sysfil {
@@ -194,7 +193,7 @@ static const struct promise_sysfil {
 
 static const struct promise_uperms {
 	enum promise_type type : 8;
-	unveil_perms_t uperms;
+	unveil_perms_t uperms : 8;
 } uperms_table[] = {
 	{ PROMISE_RPATH,	UPERM_RPATH },
 	{ PROMISE_WPATH,	UPERM_WPATH },
@@ -215,8 +214,8 @@ static bool unveils_table_sorted = false;
 
 static struct promise_unveil {
 	const char *path;
-	unveil_perms_t perms;
-	enum promise_type type;
+	unveil_perms_t perms : 8;
+	enum promise_type type : 8;
 } unveils_table[] = {
 #define	R UPERM_RPATH
 #define	W UPERM_WPATH
@@ -292,18 +291,22 @@ parse_promises(bool *promises, const char *promises_str)
 	char buf[len + 1], *str = buf;
 	const char *cur;
 	memcpy(buf, promises_str, len + 1);
-
 	while ((cur = strsep(&str, " ")))
 		if (*cur) {
 			const struct promise_name *pn;
-			for (pn = names_table; *pn->name; pn++)
-				if (0 == strcmp(pn->name, cur))
+			enum promise_type type;
+			for (pn = names_table, type = PROMISE_NONE;
+			     pn != &names_table[nitems(names_table)];
+			     pn++)
+				if (0 == strcmp(pn->name, cur)) {
+					type = pn - names_table;
 					break;
-			if (pn->type == PROMISE_NONE) {
+				}
+			if (type == PROMISE_NONE) {
 				errno = EINVAL;
 				return (-1);
 			}
-			promises[pn->type] = true;
+			promises[type] = true;
 		}
 	return (0);
 }
