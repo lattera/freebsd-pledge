@@ -2095,6 +2095,9 @@ sysctl_rtsock(SYSCTL_HANDLER_ARGS)
 	error = sysfil_require(req->td, SYSFIL_INET);
 	if (error)
 		return (error);
+	error = sysfil_check(req->td, SYSFIL_ROUTE); /* don't signal */
+	if (error)
+		return (error);
 
 	name ++;
 	namelen--;

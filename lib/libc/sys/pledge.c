@@ -56,6 +56,7 @@ enum promise_type {
 	PROMISE_SENDFILE,
 	PROMISE_INET,
 	PROMISE_UNIX,
+	PROMISE_ROUTE,
 	PROMISE_RECVFD,
 	PROMISE_SENDFD,
 	PROMISE_DNS,
@@ -118,6 +119,7 @@ static const struct promise_name {
 	[PROMISE_SENDFILE] =		{ "sendfile" },
 	[PROMISE_INET] =		{ "inet" },
 	[PROMISE_UNIX] =		{ "unix" },
+	[PROMISE_ROUTE] =		{ "route" },
 	[PROMISE_RECVFD] =		{ "recvfd" },
 	[PROMISE_SENDFD] =		{ "sendfd" },
 	[PROMISE_DNS] =			{ "dns" },
@@ -178,9 +180,11 @@ static const struct promise_sysfil {
 	{ PROMISE_SENDFILE,		SYSFIL_SENDFILE },
 	{ PROMISE_INET,			SYSFIL_INET },
 	{ PROMISE_UNIX,			SYSFIL_UNIX },
+	{ PROMISE_ROUTE,		SYSFIL_ROUTE },
 	{ PROMISE_RECVFD,		SYSFIL_RECVFD },
 	{ PROMISE_SENDFD,		SYSFIL_SENDFD },
 	{ PROMISE_DNS,			SYSFIL_INET }, /* XXX */
+	{ PROMISE_DNS,			SYSFIL_ROUTE }, /* XXX */
 	{ PROMISE_CRYPTODEV,		SYSFIL_CRYPTODEV },
 	{ PROMISE_SSL,			SYSFIL_CRYPTODEV },
 	{ PROMISE_MOUNT,		SYSFIL_MOUNT },
