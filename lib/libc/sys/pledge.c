@@ -260,7 +260,8 @@ static struct promise_unveil {
 	{ _PATH_ETC "/group", R,		PROMISE_GETPW },
 	{ _PATH_DEV "/crypto", R|W,		PROMISE_CRYPTODEV },
 	{ _PATH_DEV "/crypto", R|W,		PROMISE_SSL }, /* sysfil also enabled */
-	{ _PATH_ETC "/ssl/cert.pem", R,		PROMISE_SSL },
+	{ _PATH_ETC "/ssl/", R,			PROMISE_SSL },
+	{ _PATH_LOCALBASE "/etc/ssl/", R,	PROMISE_SSL },
 	/*
 	 * TODO: Ideally we wouldn't allow to read the directory itself (so
 	 * that a pledged process can't find the names of the temporary files
