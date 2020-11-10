@@ -11,15 +11,6 @@
 #endif
 
 /*
- * Some macros are defined to have the same filter value as other macros.  This
- * is just to help keep track of why certain syscalls have been assigned to
- * this category.  SYSFIL_CAPCOMPAT is for certain syscalls that are allowed
- * under Capsicum but not under OpenBSD's "stdio" pledge.  This is to get at
- * least some basic level of compatibility when attempting to run Capsicum
- * applications with inherited pledges.  Others generally indicate that the
- * syscall is safe to allow under a certain category because it does its own
- * checks.
- *
  * SYSFIL_DEFAULT will be lost after the first pledge() and after entering
  * Capsicum capability mode.  It must be zero for certain structures to
  * correctly initialize with this value (struct fileops/cdevsw).
@@ -27,7 +18,6 @@
 #define	SYSFIL_DEFAULT		0
 #define	SYSFIL_ALWAYS		2
 #define	SYSFIL_STDIO		3
-#define	SYSFIL_CAPCOMPAT	SYSFIL_STDIO
 #define	SYSFIL_PATH		4
 #define	SYSFIL_RPATH		5
 #define	SYSFIL_WPATH		6
@@ -81,6 +71,35 @@
 #define	SYSFIL_CRYPTODEV	54
 #define	SYSFIL_ROUTE		55
 #define	SYSFIL_LAST		SYSFIL_ROUTE
+
+/*
+ * Some syscalls are assigned to sysfils that may seem to be less restrictive
+ * than they should be.  Usually these syscalls will be doing their own
+ * checking and only allow safe operations.  These aliases are used to keep
+ * track of them and make it more explicit.
+ */
+#ifdef _KERNEL
+/*
+ * SYSFIL_CAPCOMPAT is for certain syscalls that are allowed under Capsicum but
+ * not under OpenBSD's "stdio" pledge.  This is to get at least some basic
+ * level of compatibility when attempting to run Capsicum applications with
+ * inherited pledges.
+ */
+#define	SYSFIL_CAPCOMPAT	SYSFIL_STDIO
+/* Can do certain operations on self. */
+#define	SYSFIL_PROC_CHECKED	SYSFIL_STDIO
+#define	SYSFIL_THREAD_CHECKED	SYSFIL_ALWAYS
+/* Creation of anonymous memory objects are allowed. */
+#define	SYSFIL_POSIXIPC_CHECKED	SYSFIL_STDIO
+/*
+ * SYSFIL_CHOWN is not required for all chown(2) syscalls.  It represents the
+ * ability to set the file's owner UID to something different or set its group
+ * GID to something different that the process is not a member of.
+ */
+#define	SYSFIL_CHOWN_CHECKED	SYSFIL_FATTR
+/* Retrieving correction delta with adjtime(2) is allowed. */
+#define	SYSFIL_SETTIME_CHECKED	SYSFIL_STDIO
+#endif
 
 #define	SYSFIL_VALID(i)		((i) >= 0 && (i) <= SYSFIL_LAST)
 #define	SYSFIL_USER_VALID(i)	(SYSFIL_VALID(i) && (i) >= SYSFIL_STDIO)

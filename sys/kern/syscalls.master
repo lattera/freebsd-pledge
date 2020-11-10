@@ -174,9 +174,7 @@
 		    mode_t mode
 		);
 	}
-; NOTE: The chown(2) syscall does not require SYSFIL_CHOWN in all cases.
-; SYSFIL_CHOWN represents the ability to set the IDs to something different.
-16	AUE_CHOWN	STD|SYSFIL_FATTR {
+16	AUE_CHOWN	STD|SYSFIL_CHOWN_CHECKED {
 		int chown(
 		    _In_z_ const char *path,
 		    int uid,
@@ -304,7 +302,7 @@
 36	AUE_SYNC	STD {
 		int sync(void);
 	}
-37	AUE_KILL	STD|SYSFIL_STDIO {
+37	AUE_KILL	STD|SYSFIL_PROC_CHECKED {
 		int kill(
 		    int pid,
 		    int signum
@@ -780,7 +778,7 @@
 		    _In_opt_ struct timezone *tzp
 		);
 	}
-123	AUE_FCHOWN	STD|SYSFIL_FATTR {
+123	AUE_FCHOWN	STD|SYSFIL_CHOWN_CHECKED {
 		int fchown(
 		    int fd,
 		    int uid,
@@ -887,7 +885,7 @@
 		);
 	}
 139	AUE_NULL	OBSOL	4.2 sigreturn
-140	AUE_ADJTIME	STD|SYSFIL_STDIO {
+140	AUE_ADJTIME	STD|SYSFIL_SETTIME_CHECKED {
 		int adjtime(
 		    _In_ struct timeval *delta,
 		    _Out_opt_ struct timeval *olddelta
@@ -1455,7 +1453,7 @@
 253	AUE_ISSETUGID	STD|SYSFIL_STDIO {
 		int issetugid(void);
 	}
-254	AUE_LCHOWN	STD|SYSFIL_FATTR {
+254	AUE_LCHOWN	STD|SYSFIL_CHOWN_CHECKED {
 		int lchown(
 		    _In_z_ const char *path,
 		    int uid,
@@ -1467,7 +1465,7 @@
 		    _Inout_ struct aiocb *aiocbp
 		);
 	}
-256	AUE_AIO_WRITE	STD|SYSFIL_MLOCK {
+256	AUE_AIO_WRITE	STD|SYSFIL_AIO {
 		int aio_write(
 		    _Inout_ struct aiocb *aiocbp
 		);
@@ -1629,25 +1627,25 @@
 		);
 	}
 313	AUE_NULL	OBSOL	signanosleep
-314	AUE_AIO_RETURN	STD|SYSFIL_MLOCK {
+314	AUE_AIO_RETURN	STD|SYSFIL_AIO {
 		ssize_t aio_return(
 		    _Inout_ struct aiocb *aiocbp
 		);
 	}
-315	AUE_AIO_SUSPEND	STD|SYSFIL_MLOCK {
+315	AUE_AIO_SUSPEND	STD|SYSFIL_AIO {
 		int aio_suspend(
 		    _Inout_updates_(nent) struct aiocb * const * aiocbp,
 		    int nent,
 		    _In_opt_ const struct timespec *timeout
 		);
 	}
-316	AUE_AIO_CANCEL	STD|SYSFIL_MLOCK {
+316	AUE_AIO_CANCEL	STD|SYSFIL_AIO {
 		int aio_cancel(
 		    int fd,
 		    _In_opt_ struct aiocb *aiocbp
 		);
 	}
-317	AUE_AIO_ERROR	STD|SYSFIL_MLOCK {
+317	AUE_AIO_ERROR	STD|SYSFIL_AIO {
 		int aio_error(
 		    _In_ struct aiocb *aiocbp
 		);
@@ -1899,7 +1897,7 @@
 		    _In_z_ const char *attrname
 		);
 	}
-359	AUE_AIO_WAITCOMPLETE	STD|SYSFIL_MLOCK {
+359	AUE_AIO_WAITCOMPLETE	STD|SYSFIL_AIO {
 		ssize_t aio_waitcomplete(
 		    _Outptr_result_maybenull_ struct aiocb **aiocbp,
 		    _In_opt_ struct timespec *timeout
@@ -2280,12 +2278,12 @@
 		    _Out_opt_ long *state
 		);
 	}
-432	AUE_NULL	STD|SYSFIL_ALWAYS {
+432	AUE_NULL	STD|SYSFIL_THREAD_CHECKED {
 		int thr_self(
 		    _Out_ long *id
 		);
 	}
-433	AUE_THR_KILL	STD|SYSFIL_ALWAYS {
+433	AUE_THR_KILL	STD|SYSFIL_THREAD_CHECKED {
 		int thr_kill(
 		    long id,
 		    int sig
@@ -2323,7 +2321,7 @@
 		);
 	}
 440	AUE_NULL	OBSOL	kse_switchin
-441	AUE_SEMWAIT	NOSTD {
+441	AUE_SEMWAIT	NOSTD|SYSFIL_POSIXIPC {
 		int ksem_timedwait(
 		    semid_t id,
 		    _In_opt_ const struct timespec *abstime
@@ -2475,7 +2473,7 @@
 		    _In_z_ const char *name
 		);
 	}
-465	AUE_AIO_FSYNC	STD|SYSFIL_MLOCK {
+465	AUE_AIO_FSYNC	STD|SYSFIL_AIO {
 		int aio_fsync(
 		    int op,
 		    _In_ struct aiocb *aiocbp
@@ -2582,7 +2580,7 @@
 		    int sig
 		);
 	}
-482	AUE_SHMOPEN	COMPAT12|SYSFIL_STDIO {
+482	AUE_SHMOPEN	COMPAT12|SYSFIL_POSIXIPC_CHECKED {
 		int shm_open(
 		    _In_z_ const char *path,
 		    int flags,
@@ -2648,7 +2646,7 @@
 		    int flag
 		);
 	}
-491	AUE_FCHOWNAT	STD|SYSFIL_FATTR {
+491	AUE_FCHOWNAT	STD|SYSFIL_CHOWN_CHECKED {
 		int fchownat(
 		    int fd,
 		    _In_z_ const char *path,
@@ -3003,7 +3001,7 @@
 		    int flags
 		);
 	}
-543	AUE_AIO_MLOCK	STD|SYSFIL_MLOCK {
+543	AUE_AIO_MLOCK	STD|SYSFIL_AIO {
 		int aio_mlock(
 		    _In_ struct aiocb *aiocbp
 		);
@@ -3199,7 +3197,7 @@
 		    size_t newlen
 		);
 	}
-571	AUE_SHMOPEN	STD|SYSFIL_STDIO {
+571	AUE_SHMOPEN	STD|SYSFIL_POSIXIPC_CHECKED {
 		int shm_open2(
 		    _In_z_ const char *path,
 		    int flags,
