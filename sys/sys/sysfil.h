@@ -158,8 +158,6 @@ int sysfil_require_ioctl(struct thread *, int sf, u_long com);
 int sysfil_require_af(struct thread *, int af);
 int sysfil_require_sockopt(struct thread *, int level, int name);
 
-void sysfil_sysfil_violation(struct thread *, int sf);
-
 int sysfil_priv_check(struct ucred *, int priv);
 
 static inline void

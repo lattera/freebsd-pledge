@@ -12,6 +12,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/unveil.h>
 #include <sysexits.h>
 #include <unistd.h>
+#include <signal.h>
 
 enum promise_type {
 	PROMISE_NONE = 0,
@@ -504,6 +505,8 @@ pledge(const char *promises_str, const char *execpromises_str)
 {
 	bool promises[PROMISE_COUNT] = { 0 };
 	bool execpromises[PROMISE_COUNT] = { 0 };
+	sig_t osig;
+	bool reset_sigtrap;
 	bool errors;
 	int r;
 	/* TODO: global lock */
@@ -527,16 +530,30 @@ pledge(const char *promises_str, const char *execpromises_str)
 	}
 
 	errors = false;
+	reset_sigtrap = false;
 	if (execpromises_str) {
+		if (!execpromises[PROMISE_SIGTRAP])
+			reset_sigtrap = true;
 		r = do_pledge(execpromises, true);
 		if (r < 0)
 			errors = true;
 	}
 	if (promises_str) {
+		if (!promises[PROMISE_SIGTRAP])
+			reset_sigtrap = true;
 		r = do_pledge(promises, false);
 		if (r < 0)
 			errors = true;
 	}
+
+	if (reset_sigtrap) {
+		osig = signal(SIGTRAP, SIG_DFL);
+		if (osig == SIG_ERR) {
+			warn("signal SIGTRAP");
+			errors = true;
+		}
+	}
+
 	return (errors ? -1 : 0);
 }
 
