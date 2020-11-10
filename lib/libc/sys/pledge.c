@@ -669,6 +669,12 @@ unveil(const char *path, const char *permissions)
 }
 
 int
+unveilcurr(const char *path, const char *permissions)
+{
+	return (unveil_1(path, UNVEILCTL_FOR_CURR, permissions));
+}
+
+int
 unveilexec(const char *path, const char *permissions)
 {
 	return (unveil_1(path, UNVEILCTL_FOR_EXEC, permissions));

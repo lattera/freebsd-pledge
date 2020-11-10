@@ -417,6 +417,7 @@ FBSD_1.6 {
 	unveilctl;
 	pledge;
 	unveil;
+	unveilcurr;
 	unveilexec;
 };
 
