@@ -1083,7 +1083,7 @@
 		    off_t offset
 		);
 	}
-175	AUE_SETFIB	STD {
+175	AUE_SETFIB	STD|SYSFIL_SETFIB {
 		int setfib(
 		    int fibnum
 		);
@@ -1399,17 +1399,17 @@
 		    _Out_opt_ struct timespec *rmtp
 		);
 	}
-241	AUE_NULL	STD {
+241	AUE_NULL	STD|SYSFIL_FFCLOCK {
 		int ffclock_getcounter(
 		    _Out_ ffcounter *ffcount
 		);
 	}
-242	AUE_NULL	STD {
+242	AUE_NULL	STD|SYSFIL_FFCLOCK {
 		int ffclock_setestimate(
 		    _In_ struct ffclock_estimate *cest
 		);
 	}
-243	AUE_NULL	STD {
+243	AUE_NULL	STD|SYSFIL_FFCLOCK {
 		int ffclock_getestimate(
 		    _Out_ struct ffclock_estimate *cest
 		);
@@ -1423,7 +1423,7 @@
 		);
 	}
 245-246	AUE_NULL	UNIMPL	nosys
-247	AUE_NULL	STD {
+247	AUE_NULL	STD|SYSFIL_STDIO {
 		int clock_getcpuclockid2(
 		    id_t id,
 		    int which,
@@ -2489,13 +2489,13 @@
 467-468	AUE_NULL	UNIMPL	nosys
 469	AUE_NULL	UNIMPL	__getpath_fromfd
 470	AUE_NULL	UNIMPL	__getpath_fromaddr
-471	AUE_SCTP_PEELOFF	NOSTD {
+471	AUE_SCTP_PEELOFF	NOSTD|SYSFIL_SCTP {
 		int sctp_peeloff(
 		    int sd,
 		    uint32_t name
 		);
 	}
-472	AUE_SCTP_GENERIC_SENDMSG	NOSTD {
+472	AUE_SCTP_GENERIC_SENDMSG	NOSTD|SYSFIL_SCTP {
 		int sctp_generic_sendmsg(
 		    int sd,
 		    _In_reads_bytes_(mlen) void *msg,
@@ -2506,7 +2506,7 @@
 		    int flags
 		);
 	}
-473	AUE_SCTP_GENERIC_SENDMSG_IOV	NOSTD {
+473	AUE_SCTP_GENERIC_SENDMSG_IOV	NOSTD|SYSFIL_SCTP {
 		int sctp_generic_sendmsg_iov(
 		    int sd,
 		    _In_reads_(iovlen) struct iovec *iov,
@@ -2517,7 +2517,7 @@
 		    int flags
 		);
 	}
-474	AUE_SCTP_GENERIC_RECVMSG	NOSTD {
+474	AUE_SCTP_GENERIC_RECVMSG	NOSTD|SYSFIL_SCTP {
 		int sctp_generic_recvmsg(
 		    int sd,
 		    _In_reads_(iovlen) struct iovec *iov,

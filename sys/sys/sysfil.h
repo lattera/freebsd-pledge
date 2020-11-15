@@ -55,7 +55,7 @@
 #define	SYSFIL_INET		35
 #define	SYSFIL_INET_RAW		36
 #define	SYSFIL_UNIX		37
-#define	SYSFIL_UNUSED1		38
+#define	SYSFIL_MCAST		38
 #define	SYSFIL_SIGTRAP		39
 #define	SYSFIL_CHMOD_SPECIAL	40
 #define	SYSFIL_SYSFLAGS		41
@@ -73,7 +73,10 @@
 #define	SYSFIL_ANY_SOCKOPT	53
 #define	SYSFIL_CRYPTODEV	54
 #define	SYSFIL_ROUTE		55
-#define	SYSFIL_LAST		SYSFIL_ROUTE
+#define	SYSFIL_WROUTE		56
+#define	SYSFIL_FFCLOCK		57
+#define	SYSFIL_SETFIB		58
+#define	SYSFIL_LAST		SYSFIL_SETFIB
 
 /*
  * Some syscalls are assigned to sysfils that may seem to be less restrictive
@@ -103,6 +106,7 @@
 #define	SYSFIL_CHOWN_CHECKED	SYSFIL_FATTR
 /* Retrieving correction delta with adjtime(2) is allowed. */
 #define	SYSFIL_SETTIME_CHECKED	SYSFIL_STDIO
+#define	SYSFIL_SCTP		SYSFIL_NET
 #endif
 
 #define	SYSFIL_VALID(i)		((i) >= 0 && (i) <= SYSFIL_LAST)

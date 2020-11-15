@@ -87,6 +87,7 @@ sysfil_require_sockopt(struct thread *td, int level, int name)
 	case SOL_SOCKET:
 		switch (name) {
 		case SO_SETFIB:
+			sf = SYSFIL_SETFIB;
 			break;
 		case SO_LABEL:
 		case SO_PEERLABEL:
