@@ -178,7 +178,8 @@ cap_rights_sysinit(void *arg)
 	    CAP_LOOKUP,
 	    CAP_FPATHCONF,
 	    CAP_FSTAT,
-	    CAP_FSTATAT);
+	    CAP_FSTATAT,
+	    CAP_FCHDIR);
 	cap_rights_init(&rpath_rights,
 	    CAP_LOOKUP,
 	    CAP_READ,
