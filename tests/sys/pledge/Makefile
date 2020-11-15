@@ -25,6 +25,7 @@ PLAIN_TESTS_C+= pledge_getaddrinfo
 PLAIN_TESTS_C+= pledge_chown_own
 PLAIN_TESTS_C+= pledge_fattr
 PLAIN_TESTS_C+= pledge_prot_exec
+PLAIN_TESTS_C+= pledge_proc_child
 
 PLAIN_TESTS_C+= unveil_simple0
 PLAIN_TESTS_C+= unveil_simple1

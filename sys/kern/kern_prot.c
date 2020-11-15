@@ -1472,6 +1472,12 @@ p_sysfil_check(struct thread *td, struct proc *p)
 			if (error)
 				return (error);
 		} else if (td->td_proc != p->p_pptr) {
+			/*
+			 * XXX Tracing interferes with this check since it
+			 * reparents processes.  Restricted processes cannot
+			 * use tracing, but they can still be traced by a
+			 * process that is not restricted.
+			 */
 			error = sysfil_check(td, SYSFIL_SAME_PGRP);
 			if (error)
 				return (error);
