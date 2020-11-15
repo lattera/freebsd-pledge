@@ -61,6 +61,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/bus.h>
 #include <sys/interrupt.h>
 #include <sys/vmmeter.h>
+#include <sys/sysfil.h>
 
 #include <vm/uma.h>
 #include <vm/vm.h>
@@ -874,6 +875,9 @@ cpuset_which(cpuwhich_t which, id_t id, struct proc **pp, struct thread **tdp,
 		p = td->td_proc;
 		break;
 	case CPU_WHICH_CPUSET:
+		error = sysfil_require(curthread, SYSFIL_CPUSET);
+		if (error)
+			return (error);
 		if (id == -1) {
 			thread_lock(curthread);
 			set = cpuset_refbase(curthread->td_cpuset);
@@ -887,9 +891,14 @@ cpuset_which(cpuwhich_t which, id_t id, struct proc **pp, struct thread **tdp,
 		return (ESRCH);
 	case CPU_WHICH_JAIL:
 	{
-		/* Find `set' for prison with given id. */
 		struct prison *pr;
-
+		error = sysfil_require(curthread, SYSFIL_CPUSET);
+		if (error)
+			return (error);
+		error = sysfil_require(curthread, SYSFIL_JAIL);
+		if (error)
+			return (error);
+		/* Find `set' for prison with given id. */
 		sx_slock(&allprison_lock);
 		pr = prison_find_child(curthread->td_ucred->cr_prison, id);
 		sx_sunlock(&allprison_lock);
@@ -902,7 +911,7 @@ cpuset_which(cpuwhich_t which, id_t id, struct proc **pp, struct thread **tdp,
 	}
 	case CPU_WHICH_IRQ:
 	case CPU_WHICH_DOMAIN:
-		return (0);
+		return (sysfil_require(curthread, SYSFIL_CPUSET));
 	default:
 		return (EINVAL);
 	}
@@ -1816,7 +1825,9 @@ kern_cpuset_getaffinity(struct thread *td, cpulevel_t level, cpuwhich_t which,
 		case CPU_WHICH_IRQ:
 		case CPU_WHICH_INTRHANDLER:
 		case CPU_WHICH_ITHREAD:
-			error = intr_getaffinity(id, which, mask);
+			error = sysfil_check(td, SYSFIL_CPUSET);
+			if (error == 0)
+				error = intr_getaffinity(id, which, mask);
 			break;
 		case CPU_WHICH_DOMAIN:
 			if (id < 0 || id >= MAXMEMDOM)
@@ -1945,7 +1956,9 @@ kern_cpuset_setaffinity(struct thread *td, cpulevel_t level, cpuwhich_t which,
 		case CPU_WHICH_IRQ:
 		case CPU_WHICH_INTRHANDLER:
 		case CPU_WHICH_ITHREAD:
-			error = intr_setaffinity(id, which, mask);
+			error = sysfil_check(td, SYSFIL_CPUSET);
+			if (error == 0)
+				error = intr_setaffinity(id, which, mask);
 			break;
 		default:
 			error = EINVAL;

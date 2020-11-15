@@ -1456,18 +1456,15 @@ cr_cansee(struct ucred *u1, struct ucred *u2)
 }
 
 static inline int
-p_cansysfil(struct thread *td, struct proc *p)
+p_sysfil_check(struct thread *td, struct proc *p)
 {
 	if (IN_RESTRICTED_MODE(td) && td->td_proc != p) {
 		int error;
-		error = sysfil_require(td, SYSFIL_PROC);
+		error = sysfil_check(td, SYSFIL_PROC);
 		if (error)
 			return (error);
 		if (td->td_proc->p_session != p->p_session) {
-			if (sysfil_check(td, SYSFIL_PS) == 0)
-				error = sysfil_check(td, SYSFIL_ANY_SESSION);
-			else
-				error = sysfil_require(td, SYSFIL_ANY_SESSION);
+			error = sysfil_check(td, SYSFIL_ANY_SESSION);
 			if (error)
 				return (error);
 		}
@@ -1490,7 +1487,7 @@ p_cansee(struct thread *td, struct proc *p)
 	/* Wrap cr_cansee() for all functionality. */
 	KASSERT(td == curthread, ("%s: td not curthread", __func__));
 	PROC_LOCK_ASSERT(p, MA_OWNED);
-	error = p_cansysfil(td, p);
+	error = p_sysfil_check(td, p);
 	if (error)
 		return (error);
 	return (cr_cansee(td->td_ucred, p->p_ucred));
@@ -1625,7 +1622,7 @@ p_cansignal(struct thread *td, struct proc *p, int signum)
 	    signum < SIGTHR + 4 && td->td_proc->p_leader == p->p_leader)
 		return (0);
 
-	error = p_cansysfil(td, p);
+	error = p_sysfil_check(td, p);
 	if (error)
 		return (error);
 
@@ -1650,6 +1647,10 @@ p_cansched(struct thread *td, struct proc *p)
 	if (td->td_proc == p)
 		return (0);
 	if ((error = prison_check(td->td_ucred, p->p_ucred)))
+		return (error);
+	if ((error = sysfil_check(td, SYSFIL_SCHED)))
+		return (error);
+	if ((error = p_sysfil_check(td, p)))
 		return (error);
 #ifdef MAC
 	if ((error = mac_proc_check_sched(td->td_ucred, p)))

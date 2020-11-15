@@ -8,6 +8,8 @@
 #include <sys/_sysfil.h>
 #include <sys/ucred.h>
 #include <sys/proc.h>
+#include <sys/mutex.h>
+#include <sys/lock.h>
 #endif
 
 /*
@@ -16,6 +18,7 @@
  * correctly initialize with this value (struct fileops/cdevsw).
  */
 #define	SYSFIL_DEFAULT		0
+#define	SYSFIL_UNUSED0		1
 #define	SYSFIL_ALWAYS		2
 #define	SYSFIL_STDIO		3
 #define	SYSFIL_PATH		4
@@ -46,7 +49,7 @@
 #define	SYSFIL_MAC		29
 #define	SYSFIL_CHROOT		30
 #define	SYSFIL_JAIL		31
-#define	SYSFIL_UNUSED0		32
+#define	SYSFIL_SCHED		32
 #define	SYSFIL_ERROR		33
 #define	SYSFIL_PS		34
 #define	SYSFIL_INET		35
@@ -89,6 +92,7 @@
 /* Can do certain operations on self. */
 #define	SYSFIL_PROC_CHECKED	SYSFIL_STDIO
 #define	SYSFIL_THREAD_CHECKED	SYSFIL_ALWAYS
+#define	SYSFIL_CPUSET_CHECKED	SYSFIL_SCHED
 /* Creation of anonymous memory objects are allowed. */
 #define	SYSFIL_POSIXIPC_CHECKED	SYSFIL_STDIO
 /*
@@ -146,7 +150,6 @@ sysfil_check(const struct thread *td, int sf)
 }
 
 void sysfil_violation(struct thread *, int sf, int error);
-void sysfil_require_debug(struct thread *);
 
 /*
  * Note: sysfil_require() may acquire the PROC_LOCK to send a violation signal.
@@ -157,9 +160,7 @@ static inline int
 sysfil_require(struct thread *td, int sf)
 {
 	int error;
-#ifdef INVARIANTS
-	sysfil_require_debug(td);
-#endif
+	PROC_LOCK_ASSERT(td->td_proc, MA_NOTOWNED);
 	error = sysfil_check(td, sf);
 	if (__predict_false(error))
 		sysfil_violation(td, sf, error);

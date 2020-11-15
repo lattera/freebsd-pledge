@@ -152,11 +152,11 @@ struct sysent sysent[] = {
 	{ .sy_narg = AS(select_args), .sy_call = (sy_call_t *)sys_select, .sy_auevent = AUE_SELECT, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 93 = select */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 94 = setdopt */
 	{ .sy_narg = AS(fsync_args), .sy_call = (sy_call_t *)sys_fsync, .sy_auevent = AUE_FSYNC, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 95 = fsync */
-	{ .sy_narg = AS(setpriority_args), .sy_call = (sy_call_t *)sys_setpriority, .sy_auevent = AUE_SETPRIORITY, .sy_flags = (SYSFIL_RLIMIT << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 96 = setpriority */
+	{ .sy_narg = AS(setpriority_args), .sy_call = (sy_call_t *)sys_setpriority, .sy_auevent = AUE_SETPRIORITY, .sy_flags = (SYSFIL_SCHED << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 96 = setpriority */
 	{ .sy_narg = AS(socket_args), .sy_call = (sy_call_t *)sys_socket, .sy_auevent = AUE_SOCKET, .sy_flags = (SYSFIL_NET << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 97 = socket */
 	{ .sy_narg = AS(connect_args), .sy_call = (sy_call_t *)sys_connect, .sy_auevent = AUE_CONNECT, .sy_flags = (SYSFIL_NET << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 98 = connect */
 	{ compat(AS(oaccept_args),accept), .sy_auevent = AUE_ACCEPT, .sy_flags = (SYSFIL_NET << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 99 = old accept */
-	{ .sy_narg = AS(getpriority_args), .sy_call = (sy_call_t *)sys_getpriority, .sy_auevent = AUE_GETPRIORITY, .sy_flags = (SYSFIL_RLIMIT << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 100 = getpriority */
+	{ .sy_narg = AS(getpriority_args), .sy_call = (sy_call_t *)sys_getpriority, .sy_auevent = AUE_GETPRIORITY, .sy_flags = (SYSFIL_SCHED << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 100 = getpriority */
 	{ compat(AS(osend_args),send), .sy_auevent = AUE_SEND, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 101 = old send */
 	{ compat(AS(orecv_args),recv), .sy_auevent = AUE_RECV, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 102 = old recv */
 	{ compat(AS(osigreturn_args),sigreturn), .sy_auevent = AUE_SIGRETURN, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 103 = old sigreturn */
@@ -222,7 +222,7 @@ struct sysent sysent[] = {
 	{ compat4(AS(freebsd4_setdomainname_args),setdomainname), .sy_auevent = AUE_SYSCTL, .sy_flags = 0, .sy_thrcnt = SY_THR_STATIC },	/* 163 = freebsd4 setdomainname */
 	{ compat4(AS(freebsd4_uname_args),uname), .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 164 = freebsd4 uname */
 	{ .sy_narg = AS(sysarch_args), .sy_call = (sy_call_t *)sysarch, .sy_auevent = AUE_SYSARCH, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 165 = sysarch */
-	{ .sy_narg = AS(rtprio_args), .sy_call = (sy_call_t *)sys_rtprio, .sy_auevent = AUE_RTPRIO, .sy_flags = (SYSFIL_PROC << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 166 = rtprio */
+	{ .sy_narg = AS(rtprio_args), .sy_call = (sy_call_t *)sys_rtprio, .sy_auevent = AUE_RTPRIO, .sy_flags = (SYSFIL_SCHED << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 166 = rtprio */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 167 = nosys */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 168 = nosys */
 	{ .sy_narg = AS(semsys_args), .sy_call = (sy_call_t *)lkmressys, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_SYSVIPC << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_ABSENT },	/* 169 = semsys */
@@ -522,7 +522,7 @@ struct sysent sysent[] = {
 	{ .sy_narg = AS(abort2_args), .sy_call = (sy_call_t *)sys_abort2, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_ALWAYS << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 463 = abort2 */
 	{ .sy_narg = AS(thr_set_name_args), .sy_call = (sy_call_t *)sys_thr_set_name, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_THREAD << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 464 = thr_set_name */
 	{ .sy_narg = AS(aio_fsync_args), .sy_call = (sy_call_t *)sys_aio_fsync, .sy_auevent = AUE_AIO_FSYNC, .sy_flags = (SYSFIL_AIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 465 = aio_fsync */
-	{ .sy_narg = AS(rtprio_thread_args), .sy_call = (sy_call_t *)sys_rtprio_thread, .sy_auevent = AUE_RTPRIO, .sy_flags = (SYSFIL_THREAD << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 466 = rtprio_thread */
+	{ .sy_narg = AS(rtprio_thread_args), .sy_call = (sy_call_t *)sys_rtprio_thread, .sy_auevent = AUE_RTPRIO, .sy_flags = (SYSFIL_SCHED << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 466 = rtprio_thread */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 467 = nosys */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 468 = nosys */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 469 = __getpath_fromfd */
@@ -543,8 +543,8 @@ struct sysent sysent[] = {
 	{ .sy_narg = AS(cpuset_args), .sy_call = (sy_call_t *)sys_cpuset, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_CPUSET << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 484 = cpuset */
 	{ .sy_narg = AS(cpuset_setid_args), .sy_call = (sy_call_t *)sys_cpuset_setid, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_CPUSET << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 485 = cpuset_setid */
 	{ .sy_narg = AS(cpuset_getid_args), .sy_call = (sy_call_t *)sys_cpuset_getid, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_CPUSET << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 486 = cpuset_getid */
-	{ .sy_narg = AS(cpuset_getaffinity_args), .sy_call = (sy_call_t *)sys_cpuset_getaffinity, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_CPUSET << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 487 = cpuset_getaffinity */
-	{ .sy_narg = AS(cpuset_setaffinity_args), .sy_call = (sy_call_t *)sys_cpuset_setaffinity, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_CPUSET << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 488 = cpuset_setaffinity */
+	{ .sy_narg = AS(cpuset_getaffinity_args), .sy_call = (sy_call_t *)sys_cpuset_getaffinity, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_CPUSET_CHECKED << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 487 = cpuset_getaffinity */
+	{ .sy_narg = AS(cpuset_setaffinity_args), .sy_call = (sy_call_t *)sys_cpuset_setaffinity, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_CPUSET_CHECKED << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 488 = cpuset_setaffinity */
 	{ .sy_narg = AS(faccessat_args), .sy_call = (sy_call_t *)sys_faccessat, .sy_auevent = AUE_FACCESSAT, .sy_flags = (SYSFIL_PATH << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 489 = faccessat */
 	{ .sy_narg = AS(fchmodat_args), .sy_call = (sy_call_t *)sys_fchmodat, .sy_auevent = AUE_FCHMODAT, .sy_flags = (SYSFIL_FATTR << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 490 = fchmodat */
 	{ .sy_narg = AS(fchownat_args), .sy_call = (sy_call_t *)sys_fchownat, .sy_auevent = AUE_FCHOWNAT, .sy_flags = (SYSFIL_CHOWN_CHECKED << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 491 = fchownat */
@@ -617,8 +617,8 @@ struct sysent sysent[] = {
 	{ .sy_narg = AS(fhstatfs_args), .sy_call = (sy_call_t *)sys_fhstatfs, .sy_auevent = AUE_FHSTATFS, .sy_flags = (SYSFIL_FH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 558 = fhstatfs */
 	{ .sy_narg = AS(mknodat_args), .sy_call = (sy_call_t *)sys_mknodat, .sy_auevent = AUE_MKNODAT, .sy_flags = (SYSFIL_DPATH << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 559 = mknodat */
 	{ .sy_narg = AS(kevent_args), .sy_call = (sy_call_t *)sys_kevent, .sy_auevent = AUE_KEVENT, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 560 = kevent */
-	{ .sy_narg = AS(cpuset_getdomain_args), .sy_call = (sy_call_t *)sys_cpuset_getdomain, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_CPUSET << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 561 = cpuset_getdomain */
-	{ .sy_narg = AS(cpuset_setdomain_args), .sy_call = (sy_call_t *)sys_cpuset_setdomain, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_CPUSET << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 562 = cpuset_setdomain */
+	{ .sy_narg = AS(cpuset_getdomain_args), .sy_call = (sy_call_t *)sys_cpuset_getdomain, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_CPUSET_CHECKED << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 561 = cpuset_getdomain */
+	{ .sy_narg = AS(cpuset_setdomain_args), .sy_call = (sy_call_t *)sys_cpuset_setdomain, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_CPUSET_CHECKED << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 562 = cpuset_setdomain */
 	{ .sy_narg = AS(getrandom_args), .sy_call = (sy_call_t *)sys_getrandom, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 563 = getrandom */
 	{ .sy_narg = AS(getfhat_args), .sy_call = (sy_call_t *)sys_getfhat, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_FH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 564 = getfhat */
 	{ .sy_narg = AS(fhlink_args), .sy_call = (sy_call_t *)sys_fhlink, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_FH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 565 = fhlink */

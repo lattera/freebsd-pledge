@@ -219,21 +219,6 @@ sysfil_priv_check(struct ucred *cr, int priv)
 #endif
 }
 
-void
-sysfil_require_debug(struct thread *td)
-{
-#if 0
-	PROC_LOCK_ASSERT(td->td_proc, MA_OWNED);
-#else /* XXX */
-	if (PROC_LOCKED(td->td_proc)) {
-		printf("Process should not be locked when calling sysfil_require().\n");
-#ifdef KDB
-		kdb_backtrace();
-#endif
-	}
-#endif
-}
-
 static void
 sysfil_log_violation(struct thread *td, int sf, bool signaled)
 {
@@ -293,6 +278,9 @@ sysfilset_fill(sysfilset_t *sysfilset, int sf)
 	case SYSFIL_INET_RAW:
 	case SYSFIL_UNIX:
 		SYSFILSET_FILL(sysfilset, SYSFIL_NET);
+		break;
+	case SYSFIL_CPUSET:
+		SYSFILSET_FILL(sysfilset, SYSFIL_SCHED);
 		break;
 	}
 	SYSFILSET_FILL(sysfilset, sf);

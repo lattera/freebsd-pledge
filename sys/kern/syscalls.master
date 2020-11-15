@@ -613,7 +613,7 @@
 		    int fd
 		);
 	}
-96	AUE_SETPRIORITY	STD|SYSFIL_RLIMIT {
+96	AUE_SETPRIORITY	STD|SYSFIL_SCHED {
 		int setpriority(
 		    int which,
 		    int who,
@@ -641,7 +641,7 @@
 		    int *anamelen
 		);
 	}
-100	AUE_GETPRIORITY	STD|SYSFIL_RLIMIT {
+100	AUE_GETPRIORITY	STD|SYSFIL_SCHED {
 		int getpriority(
 		    int which,
 		    int who
@@ -1025,7 +1025,7 @@
 		    _In_z_ char *parms
 		);
 	}
-166	AUE_RTPRIO	STD|SYSFIL_PROC {
+166	AUE_RTPRIO	STD|SYSFIL_SCHED {
 		int rtprio(
 		    int function,
 		    pid_t pid,
@@ -2479,7 +2479,7 @@
 		    _In_ struct aiocb *aiocbp
 		);
 	}
-466	AUE_RTPRIO	STD|SYSFIL_THREAD {
+466	AUE_RTPRIO	STD|SYSFIL_SCHED {
 		int rtprio_thread(
 		    int function,
 		    lwpid_t lwpid,
@@ -2612,7 +2612,7 @@
 		    _Out_ cpusetid_t *setid
 		);
 	}
-487	AUE_NULL	STD|SYSFIL_CPUSET {
+487	AUE_NULL	STD|SYSFIL_CPUSET_CHECKED {
 		int cpuset_getaffinity(
 		    cpulevel_t level,
 		    cpuwhich_t which,
@@ -2621,7 +2621,7 @@
 		    _Out_ cpuset_t *mask
 		);
 	}
-488	AUE_NULL	STD|SYSFIL_CPUSET {
+488	AUE_NULL	STD|SYSFIL_CPUSET_CHECKED {
 		int cpuset_setaffinity(
 		    cpulevel_t level,
 		    cpuwhich_t which,
@@ -3114,7 +3114,7 @@
 		    _In_opt_ const struct timespec *timeout
 		);
 	}
-561	AUE_NULL	STD|SYSFIL_CPUSET {
+561	AUE_NULL	STD|SYSFIL_CPUSET_CHECKED {
 		int cpuset_getdomain(
 		    cpulevel_t level,
 		    cpuwhich_t which,
@@ -3124,7 +3124,7 @@
 		    _Out_ int *policy
 		);
 	}
-562	AUE_NULL	STD|SYSFIL_CPUSET {
+562	AUE_NULL	STD|SYSFIL_CPUSET_CHECKED {
 		int cpuset_setdomain(
 		    cpulevel_t level,
 		    cpuwhich_t which,
