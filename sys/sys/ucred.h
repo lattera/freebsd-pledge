@@ -66,6 +66,7 @@ struct ucred {
 	struct mtx cr_mtx;
 	u_int	cr_ref;			/* (c) reference count */
 	u_int	cr_users;		/* (c) proc + thread using this cred */
+	struct auditinfo_addr	cr_audit;	/* Audit properties. */
 #define	cr_startcopy cr_uid
 	uid_t	cr_uid;			/* effective user id */
 	uid_t	cr_ruid;		/* real user id */
@@ -84,9 +85,8 @@ struct ucred {
 #else
 	void		*cr_pspare2[2];	/* general use 2 */
 #endif
-	struct label	*cr_label;	/* MAC label */
 #define	cr_endcopy	cr_label
-	struct auditinfo_addr	cr_audit;	/* Audit properties. */
+	struct label	*cr_label;	/* MAC label */
 	gid_t	*cr_groups;		/* groups */
 	int	cr_agroups;		/* Available groups */
 	gid_t   cr_smallgroups[XU_NGROUPS];	/* storage for small groups */
@@ -135,6 +135,28 @@ struct xucred {
 #ifdef _KERNEL
 struct proc;
 struct thread;
+
+struct credbatch {
+	struct ucred *cred;
+	int users;
+	int ref;
+};
+
+static inline void
+credbatch_prep(struct credbatch *crb)
+{
+	crb->cred = NULL;
+	crb->users = 0;
+	crb->ref = 0;
+}
+void	credbatch_add(struct credbatch *crb, struct thread *td);
+static inline void
+credbatch_process(struct credbatch *crb __unused)
+{
+
+}
+void	credbatch_add(struct credbatch *crb, struct thread *td);
+void	credbatch_final(struct credbatch *crb);
 
 void	change_egid(struct ucred *newcred, gid_t egid);
 void	change_euid(struct ucred *newcred, struct uidinfo *euip);
