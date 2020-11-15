@@ -68,7 +68,7 @@
 #define	SYSFIL_RECVFD		48
 #define	SYSFIL_SENDFD		49
 #define	SYSFIL_PROT_EXEC	50
-#define	SYSFIL_ANY_SESSION	51
+#define	SYSFIL_ANY_PROCESS	51
 #define	SYSFIL_ANY_IOCTL	52
 #define	SYSFIL_ANY_SOCKOPT	53
 #define	SYSFIL_CRYPTODEV	54
@@ -76,7 +76,10 @@
 #define	SYSFIL_WROUTE		56
 #define	SYSFIL_FFCLOCK		57
 #define	SYSFIL_SETFIB		58
-#define	SYSFIL_LAST		SYSFIL_SETFIB
+#define	SYSFIL_SAME_SESSION	59
+#define	SYSFIL_SAME_PGRP	60
+#define	SYSFIL_CHILD_PROCESS	61
+#define	SYSFIL_LAST		SYSFIL_CHILD_PROCESS
 
 /*
  * Some syscalls are assigned to sysfils that may seem to be less restrictive

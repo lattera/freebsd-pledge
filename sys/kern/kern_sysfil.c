@@ -283,6 +283,15 @@ sysfilset_fill(sysfilset_t *sysfilset, int sf)
 	case SYSFIL_CPUSET:
 		SYSFILSET_FILL(sysfilset, SYSFIL_SCHED);
 		break;
+	case SYSFIL_ANY_PROCESS:
+		SYSFILSET_FILL(sysfilset, SYSFIL_SAME_SESSION);
+		/* FALLTHROUGH */
+	case SYSFIL_SAME_SESSION:
+		SYSFILSET_FILL(sysfilset, SYSFIL_SAME_PGRP);
+		/* FALLTHROUGH */
+	case SYSFIL_SAME_PGRP:
+		SYSFILSET_FILL(sysfilset, SYSFIL_CHILD_PROCESS);
+		break;
 	}
 	SYSFILSET_FILL(sysfilset, sf);
 }

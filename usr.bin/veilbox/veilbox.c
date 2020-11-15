@@ -1,13 +1,15 @@
 #include <err.h>
 #include <limits.h>
 #include <paths.h>
-#include <stdint.h>
+#include <pwd.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/errno.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <sysexits.h>
 #include <unistd.h>
 
@@ -22,14 +24,19 @@ static const mode_t tmpdir_mode = S_IWUSR|S_IXUSR;
 
 static const char *default_promises =
     "stdio "
+    "thread "
     "rlimit "
     "rpath wpath cpath dpath tmppath "
     "exec prot_exec "
     "flock fattr chown id "
-    "proc_session thread "
+    "proc_child ps_child "
     "tty "
     "posixrt "
     "unix recvfd sendfd ";
+
+static const char *pgrp_promises = "proc_pgrp ps_pgrp";
+
+static const char *shell_promises = "proc_session ps_session";
 
 static const char *network_promises = "ssl dns inet";
 
@@ -71,7 +78,7 @@ static const size_t default_unveils_count =
 static void
 usage(void)
 {
-	fprintf(stderr, "usage: %s [-s] [-p promises] [-u unveil ...] cmd [arg ...]\n", getprogname());
+	fprintf(stderr, "usage: %s [-kg] [-p promises] [-u unveil ...] [-sS] cmd [arg ...]\n", getprogname());
 	exit(EX_USAGE);
 }
 
@@ -111,15 +118,62 @@ new_tmpdir()
 		err(EX_OSERR, "setenv");
 }
 
+static void
+preexec_cleanup(void)
+{
+	closefrom(3); /* Prevent potentially unintended FD passing. */
+}
+
+static void
+exec_shell(bool login_shell)
+{
+	const char *run, *name;
+
+	run = getenv("SHELL");
+	if (!run || !*run) {
+		struct passwd *pw;
+		run = _PATH_BSHELL;
+		errno = 0;
+		pw = getpwuid(getuid());
+		if (pw) {
+			if (pw->pw_shell && *pw->pw_shell) {
+				run = strdup(pw->pw_shell);
+				if (!run)
+					err(EX_TEMPFAIL, "strdup");
+			}
+		} else if (errno)
+			err(EX_OSERR, "getpwuid");
+		endpwent();
+	}
+
+	if (login_shell) {
+		char *p;
+		const char *q;
+		q = (p = strrchr(run, '/')) ? p + 1 : run;
+		p = malloc(1 + strlen(q) + 1);
+		if (!p)
+			err(EX_TEMPFAIL, "malloc");
+		p[0] = '-';
+		strcpy(p + 1, q);
+		name = p;
+	} else
+		name = run;
+
+	preexec_cleanup();
+	execlp(run, name, (char *)NULL);
+	err(EX_OSERR, "%s", run);
+}
 
 int
 main(int argc, char *argv[])
 {
 	int ch, r;
 	char promises[1024] = "";
-	bool signaling = false;
+	bool signaling = false,
+	     run_shell = false,
+	     login_shell = false,
+	     new_pgrp = false;
 	char *cmd_arg0 = NULL;
-	char *cmd_name;
 	char abspath[PATH_MAX];
 	size_t abspath_len = 0;
 
@@ -137,11 +191,14 @@ main(int argc, char *argv[])
 			err(EX_OSERR, "%s", entry->path);
 	}
 
-	while ((ch = getopt(argc, argv, "sp:u:0:")) != -1)
+	while ((ch = getopt(argc, argv, "kgp:u:0:sS")) != -1)
 		switch (ch) {
-		case 's':
+		case 'k':
 			signaling = true;
 			break;
+		case 'g':
+			  new_pgrp = true;
+			  break;
 		case 'p': {
 			char *p;
 			for (p = optarg; *p; p++)
@@ -180,16 +237,20 @@ main(int argc, char *argv[])
 		case '0':
 			  cmd_arg0 = optarg;
 			  break;
+		case 'S':
+			  login_shell = true;
+			  /* FALLTHROUGH */
+		case 's':
+			  run_shell = true;
+			  break;
 		default:
 			usage();
 		}
 	argv += optind;
 	argc -= optind;
 
-	if (!argc)
+	if (run_shell == (argc != 0))
 		usage();
-
-	closefrom(3); /* Prevent potentially unintended FD passing. */
 
 	new_tmpdir();
 
@@ -197,14 +258,34 @@ main(int argc, char *argv[])
 		strlcat(promises, " ", sizeof promises);
 		strlcat(promises, error_promises, sizeof promises);
 	}
+	if (run_shell) {
+		strlcat(promises, " ", sizeof promises);
+		strlcat(promises, shell_promises, sizeof promises);
+	}
+	if (new_pgrp) {
+		strlcat(promises, " ", sizeof promises);
+		strlcat(promises, pgrp_promises, sizeof promises);
+		if (getpgid(0) != getpid()) {
+			r = setpgid(0, 0);
+			if (r < 0)
+				err(EX_OSERR, "setpgid");
+		}
+	}
 
 	r = pledge(NULL, promises);
 	if (r < 0)
 		err(EX_NOPERM, "pledge");
 
-	cmd_name = argv[0];
-	if (cmd_arg0)
-		argv[0] = cmd_arg0;
-	execvp(cmd_name, argv);
-	err(EX_OSERR, "%s", cmd_name);
+	if (run_shell) {
+		exec_shell(login_shell);
+
+	} else {
+		char *cmd_name;
+		cmd_name = argv[0];
+		if (cmd_arg0)
+			argv[0] = cmd_arg0;
+		preexec_cleanup();
+		execvp(cmd_name, argv);
+		err(EX_OSERR, "%s", cmd_name);
+	}
 }

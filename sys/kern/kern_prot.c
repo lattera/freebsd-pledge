@@ -1464,7 +1464,19 @@ p_sysfil_check(struct thread *td, struct proc *p)
 		if (error)
 			return (error);
 		if (td->td_proc->p_session != p->p_session) {
-			error = sysfil_check(td, SYSFIL_ANY_SESSION);
+			error = sysfil_check(td, SYSFIL_ANY_PROCESS);
+			if (error)
+				return (error);
+		} else if (td->td_proc->p_pgrp != p->p_pgrp) {
+			error = sysfil_check(td, SYSFIL_SAME_SESSION);
+			if (error)
+				return (error);
+		} else if (td->td_proc != p->p_pptr) {
+			error = sysfil_check(td, SYSFIL_SAME_PGRP);
+			if (error)
+				return (error);
+		} else {
+			error = sysfil_check(td, SYSFIL_CHILD_PROCESS);
 			if (error)
 				return (error);
 		}
