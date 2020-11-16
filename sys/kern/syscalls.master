@@ -417,7 +417,7 @@
 		    _In_z_ const char *link
 		);
 	}
-58	AUE_READLINK	STD|SYSFIL_PATH {
+58	AUE_READLINK	STD|SYSFIL_RPATH {
 		ssize_t readlink(
 		    _In_z_ const char *path,
 		    _Out_writes_z_(count) char *buf,
@@ -983,7 +983,7 @@
 		    _Out_ struct ostatfs *buf
 		);
 	}
-158	AUE_FSTATFS	COMPAT4|SYSFIL_STDIO {
+158	AUE_FSTATFS	COMPAT4|SYSFIL_RPATH {
 		int fstatfs(
 		    int fd,
 		    _Out_ struct ostatfs *buf
@@ -1136,7 +1136,7 @@
 		    _Out_ struct freebsd11_stat *ub
 		);
 	}
-191	AUE_PATHCONF	STD|SYSFIL_RPATH {
+191	AUE_PATHCONF	STD|SYSFIL_PATH {
 		int pathconf(
 		    _In_z_ const char *path,
 		    int name
@@ -2717,7 +2717,7 @@
 		    mode_t mode
 		);
 	}
-500	AUE_READLINKAT	STD|SYSFIL_PATH {
+500	AUE_READLINKAT	STD|SYSFIL_RPATH {
 		ssize_t readlinkat(
 		    int fd,
 		    _In_z_ const char *path,
@@ -2804,7 +2804,7 @@
 		    _Inout_opt_ struct shmid_ds *buf
 		);
 	}
-513	AUE_LPATHCONF	STD|SYSFIL_RPATH {
+513	AUE_LPATHCONF	STD|SYSFIL_PATH {
 		int lpathconf(
 		    _In_z_ const char *path,
 		    int name
