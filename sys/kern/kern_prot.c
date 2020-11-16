@@ -1749,6 +1749,8 @@ p_candebug(struct thread *td, struct proc *p)
 	PROC_LOCK_ASSERT(p, MA_OWNED);
 	if ((error = priv_check(td, PRIV_DEBUG_UNPRIV)))
 		return (error);
+	if ((error = sysfil_check(td, SYSFIL_DEFAULT)))
+		return (error);
 	if (td->td_proc == p)
 		return (0);
 	if ((error = prison_check(td->td_ucred, p->p_ucred)))
