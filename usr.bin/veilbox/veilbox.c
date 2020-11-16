@@ -49,16 +49,18 @@ struct unveil_entry {
 
 static const struct unveil_entry default_unveils[] = {
 	/*
-	 * NOTE: On this implementation, open(2) with O_CREAT works with just
-	 * "w" unveil permissions if the file already exists.
+	 * NOTE:
+	 * - "m" permission is "w" without the implied "a" (change attributes).
+	 * - On this implementation, open(2) with O_CREAT works with just "w"
+	 *   (or "m") unveil permissions if the file already exists.
 	 */
-	{ _PATH_DEVNULL, "rw" },
-	{ _PATH_DEV "/fd", "rw" },
+	{ _PATH_DEVNULL, "rm" },
+	{ _PATH_DEV "/fd", "rm" },
 	{ _PATH_DEV "/stdin", "r" },
-	{ _PATH_DEV "/stdout", "rw" },
-	{ _PATH_DEV "/stderr", "rw" },
-	{ _PATH_DEV "/full", "rw" },
-	{ _PATH_DEV "/zero", "rw" },
+	{ _PATH_DEV "/stdout", "rm" },
+	{ _PATH_DEV "/stderr", "rm" },
+	{ _PATH_DEV "/full", "rm" },
+	{ _PATH_DEV "/zero", "rm" },
 	{ _PATH_ETC "/termcap", "r" },
 	{ "/lib", "rx" },
 	{ "/usr/lib", "rx" },

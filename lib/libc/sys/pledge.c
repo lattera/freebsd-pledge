@@ -254,7 +254,7 @@ static struct promise_unveil {
 	enum promise_type type : 8;
 } unveils_table[] = {
 #define	R UPERM_RPATH
-#define	W UPERM_WPATH
+#define	W UPERM_WPATH /* NOTE: UPERM_APATH not implied here */
 #define	C UPERM_CPATH
 #define	X UPERM_XPATH
 #define	A UPERM_APATH
@@ -270,10 +270,6 @@ static struct promise_unveil {
 	{ "/usr/share/zoneinfo/", R,		PROMISE_STDIO },
 	{ "/usr/share/nls/", R,			PROMISE_STDIO },
 	{ _PATH_LOCALBASE "/share/nls/", R,	PROMISE_STDIO },
-	/*
-	 * NOTE: UPERM_CPATH is generally not given.  This is safer but
-	 * programs that try to open those files with O_CREAT will fail.
-	 */
 	{ _PATH_DEVNULL, R|W,			PROMISE_STDIO },
 	{ _PATH_DEV "/random", R,		PROMISE_STDIO },
 	{ _PATH_DEV "/urandom", R,		PROMISE_STDIO },
@@ -595,6 +591,7 @@ unveil_parse_perms(unveil_perms_t *perms, const char *s)
 	while (*s)
 		switch (*s++) {
 		case 'r': *perms |= UPERM_RPATH; break;
+		case 'm': *perms |= UPERM_WPATH; break;
 		case 'w': *perms |= UPERM_WPATH; /* FALLTHROUGH */
 		case 'a': *perms |= UPERM_APATH; break;
 		case 'c': *perms |= UPERM_CPATH; break;
