@@ -190,7 +190,6 @@ cap_rights_sysinit(void *arg)
 	    CAP_FSTAT,
 	    CAP_FSTATAT,
 	    CAP_FSTATFS,
-	    CAP_RENAMEAT_SOURCE,
 	    CAP_LINKAT_SOURCE,
 	    CAP_MAC_GET,
 	    CAP_EXTATTR_GET,
@@ -215,6 +214,7 @@ cap_rights_sysinit(void *arg)
 	    CAP_UNLINKAT,
 	    CAP_BINDAT,
 	    CAP_CONNECTAT,
+	    CAP_RENAMEAT_SOURCE,
 	    CAP_RENAMEAT_TARGET,
 	    CAP_UNDELETEAT);
 	cap_rights_init(&xpath_rights,
