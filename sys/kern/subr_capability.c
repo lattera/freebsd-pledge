@@ -106,6 +106,8 @@ __read_mostly cap_rights_t cap_extattr_list_rights;
 __read_mostly cap_rights_t cap_extattr_set_rights;
 __read_mostly cap_rights_t cap_no_rights;
 #if defined(UNVEIL) || defined(SYSFIL)
+__read_mostly cap_rights_t cap_unveil_o_exec_kludge_rights;
+__read_mostly cap_rights_t cap_unveil_o_creat_kludge_rights;
 __read_mostly cap_rights_t cap_unveil_merged_rights[1 << 6];
 #endif
 
@@ -237,6 +239,9 @@ cap_rights_sysinit(void *arg)
 	    CAP_EXTATTR_DELETE);
 	cap_rights_init(&rcpath_rights,
 	    CAP_RENAMEAT_SOURCE);
+
+	cap_rights_init(&cap_unveil_o_exec_kludge_rights, CAP_FEXECVE, CAP_EXECAT);
+	cap_rights_init(&cap_unveil_o_creat_kludge_rights, CAP_CREATE);
 
 	/* Pre-merge rights for every possible set of unveil permissions. */
 	for (int i = 0; i < nitems(cap_unveil_merged_rights); i++) {

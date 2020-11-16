@@ -49,17 +49,16 @@ struct unveil_entry {
 
 static const struct unveil_entry default_unveils[] = {
 	/*
-	 * NOTE: pledge(3) unveils /dev/null but only with "rw" permissions.
-	 * Programs that try to open(2) it with O_CREAT will fail unless it is
-	 * re-unveiled with "c" permission.
+	 * NOTE: On this implementation, open(2) with O_CREAT works with just
+	 * "w" unveil permissions if the file already exists.
 	 */
-	{ _PATH_DEVNULL, "rwc" },
-	{ _PATH_DEV "/fd", "rwc" },
+	{ _PATH_DEVNULL, "rw" },
+	{ _PATH_DEV "/fd", "rw" },
 	{ _PATH_DEV "/stdin", "r" },
-	{ _PATH_DEV "/stdout", "rwc" },
-	{ _PATH_DEV "/stderr", "rwc" },
-	{ _PATH_DEV "/full", "rwc" },
-	{ _PATH_DEV "/zero", "rwc" },
+	{ _PATH_DEV "/stdout", "rw" },
+	{ _PATH_DEV "/stderr", "rw" },
+	{ _PATH_DEV "/full", "rw" },
+	{ _PATH_DEV "/zero", "rw" },
 	{ _PATH_ETC "/termcap", "r" },
 	{ "/lib", "rx" },
 	{ "/usr/lib", "rx" },

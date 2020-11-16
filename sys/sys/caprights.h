@@ -113,6 +113,8 @@ extern cap_rights_t cap_extattr_get_rights;
 extern cap_rights_t cap_extattr_list_rights;
 extern cap_rights_t cap_extattr_set_rights;
 #if defined(UNVEIL) || defined(SYSFIL)
+extern cap_rights_t cap_unveil_o_exec_kludge_rights;
+extern cap_rights_t cap_unveil_o_creat_kludge_rights;
 extern cap_rights_t cap_unveil_merged_rights[1 << 6];
 #define	CAP_UNVEIL_MERGED_RIGHTS(inspect, rpath, wpath, cpath, xpath, apath)	\
 	&cap_unveil_merged_rights[						\

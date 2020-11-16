@@ -815,25 +815,28 @@ unveil_lookup_check(struct nameidata *ndp)
 {
 	struct componentname *cnp = &ndp->ni_cnd;
 	unveil_perms_t uperms;
-	const cap_rights_t *haverights, *needrights;
+	const cap_rights_t *haverights;
+	cap_rights_t needrights;
 	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
 		return (0);
 
 	if (cnp->cn_flags & ISSYMLINK)
-		needrights = &cap_fstat_rights;
+		needrights = cap_fstat_rights;
 	else
-		needrights = ndp->ni_rightsneeded;
+		needrights = *ndp->ni_rightsneeded;
 
-	uperms = unveil_traverse_effective_perms(
-	    cnp->cn_thread, &ndp->ni_unveil);
+	uperms = unveil_traverse_effective_perms(cnp->cn_thread, &ndp->ni_unveil);
 
-	/* Kludge for O_EXEC/O_SEARCH opens. */
-	if (ndp->ni_vp && ndp->ni_vp->v_type == VDIR &&
-	    (uperms & UPERM_RPATH))
-		uperms |= UPERM_XPATH;
+	/* Kludge for directory O_EXEC/O_SEARCH opens. */
+	if (ndp->ni_vp && ndp->ni_vp->v_type == VDIR && (uperms & UPERM_RPATH))
+		cap_rights_remove(&needrights, &cap_unveil_o_exec_kludge_rights);
+
+	/* Kludge for O_CREAT opens. */
+	if (ndp->ni_vp && (uperms & UPERM_WPATH))
+		cap_rights_remove(&needrights, &cap_unveil_o_creat_kludge_rights);
 
 	haverights = unveil_perms_to_rights(uperms);
-	if (cap_rights_contains(haverights, needrights))
+	if (cap_rights_contains(haverights, &needrights))
 		return (0);
 
 	return (uperms & ~UPERM_INSPECT ? EACCES : ENOENT);
