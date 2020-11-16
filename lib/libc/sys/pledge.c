@@ -271,10 +271,10 @@ static struct promise_unveil {
 	{ "/usr/share/nls/", R,			PROMISE_STDIO },
 	{ _PATH_LOCALBASE "/share/nls/", R,	PROMISE_STDIO },
 	/*
-	 * Programs will often open /dev/null with O_CREAT.  TODO: Could have a
-	 * different unveil() permission just for that.
+	 * NOTE: UPERM_CPATH is generally not given.  This is safer but
+	 * programs that try to open those files with O_CREAT will fail.
 	 */
-	{ _PATH_DEVNULL, R|W|C,			PROMISE_STDIO },
+	{ _PATH_DEVNULL, R|W,			PROMISE_STDIO },
 	{ _PATH_DEV "/random", R,		PROMISE_STDIO },
 	{ _PATH_DEV "/urandom", R,		PROMISE_STDIO },
 	{ _PATH_ETC "/nsswitch.conf", R,	PROMISE_DNS },
@@ -293,9 +293,8 @@ static struct promise_unveil {
 	{ _PATH_ETC "/ssl/", R,			PROMISE_SSL },
 	{ _PATH_LOCALBASE "/etc/ssl/", R,	PROMISE_SSL },
 	/*
-	 * TODO: Ideally we wouldn't allow to read the directory itself (so
-	 * that a pledged process can't find the names of the temporary files
-	 * of other processes).
+	 * XXX: OpenBSD is a lot more restrictive there.  It only allows to
+	 * create regular files (with open(2)) and unlink them.
 	 */
 	{ tmp_path, R|W|C|A,			PROMISE_TMPPATH },
 	{ "", 0,				PROMISE_NONE }

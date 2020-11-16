@@ -48,6 +48,12 @@ struct unveil_entry {
 };
 
 static const struct unveil_entry default_unveils[] = {
+	/*
+	 * NOTE: pledge(3) unveils /dev/null but only with "rw" permissions.
+	 * Programs that try to open(2) it with O_CREAT will fail unless it is
+	 * re-unveiled with "c" permission.
+	 */
+	{ _PATH_DEVNULL, "rwc" },
 	{ _PATH_DEV "/fd", "rwc" },
 	{ _PATH_DEV "/stdin", "r" },
 	{ _PATH_DEV "/stdout", "rwc" },
