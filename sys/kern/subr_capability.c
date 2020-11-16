@@ -172,6 +172,7 @@ cap_rights_sysinit(void *arg)
 	cap_rights_t cpath_rights;
 	cap_rights_t xpath_rights;
 	cap_rights_t apath_rights;
+	cap_rights_t rcpath_rights;
 
 	cap_rights_init(&null_rights);
 	cap_rights_init(&inspect_rights,
@@ -214,7 +215,6 @@ cap_rights_sysinit(void *arg)
 	    CAP_UNLINKAT,
 	    CAP_BINDAT,
 	    CAP_CONNECTAT,
-	    CAP_RENAMEAT_SOURCE,
 	    CAP_RENAMEAT_TARGET,
 	    CAP_UNDELETEAT);
 	cap_rights_init(&xpath_rights,
@@ -235,17 +235,27 @@ cap_rights_sysinit(void *arg)
 	    CAP_REVOKEAT,
 	    CAP_EXTATTR_SET,
 	    CAP_EXTATTR_DELETE);
+	cap_rights_init(&rcpath_rights,
+	    CAP_RENAMEAT_SOURCE);
 
 	/* Pre-merge rights for every possible set of unveil permissions. */
 	for (int i = 0; i < nitems(cap_unveil_merged_rights); i++) {
 		cap_rights_t *rights = &cap_unveil_merged_rights[i];
+		/* Must match the argument order of CAP_UNVEIL_MERGED_RIGHTS(). */
+		bool inspect = i & (1 << 0),
+		     rpath = i & (1 << 1),
+		     wpath = i & (1 << 2),
+		     cpath = i & (1 << 3),
+		     xpath = i & (1 << 4),
+		     apath = i & (1 << 5);
 		cap_rights_init(rights);
-		cap_rights_merge(rights, i & (1 << 0) ? &inspect_rights : &null_rights);
-		cap_rights_merge(rights, i & (1 << 1) ? &rpath_rights   : &null_rights);
-		cap_rights_merge(rights, i & (1 << 2) ? &wpath_rights   : &null_rights);
-		cap_rights_merge(rights, i & (1 << 3) ? &cpath_rights   : &null_rights);
-		cap_rights_merge(rights, i & (1 << 4) ? &xpath_rights   : &null_rights);
-		cap_rights_merge(rights, i & (1 << 5) ? &apath_rights   : &null_rights);
+		cap_rights_merge(rights, inspect ? &inspect_rights : &null_rights);
+		cap_rights_merge(rights, rpath   ? &rpath_rights   : &null_rights);
+		cap_rights_merge(rights, wpath   ? &wpath_rights   : &null_rights);
+		cap_rights_merge(rights, cpath   ? &cpath_rights   : &null_rights);
+		cap_rights_merge(rights, xpath   ? &xpath_rights   : &null_rights);
+		cap_rights_merge(rights, apath   ? &apath_rights   : &null_rights);
+		cap_rights_merge(rights, rpath && cpath ? &rcpath_rights : &null_rights);
 	}
 #endif
 }
