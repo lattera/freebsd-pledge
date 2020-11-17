@@ -13,13 +13,23 @@
 #endif
 
 /*
- * SYSFIL_DEFAULT will be lost after the first pledge() and after entering
- * Capsicum capability mode.  It must be zero for certain structures to
- * correctly initialize with this value (struct fileops/cdevsw).
+ * SYSFIL_DEFAULT is a generic category for miscellaneous operations that must
+ * be restricted.  It will be lost after the first pledge().  It must be zero
+ * for certain structures to correctly initialize with its value (such as
+ * struct fileops/cdevsw).
  */
 #define	SYSFIL_DEFAULT		0
-#define	SYSFIL_UNUSED0		1
+/*
+ * SYSFIL_NOCAPSICUM will be lost after entering Capsicum capability mode.  It
+ * is only there to make some checks faster.
+ */
+#define	SYSFIL_NOCAPSICUM	1
+/*
+ * SYSFIL_ALWAYS is for various operations that should always be allowed.  It
+ * should never be lost.
+ */
 #define	SYSFIL_ALWAYS		2
+
 #define	SYSFIL_STDIO		3
 #define	SYSFIL_PATH		4
 #define	SYSFIL_RPATH		5
@@ -114,6 +124,8 @@
 
 #define	SYSFIL_VALID(i)		((i) >= 0 && (i) <= SYSFIL_LAST)
 #define	SYSFIL_USER_VALID(i)	(SYSFIL_VALID(i) && (i) >= SYSFIL_STDIO)
+
+/* sysfilctl() flags and other constants */
 
 #define	SYSFILCTL_MASK		0
 #define	SYSFILCTL_OPTIONAL	(1 <<  0)
@@ -217,8 +229,8 @@ static inline void
 sysfil_cred_sandbox(struct ucred *cr)
 {
 #ifdef SYSFIL
-	SYSFILSET_CLEAR(&cr->cr_sysfilset, SYSFIL_DEFAULT);
-	SYSFILSET_CLEAR(&cr->cr_sysfilset_exec, SYSFIL_DEFAULT);
+	SYSFILSET_CLEAR(&cr->cr_sysfilset, SYSFIL_NOCAPSICUM);
+	SYSFILSET_CLEAR(&cr->cr_sysfilset_exec, SYSFIL_NOCAPSICUM);
 #endif
 }
 
