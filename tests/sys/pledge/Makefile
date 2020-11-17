@@ -4,6 +4,10 @@ PACKAGE=        tests
 
 TESTSDIR=	${TESTSBASE}/sys/pledge
 
+BINDIR=			${TESTSDIR}
+PROGS+=			suid-check
+BINMODE.suid-check=	4555
+
 ATF_TESTS_SH+=		execpledge_various
 
 PLAIN_TESTS_C+= pledge_super_basic_test
@@ -26,6 +30,7 @@ PLAIN_TESTS_C+= pledge_chown_own
 PLAIN_TESTS_C+= pledge_fattr
 PLAIN_TESTS_C+= pledge_prot_exec
 PLAIN_TESTS_C+= pledge_proc_child
+PLAIN_TESTS_C+= pledge_suid_exec
 
 PLAIN_TESTS_C+= unveil_simple0
 PLAIN_TESTS_C+= unveil_simple1

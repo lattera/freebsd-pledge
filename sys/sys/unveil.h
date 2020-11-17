@@ -58,11 +58,21 @@ int unveilctl(int atfd, const char *path, int flags, int perms);
 MALLOC_DECLARE(M_UNVEIL);
 #endif
 
-static bool
+static inline bool
 unveil_is_active(struct thread *td)
 {
 #ifdef UNVEIL
 	return (td->td_proc->p_fd->fd_unveil.active);
+#else
+	return (false);
+#endif
+}
+
+static inline bool
+unveil_exec_is_active(struct thread *td)
+{
+#ifdef UNVEIL
+	return (td->td_proc->p_fd->fd_unveil.exec_active);
 #else
 	return (false);
 #endif

@@ -532,6 +532,9 @@ interpret:
 	    !CRED_IN_CAPABILITY_MODE(oldcred) &&
 	    !CRED_IN_RESTRICTED_EXEC_MODE(oldcred) &&
 #endif
+#ifdef UNVEIL
+	    !unveil_exec_is_active(td) &&
+#endif
 	    (imgp->vp->v_mount->mnt_flag & MNT_NOSUID) == 0 &&
 	    (p->p_flag & P_TRACED) == 0) {
 		imgp->credential_setid = true;

@@ -24,7 +24,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/socket.h>
 #include <netinet/in.h>
 
-static unsigned sysfil_violation_log_level = 1;
+static unsigned __read_mostly sysfil_violation_log_level = 1;
 SYSCTL_UINT(_kern, OID_AUTO, log_sysfil_violation,
     CTLFLAG_RW, &sysfil_violation_log_level, 0,
     "Log violations of sysfil restrictions");

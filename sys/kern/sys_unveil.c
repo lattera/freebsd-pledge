@@ -27,11 +27,11 @@ __FBSDID("$FreeBSD$");
 
 MALLOC_DEFINE(M_UNVEIL, "unveil", "unveil");
 
-static bool unveil_enabled = true;
+static bool __read_mostly unveil_enabled = true;
 SYSCTL_BOOL(_kern, OID_AUTO, unveil_enabled, CTLFLAG_RW,
 	&unveil_enabled, 0, "Allow unveil usage");
 
-static unsigned int unveil_max_nodes_per_process = 128;
+static unsigned int __read_mostly unveil_max_nodes_per_process = 128;
 SYSCTL_UINT(_kern, OID_AUTO, maxunveilsperproc, CTLFLAG_RW,
 	&unveil_max_nodes_per_process, 0, "Maximum unveils allowed per process");
 
@@ -288,10 +288,19 @@ unveil_proc_exec_switch(struct thread *td)
 {
 	struct filedesc *fdp = td->td_proc->p_fd;
 	struct unveil_base *base = &fdp->fd_unveil;
-	struct unveil_node *node, *node_tmp;
-	base->active = base->exec_active;
-	RB_FOREACH_SAFE(node, unveil_node_tree, &base->root, node_tmp)
-		unveil_node_exec_to_curr(node, false);
+	if ((base->active = base->exec_active)) {
+		struct unveil_node *node, *node_tmp;
+		RB_FOREACH_SAFE(node, unveil_node_tree, &base->root, node_tmp)
+			unveil_node_exec_to_curr(node, false);
+	} else {
+		/*
+		 * This is very important for SUID/SGID execution checks.  When
+		 * unveil_exec_is_active() is false, unveil_proc_exec_switch()
+		 * must provide a clean execution environment for programs with
+		 * elevated privileges.
+		 */
+		unveil_clear(base);
+	}
 }
 
 
