@@ -364,7 +364,7 @@ pledge_unveil_fixup_path(bool for_exec, const char *path)
 		 */
 		if (has_custom_unveils[for_exec])
 			path = NULL;
-	} else if (path == tmp_path) {
+	} else if (issetugid() == 0 && path == tmp_path) {
 		char *tmpdir;
 		if ((tmpdir = getenv("TMPDIR")))
 			path = tmpdir;
