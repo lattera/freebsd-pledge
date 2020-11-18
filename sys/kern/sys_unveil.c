@@ -112,20 +112,12 @@ unveil_node_freeze(struct unveil_node *node, enum unveil_role role, unveil_perms
 }
 
 static void
-unveil_node_exec_to_curr(struct unveil_node *node, bool simplify)
+unveil_node_exec_to_curr(struct unveil_node *node)
 {
 	const int s = UNVEIL_ROLE_EXEC, d = UNVEIL_ROLE_CURR;
-	int i;
-	if (simplify) {
-		unveil_perms_t perms;
-		perms = unveil_node_soft_perms(node, s);
-		for (i = 0; i < UNVEIL_SLOT_COUNT; i++) {
-			node->wanted_perms[s][i] = perms;
-			node->wanted_final[s][i] = true;
-		}
-	}
+	unveil_node_freeze(node, s, UPERM_NONE);
 	node->frozen_perms[d] = node->frozen_perms[s];
-	for (i = 0; i < UNVEIL_SLOT_COUNT; i++) {
+	for (int i = 0; i < UNVEIL_SLOT_COUNT; i++) {
 		node->wanted_perms[d][i] = node->wanted_perms[s][i];
 		node->wanted_final[d][i] = node->wanted_final[s][i];
 	}
@@ -291,7 +283,22 @@ unveil_proc_exec_switch(struct thread *td)
 	if ((base->active = base->exec_active)) {
 		struct unveil_node *node, *node_tmp;
 		RB_FOREACH_SAFE(node, unveil_node_tree, &base->root, node_tmp)
-			unveil_node_exec_to_curr(node, false);
+			unveil_node_exec_to_curr(node);
+#if 0
+		/*
+		 * Since unveil_node_exec_to_curr() freezes the nodes (in a
+		 * separate pass and with no extra retained permissions); it is
+		 * possible to drop the inheritance from the wanted permissions.
+		 */
+		RB_FOREACH_SAFE(node, unveil_node_tree, &base->root, node_tmp)
+			for (int i = 0; i < UNVEIL_ROLE_COUNT; i++) {
+				unveil_perms_t perms = unveil_node_soft_perms(node, i);
+				for (int j = 0; j < UNVEIL_SLOT_COUNT; j++) {
+					node->wanted_perms[i][j] = perms;
+					node->wanted_final[i][j] = true;
+				}
+			}
+#endif
 	} else {
 		/*
 		 * This is very important for SUID/SGID execution checks.  When

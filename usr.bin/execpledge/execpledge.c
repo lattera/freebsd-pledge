@@ -16,16 +16,17 @@ int
 main(int argc, char *argv[])
 {
 	int ch, r;
-	char *promises = NULL;
 
 	while ((ch = getopt(argc, argv, "p:u:")) != -1)
 		switch (ch) {
 		case 'p': {
 			char *p;
-			promises = optarg;
-			for (p = promises; *p; p++)
+			for (p = optarg; *p; p++)
 				if (*p == ',')
 					*p = ' ';
+			r = pledge(NULL, optarg);
+			if (r < 0)
+				err(EX_NOPERM, "pledge");
 			break;
 		}
 		case 'u': {
@@ -47,11 +48,6 @@ main(int argc, char *argv[])
 
 	if (!argc)
 		usage();
-
-	r = pledge("stdio exec", promises);
-	if (r < 0)
-		err(EX_NOPERM, "pledge");
-
 	execvp(argv[0], argv);
-	err(EX_OSERR, "execvp");
+	err(EX_OSERR, "%s", argv[0]);
 }
