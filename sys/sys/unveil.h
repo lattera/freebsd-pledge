@@ -76,6 +76,14 @@ void unveil_traverse_dotdot(struct thread *, struct unveil_traversal *,
     struct vnode *);
 unveil_perms_t unveil_traverse_effective_perms(struct thread *, struct unveil_traversal *);
 
+extern cap_rights_t cap_unveil_o_exec_kludge_rights;
+extern cap_rights_t cap_unveil_o_creat_kludge_rights;
+#define	CAP_UNVEIL_MERGED_RIGHTS_SIZE (1 << 6)
+#define	CAP_UNVEIL_MERGED_RIGHTS_MASK (CAP_UNVEIL_MERGED_RIGHTS_SIZE - 1)
+#define	CAP_UNVEIL_MERGED_RIGHTS(uperms) \
+	&cap_unveil_merged_rights[(uperms) & CAP_UNVEIL_MERGED_RIGHTS_MASK]
+extern cap_rights_t cap_unveil_merged_rights[CAP_UNVEIL_MERGED_RIGHTS_SIZE];
+
 #endif /* _KERNEL */
 
 #endif

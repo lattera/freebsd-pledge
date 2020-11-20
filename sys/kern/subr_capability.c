@@ -43,9 +43,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/systm.h>
 #include <sys/kernel.h>
 #include <machine/stdarg.h>
-#ifdef UNVEIL
-#include <sys/unveil.h>
-#endif
 #else	/* !_KERNEL */
 #include <assert.h>
 #include <stdarg.h>
@@ -108,11 +105,6 @@ __read_mostly cap_rights_t cap_extattr_get_rights;
 __read_mostly cap_rights_t cap_extattr_list_rights;
 __read_mostly cap_rights_t cap_extattr_set_rights;
 __read_mostly cap_rights_t cap_no_rights;
-#if defined(UNVEIL) || defined(SYSFIL)
-__read_mostly cap_rights_t cap_unveil_o_exec_kludge_rights;
-__read_mostly cap_rights_t cap_unveil_o_creat_kludge_rights;
-__read_mostly cap_rights_t cap_unveil_merged_rights[1 << 6];
-#endif
 
 static void
 cap_rights_sysinit(void *arg)
@@ -168,121 +160,6 @@ cap_rights_sysinit(void *arg)
 	cap_rights_init_one(&cap_extattr_list_rights, CAP_EXTATTR_LIST);
 	cap_rights_init_one(&cap_extattr_set_rights, CAP_EXTATTR_SET);
 	cap_rights_init(&cap_no_rights);
-
-#if defined(UNVEIL) || defined(SYSFIL)
-	cap_rights_t null_rights;
-	cap_rights_t inspect_rights;
-	cap_rights_t rpath_rights;
-	cap_rights_t wpath_rights;
-	cap_rights_t cpath_rights;
-	cap_rights_t xpath_rights;
-	cap_rights_t apath_rights;
-	cap_rights_t rcpath_rights;
-	cap_rights_t rwcapath_rights;
-
-	cap_rights_init(&null_rights);
-	cap_rights_init(&inspect_rights,
-	    CAP_LOOKUP,
-	    CAP_FPATHCONF,
-	    CAP_FSTAT,
-	    CAP_FSTATAT,
-	    CAP_FCHDIR);
-	cap_rights_init(&rpath_rights,
-	    CAP_LOOKUP,
-	    CAP_FLOCK,
-	    CAP_READ,
-	    CAP_SEEK,
-	    CAP_FPATHCONF,
-	    CAP_MMAP,
-	    CAP_FCHDIR,
-	    CAP_FSTAT,
-	    CAP_FSTATAT,
-	    CAP_FSTATFS,
-	    CAP_MAC_GET,
-	    CAP_EXTATTR_GET,
-	    CAP_EXTATTR_LIST);
-	cap_rights_init(&wpath_rights,
-	    CAP_LOOKUP,
-	    CAP_FLOCK,
-	    CAP_WRITE,
-	    CAP_SEEK,
-	    CAP_FPATHCONF,
-	    CAP_MMAP,
-	    CAP_FSYNC,
-	    CAP_FTRUNCATE);
-	cap_rights_init(&cpath_rights,
-	    CAP_LOOKUP,
-	    CAP_CREATE,
-	    CAP_FPATHCONF,
-	    CAP_LINKAT_TARGET,
-	    CAP_MKDIRAT,
-	    CAP_MKFIFOAT,
-	    CAP_MKNODAT,
-	    CAP_SYMLINKAT,
-	    CAP_UNLINKAT,
-	    CAP_BINDAT,
-	    CAP_CONNECTAT,
-	    CAP_RENAMEAT_TARGET,
-	    CAP_UNDELETEAT);
-	cap_rights_init(&xpath_rights,
-	    CAP_LOOKUP,
-	    CAP_FEXECVE,
-	    CAP_EXECAT);
-	cap_rights_init(&apath_rights,
-	    CAP_LOOKUP,
-	    CAP_FCHFLAGS,
-	    CAP_CHFLAGSAT,
-	    CAP_FCHMOD,
-	    CAP_FCHMODAT,
-	    CAP_FCHOWN,
-	    CAP_FCHOWNAT,
-	    CAP_FUTIMES,
-	    CAP_FUTIMESAT,
-	    CAP_MAC_SET,
-	    CAP_REVOKEAT,
-	    CAP_EXTATTR_SET,
-	    CAP_EXTATTR_DELETE);
-	cap_rights_init(&rcpath_rights,
-	    CAP_RENAMEAT_SOURCE);
-	/*
-	 * To prevent a file being linked in a target directory that was
-	 * unveiled with more permissions than its source directory, require
-	 * the source to have all permissions for now.
-	 *
-	 * UPERM_CPATH might arguably not be required (since directories cannot
-	 * be hard linked), but it is probably safer to require it (even if
-	 * only because it might be less surprising).
-	 */
-	cap_rights_init(&rwcapath_rights,
-	    CAP_LINKAT_SOURCE);
-
-	cap_rights_init(&cap_unveil_o_exec_kludge_rights, CAP_FEXECVE, CAP_EXECAT);
-	cap_rights_init(&cap_unveil_o_creat_kludge_rights, CAP_CREATE);
-
-	/* Pre-merge rights for every possible set of unveil permissions. */
-	for (int i = 0; i < nitems(cap_unveil_merged_rights); i++) {
-		cap_rights_t *rights = &cap_unveil_merged_rights[i];
-		cap_rights_init(rights);
-		if (i & UPERM_INSPECT)
-			cap_rights_merge(rights, &inspect_rights);
-		if (i & UPERM_RPATH)
-			cap_rights_merge(rights, &rpath_rights);
-		if (i & UPERM_WPATH)
-			cap_rights_merge(rights, &wpath_rights);
-		if (i & UPERM_CPATH) {
-			cap_rights_merge(rights, &cpath_rights);
-			if (i & UPERM_RPATH)
-				cap_rights_merge(rights, &rcpath_rights);
-		}
-		if (i & UPERM_XPATH)
-			cap_rights_merge(rights, &xpath_rights);
-		if (i & UPERM_APATH) {
-			cap_rights_merge(rights, &apath_rights);
-			if (i & UPERM_CPATH && i & UPERM_WPATH && i & UPERM_RPATH)
-				cap_rights_merge(rights, &rwcapath_rights);
-		}
-	}
-#endif
 }
 SYSINIT(cap_rights_sysinit, SI_SUB_COPYRIGHT, SI_ORDER_ANY, cap_rights_sysinit,
     NULL);

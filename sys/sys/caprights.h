@@ -112,15 +112,6 @@ extern cap_rights_t cap_extattr_delete_rights;
 extern cap_rights_t cap_extattr_get_rights;
 extern cap_rights_t cap_extattr_list_rights;
 extern cap_rights_t cap_extattr_set_rights;
-#if defined(UNVEIL) || defined(SYSFIL)
-extern cap_rights_t cap_unveil_o_exec_kludge_rights;
-extern cap_rights_t cap_unveil_o_creat_kludge_rights;
-#define	CAP_UNVEIL_MERGED_RIGHTS_SIZE (1 << 6)
-#define	CAP_UNVEIL_MERGED_RIGHTS_MASK (CAP_UNVEIL_MERGED_RIGHTS_SIZE - 1)
-#define	CAP_UNVEIL_MERGED_RIGHTS(uperms) \
-	&cap_unveil_merged_rights[(uperms) & CAP_UNVEIL_MERGED_RIGHTS_MASK]
-extern cap_rights_t cap_unveil_merged_rights[CAP_UNVEIL_MERGED_RIGHTS_SIZE];
-#endif
 #endif
 
 #endif /* !_SYS_CAPRIGHTS_H_ */
