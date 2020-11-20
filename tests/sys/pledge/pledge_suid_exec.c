@@ -53,7 +53,7 @@ setup_unveil_frozen()
 	EXPECT(unveil(NULL, NULL));
 }
 
-static void
+static int
 run(const char *name, int expected_exit, void (*setup)(void))
 {
 	pid_t pid;
@@ -70,9 +70,10 @@ run(const char *name, int expected_exit, void (*setup)(void))
 	EXPECT(waitpid(pid, &status, WEXITED));
 	if (WIFSIGNALED(status))
 		errx(1, "%s: child unexpected signal", name);
-	if (WEXITSTATUS(status) != expected_exit)
+	if (expected_exit >= 0 && WEXITSTATUS(status) != expected_exit)
 		errx(1, "%s: child exited with %d instead of expected %d",
 		    name, WEXITSTATUS(status), expected_exit);
+	return (WEXITSTATUS(status));
 }
 #define	RUN(e, f) run(#f, e, f)
 
@@ -94,6 +95,9 @@ main(int argc, char **argv)
 
 	if (geteuid() == 0)
 		errx(0, "skipping tests when run as root");
+
+	if (RUN(-1, setup_no_pledge) != 0)
+		errx(0, "skipping tests when suid execution already disabled");
 
 	RUN(0, setup_no_pledge);
 	RUN(0, setup_curr_pledge);
