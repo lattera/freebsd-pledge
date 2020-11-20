@@ -43,6 +43,9 @@ __FBSDID("$FreeBSD$");
 #include <sys/systm.h>
 #include <sys/kernel.h>
 #include <machine/stdarg.h>
+#ifdef UNVEIL
+#include <sys/unveil.h>
+#endif
 #else	/* !_KERNEL */
 #include <assert.h>
 #include <stdarg.h>
@@ -259,23 +262,25 @@ cap_rights_sysinit(void *arg)
 	/* Pre-merge rights for every possible set of unveil permissions. */
 	for (int i = 0; i < nitems(cap_unveil_merged_rights); i++) {
 		cap_rights_t *rights = &cap_unveil_merged_rights[i];
-		/* Must match the argument order of CAP_UNVEIL_MERGED_RIGHTS(). */
-		bool inspect = i & (1 << 0),
-		     rpath = i & (1 << 1),
-		     wpath = i & (1 << 2),
-		     cpath = i & (1 << 3),
-		     xpath = i & (1 << 4),
-		     apath = i & (1 << 5);
 		cap_rights_init(rights);
-		cap_rights_merge(rights, inspect ? &inspect_rights : &null_rights);
-		cap_rights_merge(rights, rpath   ? &rpath_rights   : &null_rights);
-		cap_rights_merge(rights, wpath   ? &wpath_rights   : &null_rights);
-		cap_rights_merge(rights, cpath   ? &cpath_rights   : &null_rights);
-		cap_rights_merge(rights, xpath   ? &xpath_rights   : &null_rights);
-		cap_rights_merge(rights, apath   ? &apath_rights   : &null_rights);
-		cap_rights_merge(rights, rpath && cpath ? &rcpath_rights : &null_rights);
-		cap_rights_merge(rights,
-		    rpath && wpath && cpath && apath ? &rwcapath_rights : &null_rights);
+		if (i & UPERM_INSPECT)
+			cap_rights_merge(rights, &inspect_rights);
+		if (i & UPERM_RPATH)
+			cap_rights_merge(rights, &rpath_rights);
+		if (i & UPERM_WPATH)
+			cap_rights_merge(rights, &wpath_rights);
+		if (i & UPERM_CPATH) {
+			cap_rights_merge(rights, &cpath_rights);
+			if (i & UPERM_RPATH)
+				cap_rights_merge(rights, &rcpath_rights);
+		}
+		if (i & UPERM_XPATH)
+			cap_rights_merge(rights, &xpath_rights);
+		if (i & UPERM_APATH) {
+			cap_rights_merge(rights, &apath_rights);
+			if (i & UPERM_CPATH && i & UPERM_WPATH && i & UPERM_RPATH)
+				cap_rights_merge(rights, &rwcapath_rights);
+		}
 	}
 #endif
 }

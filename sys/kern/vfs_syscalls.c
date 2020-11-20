@@ -2117,7 +2117,10 @@ kern_accessat(struct thread *td, int fd, const char *path,
 	AUDIT_ARG_VALUE(amode);
 #ifdef UNVEIL
 	rightsp = CAP_UNVEIL_MERGED_RIGHTS(
-	    amode == F_OK, amode & R_OK, amode & W_OK, 0, amode & X_OK, false);
+	    amode == F_OK ? UPERM_INSPECT :
+	    (amode & R_OK ? UPERM_RPATH : UPERM_NONE) |
+	    (amode & W_OK ? UPERM_WPATH : UPERM_NONE) |
+	    (amode & X_OK ? UPERM_XPATH : UPERM_NONE));
 #else
 	rightsp = &cap_fstat_rights;
 #endif

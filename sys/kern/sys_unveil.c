@@ -275,6 +275,27 @@ unveil_fd_free(struct filedesc *fdp)
 	unveil_free(&fdp->fd_unveil);
 }
 
+
+bool
+unveil_is_active(struct thread *td)
+{
+#ifdef UNVEIL
+	return (td->td_proc->p_fd->fd_unveil.active);
+#else
+	return (false);
+#endif
+}
+
+bool
+unveil_exec_is_active(struct thread *td)
+{
+#ifdef UNVEIL
+	return (td->td_proc->p_fd->fd_unveil.exec_active);
+#else
+	return (false);
+#endif
+}
+
 void
 unveil_proc_exec_switch(struct thread *td)
 {

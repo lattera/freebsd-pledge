@@ -58,25 +58,14 @@ int unveilctl(int atfd, const char *path, int flags, int perms);
 MALLOC_DECLARE(M_UNVEIL);
 #endif
 
-static inline bool
-unveil_is_active(struct thread *td)
-{
-#ifdef UNVEIL
-	return (td->td_proc->p_fd->fd_unveil.active);
-#else
-	return (false);
-#endif
-}
+bool unveil_is_active(struct thread *);
+bool unveil_exec_is_active(struct thread *);
 
-static inline bool
-unveil_exec_is_active(struct thread *td)
-{
-#ifdef UNVEIL
-	return (td->td_proc->p_fd->fd_unveil.exec_active);
-#else
-	return (false);
-#endif
-}
+void unveil_proc_exec_switch(struct thread *);
+
+void unveil_fd_init(struct filedesc *);
+void unveil_fd_merge(struct filedesc *dst, struct filedesc *src);
+void unveil_fd_free(struct filedesc *);
 
 int unveil_traverse_begin(struct thread *, struct unveil_traversal *,
     struct vnode *);
@@ -86,12 +75,6 @@ int unveil_traverse(struct thread *, struct unveil_traversal *,
 void unveil_traverse_dotdot(struct thread *, struct unveil_traversal *,
     struct vnode *);
 unveil_perms_t unveil_traverse_effective_perms(struct thread *, struct unveil_traversal *);
-
-void unveil_fd_init(struct filedesc *);
-void unveil_fd_merge(struct filedesc *dst, struct filedesc *src);
-void unveil_fd_free(struct filedesc *);
-
-void unveil_proc_exec_switch(struct thread *);
 
 #endif /* _KERNEL */
 

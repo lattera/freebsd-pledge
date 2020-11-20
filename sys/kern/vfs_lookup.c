@@ -258,12 +258,11 @@ static inline const cap_rights_t *
 sysfil_to_rights(struct thread *td)
 {
 	return (CAP_UNVEIL_MERGED_RIGHTS(
-	    0,
-	    sysfil_check(td, SYSFIL_RPATH) == 0,
-	    sysfil_check(td, SYSFIL_WPATH) == 0,
-	    sysfil_check(td, SYSFIL_CPATH) == 0,
-	    sysfil_check(td, SYSFIL_EXEC)  == 0,
-	    sysfil_check(td, SYSFIL_FATTR) == 0));
+	    (sysfil_check(td, SYSFIL_RPATH) == 0 ? UPERM_RPATH : UPERM_NONE) |
+	    (sysfil_check(td, SYSFIL_WPATH) == 0 ? UPERM_WPATH : UPERM_NONE) |
+	    (sysfil_check(td, SYSFIL_CPATH) == 0 ? UPERM_CPATH : UPERM_NONE) |
+	    (sysfil_check(td, SYSFIL_EXEC)  == 0 ? UPERM_XPATH : UPERM_NONE) |
+	    (sysfil_check(td, SYSFIL_FATTR) == 0 ? UPERM_APATH : UPERM_NONE)));
 }
 
 static int
@@ -801,13 +800,7 @@ unveil_lookup_dotdot(struct nameidata *ndp,
 static inline const cap_rights_t *
 unveil_perms_to_rights(unveil_perms_t uperms)
 {
-	return (CAP_UNVEIL_MERGED_RIGHTS(
-	    uperms & UPERM_INSPECT,
-	    uperms & UPERM_RPATH,
-	    uperms & UPERM_WPATH,
-	    uperms & UPERM_CPATH,
-	    uperms & UPERM_XPATH,
-	    uperms & UPERM_APATH));
+	return (CAP_UNVEIL_MERGED_RIGHTS(uperms));
 }
 
 static int

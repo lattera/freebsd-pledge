@@ -115,15 +115,11 @@ extern cap_rights_t cap_extattr_set_rights;
 #if defined(UNVEIL) || defined(SYSFIL)
 extern cap_rights_t cap_unveil_o_exec_kludge_rights;
 extern cap_rights_t cap_unveil_o_creat_kludge_rights;
-extern cap_rights_t cap_unveil_merged_rights[1 << 6];
-#define	CAP_UNVEIL_MERGED_RIGHTS(inspect, rpath, wpath, cpath, xpath, apath)	\
-	&cap_unveil_merged_rights[						\
-	    (((inspect) != 0) << 0 |						\
-	     ((rpath)   != 0) << 1 |						\
-	     ((wpath)   != 0) << 2 |						\
-	     ((cpath)   != 0) << 3 |						\
-	     ((xpath)   != 0) << 4 |						\
-	     ((apath)   != 0) << 5)]
+#define	CAP_UNVEIL_MERGED_RIGHTS_SIZE (1 << 6)
+#define	CAP_UNVEIL_MERGED_RIGHTS_MASK (CAP_UNVEIL_MERGED_RIGHTS_SIZE - 1)
+#define	CAP_UNVEIL_MERGED_RIGHTS(uperms) \
+	&cap_unveil_merged_rights[(uperms) & CAP_UNVEIL_MERGED_RIGHTS_MASK]
+extern cap_rights_t cap_unveil_merged_rights[CAP_UNVEIL_MERGED_RIGHTS_SIZE];
 #endif
 #endif
 
