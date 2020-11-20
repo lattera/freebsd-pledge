@@ -92,6 +92,9 @@ main(int argc, char **argv)
 	strcat(p, s);
 	suid_check_path = p;
 
+	if (geteuid() == 0)
+		errx(0, "skipping tests when run as root");
+
 	RUN(0, setup_no_pledge);
 	RUN(0, setup_curr_pledge);
 	RUN(1, setup_exec_pledge);
