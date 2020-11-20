@@ -9,6 +9,7 @@ PROGS+=			suid-check
 BINMODE.suid-check=	4555
 
 ATF_TESTS_SH+=		execpledge_various
+ATF_TESTS_SH+=		execpledge_hard_link
 
 PLAIN_TESTS_C+= pledge_super_basic_test
 PLAIN_TESTS_C+= pledge_elevation

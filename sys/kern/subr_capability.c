@@ -175,6 +175,7 @@ cap_rights_sysinit(void *arg)
 	cap_rights_t xpath_rights;
 	cap_rights_t apath_rights;
 	cap_rights_t rcpath_rights;
+	cap_rights_t rwcapath_rights;
 
 	cap_rights_init(&null_rights);
 	cap_rights_init(&inspect_rights,
@@ -194,7 +195,6 @@ cap_rights_sysinit(void *arg)
 	    CAP_FSTAT,
 	    CAP_FSTATAT,
 	    CAP_FSTATFS,
-	    CAP_LINKAT_SOURCE,
 	    CAP_MAC_GET,
 	    CAP_EXTATTR_GET,
 	    CAP_EXTATTR_LIST);
@@ -241,6 +241,17 @@ cap_rights_sysinit(void *arg)
 	    CAP_EXTATTR_DELETE);
 	cap_rights_init(&rcpath_rights,
 	    CAP_RENAMEAT_SOURCE);
+	/*
+	 * To prevent a file being linked in a target directory that was
+	 * unveiled with more permissions than its source directory, require
+	 * the source to have all permissions for now.
+	 *
+	 * UPERM_CPATH might arguably not be required (since directories cannot
+	 * be hard linked), but it is probably safer to require it (even if
+	 * only because it might be less surprising).
+	 */
+	cap_rights_init(&rwcapath_rights,
+	    CAP_LINKAT_SOURCE);
 
 	cap_rights_init(&cap_unveil_o_exec_kludge_rights, CAP_FEXECVE, CAP_EXECAT);
 	cap_rights_init(&cap_unveil_o_creat_kludge_rights, CAP_CREATE);
@@ -263,6 +274,8 @@ cap_rights_sysinit(void *arg)
 		cap_rights_merge(rights, xpath   ? &xpath_rights   : &null_rights);
 		cap_rights_merge(rights, apath   ? &apath_rights   : &null_rights);
 		cap_rights_merge(rights, rpath && cpath ? &rcpath_rights : &null_rights);
+		cap_rights_merge(rights,
+		    rpath && wpath && cpath && apath ? &rwcapath_rights : &null_rights);
 	}
 #endif
 }
