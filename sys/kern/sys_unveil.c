@@ -455,7 +455,7 @@ unveil_find_cover(struct thread *td, struct vnode *dp, struct unveil_node **cove
 
 		cn = (struct componentname){
 			.cn_nameiop = LOOKUP,
-			.cn_flags = ISLASTCN | ISDOTDOT | RDONLY,
+			.cn_flags = ISLASTCN | ISDOTDOT,
 			.cn_lkflags = LK_SHARED,
 			.cn_thread = td,
 			.cn_cred = td->td_ucred,
