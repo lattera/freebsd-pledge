@@ -48,15 +48,21 @@ main()
 	atexit(cleanup);
 
 	EXPECT((fd = open(p, O_RDWR|O_CREAT, 0644)));
+#if 0
 	EXPECT(access(p, R_OK));
+#endif
 	EXPECT(stat(p, &s));
 	EXPECT(write(fd, "test\n", 5));
 	EXPECT(close(fd));
+#if 0
 	EXPECT(access(p, R_OK));
+#endif
 	EXPECT(stat(p, &s));
 
 	EXPECT((fd = open(p, O_RDWR, 0644)));
+#if 0
 	EXPECT(access(p, R_OK));
+#endif
 	EXPECT(stat(p, &s));
 	EXPECT(read(fd, buf, 5));
 	assert(0 == memcmp("test\n", buf, 5));

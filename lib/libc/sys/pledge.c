@@ -15,7 +15,6 @@ __FBSDID("$FreeBSD$");
 #include <signal.h>
 
 enum promise_type {
-	PROMISE_NONE = 0,
 	PROMISE_ERROR,
 	PROMISE_BASIC, /* same as PROMISE_STDIO but without the unveils */
 	PROMISE_STDIO,
@@ -84,7 +83,6 @@ enum promise_type {
 static const struct promise_name {
 	const char name[PROMISE_NAME_SIZE];
 } names_table[PROMISE_COUNT] = {
-	[PROMISE_NONE] =		{ "" },
 	[PROMISE_ERROR] =		{ "error" },
 	[PROMISE_BASIC] =		{ "basic" },
 	[PROMISE_STDIO] =		{ "stdio" },
@@ -227,22 +225,6 @@ static const struct promise_sysfil {
 	{ PROMISE_ANY_SOCKOPT,		SYSFIL_ANY_SOCKOPT },
 };
 
-static const struct promise_uperms {
-	enum promise_type type : 8;
-	unveil_perms_t uperms : 8;
-} uperms_table[] = {
-	{ PROMISE_RPATH,	UPERM_RPATH },
-	{ PROMISE_WPATH,	UPERM_WPATH },
-	{ PROMISE_CPATH,	UPERM_CPATH },
-	{ PROMISE_EXEC,		UPERM_XPATH },
-	{ PROMISE_FATTR,	UPERM_APATH },
-};
-
-/* The "fattr" promise is a bit special and shouldn't be enabled implicitly. */
-static const unveil_perms_t promise_no_implicit_uperms = UPERM_APATH;
-
-static const unveil_perms_t custom_keep_implicit_uperms = UPERM_INSPECT;
-
 static const char *const root_path = "/";
 static const char *const tmp_path = _PATH_TMP;
 
@@ -253,11 +235,13 @@ static struct promise_unveil {
 	unveil_perms_t perms : 8;
 	enum promise_type type : 8;
 } unveils_table[] = {
+#define	I UPERM_INSPECT
 #define	R UPERM_RPATH
 #define	W UPERM_WPATH /* NOTE: UPERM_APATH not implied here */
 #define	C UPERM_CPATH
 #define	X UPERM_XPATH
 #define	A UPERM_APATH
+#define	T UPERM_TMPPATH
 	{ root_path, R,				PROMISE_RPATH },
 	{ root_path, W,				PROMISE_WPATH },
 	{ root_path, C,				PROMISE_CPATH },
@@ -288,17 +272,15 @@ static struct promise_unveil {
 	{ _PATH_DEV "/crypto", R|W,		PROMISE_SSL }, /* sysfil also enabled */
 	{ _PATH_ETC "/ssl/", R,			PROMISE_SSL },
 	{ _PATH_LOCALBASE "/etc/ssl/", R,	PROMISE_SSL },
-	/*
-	 * XXX: OpenBSD is a lot more restrictive there.  It only allows to
-	 * create regular files (with open(2)) and unlink them.
-	 */
-	{ tmp_path, R|W|C|A,			PROMISE_TMPPATH },
-	{ "", 0,				PROMISE_NONE }
+	{ tmp_path, T,				PROMISE_TMPPATH },
+	{ "", 0, -1 }
+#undef	T
 #undef	A
 #undef	X
 #undef	C
 #undef	W
 #undef	R
+#undef	I
 };
 
 
@@ -334,7 +316,7 @@ parse_promises(bool *promises, const char *promises_str)
 			*q++ = *p++;
 		} while (*p && *p != ' ');
 		/* search for name in table */
-		enum promise_type type = PROMISE_NONE + 1;
+		enum promise_type type = 0;
 		do {
 			if (type >= PROMISE_COUNT)
 				goto inval; /* not found */
@@ -372,13 +354,43 @@ pledge_unveil_fixup_path(bool for_exec, const char *path)
 	return (path);
 }
 
+static void
+promises_needed_for_uperms(bool *promises, unveil_perms_t uperms)
+{
+	if (uperms & UPERM_RPATH) promises[PROMISE_RPATH] = true;
+	if (uperms & UPERM_WPATH) promises[PROMISE_WPATH] = true;
+	if (uperms & UPERM_CPATH) promises[PROMISE_CPATH] = true;
+	if (uperms & UPERM_XPATH) promises[PROMISE_EXEC]  = true;
+	/* Note that UPERM_APATH does not imply PROMISE_FATTR. */
+	if (uperms & UPERM_TMPPATH) {
+		promises[PROMISE_RPATH] = true;
+		promises[PROMISE_WPATH] = true;
+		promises[PROMISE_CPATH] = true;
+	}
+}
+
+static unveil_perms_t
+retained_uperms_for_promises(const bool *promises)
+{
+	unveil_perms_t uperms = UPERM_INSPECT;
+	if (promises[PROMISE_RPATH]) uperms |= UPERM_RPATH;
+	if (promises[PROMISE_WPATH]) uperms |= UPERM_WPATH;
+	if (promises[PROMISE_CPATH]) uperms |= UPERM_CPATH;
+	if (promises[PROMISE_EXEC])  uperms |= UPERM_XPATH;
+	if (promises[PROMISE_FATTR]) uperms |= UPERM_APATH;
+	if (promises[PROMISE_RPATH] &&
+	    promises[PROMISE_WPATH] &&
+	    promises[PROMISE_CPATH])
+		uperms |= UPERM_TMPPATH;
+	return (uperms);
+}
+
 static size_t
 do_pledge_unveils(const bool *req_promises, bool for_exec, int *sysfils)
 {
 	int *orig_sysfils = sysfils;
 	const struct promise_sysfil *pa;
 	const struct promise_unveil *pu;
-	const struct promise_uperms *pp;
 	const char *path;
 	unveil_perms_t need_uperms, req_uperms;
 	int flags, flags1, r;
@@ -416,7 +428,7 @@ do_pledge_unveils(const bool *req_promises, bool for_exec, int *sysfils)
 			pu++;
 		} while (strcmp(pu->path, path) == 0);
 		/* maximum unveil permissions we'll need for those promises */
-		need_uperms |= uperms & ~promise_no_implicit_uperms;
+		need_uperms |= uperms;
 		if (modified && (path = pledge_unveil_fixup_path(for_exec, path))) {
 			r = unveilctl(AT_FDCWD, path, flags1, uperms);
 			if (r < 0 && errno != ENOENT && errno != EACCES)
@@ -425,18 +437,12 @@ do_pledge_unveils(const bool *req_promises, bool for_exec, int *sysfils)
 	}
 
 	/*
-	 * Figure out which uperms equivalents were explicitly requested with
-	 * promises and which additional promises must be implicitly enabled
-	 * for the implicit uperms needed for their unveils to work.
+	 * Figure out which promises must be implicitly enabled to make the
+	 * unveils of the requested promises work.  Only the sysfils associated
+	 * with those implicitly enabled promises are needed, not their unveils.
 	 */
 	memcpy(need_promises, req_promises, PROMISE_COUNT * sizeof *need_promises);
-	req_uperms = UPERM_NONE;
-	for (pp = uperms_table; pp != &uperms_table[nitems(uperms_table)]; pp++) {
-		if (req_promises[pp->type])
-			req_uperms |= pp->uperms | custom_keep_implicit_uperms;
-		if (pp->uperms & need_uperms)
-			need_promises[pp->type] = true;
-	}
+	promises_needed_for_uperms(need_promises, need_uperms);
 
 	/*
 	 * Map promises to sysfils.
@@ -447,6 +453,12 @@ do_pledge_unveils(const bool *req_promises, bool for_exec, int *sysfils)
 	for (pa = sysfils_table; pa != &sysfils_table[nitems(sysfils_table)]; pa++)
 		if (need_promises[pa->type])
 			*sysfils++ = pa->sysfil;
+
+	/*
+	 * Figure out the uperms equivalent for the promises that were
+	 * explicitly required (NOT those that were implicitly enabled).
+	 */
+	req_uperms = retained_uperms_for_promises(req_promises);
 
 	/*
 	 * Alter user's explicit unveils to compensate for sysfils implicitly
@@ -597,6 +609,7 @@ unveil_parse_perms(unveil_perms_t *perms, const char *s)
 		case 'c': *perms |= UPERM_CPATH; break;
 		case 'x': *perms |= UPERM_XPATH; break;
 		case 'i': *perms |= UPERM_INSPECT; break;
+		case 't': *perms |= UPERM_TMPPATH; break;
 		default:
 			return (-1);
 		}

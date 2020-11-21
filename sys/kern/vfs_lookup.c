@@ -254,27 +254,16 @@ nameicap_check_dotdot(struct nameidata *ndp, struct vnode *dp)
 
 #ifdef SYSFIL
 
-static inline const cap_rights_t *
-sysfil_to_rights(struct thread *td)
-{
-	return (CAP_UNVEIL_MERGED_RIGHTS(
-	    (sysfil_check(td, SYSFIL_RPATH) == 0 ? UPERM_RPATH : UPERM_NONE) |
-	    (sysfil_check(td, SYSFIL_WPATH) == 0 ? UPERM_WPATH : UPERM_NONE) |
-	    (sysfil_check(td, SYSFIL_CPATH) == 0 ? UPERM_CPATH : UPERM_NONE) |
-	    (sysfil_check(td, SYSFIL_EXEC)  == 0 ? UPERM_XPATH : UPERM_NONE) |
-	    (sysfil_check(td, SYSFIL_FATTR) == 0 ? UPERM_APATH : UPERM_NONE)));
-}
-
 static int
 sysfil_namei_check(struct nameidata *ndp, struct thread *td)
 {
-	const cap_rights_t *haverights;
+	cap_rights_t haverights;
 	if (!IN_RESTRICTED_MODE(td))
 		return (0);
-	haverights = sysfil_to_rights(td);
-	if (cap_rights_contains(haverights, ndp->ni_rightsneeded))
+	sysfil_cred_rights(td->td_ucred, &haverights);
+	if (cap_rights_contains(&haverights, ndp->ni_rightsneeded))
 		return (0);
-	return (EPERM);
+	return (ENOTCAPABLE);
 }
 
 #endif
@@ -797,42 +786,27 @@ unveil_lookup_dotdot(struct nameidata *ndp,
 	unveil_traverse_dotdot(cnp->cn_thread, &ndp->ni_unveil, pdvp);
 }
 
-static inline const cap_rights_t *
-unveil_perms_to_rights(unveil_perms_t uperms)
-{
-	return (CAP_UNVEIL_MERGED_RIGHTS(uperms));
-}
-
 static int
 unveil_lookup_check(struct nameidata *ndp)
 {
 	struct componentname *cnp = &ndp->ni_cnd;
-	unveil_perms_t uperms;
-	const cap_rights_t *haverights;
-	cap_rights_t needrights;
+	cap_rights_t haverights, *needrights;
+	int error;
 	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
 		return (0);
 
 	if (cnp->cn_flags & ISSYMLINK)
-		needrights = cap_fstat_rights;
+		needrights = &cap_fstat_rights;
 	else
-		needrights = *ndp->ni_rightsneeded;
+		needrights = ndp->ni_rightsneeded;
 
-	uperms = unveil_traverse_effective_perms(cnp->cn_thread, &ndp->ni_unveil);
+	unveil_traverse_effective_rights(
+	    cnp->cn_thread, &ndp->ni_unveil, &haverights, &error);
 
-	/* Kludge for directory O_EXEC/O_SEARCH opens. */
-	if (ndp->ni_vp && ndp->ni_vp->v_type == VDIR && (uperms & UPERM_RPATH))
-		cap_rights_remove(&needrights, &cap_unveil_o_exec_kludge_rights);
-
-	/* Kludge for O_CREAT opens. */
-	if (ndp->ni_vp && (uperms & UPERM_WPATH))
-		cap_rights_remove(&needrights, &cap_unveil_o_creat_kludge_rights);
-
-	haverights = unveil_perms_to_rights(uperms);
-	if (cap_rights_contains(haverights, &needrights))
+	if (cap_rights_contains(&haverights, needrights))
 		return (0);
 
-	return (uperms & ~UPERM_INSPECT ? EACCES : ENOENT);
+	return (error);
 }
 
 #endif

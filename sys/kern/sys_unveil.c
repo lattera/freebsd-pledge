@@ -66,49 +66,58 @@ struct unveil_node {
 CTASSERT(NAME_MAX <= UCHAR_MAX);
 
 
+static const unveil_perms_t uperms_noninheritable = UPERM_INSPECT | UPERM_TMPPATH;
+
+static inline unveil_perms_t
+unveil_uperms_expand(unveil_perms_t perms)
+{
+	if (perms & UPERM_RPATH) {
+		perms |= UPERM_INSPECT;
+		if (perms & UPERM_WPATH && perms & UPERM_CPATH)
+			perms |= UPERM_TMPPATH;
+	}
+	return (perms);
+}
+
+
 static unveil_perms_t
 unveil_node_soft_perms(struct unveil_node *node, enum unveil_role role)
 {
 	struct unveil_node *node1;
 	bool inherited_final[UNVEIL_SLOT_COUNT];
-	unveil_perms_t inherited_perms[UNVEIL_SLOT_COUNT], soft_perms, mask;
+	unveil_perms_t inherited_perms[UNVEIL_SLOT_COUNT], soft_perms;
 	bool all_final;
 	int i;
-	for (i = 0; i < UNVEIL_SLOT_COUNT; i++) {
-		inherited_final[i] = false;
-		inherited_perms[i] = UPERM_NONE;
-	}
 	/*
 	 * Go up the node chain until all wanted permissions have been found
 	 * without any more inheritance required.
 	 */
-	node1 = node;
-	mask = UPERM_ALL;
-	do {
-		all_final = true;
-		for (i = 0; i < UNVEIL_SLOT_COUNT; i++)
+	for (all_final = true, i = 0; i < UNVEIL_SLOT_COUNT; i++) {
+		inherited_perms[i] = node->wanted_perms[role][i];
+		if (!(inherited_final[i] = node->wanted_final[role][i]))
+			all_final = false;
+	}
+	for (node1 = node->cover; !all_final && node1; node1 = node1->cover)
+		for (all_final = true, i = 0; i < UNVEIL_SLOT_COUNT; i++)
 			if (!inherited_final[i]) {
-				inherited_perms[i] |= node1->wanted_perms[role][i] & mask;
+				inherited_perms[i] |= node1->wanted_perms[role][i] &
+				    ~uperms_noninheritable;
 				if (!(inherited_final[i] = node1->wanted_final[role][i]))
 					all_final = false;
 			}
-		mask &= ~UPERM_NONINHERITED_MASK;
-	} while (!all_final && (node1 = node1->cover));
-	/*
-	 * Merge wanted permissions and mask them with the frozen permissions.
-	 */
+	/* Merge wanted permissions from all slots */
 	soft_perms = UPERM_NONE;
 	for (i = 0; i < UNVEIL_SLOT_COUNT; i++)
 		soft_perms |= inherited_perms[i];
-	soft_perms &= node->frozen_perms[role];
 	return (soft_perms);
 }
-
 
 static void
 unveil_node_freeze(struct unveil_node *node, enum unveil_role role, unveil_perms_t keep)
 {
-	node->frozen_perms[role] &= keep | unveil_node_soft_perms(node, role);
+	node->frozen_perms[role] =
+	    unveil_uperms_expand(node->frozen_perms[role]) &
+	    unveil_uperms_expand(keep | unveil_node_soft_perms(node, role));
 }
 
 static void
@@ -338,14 +347,6 @@ unveil_proc_exec_switch(struct thread *td)
 			for (j = 0; j < UNVEIL_SLOT_COUNT; j++) \
 				if ((flags) & (1 << (UNVEILCTL_SLOT_SHIFT + j)))
 
-static inline unveil_perms_t
-unveil_cover_frozen_perms(struct unveil_base *base, struct unveil_node *cover,
-    enum unveil_role role)
-{
-	return (cover ? cover->frozen_perms[role] :
-	    base->active ? UPERM_NONE : UPERM_ALL);
-}
-
 static int
 unveil_remember(struct unveil_base *base,
     struct unveil_node **cover,
@@ -390,7 +391,9 @@ unveil_remember(struct unveil_base *base,
 	 */
 	if (inserted)
 		for (int i = 0; i < UNVEIL_ROLE_COUNT; i++)
-			node->frozen_perms[i] = unveil_cover_frozen_perms(base, *cover, i);
+			node->frozen_perms[i] =
+			    *cover ? (*cover)->frozen_perms[i] & ~uperms_noninheritable :
+			    base->active ? UPERM_NONE : UPERM_ALL;
 	*cover = node;
 
 	if (flags & UNVEILCTL_INTERMEDIATE)
@@ -409,7 +412,8 @@ unveil_remember(struct unveil_base *base,
 }
 
 static int
-unveil_find_cover(struct thread *td, struct vnode *dp, struct unveil_node **cover)
+unveil_find_cover(struct thread *td, struct vnode *dp,
+    struct unveil_node **cover, uint8_t *depth)
 {
 	struct filedesc *fdp = td->td_proc->p_fd;
 	struct unveil_base *base = &fdp->fd_unveil;
@@ -472,6 +476,9 @@ unveil_find_cover(struct thread *td, struct vnode *dp, struct unveil_node **cove
 		}
 		vput(dp);
 		dp = vp;
+
+		if (!++*depth)
+			*depth = -1;
 	}
 
 	vput(dp);
@@ -488,15 +495,11 @@ int
 unveil_traverse_begin(struct thread *td, struct unveil_traversal *trav,
     struct vnode *dvp)
 {
-	int error;
 	/* TODO: caching */
 	trav->cover = NULL;
-	trav->descended = false;
-	error = unveil_find_cover(td, dvp, &trav->cover);
-	if (error)
-		return (error);
-	trav->descended = trav->cover && trav->cover->vp != dvp;
-	return (error);
+	trav->type = VDIR;
+	trav->depth = 0;
+	return (unveil_find_cover(td, dvp, &trav->cover, &trav->depth));
 }
 
 /*
@@ -518,9 +521,9 @@ unveil_traverse(struct thread *td, struct unveil_traversal *trav,
 {
 	struct filedesc *fdp = td->td_proc->p_fd;
 	struct unveil_base *base = &fdp->fd_unveil;
-	int error = 0;
 
 	if (trav->save && (final || (trav->save->flags & UNVEILCTL_INTERMEDIATE))) {
+		int error;
 		if (name_len > NAME_MAX)
 			return (ENAMETOOLONG);
 		if (base->node_count >= unveil_max_nodes_per_process)
@@ -531,7 +534,9 @@ unveil_traverse(struct thread *td, struct unveil_traversal *trav,
 		    trav->save->flags, trav->save->perms,
 		    dvp, name, name_len, vp, final);
 		FILEDESC_XUNLOCK(fdp);
-		trav->descended = false;
+		if (error)
+			return (error);
+		trav->depth = 0;
 
 	} else {
 		struct unveil_node *node;
@@ -545,12 +550,15 @@ unveil_traverse(struct thread *td, struct unveil_traversal *trav,
 		FILEDESC_SUNLOCK(fdp);
 		if (node) {
 			trav->cover = node;
-			trav->descended = false;
-		} else
-			trav->descended = true;
+			trav->depth = 0;
+		} else {
+			if (!++trav->depth)
+				trav->depth = -1;
+		}
 	}
 
-	return (error);
+	trav->type = vp ? vp->v_type : VNON;
+	return (0);
 }
 
 void
@@ -558,32 +566,55 @@ unveil_traverse_dotdot(struct thread *td, struct unveil_traversal *trav,
     struct vnode *dvp)
 {
 	struct filedesc *fdp = td->td_proc->p_fd;
-	if (trav->cover && !trav->descended) {
+	if (trav->cover && trav->depth == 0) {
 		FILEDESC_SLOCK(fdp);
 		trav->cover = trav->cover->fully_covered ? NULL : trav->cover->cover;
-		trav->descended = trav->cover && trav->cover->vp != dvp;
 		FILEDESC_SUNLOCK(fdp);
 	}
+	trav->depth = -1;
+	trav->type = VDIR;
 }
 
 unveil_perms_t
-unveil_traverse_effective_perms(struct thread *td, struct unveil_traversal *trav)
+unveil_traverse_effective_uperms(struct thread *td, struct unveil_traversal *trav)
 {
 	struct filedesc *fdp = td->td_proc->p_fd;
 	struct unveil_base *base = &fdp->fd_unveil;
 	unveil_perms_t perms;
 	FILEDESC_SLOCK(fdp);
-	if (trav->save) {
-		perms = unveil_cover_frozen_perms(base, trav->cover, UNVEIL_ROLE_CURR);
-	} else if (trav->cover) {
-		perms = unveil_node_soft_perms(trav->cover, UNVEIL_ROLE_CURR);
-		if (trav->descended) /* the unveil covered a parent directory */
-			perms &= ~UPERM_NONINHERITED_MASK;
-	} else {
-		perms = UPERM_NONE;
-	}
+	if (trav->cover) {
+		perms = unveil_uperms_expand(
+		    trav->cover->frozen_perms[UNVEIL_ROLE_CURR]);
+		if (!trav->save)
+			perms &= unveil_uperms_expand(
+			    unveil_node_soft_perms(trav->cover, UNVEIL_ROLE_CURR));
+	} else
+		perms = base->active ? UPERM_NONE : UPERM_ALL;
 	FILEDESC_SUNLOCK(fdp);
+	/* NOTE: This function does not take the depth into consideration. */
 	return (perms);
+}
+
+static void unveil_uperms_rights_1(unveil_perms_t, enum vtype type, uint8_t depth,
+    cap_rights_t *);
+
+void
+unveil_traverse_effective_rights(struct thread *td, struct unveil_traversal *trav,
+    cap_rights_t *rights, int *suggested_error)
+{
+	unveil_perms_t perms;
+	perms = unveil_traverse_effective_uperms(td, trav);
+	unveil_uperms_rights_1(perms, trav->type, trav->depth, rights);
+
+	/* Kludge for directory O_EXEC/O_SEARCH opens. */
+	if (trav->type == VDIR && (perms & UPERM_RPATH))
+		cap_rights_set(rights, CAP_FEXECVE, CAP_EXECAT);
+	/* Kludge for O_CREAT opens. */
+	if (trav->type != VNON && (perms & UPERM_WPATH))
+		cap_rights_set(rights, CAP_CREATE);
+
+	if (suggested_error)
+		*suggested_error = perms & ~UPERM_INSPECT ? EACCES : ENOENT;
 }
 
 
@@ -594,7 +625,7 @@ do_unveil_limit(struct unveil_base *base, int flags, unveil_perms_t perms)
 	int i, j;
 	RB_FOREACH(node, unveil_node_tree, &base->root)
 		FOREACH_SLOT_FLAGS(flags, i, j)
-			node->wanted_perms[i][j] &= perms;
+			node->wanted_perms[i][j] &= unveil_uperms_expand(perms);
 }
 
 static void
@@ -671,26 +702,58 @@ sys_unveilctl(struct thread *td, struct unveilctl_args *uap)
 #endif /* UNVEIL */
 }
 
-#if defined(UNVEIL) || defined(SYSFIL)
+#if defined(UNVEIL)
 
-__read_mostly cap_rights_t cap_unveil_o_exec_kludge_rights;
-__read_mostly cap_rights_t cap_unveil_o_creat_kludge_rights;
-__read_mostly cap_rights_t cap_unveil_merged_rights[1 << 6];
+static cap_rights_t __read_mostly inspect_rights;
+static cap_rights_t __read_mostly rpath_rights;
+static cap_rights_t __read_mostly wpath_rights;
+static cap_rights_t __read_mostly cpath_rights;
+static cap_rights_t __read_mostly xpath_rights;
+static cap_rights_t __read_mostly apath_rights;
+static cap_rights_t __read_mostly tmppath_rights;
+static cap_rights_t __read_mostly rcpath_rights;
+static cap_rights_t __read_mostly rwcapath_rights;
+
+static void
+unveil_uperms_rights_1(unveil_perms_t perms, enum vtype type, uint8_t depth,
+    cap_rights_t *rights)
+{
+	CAP_NONE(rights);
+	if (perms & UPERM_INSPECT && depth == 0)
+		cap_rights_merge(rights, &inspect_rights);
+	if (perms & UPERM_RPATH)
+		cap_rights_merge(rights, &rpath_rights);
+	if (perms & UPERM_WPATH)
+		cap_rights_merge(rights, &wpath_rights);
+	if (perms & UPERM_CPATH) {
+		cap_rights_merge(rights, &cpath_rights);
+		if (perms & UPERM_RPATH)
+			cap_rights_merge(rights, &rcpath_rights);
+	}
+	if (perms & UPERM_XPATH)
+		cap_rights_merge(rights, &xpath_rights);
+	if (perms & UPERM_APATH) {
+		cap_rights_merge(rights, &apath_rights);
+		if (perms & UPERM_CPATH && perms & UPERM_WPATH && perms & UPERM_RPATH)
+			cap_rights_merge(rights, &rwcapath_rights);
+	}
+	if (perms & UPERM_TMPPATH) {
+		if (depth == 0)
+			cap_rights_merge(rights, &inspect_rights);
+		else if (depth == 1 && (type == VNON || type == VREG))
+			cap_rights_merge(rights, &tmppath_rights);
+	}
+}
+
+void
+unveil_uperms_rights(unveil_perms_t perms, cap_rights_t *rights)
+{
+	return (unveil_uperms_rights_1(perms, VBAD, 0, rights));
+}
 
 static void
 unveil_sysinit(void *arg)
 {
-	cap_rights_t null_rights;
-	cap_rights_t inspect_rights;
-	cap_rights_t rpath_rights;
-	cap_rights_t wpath_rights;
-	cap_rights_t cpath_rights;
-	cap_rights_t xpath_rights;
-	cap_rights_t apath_rights;
-	cap_rights_t rcpath_rights;
-	cap_rights_t rwcapath_rights;
-
-	cap_rights_init(&null_rights);
 	cap_rights_init(&inspect_rights,
 	    CAP_LOOKUP,
 	    CAP_FPATHCONF,
@@ -752,12 +815,24 @@ unveil_sysinit(void *arg)
 	    CAP_REVOKEAT,
 	    CAP_EXTATTR_SET,
 	    CAP_EXTATTR_DELETE);
+	cap_rights_init(&tmppath_rights,
+	    CAP_LOOKUP,
+	    CAP_FSTAT,
+	    CAP_FSTATAT,
+	    CAP_FPATHCONF,
+	    CAP_READ,
+	    CAP_SEEK,
+	    CAP_MMAP,
+	    CAP_CREATE,
+	    CAP_WRITE,
+	    CAP_UNLINKAT,
+	    CAP_FTRUNCATE);
 	cap_rights_init(&rcpath_rights,
 	    CAP_RENAMEAT_SOURCE);
 	/*
 	 * To prevent a file being linked in a target directory that was
 	 * unveiled with more permissions than its source directory, require
-	 * the source to have all permissions for now.
+	 * the source to have all permissions except UPERM_XPATH for now.
 	 *
 	 * UPERM_CPATH might arguably not be required (since directories cannot
 	 * be hard linked), but it is probably safer to require it (even if
@@ -765,33 +840,6 @@ unveil_sysinit(void *arg)
 	 */
 	cap_rights_init(&rwcapath_rights,
 	    CAP_LINKAT_SOURCE);
-
-	cap_rights_init(&cap_unveil_o_exec_kludge_rights, CAP_FEXECVE, CAP_EXECAT);
-	cap_rights_init(&cap_unveil_o_creat_kludge_rights, CAP_CREATE);
-
-	/* Pre-merge rights for every possible set of unveil permissions. */
-	for (int i = 0; i < nitems(cap_unveil_merged_rights); i++) {
-		cap_rights_t *rights = &cap_unveil_merged_rights[i];
-		cap_rights_init(rights);
-		if (i & UPERM_INSPECT)
-			cap_rights_merge(rights, &inspect_rights);
-		if (i & UPERM_RPATH)
-			cap_rights_merge(rights, &rpath_rights);
-		if (i & UPERM_WPATH)
-			cap_rights_merge(rights, &wpath_rights);
-		if (i & UPERM_CPATH) {
-			cap_rights_merge(rights, &cpath_rights);
-			if (i & UPERM_RPATH)
-				cap_rights_merge(rights, &rcpath_rights);
-		}
-		if (i & UPERM_XPATH)
-			cap_rights_merge(rights, &xpath_rights);
-		if (i & UPERM_APATH) {
-			cap_rights_merge(rights, &apath_rights);
-			if (i & UPERM_CPATH && i & UPERM_WPATH && i & UPERM_RPATH)
-				cap_rights_merge(rights, &rwcapath_rights);
-		}
-	}
 }
 
 SYSINIT(unveil_sysinit, SI_SUB_COPYRIGHT, SI_ORDER_ANY, unveil_sysinit, NULL);

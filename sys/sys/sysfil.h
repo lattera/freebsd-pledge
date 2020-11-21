@@ -10,6 +10,7 @@
 #include <sys/proc.h>
 #include <sys/mutex.h>
 #include <sys/lock.h>
+#include <sys/capsicum.h>
 #endif
 
 /*
@@ -233,6 +234,8 @@ sysfil_cred_sandbox(struct ucred *cr)
 	SYSFILSET_CLEAR(&cr->cr_sysfilset_exec, SYSFIL_NOCAPSICUM);
 #endif
 }
+
+void sysfil_cred_rights(struct ucred *, cap_rights_t *);
 
 #endif
 

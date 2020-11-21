@@ -2092,6 +2092,9 @@ kern_accessat(struct thread *td, int fd, const char *path,
 	struct ucred *cred, *usecred;
 	struct vnode *vp;
 	struct nameidata nd;
+#ifdef UNVEIL
+	cap_rights_t rights;
+#endif
 	cap_rights_t *rightsp;
 	int error;
 
@@ -2116,11 +2119,13 @@ kern_accessat(struct thread *td, int fd, const char *path,
 		usecred = cred;
 	AUDIT_ARG_VALUE(amode);
 #ifdef UNVEIL
-	rightsp = CAP_UNVEIL_MERGED_RIGHTS(
+	unveil_uperms_rights(
 	    amode == F_OK ? UPERM_INSPECT :
 	    (amode & R_OK ? UPERM_RPATH : UPERM_NONE) |
 	    (amode & W_OK ? UPERM_WPATH : UPERM_NONE) |
-	    (amode & X_OK ? UPERM_XPATH : UPERM_NONE));
+	    (amode & X_OK ? UPERM_XPATH : UPERM_NONE),
+	    &rights);
+	rightsp = &rights;
 #else
 	rightsp = &cap_fstat_rights;
 #endif

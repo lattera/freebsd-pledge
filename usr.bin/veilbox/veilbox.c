@@ -26,7 +26,7 @@ static const char *default_promises =
     "stdio "
     "thread "
     "rlimit "
-    "rpath wpath cpath dpath tmppath "
+    "rpath wpath cpath dpath "
     "exec prot_exec "
     "flock fattr chown id "
     "proc_child ps_child "
@@ -90,21 +90,20 @@ usage(void)
 }
 
 static void
-new_tmpdir()
+new_tmpdir(char *newtmpdir, size_t newtmpdir_size)
 {
 	const char *tmpdir;
-	char newtmpdir[PATH_MAX];
 	struct stat st;
 	uid_t uid;
 	int r;
 	uid = geteuid();
-	if (!(tmpdir = getenv("TMPDIR")))
+	if (!((tmpdir = getenv("TMPDIR")) && *tmpdir))
 		tmpdir = _PATH_TMP;
-	r = snprintf(newtmpdir, sizeof newtmpdir,
+	r = snprintf(newtmpdir, newtmpdir_size,
 	    "%s/veilbox-%ju", tmpdir, (uintmax_t)uid);
 	if (r < 0)
 		err(EX_SOFTWARE, "snprintf");
-	if ((size_t)r >= sizeof newtmpdir)
+	if ((size_t)r >= newtmpdir_size)
 		errx(EX_OSFILE, "new TMPDIR too long");
 	r = mkdir(newtmpdir, tmpdir_mode);
 	if (r < 0 && errno != EEXIST)
@@ -189,15 +188,6 @@ main(int argc, char *argv[])
 	strlcat(promises, " ", sizeof promises);
 	strlcat(promises, network_promises, sizeof promises);
 
-	const struct unveil_entry *entry;
-	for (entry = default_unveils;
-	    entry != &default_unveils[default_unveils_count];
-	    entry++) {
-		r = unveilexec(entry->path, entry->perms);
-		if (r < 0)
-			err(EX_OSERR, "%s", entry->path);
-	}
-
 	while ((ch = getopt(argc, argv, "kgp:u:0:sS")) != -1)
 		switch (ch) {
 		case 'k':
@@ -259,7 +249,22 @@ main(int argc, char *argv[])
 	if (run_shell == (argc != 0))
 		usage();
 
-	new_tmpdir();
+	const struct unveil_entry *entry;
+	for (entry = default_unveils;
+	    entry != &default_unveils[default_unveils_count];
+	    entry++) {
+		r = unveilexec(entry->path, entry->perms);
+		if (r < 0)
+			err(EX_OSERR, "%s", entry->path);
+	}
+
+	{
+		char tmppath[PATH_MAX];
+		new_tmpdir(tmppath, sizeof tmppath);
+		r = unveilexec(tmppath, "rwc");
+		if (r < 0)
+			err(EX_OSERR, "%s", tmppath);
+	}
 
 	if (!signaling) {
 		strlcat(promises, " ", sizeof promises);

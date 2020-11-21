@@ -10,6 +10,7 @@
 #ifdef _KERNEL
 #include <sys/systm.h>
 #include <sys/limits.h>
+#include <sys/capsicum.h>
 #endif
 
 enum {
@@ -20,8 +21,8 @@ enum {
 	UPERM_CPATH = 1 << 3,
 	UPERM_XPATH = 1 << 4,
 	UPERM_APATH = 1 << 5,
+	UPERM_TMPPATH = 1 << 6,
 	UPERM_ALL = -1,
-	UPERM_NONINHERITED_MASK = UPERM_INSPECT,
 };
 
 enum {
@@ -74,15 +75,11 @@ int unveil_traverse(struct thread *, struct unveil_traversal *,
     bool final);
 void unveil_traverse_dotdot(struct thread *, struct unveil_traversal *,
     struct vnode *);
-unveil_perms_t unveil_traverse_effective_perms(struct thread *, struct unveil_traversal *);
+unveil_perms_t unveil_traverse_effective_uperms(struct thread *, struct unveil_traversal *);
+void unveil_traverse_effective_rights(struct thread *, struct unveil_traversal *,
+    cap_rights_t *, int *suggested_error);
 
-extern cap_rights_t cap_unveil_o_exec_kludge_rights;
-extern cap_rights_t cap_unveil_o_creat_kludge_rights;
-#define	CAP_UNVEIL_MERGED_RIGHTS_SIZE (1 << 6)
-#define	CAP_UNVEIL_MERGED_RIGHTS_MASK (CAP_UNVEIL_MERGED_RIGHTS_SIZE - 1)
-#define	CAP_UNVEIL_MERGED_RIGHTS(uperms) \
-	&cap_unveil_merged_rights[(uperms) & CAP_UNVEIL_MERGED_RIGHTS_MASK]
-extern cap_rights_t cap_unveil_merged_rights[CAP_UNVEIL_MERGED_RIGHTS_SIZE];
+void unveil_uperms_rights(unveil_perms_t, cap_rights_t *);
 
 #endif /* _KERNEL */
 

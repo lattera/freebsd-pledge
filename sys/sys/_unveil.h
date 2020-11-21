@@ -14,7 +14,8 @@ struct unveil_node;
 struct unveil_traversal {
 	struct unveil_node *cover; /* last unveil encountered */
 	struct unveil_save *save;
-	bool descended;
+	int8_t type; /* type of last file encountered */
+	uint8_t depth; /* depth under cover of last file */
 };
 
 struct unveil_base {
