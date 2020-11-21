@@ -449,7 +449,7 @@ do_pledge_unveils(const bool *req_promises, bool for_exec, int *sysfils)
 	 *
 	 * NOTE: do_pledge() must allocate a large enough array.
 	 */
-	*sysfils++ = SYSFIL_UNVEIL;
+	*sysfils++ = SYSFIL_UNVEIL; /* to allow dropping permissions afterward */
 	for (pa = sysfils_table; pa != &sysfils_table[nitems(sysfils_table)]; pa++)
 		if (need_promises[pa->type])
 			*sysfils++ = pa->sysfil;
@@ -476,9 +476,16 @@ do_pledge_unveils(const bool *req_promises, bool for_exec, int *sysfils)
 
 	/*
 	 * Permanently drop permissions that aren't explicitly requested.
+	 *
+	 * If the "unveil" promise was explicitly requested, retain the uperms
+	 * equivalent for the explicitly requested promises in the frozen
+	 * permissions to allow future unveils to use them (until they are
+	 * frozen with no retained permissions, either by dropping the "unveil"
+	 * promise or doing an unveil(NULL, NULL).
 	 */
 	flags1 = flags | UNVEILCTL_ACTIVATE;
-	r = unveilctl(-1, NULL, flags1 | UNVEILCTL_FREEZE, UPERM_NONE);
+	r = unveilctl(-1, NULL, flags1 | UNVEILCTL_FREEZE,
+	    req_promises[PROMISE_UNVEIL] ? req_uperms : UPERM_NONE);
 	if (r < 0)
 		err(EX_OSERR, "unveilctl freeze");
 

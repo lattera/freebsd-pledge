@@ -43,6 +43,7 @@ PLAIN_TESTS_C+= unveil_chdir
 PLAIN_TESTS_C+= unveil_escape
 PLAIN_TESTS_C+= unveil_fork
 PLAIN_TESTS_C+= unveil_after_pledge
+PLAIN_TESTS_C+= unveil_pledge_drop
 PLAIN_TESTS_C+= pledge_after_unveil
 PLAIN_TESTS_C+= unveil_pledge_limit
 PLAIN_TESTS_C+= unveil_curr_only
