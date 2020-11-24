@@ -28,7 +28,7 @@ static const char *default_promises =
     "thread "
     "rlimit "
     "rpath wpath cpath dpath "
-    "exec prot_exec "
+    "exec "
     "flock fattr chown id "
     "proc_child ps_child "
     "tty "
@@ -40,6 +40,8 @@ static const char *pgrp_promises = "proc_pgrp ps_pgrp";
 static const char *shell_promises = "proc_session ps_session";
 
 static const char *network_promises = "ssl dns inet";
+
+static const char *protexec_promises = "prot_exec";
 
 static const char *error_promises = "error sigtrap";
 
@@ -83,7 +85,7 @@ static const struct unveil_entry default_unveils[] = {
 static void
 usage(void)
 {
-	fprintf(stderr, "usage: %s [-kg] [-p promises] [-u unveil ...] [-sS] cmd [arg ...]\n", getprogname());
+	fprintf(stderr, "usage: %s [-kge] [-p promises] [-u unveil ...] [-sS] cmd [arg ...]\n", getprogname());
 	exit(EX_USAGE);
 }
 
@@ -212,23 +214,27 @@ int
 main(int argc, char *argv[])
 {
 	int ch, r;
-	const char *promises_base[6], **promises_fill = promises_base,
+	const char *promises_base[7], **promises_fill = promises_base,
 	     *custom_promises = NULL;
 	bool signaling = false,
 	     run_shell = false,
 	     login_shell = false,
-	     new_pgrp = false;
+	     new_pgrp = false,
+	     no_protexec = false;
 	char *cmd_arg0 = NULL;
 	char abspath[PATH_MAX];
 	size_t abspath_len = 0;
 
-	while ((ch = getopt(argc, argv, "kgp:u:0:sS")) != -1)
+	while ((ch = getopt(argc, argv, "kgep:u:0:sS")) != -1)
 		switch (ch) {
 		case 'k':
 			signaling = true;
 			break;
 		case 'g':
 			  new_pgrp = true;
+			  break;
+		case 'e':
+			  no_protexec = true;
 			  break;
 		case 'p': {
 			char *p;
@@ -302,6 +308,8 @@ main(int argc, char *argv[])
 				err(EX_OSERR, "setpgid");
 		}
 	}
+	if (!no_protexec)
+		*promises_fill++ = protexec_promises;
 
 	do_pledge(promises_base, promises_fill);
 
