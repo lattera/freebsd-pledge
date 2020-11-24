@@ -151,14 +151,6 @@ ogetpagesize(struct thread *td, struct ogetpagesize_args *uap)
 }
 #endif				/* COMPAT_43 */
 
-static int
-sysfil_check_vm_prot(struct thread *td, vm_prot_t prot)
-{
-	if (prot & PROT_EXEC)
-		return (sysfil_require(td, SYSFIL_PROT_EXEC));
-	return (0);
-}
-
 /*
  * Memory Map (mmap) system call.  Note that the file offset
  * and address are allowed to be NOT page aligned, though if
@@ -249,10 +241,6 @@ kern_mmap_req(struct thread *td, const struct mmap_req *mrp)
 	prot = PROT_EXTRACT(prot);
 	if (max_prot != 0 && (max_prot & prot) != prot)
 		return (ENOTSUP);
-
-	error = sysfil_check_vm_prot(td, prot);
-	if (error)
-		return (error);
 
 	p = td->td_proc;
 
@@ -386,6 +374,7 @@ kern_mmap_req(struct thread *td, const struct mmap_req *mrp)
 			addr = round_page((vm_offset_t)vms->vm_daddr +
 			    lim_max(td, RLIMIT_DATA));
 	}
+
 	if (len == 0) {
 		/*
 		 * Return success without mapping anything for old
@@ -403,6 +392,11 @@ kern_mmap_req(struct thread *td, const struct mmap_req *mrp)
 		 *
 		 * This relies on VM_PROT_* matching PROT_*.
 		 */
+#ifdef SYSFIL
+		error = sysfil_require_vm_prot(td, prot, false);
+		if (error)
+			return (error);
+#endif
 		error = vm_mmap_object(&vms->vm_map, &addr, size, prot,
 		    max_prot, flags, NULL, pos, FALSE, td);
 	} else {
@@ -429,6 +423,11 @@ kern_mmap_req(struct thread *td, const struct mmap_req *mrp)
 			error = EINVAL;
 			goto done;
 		}
+#ifdef SYSFIL
+		error = sysfil_require_vm_prot(td, prot, fp->f_ops == &vnops);
+		if (error)
+			return (error);
+#endif
 		if (check_fp_fn != NULL) {
 			error = check_fp_fn(fp, prot, max_prot & cap_maxprot,
 			    flags);
@@ -685,9 +684,11 @@ kern_mprotect(struct thread *td, uintptr_t addr0, size_t size, int prot)
 	if (addr + size < addr)
 		return (EINVAL);
 
-	error = sysfil_check_vm_prot(td, prot);
+#ifdef SYSFIL
+	error = sysfil_require_vm_prot(td, prot, false);
 	if (error)
 		return (error);
+#endif
 
 	vm_error = KERN_SUCCESS;
 	if (max_prot != 0) {

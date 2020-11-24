@@ -16,6 +16,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/priv.h>
 #include <sys/jail.h>
 #include <sys/signalvar.h>
+#include <sys/mman.h>
 #include <sys/sysfil.h>
 
 #include <sys/filio.h>
@@ -27,6 +28,15 @@ static unsigned __read_mostly sysfil_violation_log_level = 1;
 SYSCTL_UINT(_kern, OID_AUTO, log_sysfil_violation,
     CTLFLAG_RW, &sysfil_violation_log_level, 0,
     "Log violations of sysfil restrictions");
+
+int
+sysfil_require_vm_prot(struct thread *td, vm_prot_t prot, bool loose)
+{
+	if (prot & VM_PROT_EXECUTE)
+		return (sysfil_require(td, loose && !(prot & VM_PROT_WRITE) ?
+		    SYSFIL_PROT_EXEC_LOOSE : SYSFIL_PROT_EXEC));
+	return (0);
+}
 
 int
 sysfil_require_ioctl(struct thread *td, int sf, u_long com)
@@ -274,6 +284,9 @@ sysfilset_fill(sysfilset_t *sysfilset, int sf)
 	case SYSFIL_DPATH:
 		SYSFILSET_FILL(sysfilset, SYSFIL_PATH);
 		break;
+	case SYSFIL_PROT_EXEC:
+		SYSFILSET_FILL(sysfilset, SYSFIL_PROT_EXEC_LOOSE);
+		break;
 	case SYSFIL_INET:
 	case SYSFIL_INET_RAW:
 	case SYSFIL_UNIX:
@@ -333,7 +346,7 @@ sysfil_cred_update(struct ucred *cr,
 			 * done its job).  Not so for us, so implicitly allow
 			 * PROT_EXEC for now. XXX
 			 */
-			SYSFILSET_FILL(&sysfilset, SYSFIL_PROT_EXEC);
+			SYSFILSET_FILL(&sysfilset, SYSFIL_PROT_EXEC_LOOSE);
 		SYSFILSET_MASK(&cr->cr_sysfilset_exec, &sysfilset);
 		MPASS(SYSFILSET_IS_RESTRICTED(&cr->cr_sysfilset_exec));
 		MPASS(CRED_IN_RESTRICTED_EXEC_MODE(cr));

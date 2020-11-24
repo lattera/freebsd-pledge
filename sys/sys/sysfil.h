@@ -10,6 +10,7 @@
 #include <sys/proc.h>
 #include <sys/mutex.h>
 #include <sys/lock.h>
+#include <sys/mman.h>
 #include <sys/capsicum.h>
 #endif
 
@@ -90,7 +91,8 @@
 #define	SYSFIL_SAME_SESSION	59
 #define	SYSFIL_SAME_PGRP	60
 #define	SYSFIL_CHILD_PROCESS	61
-#define	SYSFIL_LAST		SYSFIL_CHILD_PROCESS
+#define	SYSFIL_PROT_EXEC_LOOSE	62 /* SYSFIL_LAST! */
+#define	SYSFIL_LAST		SYSFIL_PROT_EXEC_LOOSE
 
 /*
  * Some syscalls are assigned to sysfils that may seem to be less restrictive
@@ -194,6 +196,7 @@ sysfil_failed(struct thread *td, int sf)
 	return (SYSFIL_FAILED_ERRNO);
 }
 
+int sysfil_require_vm_prot(struct thread *, vm_prot_t prot, bool loose);
 int sysfil_require_ioctl(struct thread *, int sf, u_long com);
 int sysfil_require_af(struct thread *, int af);
 int sysfil_require_sockopt(struct thread *, int level, int name);
