@@ -47,6 +47,7 @@ PLAIN_TESTS_C+= unveil_pledge_drop
 PLAIN_TESTS_C+= pledge_after_unveil
 PLAIN_TESTS_C+= unveil_pledge_limit
 PLAIN_TESTS_C+= unveil_curr_only
+PLAIN_TESTS_C+= unveil_exec
 
 PLAIN_TESTS_C+= unveilctl_sweep
 PLAIN_TESTS_C+= unveilctl_restrict

@@ -21,10 +21,8 @@ try_stuff(bool should_work, int fl, int fds[])
 	}
 
 	EXPECT_BOOL((p = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_MAX(PROT_READ|PROT_EXEC), fl, fds[1], 0)) != MAP_FAILED);
-	if (should_work) {
-		EXPECT(mprotect(p, PAGE_SIZE, PROT_EXEC));
-		EXPECT(munmap(p, PAGE_SIZE));
-	}
+	TRY(mprotect(p, PAGE_SIZE, PROT_EXEC), should_work);
+	EXPECT(munmap(p, PAGE_SIZE));
 
 	TRY_BOOL((p = mmap(NULL, PAGE_SIZE, PROT_EXEC, MAP_ANON | fl, -1, 0)) != MAP_FAILED, should_work);
 	if (should_work) {
@@ -39,10 +37,8 @@ try_stuff(bool should_work, int fl, int fds[])
 	}
 
 	EXPECT_BOOL((p = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_MAX(PROT_READ|PROT_EXEC), MAP_ANON | fl, -1, 0)) != MAP_FAILED);
-	if (should_work) {
-		EXPECT(mprotect(p, PAGE_SIZE, PROT_EXEC));
-		EXPECT(munmap(p, PAGE_SIZE));
-	}
+	TRY(mprotect(p, PAGE_SIZE, PROT_EXEC), should_work);
+	EXPECT(munmap(p, PAGE_SIZE));
 
 	EXPECT_PTR((p = aligned_alloc(PAGE_SIZE, PAGE_SIZE)));
 	TRY(mprotect(p, PAGE_SIZE, PROT_EXEC), should_work);
