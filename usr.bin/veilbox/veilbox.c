@@ -9,6 +9,7 @@
 #include <string.h>
 #include <sys/errno.h>
 #include <sys/stat.h>
+#include <sys/param.h>
 #include <sys/types.h>
 #include <sysexits.h>
 #include <unistd.h>
@@ -78,9 +79,6 @@ static const struct unveil_entry default_unveils[] = {
 	{ _PATH_LOCALBASE "/share", "rx" },
 };
 
-static const size_t default_unveils_count =
-    sizeof default_unveils / sizeof *default_unveils;
-
 
 static void
 usage(void)
@@ -122,6 +120,46 @@ new_tmpdir(char *newtmpdir, size_t newtmpdir_size)
 	r = setenv("TMPDIR", newtmpdir, 1);
 	if (r < 0)
 		err(EX_OSERR, "setenv");
+}
+
+static void
+do_default_unveils(void)
+{
+	int r;
+	const struct unveil_entry *entry;
+	for (entry = default_unveils;
+	    entry != &default_unveils[nitems(default_unveils)];
+	    entry++) {
+		r = unveilexec(entry->path, entry->perms);
+		if (r < 0)
+			err(EX_OSERR, "%s", entry->path);
+	}
+
+	char tmppath[PATH_MAX];
+	new_tmpdir(tmppath, sizeof tmppath);
+	r = unveilexec(tmppath, "rwc");
+	if (r < 0)
+		err(EX_OSERR, "%s", tmppath);
+}
+
+static void
+do_pledge(const char **base, const char **fill)
+{
+	size_t size;
+	const char **iter;
+	for (size = 0, iter = base; iter != fill; iter++)
+		size += strlen(*iter) + 1;
+	char buf[size], *ptr;
+	for (ptr = buf, iter = base; iter != fill; iter++) {
+		ptr = stpcpy(ptr, *iter);
+		*ptr++ = ' ';
+	}
+	*ptr = '\0';
+
+	int r;
+	r = pledge(NULL, buf);
+	if (r < 0)
+		err(EX_NOPERM, "pledge");
 }
 
 static void
@@ -174,7 +212,8 @@ int
 main(int argc, char *argv[])
 {
 	int ch, r;
-	char promises[1024] = "";
+	const char *promises_base[6], **promises_fill = promises_base,
+	     *custom_promises = NULL;
 	bool signaling = false,
 	     run_shell = false,
 	     login_shell = false,
@@ -182,11 +221,6 @@ main(int argc, char *argv[])
 	char *cmd_arg0 = NULL;
 	char abspath[PATH_MAX];
 	size_t abspath_len = 0;
-
-	strlcat(promises, " ", sizeof promises);
-	strlcat(promises, default_promises, sizeof promises);
-	strlcat(promises, " ", sizeof promises);
-	strlcat(promises, network_promises, sizeof promises);
 
 	while ((ch = getopt(argc, argv, "kgp:u:0:sS")) != -1)
 		switch (ch) {
@@ -201,8 +235,7 @@ main(int argc, char *argv[])
 			for (p = optarg; *p; p++)
 				if (*p == ',')
 					*p = ' ';
-			strlcat(promises, " ", sizeof promises);
-			strlcat(promises, optarg, sizeof promises);
+			custom_promises = optarg;
 			break;
 		}
 		case 'u': {
@@ -249,34 +282,20 @@ main(int argc, char *argv[])
 	if (run_shell == (argc != 0))
 		usage();
 
-	const struct unveil_entry *entry;
-	for (entry = default_unveils;
-	    entry != &default_unveils[default_unveils_count];
-	    entry++) {
-		r = unveilexec(entry->path, entry->perms);
-		if (r < 0)
-			err(EX_OSERR, "%s", entry->path);
-	}
+	do_default_unveils();
 
-	{
-		char tmppath[PATH_MAX];
-		new_tmpdir(tmppath, sizeof tmppath);
-		r = unveilexec(tmppath, "rwc");
-		if (r < 0)
-			err(EX_OSERR, "%s", tmppath);
-	}
+	if (custom_promises)
+		*promises_fill++ = custom_promises;
 
-	if (!signaling) {
-		strlcat(promises, " ", sizeof promises);
-		strlcat(promises, error_promises, sizeof promises);
-	}
-	if (run_shell) {
-		strlcat(promises, " ", sizeof promises);
-		strlcat(promises, shell_promises, sizeof promises);
-	}
+	*promises_fill++ = default_promises;
+	*promises_fill++ = network_promises;
+
+	if (!signaling)
+		*promises_fill++ = error_promises;
+	if (run_shell)
+		*promises_fill++ = shell_promises;
 	if (new_pgrp) {
-		strlcat(promises, " ", sizeof promises);
-		strlcat(promises, pgrp_promises, sizeof promises);
+		*promises_fill++ = pgrp_promises;
 		if (getpgid(0) != getpid()) {
 			r = setpgid(0, 0);
 			if (r < 0)
@@ -284,9 +303,7 @@ main(int argc, char *argv[])
 		}
 	}
 
-	r = pledge(NULL, promises);
-	if (r < 0)
-		err(EX_NOPERM, "pledge");
+	do_pledge(promises_base, promises_fill);
 
 	if (run_shell) {
 		exec_shell(login_shell);
