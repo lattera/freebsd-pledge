@@ -257,6 +257,7 @@ static struct promise_unveil {
 	{ _PATH_DEVNULL, R|W,			PROMISE_STDIO },
 	{ _PATH_DEV "/random", R,		PROMISE_STDIO },
 	{ _PATH_DEV "/urandom", R,		PROMISE_STDIO },
+	{ "/libexec/ld-elf.so.1", X,		PROMISE_EXEC },
 	{ _PATH_ETC "/nsswitch.conf", R,	PROMISE_DNS },
 	{ _PATH_ETC "/resolv.conf", R,		PROMISE_DNS },
 	{ _PATH_ETC "/hosts", R,		PROMISE_DNS },

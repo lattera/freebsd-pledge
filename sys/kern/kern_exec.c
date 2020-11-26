@@ -584,7 +584,7 @@ interpret:
 
 #ifdef SYSFIL
 	/*
-	 * Switch to on-exec sysfils.
+	 * Switch pending cred to its on-exec sysfils.
 	 */
 	if (sysfil_cred_need_exec_switch(oldcred)) {
 		if (!imgp->newcred)
