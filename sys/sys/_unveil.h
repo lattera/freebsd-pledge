@@ -18,10 +18,13 @@ struct unveil_traversal {
 	uint8_t depth; /* depth under cover of last file */
 };
 
+enum { UNVEIL_ROLE_COUNT = 2 };
+
 struct unveil_base {
 	RB_HEAD(unveil_node_tree, unveil_node) root;
 	u_int node_count;
-	bool active, exec_active;
+	bool frozen[UNVEIL_ROLE_COUNT];
+	bool active[UNVEIL_ROLE_COUNT];
 };
 
 #endif

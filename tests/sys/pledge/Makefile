@@ -35,6 +35,7 @@ PLAIN_TESTS_C+= pledge_suid_exec
 
 PLAIN_TESTS_C+= unveil_simple0
 PLAIN_TESTS_C+= unveil_simple1
+PLAIN_TESTS_C+= unveil_simple2
 PLAIN_TESTS_C+= unveil_disable
 PLAIN_TESTS_C+= unveil_subdir
 PLAIN_TESTS_C+= unveil_openat

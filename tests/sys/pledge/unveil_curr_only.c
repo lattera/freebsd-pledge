@@ -10,6 +10,6 @@ main()
 	EXPECT(pledge("stdio exec", NULL));
 	EXPECT(unveilcurr("/", "x"));
 	EXPECT(unveilcurr(NULL, NULL));
-	EXPECT(execlp("test", "test", "-f", "/etc/rc", NULL));
+	EXPECT(execlp("test", "test", "-r", "/etc/rc", NULL));
 	return (1);
 }
