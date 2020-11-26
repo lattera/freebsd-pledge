@@ -333,7 +333,7 @@ inval:	errno = EINVAL;
 
 
 static const char *
-pledge_unveil_fixup_path(bool for_exec, const char *path)
+pledge_unveil_fixup_path(bool tainted, bool for_exec, const char *path)
 {
 	if (path == root_path) {
 		/*
@@ -346,7 +346,7 @@ pledge_unveil_fixup_path(bool for_exec, const char *path)
 		 */
 		if (has_custom_unveils[for_exec])
 			path = NULL;
-	} else if (issetugid() == 0 && path == tmp_path) {
+	} else if (!tainted && path == tmp_path) {
 		char *tmpdir;
 		if ((tmpdir = getenv("TMPDIR")))
 			path = tmpdir;
@@ -392,6 +392,7 @@ do_pledge_unveils(const bool *req_promises, bool for_exec, int *sysfils)
 	const struct promise_sysfil *pa;
 	const struct promise_unveil *pu;
 	const char *path;
+	bool tainted;
 	unveil_perms_t need_uperms, req_uperms;
 	int flags, flags1, r;
 	bool need_promises[PROMISE_COUNT];
@@ -415,6 +416,7 @@ do_pledge_unveils(const bool *req_promises, bool for_exec, int *sysfils)
 	/*
 	 * Do unveils for the promises added or removed.
 	 */
+	tainted = issetugid() != 0;
 	flags1 |= unveil_global_flags;
 	need_uperms = UPERM_NONE;
 	for (pu = unveils_table; (*(path = pu->path)); ) {
@@ -429,7 +431,7 @@ do_pledge_unveils(const bool *req_promises, bool for_exec, int *sysfils)
 		} while (strcmp(pu->path, path) == 0);
 		/* maximum unveil permissions we'll need for those promises */
 		need_uperms |= uperms;
-		if (modified && (path = pledge_unveil_fixup_path(for_exec, path))) {
+		if (modified && (path = pledge_unveil_fixup_path(tainted, for_exec, path))) {
 			r = unveilctl(AT_FDCWD, path, flags1, uperms);
 			if (r < 0 && errno != ENOENT && errno != EACCES)
 				warn("unveil: %s", path);
@@ -498,12 +500,14 @@ reserve_pledge_unveils(bool for_exec)
 {
 	const struct promise_unveil *pu;
 	const char *path;
+	bool tainted;
 	int r, i, flags, flags1;
 	flags = (for_exec ? UNVEILCTL_FOR_EXEC : UNVEILCTL_FOR_CURR) |
 	    UNVEILCTL_FOR_PLEDGE;
 	r = unveilctl(-1, NULL, flags | UNVEILCTL_SWEEP, -1);
 	if (r < 0)
 		err(EX_OSERR, "unveilctl sweep");
+	tainted = issetugid() != 0;
 	flags1 = flags | unveil_global_flags;
 	for (pu = unveils_table; (*(path = pu->path)); ) {
 		unveil_perms_t uperms = UPERM_NONE;
@@ -511,7 +515,7 @@ reserve_pledge_unveils(bool for_exec)
 			uperms |= pu->perms;
 			pu++;
 		} while (strcmp(pu->path, path) == 0);
-		if ((path = pledge_unveil_fixup_path(for_exec, path))) {
+		if ((path = pledge_unveil_fixup_path(tainted, for_exec, path))) {
 			r = unveilctl(AT_FDCWD, path, flags1, uperms);
 			if (r < 0 && errno != ENOENT && errno != EACCES)
 				warn("unveil: %s", path);
