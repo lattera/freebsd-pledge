@@ -148,6 +148,11 @@ kern_socket(struct thread *td, int domain, int type, int protocol)
 		fflag |= FNONBLOCK;
 	}
 
+#ifdef SYSFIL
+	error = sysfil_require_af(td, domain);
+	if (error)
+		return (error);
+#endif
 #ifdef MAC
 	error = mac_socket_check_create(td->td_ucred, domain, type, protocol);
 	if (error != 0)

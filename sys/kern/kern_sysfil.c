@@ -22,6 +22,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/filio.h>
 #include <sys/tty.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <netinet/in.h>
 
 static unsigned __read_mostly sysfil_violation_log_level = 1;
@@ -103,10 +104,15 @@ sysfil_require_sockopt(struct thread *td, int level, int name)
 			sf = SYSFIL_MAC;
 			break;
 		default:
-			sf = SYSFIL_ALWAYS;
+			sf = SYSFIL_NET;
 			break;
 		}
 		break;
+#if 0 /* XXX SOL_LOCAL and IPPROTO_IP are both 0! */
+	case SOL_LOCAL:
+		sf = SYSFIL_UNIX;
+		break;
+#endif
 	case IPPROTO_IP:
 	case IPPROTO_IPV6:
 	case IPPROTO_TCP:

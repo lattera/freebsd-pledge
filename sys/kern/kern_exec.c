@@ -416,6 +416,11 @@ do_execve(struct thread *td, struct image_args *args, struct mac *mac_p,
 	orig_osrel = p->p_osrel;
 	orig_fctl0 = p->p_fctl0;
 
+#ifdef SYSFIL
+	error = sysfil_require(td, SYSFIL_EXEC);
+	if (error)
+		goto exec_fail;
+#endif
 #ifdef MAC
 	error = mac_execve_enter(imgp, mac_p);
 	if (error)
@@ -452,9 +457,6 @@ interpret:
 			goto exec_fail;
 		}
 #endif
-		error = sysfil_require(td, SYSFIL_EXEC);
-		if (error)
-			goto exec_fail;
 		error = namei(&nd);
 		if (error)
 			goto exec_fail;
