@@ -158,7 +158,7 @@ unveil_check(struct unveil_base *base)
 {
 #ifdef INVARIANTS
 	for (int i = 0; i < UNVEIL_ROLE_COUNT; i++)
-		KASSERT(base->active[i] || !base->frozen[i],
+		KASSERT(base->flags[i].active || !base->flags[i].frozen,
 		    ("unveils frozen but not active"));
 #endif
 }
@@ -182,10 +182,8 @@ unveil_merge(struct unveil_base *dst, struct unveil_base *src)
 {
 	struct unveil_node *dst_node, *src_node;
 	int i, j;
-	for (i = 0; i < UNVEIL_ROLE_COUNT; i++) {
-		dst->active[i] = src->active[i];
-		dst->frozen[i] = src->frozen[i];
-	}
+	for (i = 0; i < UNVEIL_ROLE_COUNT; i++)
+		dst->flags[i] = src->flags[i];
 	/* first pass, copy the nodes without cover links */
 	RB_FOREACH(src_node, unveil_node_tree, &src->root) {
 		dst_node = unveil_insert(dst, src_node->vp,
@@ -300,13 +298,13 @@ unveil_fd_free(struct filedesc *fdp)
 bool
 unveil_is_active(struct thread *td)
 {
-	return (td->td_proc->p_fd->fd_unveil.active[UNVEIL_ROLE_CURR]);
+	return (td->td_proc->p_fd->fd_unveil.flags[UNVEIL_ROLE_CURR].active);
 }
 
 bool
 unveil_exec_is_active(struct thread *td)
 {
-	return (td->td_proc->p_fd->fd_unveil.active[UNVEIL_ROLE_EXEC]);
+	return (td->td_proc->p_fd->fd_unveil.flags[UNVEIL_ROLE_EXEC].active);
 }
 
 void
@@ -314,8 +312,8 @@ unveil_proc_exec_switch(struct thread *td)
 {
 	struct filedesc *fdp = td->td_proc->p_fd;
 	struct unveil_base *base = &fdp->fd_unveil;
-	if ((base->active[UNVEIL_ROLE_CURR] = base->active[UNVEIL_ROLE_EXEC])) {
-		base->frozen[UNVEIL_ROLE_CURR] = base->frozen[UNVEIL_ROLE_EXEC] = true;
+	if ((base->flags[UNVEIL_ROLE_CURR].active = base->flags[UNVEIL_ROLE_EXEC].active)) {
+		base->flags[UNVEIL_ROLE_CURR].frozen = base->flags[UNVEIL_ROLE_EXEC].frozen = true;
 		struct unveil_node *node, *node_tmp;
 		RB_FOREACH_SAFE(node, unveil_node_tree, &base->root, node_tmp)
 			unveil_node_exec_to_curr(node);
@@ -341,7 +339,7 @@ unveil_proc_exec_switch(struct thread *td)
 		 * must provide a clean execution environment for programs with
 		 * elevated privileges.
 		 */
-		base->frozen[UNVEIL_ROLE_CURR] = base->frozen[UNVEIL_ROLE_EXEC] = false;
+		base->flags[UNVEIL_ROLE_CURR].frozen = base->flags[UNVEIL_ROLE_EXEC].frozen = false;
 		unveil_clear(base);
 	}
 	unveil_check(base);
@@ -402,7 +400,7 @@ unveil_remember(struct unveil_base *base,
 		for (int i = 0; i < UNVEIL_ROLE_COUNT; i++)
 			node->frozen_perms[i] =
 			    *cover ? (*cover)->frozen_perms[i] & ~uperms_noninheritable :
-			    base->frozen[i] ? UPERM_NONE : UPERM_ALL;
+			    base->flags[i].frozen ? UPERM_NONE : UPERM_ALL;
 	*cover = node;
 
 	if (flags & UNVEILCTL_INTERMEDIATE)
@@ -599,9 +597,9 @@ unveil_traverse_effective_uperms(struct thread *td, struct unveil_traversal *tra
 			    unveil_node_soft_perms(trav->cover, UNVEIL_ROLE_CURR));
 	} else {
 		if (trav->save)
-			perms = base->frozen[UNVEIL_ROLE_CURR] ? UPERM_NONE : UPERM_ALL;
+			perms = base->flags[UNVEIL_ROLE_CURR].frozen ? UPERM_NONE : UPERM_ALL;
 		else
-			perms = base->active[UNVEIL_ROLE_CURR] ? UPERM_NONE : UPERM_ALL;
+			perms = base->flags[UNVEIL_ROLE_CURR].active ? UPERM_NONE : UPERM_ALL;
 	}
 	FILEDESC_SUNLOCK(fdp);
 	/* NOTE: This function does not take the depth into consideration. */
@@ -647,7 +645,7 @@ do_unveil_freeze(struct unveil_base *base, int flags, unveil_perms_t perms)
 	struct unveil_node *node;
 	int i;
 	FOREACH_ROLE_FLAGS(flags, i)
-	    base->frozen[i] = base->active[i] = true;
+	    base->flags[i].frozen = base->flags[i].active = true;
 	RB_FOREACH(node, unveil_node_tree, &base->root)
 		FOREACH_ROLE_FLAGS(flags, i)
 			unveil_node_freeze(node, i, perms);
@@ -699,7 +697,7 @@ sys_unveilctl(struct thread *td, struct unveilctl_args *uap)
 	if (flags & UNVEILCTL_ACTIVATE) {
 		int i;
 		FOREACH_ROLE_FLAGS(flags, i)
-		    base->active[i] = true;
+		    base->flags[i].active = true;
 	}
 	if (flags & UNVEILCTL_LIMIT)
 		do_unveil_limit(base, flags, perms);

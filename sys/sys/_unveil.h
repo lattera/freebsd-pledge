@@ -23,8 +23,10 @@ enum { UNVEIL_ROLE_COUNT = 2 };
 struct unveil_base {
 	RB_HEAD(unveil_node_tree, unveil_node) root;
 	u_int node_count;
-	bool frozen[UNVEIL_ROLE_COUNT];
-	bool active[UNVEIL_ROLE_COUNT];
+	struct {
+		bool active : 1;
+		bool frozen : 1;
+	} flags[UNVEIL_ROLE_COUNT];
 };
 
 #endif
