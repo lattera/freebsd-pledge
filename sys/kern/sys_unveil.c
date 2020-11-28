@@ -78,35 +78,32 @@ unveil_uperms_expand(unveil_perms_t perms)
 
 
 static unveil_perms_t
-unveil_node_soft_perms(struct unveil_node *node, enum unveil_role role)
+__noinline
+unveil_node_wanted_perms(struct unveil_node *node, enum unveil_role role)
 {
 	struct unveil_node *node1;
-	bool inherited_final[UNVEIL_SLOT_COUNT];
-	unveil_perms_t inherited_perms[UNVEIL_SLOT_COUNT], soft_perms;
-	bool all_final;
-	int i;
-	/*
-	 * Go up the node chain until all wanted permissions have been found
-	 * without any more inheritance required.
-	 */
-	for (all_final = true, i = 0; i < UNVEIL_SLOT_COUNT; i++) {
-		inherited_perms[i] = node->wanted_perms[role][i];
-		if (!(inherited_final[i] = node->wanted_final[role][i]))
+	bool wanted_final[UNVEIL_SLOT_COUNT], all_final;
+	unveil_perms_t merged_perms;
+	int j;
+	merged_perms = UPERM_NONE;
+	for (all_final = true, j = 0; j < UNVEIL_SLOT_COUNT; j++) {
+		merged_perms |= node->wanted_perms[role][j];
+		if (!(wanted_final[j] = node->wanted_final[role][j]))
 			all_final = false;
 	}
+	/*
+	 * Go up the cover chain until all wanted permissions have been merged
+	 * without any more inheritance required.
+	 */
 	for (node1 = node->cover; !all_final && node1; node1 = node1->cover)
-		for (all_final = true, i = 0; i < UNVEIL_SLOT_COUNT; i++)
-			if (!inherited_final[i]) {
-				inherited_perms[i] |= node1->wanted_perms[role][i] &
+		for (all_final = true, j = 0; j < UNVEIL_SLOT_COUNT; j++)
+			if (!wanted_final[j]) {
+				merged_perms |= node1->wanted_perms[role][j] &
 				    ~uperms_noninheritable;
-				if (!(inherited_final[i] = node1->wanted_final[role][i]))
+				if (!(wanted_final[j] = node1->wanted_final[role][j]))
 					all_final = false;
 			}
-	/* Merge wanted permissions from all slots */
-	soft_perms = UPERM_NONE;
-	for (i = 0; i < UNVEIL_SLOT_COUNT; i++)
-		soft_perms |= inherited_perms[i];
-	return (soft_perms);
+	return (merged_perms);
 }
 
 static void
@@ -114,7 +111,7 @@ unveil_node_freeze(struct unveil_node *node, enum unveil_role role, unveil_perms
 {
 	node->frozen_perms[role] =
 	    unveil_uperms_expand(node->frozen_perms[role]) &
-	    unveil_uperms_expand(keep | unveil_node_soft_perms(node, role));
+	    unveil_uperms_expand(keep | unveil_node_wanted_perms(node, role));
 }
 
 static void
@@ -123,9 +120,9 @@ unveil_node_exec_to_curr(struct unveil_node *node)
 	const int s = UNVEIL_ROLE_EXEC, d = UNVEIL_ROLE_CURR;
 	unveil_node_freeze(node, s, UPERM_NONE);
 	node->frozen_perms[d] = node->frozen_perms[s];
-	for (int i = 0; i < UNVEIL_SLOT_COUNT; i++) {
-		node->wanted_perms[d][i] = node->wanted_perms[s][i];
-		node->wanted_final[d][i] = node->wanted_final[s][i];
+	for (int j = 0; j < UNVEIL_SLOT_COUNT; j++) {
+		node->wanted_perms[d][j] = node->wanted_perms[s][j];
+		node->wanted_final[d][j] = node->wanted_final[s][j];
 	}
 }
 
@@ -325,7 +322,7 @@ unveil_proc_exec_switch(struct thread *td)
 		 */
 		RB_FOREACH_SAFE(node, unveil_node_tree, &base->root, node_tmp)
 			for (int i = 0; i < UNVEIL_ROLE_COUNT; i++) {
-				unveil_perms_t perms = unveil_node_soft_perms(node, i);
+				unveil_perms_t perms = unveil_node_wanted_perms(node, i);
 				for (int j = 0; j < UNVEIL_SLOT_COUNT; j++) {
 					node->wanted_perms[i][j] = perms;
 					node->wanted_final[i][j] = true;
@@ -594,7 +591,7 @@ unveil_traverse_effective_uperms(struct thread *td, struct unveil_traversal *tra
 		    trav->cover->frozen_perms[UNVEIL_ROLE_CURR]);
 		if (!trav->save)
 			perms &= unveil_uperms_expand(
-			    unveil_node_soft_perms(trav->cover, UNVEIL_ROLE_CURR));
+			    unveil_node_wanted_perms(trav->cover, UNVEIL_ROLE_CURR));
 	} else {
 		if (trav->save)
 			perms = base->flags[UNVEIL_ROLE_CURR].frozen ? UPERM_NONE : UPERM_ALL;
