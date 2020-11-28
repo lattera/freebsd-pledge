@@ -65,7 +65,7 @@ isp_send_cmd(ispsoftc_t *isp, void *fqe, void *segp, uint32_t nsegs)
 {
 	ispcontreq64_t crq;
 	uint8_t type, nqe = 1;
-	uint32_t seg, seglim, nxt, nxtnxt;
+	uint32_t seg, seglim, nxt;
 	ispds64_t *dsp64 = NULL;
 	void *qe0, *qe1;
 
@@ -109,14 +109,8 @@ isp_send_cmd(ispsoftc_t *isp, void *fqe, void *segp, uint32_t nsegs)
 	 * Second, start building additional continuation segments as needed.
 	 */
 	while (seg < nsegs) {
-		nxtnxt = ISP_NXT_QENTRY(nxt, RQUEST_QUEUE_LEN(isp));
-		if (nxtnxt == isp->isp_reqodx) {
-			isp->isp_reqodx = ISP_READ(isp, BIU2400_REQOUTP);
-			if (nxtnxt == isp->isp_reqodx)
-				return (CMD_EAGAIN);
-		}
-		qe1 = ISP_QUEUE_ENTRY(isp->isp_rquest, nxt);
-		nxt = nxtnxt;
+		if (!isp_rqentry_avail(isp, ++nqe))
+			return (CMD_EAGAIN);
 
 		ISP_MEMZERO(&crq, QENTRY_LEN);
 		crq.req_header.rqs_entry_type = RQSTYPE_A64_CONT;
@@ -128,13 +122,16 @@ isp_send_cmd(ispsoftc_t *isp, void *fqe, void *segp, uint32_t nsegs)
 			seglim = nsegs;
 		while (seg < seglim)
 			XS_GET_DMA64_SEG(dsp64++, segp, seg++);
+
+		qe1 = ISP_QUEUE_ENTRY(isp->isp_rquest, nxt);
 		isp_put_cont64_req(isp, &crq, qe1);
 		if (isp->isp_dblev & ISP_LOGDEBUG1) {
 			isp_print_bytes(isp, "additional queue entry",
 			    QENTRY_LEN, qe1);
 		}
-		nqe++;
-        }
+
+		nxt = ISP_NXT_QENTRY(nxt, RQUEST_QUEUE_LEN(isp));
+	}
 
 copy_and_sync:
 	((isphdr_t *)fqe)->rqs_entry_count = nqe;
@@ -195,7 +192,7 @@ isp_find_handle(ispsoftc_t *isp, void *xs)
 	uint32_t i, foundhdl = ISP_HANDLE_FREE;
 
 	if (xs != NULL) {
-		for (i = 0; i < isp->isp_maxcmds; i++) {
+		for (i = 0; i < ISP_HANDLE_NUM(isp); i++) {
 			if (isp->isp_xflist[i].cmd != xs) {
 				continue;
 			}
@@ -216,26 +213,6 @@ isp_destroy_handle(ispsoftc_t *isp, uint32_t handle)
 		isp->isp_xflist[(handle & ISP_HANDLE_CMD_MASK)].cmd = isp->isp_xffree;
 		isp->isp_xffree = &isp->isp_xflist[(handle & ISP_HANDLE_CMD_MASK)];
 	}
-}
-
-/*
- * Make sure we have space to put something on the request queue.
- * Return a pointer to that entry if we do. A side effect of this
- * function is to update the output index. The input index
- * stays the same.
- */
-void *
-isp_getrqentry(ispsoftc_t *isp)
-{
-	uint32_t next;
-
-	next = ISP_NXT_QENTRY(isp->isp_reqidx, RQUEST_QUEUE_LEN(isp));
-	if (next == isp->isp_reqodx) {
-		isp->isp_reqodx = ISP_READ(isp, BIU2400_REQOUTP);
-		if (next == isp->isp_reqodx)
-			return (NULL);
-	}
-	return (ISP_QUEUE_ENTRY(isp->isp_rquest, isp->isp_reqidx));
 }
 
 #define	TBA	(4 * (((QENTRY_LEN >> 2) * 3) + 1) + 1)
@@ -486,7 +463,7 @@ isp_clear_commands(ispsoftc_t *isp)
 	isp_notify_t notify;
 #endif
 
-	for (tmp = 0; isp->isp_xflist && tmp < isp->isp_maxcmds; tmp++) {
+	for (tmp = 0; isp->isp_xflist && tmp < ISP_HANDLE_NUM(isp); tmp++) {
 
 		hdp = &isp->isp_xflist[tmp];
 		switch (ISP_H2HT(hdp->handle)) {
@@ -513,6 +490,7 @@ isp_clear_commands(ispsoftc_t *isp)
 		}
 #endif
 		case ISP_HANDLE_CTRL:
+			ISP_MEMZERO(hdp->cmd, QENTRY_LEN);
 			wakeup(hdp->cmd);
 			isp_destroy_handle(isp, hdp->handle);
 			break;
@@ -805,8 +783,8 @@ isp_put_icb_2400(ispsoftc_t *isp, isp_icb_2400_t *src, isp_icb_2400_t *dst)
 	ISP_IOXPUT_16(isp, src->icb_qos, &dst->icb_qos);
 	for (i = 0; i < 3; i++)
 		ISP_IOXPUT_16(isp, src->icb_reserved2[i], &dst->icb_reserved2[i]);
-	for (i = 0; i < 3; i++)
-		ISP_IOXPUT_16(isp, src->icb_enodemac[i], &dst->icb_enodemac[i]);
+	for (i = 0; i < 6; i++)
+		ISP_IOXPUT_8(isp, src->icb_enodemac[i], &dst->icb_enodemac[i]);
 	ISP_IOXPUT_16(isp, src->icb_disctime, &dst->icb_disctime);
 	for (i = 0; i < 4; i++)
 		ISP_IOXPUT_16(isp, src->icb_reserved3[i], &dst->icb_reserved3[i]);
@@ -1677,82 +1655,7 @@ isp_del_wwn_entry(ispsoftc_t *isp, int chan, uint64_t wwpn, uint16_t nphdl, uint
 	/* Notify above levels about gone port. */
 	isp_async(isp, ISPASYNC_DEV_GONE, chan, lp);
 }
-
-void
-isp_del_all_wwn_entries(ispsoftc_t *isp, int chan)
-{
-	fcparam *fcp;
-	int i;
-
-	/*
-	 * Handle iterations over all channels via recursion
-	 */
-	if (chan == ISP_NOCHAN) {
-		for (chan = 0; chan < isp->isp_nchan; chan++) {
-			isp_del_all_wwn_entries(isp, chan);
-		}
-		return;
-	}
-
-	if (chan > isp->isp_nchan) {
-		return;
-	}
-
-	fcp = FCPARAM(isp, chan);
-	if (fcp == NULL) {
-		return;
-	}
-	for (i = 0; i < MAX_FC_TARG; i++) {
-		fcportdb_t *lp = &fcp->portdb[i];
-
-		if (lp->state != FC_PORTDB_STATE_NIL)
-			isp_del_wwn_entry(isp, chan, lp->port_wwn, lp->handle, lp->portid);
-	}
-}
-
-void
-isp_del_wwn_entries(ispsoftc_t *isp, isp_notify_t *mp)
-{
-	fcportdb_t *lp;
-
-	/*
-	 * Handle iterations over all channels via recursion
-	 */
-	if (mp->nt_channel == ISP_NOCHAN) {
-		for (mp->nt_channel = 0; mp->nt_channel < isp->isp_nchan; mp->nt_channel++) {
-			isp_del_wwn_entries(isp, mp);
-		}
-		mp->nt_channel = ISP_NOCHAN;
-		return;
-	}
-
-	/*
-	 * We have an entry which is only partially identified.
-	 *
-	 * It's only known by WWN, N-Port handle, or Port ID.
-	 * We need to find the actual entry so we can delete it.
-	 */
-	if (mp->nt_nphdl != NIL_HANDLE) {
-		if (isp_find_pdb_by_handle(isp, mp->nt_channel, mp->nt_nphdl, &lp)) {
-			isp_del_wwn_entry(isp, mp->nt_channel, lp->port_wwn, lp->handle, lp->portid);
-			return;
-		}
-	}
-	if (VALID_INI(mp->nt_wwn)) {
-		if (isp_find_pdb_by_wwpn(isp, mp->nt_channel, mp->nt_wwn, &lp)) {
-			isp_del_wwn_entry(isp, mp->nt_channel, lp->port_wwn, lp->handle, lp->portid);
-			return;
-		}
-	}
-	if (VALID_PORT(mp->nt_sid)) {
-		if (isp_find_pdb_by_portid(isp, mp->nt_channel, mp->nt_sid, &lp)) {
-			isp_del_wwn_entry(isp, mp->nt_channel, lp->port_wwn, lp->handle, lp->portid);
-			return;
-		}
-	}
-	isp_prt(isp, ISP_LOGWARN, "Chan %d unable to find entry to delete WWPN 0x%016jx PortID 0x%06x handle 0x%x",
-	    mp->nt_channel, mp->nt_wwn, mp->nt_sid, mp->nt_nphdl);
-}
+#endif	/* ISP_TARGET_MODE */
 
 void
 isp_get_atio7(ispsoftc_t *isp, at7_entry_t *src, at7_entry_t *dst)
@@ -2129,7 +2032,156 @@ isp_get_abts_rsp(ispsoftc_t *isp, abts_rsp_t *src, abts_rsp_t *dst)
 	ISP_IOXGET_32(isp, &src->abts_rsp_payload.rsp.subcode2, dst->abts_rsp_payload.rsp.subcode2);
 	ISP_IOXGET_32(isp, &src->abts_rsp_rxid_task, dst->abts_rsp_rxid_task);
 }
-#endif	/* ISP_TARGET_MODE */
+
+void
+isp_put_entry(ispsoftc_t *isp, void *src, void *dst)
+{
+	uint8_t etype = ((isphdr_t *)src)->rqs_entry_type;
+
+	switch (etype) {
+	case RQSTYPE_NOTIFY_ACK:
+		isp_put_notify_ack_24xx(isp, (na_fcentry_24xx_t *)src,
+		    (na_fcentry_24xx_t *)dst);
+		break;
+	case RQSTYPE_CTIO7:
+		isp_put_ctio7(isp, (ct7_entry_t *)src, (ct7_entry_t *)dst);
+		break;
+	case RQSTYPE_TSK_MGMT:
+		isp_put_24xx_tmf(isp, (isp24xx_tmf_t *)src, (isp24xx_tmf_t *)dst);
+		break;
+	case RQSTYPE_CT_PASSTHRU:
+		isp_put_ct_pt(isp, (isp_ct_pt_t *)src, (isp_ct_pt_t *)dst);
+		break;
+	case RQSTYPE_VP_CTRL:
+		isp_put_vp_ctrl_info(isp, (vp_ctrl_info_t *)src, (vp_ctrl_info_t *)dst);
+		break;
+	case RQSTYPE_VP_MODIFY:
+		isp_put_vp_modify(isp, (vp_modify_t *)src, (vp_modify_t *)dst);
+		break;
+	case RQSTYPE_ABORT_IO:
+		isp_put_24xx_abrt(isp, (isp24xx_abrt_t *)src, (isp24xx_abrt_t *)dst);
+		break;
+	case RQSTYPE_LOGIN:
+		isp_put_plogx(isp, (isp_plogx_t *)src, (isp_plogx_t *)dst);
+		break;
+	case RQSTYPE_ABTS_RSP:
+		isp_put_abts_rsp(isp, (abts_rsp_t *)src, (abts_rsp_t *)dst);
+		break;
+	default:
+		panic("%s: Unknown type 0x%x\n", __func__, etype);
+	}
+}
+
+void
+isp_get_entry(ispsoftc_t *isp, void *src, void *dst)
+{
+	uint8_t etype;
+
+	isp_get_hdr(isp, src, (isphdr_t *)dst);
+	etype = ((isphdr_t *)dst)->rqs_entry_type;
+	switch (etype) {
+	case 0:	/* After isp_clear_commands() */
+		ISP_MEMZERO(dst, QENTRY_LEN);
+		break;
+	case RQSTYPE_RESPONSE:
+		isp_get_24xx_response(isp, (isp24xx_statusreq_t *)src, (isp24xx_statusreq_t *)dst);
+		break;
+	case RQSTYPE_CT_PASSTHRU:
+		isp_get_ct_pt(isp, (isp_ct_pt_t *)src, (isp_ct_pt_t *)dst);
+		break;
+	case RQSTYPE_VP_CTRL:
+		isp_get_vp_ctrl_info(isp, (vp_ctrl_info_t *)src, (vp_ctrl_info_t *)dst);
+		break;
+	case RQSTYPE_VP_MODIFY:
+		isp_get_vp_modify(isp, (vp_modify_t *)src, (vp_modify_t *)dst);
+		break;
+	case RQSTYPE_ABORT_IO:
+		isp_get_24xx_abrt(isp, (isp24xx_abrt_t *)src, (isp24xx_abrt_t *)dst);
+		break;
+	case RQSTYPE_LOGIN:
+		isp_get_plogx(isp, (isp_plogx_t *)src, (isp_plogx_t *)dst);
+		break;
+	default:
+		panic("%s: Unknown type 0x%x\n", __func__, etype);
+	}
+}
+
+int
+isp_send_entry(ispsoftc_t *isp, void *src)
+{
+	void *outp;
+
+	outp = isp_getrqentry(isp);
+	if (outp == NULL) {
+		isp_prt(isp, ISP_LOGWARN, "%s: Request Queue Overflow", __func__);
+		return (-1);
+	}
+	isp_put_entry(isp, src, outp);
+	if (isp->isp_dblev & ISP_LOGTDEBUG2)
+	    isp_print_qentry(isp, __func__, isp->isp_reqidx, outp);
+	ISP_SYNC_REQUEST(isp);
+	return (0);
+}
+
+int
+isp_exec_entry_mbox(ispsoftc_t *isp, void *src, void *dst, int timeout)
+{
+	mbreg_t mbs;
+
+	isp_put_entry(isp, src, isp->isp_iocb);
+	MEMORYBARRIER(isp, SYNC_IFORDEV, 0, 2 * QENTRY_LEN, 0);
+
+	MBSINIT(&mbs, MBOX_EXEC_COMMAND_IOCB_A64, MBLOGALL,
+	    MBCMD_DEFAULT_TIMEOUT + timeout * 1000000);
+	mbs.param[1] = QENTRY_LEN;
+	mbs.param[2] = DMA_WD1(isp->isp_iocb_dma);
+	mbs.param[3] = DMA_WD0(isp->isp_iocb_dma);
+	mbs.param[6] = DMA_WD3(isp->isp_iocb_dma);
+	mbs.param[7] = DMA_WD2(isp->isp_iocb_dma);
+	isp_control(isp, ISPCTL_RUN_MBOXCMD, &mbs);
+	if (mbs.param[0] != MBOX_COMMAND_COMPLETE)
+		return (EIO);
+
+	MEMORYBARRIER(isp, SYNC_IFORCPU, QENTRY_LEN, QENTRY_LEN, 0);
+	isp_get_entry(isp, &((isp24xx_statusreq_t *)isp->isp_iocb)[1], dst);
+	return (0);
+}
+
+int
+isp_exec_entry_queue(ispsoftc_t *isp, void *src, void *dst, int timeout)
+{
+	uint8_t resp[QENTRY_LEN];
+	uint32_t hdl;
+
+	timeout *= hz;
+again:
+	/* Wait for empty request queue slot. */
+	while (!isp_rqentry_avail(isp, QENTRY_MAX) && timeout-- > 0)
+		msleep(resp, &isp->isp_lock, 0, "isprqa", 1);
+	if (timeout <= 0)
+		return (ENOMEM);
+
+	/* Allocate handle.  Should always be available, but stay safe. */
+	hdl = isp_allocate_handle(isp, resp, ISP_HANDLE_CTRL);
+	if (hdl == 0) {
+		if (timeout-- > 0) {
+			msleep(resp, &isp->isp_lock, 0, "ispha", 1);
+			goto again;
+		}
+		return (ENOMEM);
+	}
+	((uint32_t *)src)[1] = hdl;
+
+	/* Execute the request and wait for response. */
+	isp_send_entry(isp, src);
+	if (msleep(resp, &isp->isp_lock, 0, "ispeeq", timeout) != 0) {
+		isp_destroy_handle(isp, hdl);
+		return (EWOULDBLOCK);
+	}
+	isp_get_entry(isp, resp, dst);
+	return (0);
+}
+
 /*
  * vim:ts=8:sw=8
  */

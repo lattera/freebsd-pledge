@@ -55,8 +55,6 @@ __FBSDID("$FreeBSD$");
 #endif
 
 #ifdef	ISP_TARGET_MODE
-static const char rqo[] = "%s: Request Queue Overflow";
-
 static void isp_got_tmf_24xx(ispsoftc_t *, at7_entry_t *);
 static void isp_handle_abts(ispsoftc_t *, abts_t *);
 static void isp_handle_ctio7(ispsoftc_t *, ct7_entry_t *);
@@ -134,7 +132,8 @@ isp_target_notify(ispsoftc_t *isp, void *vptr, uint32_t *optrp, uint16_t ql)
 	type = isp_get_response_type(isp, (isphdr_t *)vptr);
 	unp.vp = vptr;
 
-	ISP_TDQE(isp, "isp_target_notify", (int) *optrp, vptr);
+	if (isp->isp_dblev & ISP_LOGTDEBUG2)
+		isp_print_qentry(isp, __func__, *optrp, vptr);
 
 	switch (type) {
 	case RQSTYPE_ATIO:
@@ -174,6 +173,7 @@ isp_target_notify(ispsoftc_t *isp, void *vptr, uint32_t *optrp, uint16_t ql)
 	case RQSTYPE_NOTIFY:
 		isp_get_notify_24xx(isp, inot_24xx, (in_fcentry_24xx_t *)local);
 		isp_handle_notify_24xx(isp, (in_fcentry_24xx_t *)local);
+		break;
 
 	case RQSTYPE_NOTIFY_ACK:
 		/*
@@ -216,37 +216,6 @@ isp_target_notify(ispsoftc_t *isp, void *vptr, uint32_t *optrp, uint16_t ql)
 #undef	abts_rsp
 #undef	hdrp
 	return (rval);
-}
-
-int
-isp_target_put_entry(ispsoftc_t *isp, void *ap)
-{
-	void *outp;
-	uint8_t etype = ((isphdr_t *) ap)->rqs_entry_type;
-
-	outp = isp_getrqentry(isp);
-	if (outp == NULL) {
-		isp_prt(isp, ISP_LOGWARN, rqo, __func__); 
-		return (-1);
-	}
-	switch (etype) {
-	case RQSTYPE_NOTIFY_ACK:
-		isp_put_notify_ack_24xx(isp, (na_fcentry_24xx_t *)ap,
-		    (na_fcentry_24xx_t *)outp);
-		break;
-	case RQSTYPE_CTIO7:
-		isp_put_ctio7(isp, (ct7_entry_t *)ap, (ct7_entry_t *)outp);
-		break;
-	case RQSTYPE_ABTS_RSP:
-		isp_put_abts_rsp(isp, (abts_rsp_t *)ap, (abts_rsp_t *)outp);
-		break;
-	default:
-		isp_prt(isp, ISP_LOGERR, "%s: Unknown type 0x%x", __func__, etype);
-		return (-1);
-	}
-	ISP_TDQE(isp, __func__, isp->isp_reqidx, ap);
-	ISP_SYNC_REQUEST(isp);
-	return (0);
 }
 
 /*
@@ -330,7 +299,7 @@ isp_endcmd(ispsoftc_t *isp, ...)
 		cto->ct_scsi_status |= (FCP_RESID_UNDERFLOW << 8);
 	}
 	cto->ct_syshandle = hdl;
-	return (isp_target_put_entry(isp, cto));
+	return (isp_send_entry(isp, cto));
 }
 
 /*
@@ -372,17 +341,6 @@ isp_target_async(ispsoftc_t *isp, int bus, int event)
 	case ASYNC_LOOP_RESET:
 		isp_prt(isp, ISP_LOGTDEBUG0, "%s: LIP RESET", __func__);
 		notify.nt_ncode = NT_LIP_RESET;
-		isp_async(isp, ISPASYNC_TARGET_NOTIFY, &notify);
-		break;
-	case ASYNC_BUS_RESET:
-	case ASYNC_TIMEOUT_RESET:	/* XXX: where does this come from ? */
-		isp_prt(isp, ISP_LOGTDEBUG0, "%s: BUS RESET", __func__);
-		notify.nt_ncode = NT_BUS_RESET;
-		isp_async(isp, ISPASYNC_TARGET_NOTIFY, &notify);
-		break;
-	case ASYNC_DEVICE_RESET:
-		isp_prt(isp, ISP_LOGTDEBUG0, "%s: DEVICE RESET", __func__);
-		notify.nt_ncode = NT_TARGET_RESET;
 		isp_async(isp, ISPASYNC_TARGET_NOTIFY, &notify);
 		break;
 	default:
@@ -504,7 +462,7 @@ isp_notify_ack(ispsoftc_t *isp, void *arg)
 			na->na_srr_reject_explanation = 0x2a;
 		}
 	}
-	return (isp_target_put_entry(isp, na));
+	return (isp_send_entry(isp, na));
 }
 
 int
@@ -563,7 +521,7 @@ isp_acknak_abts(ispsoftc_t *isp, void *arg, int errno)
 			break;
 		}
 	}
-	return (isp_target_put_entry(isp, rsp));
+	return (isp_send_entry(isp, rsp));
 }
 
 static void
@@ -819,6 +777,9 @@ isp_handle_notify_24xx(ispsoftc_t *isp, in_fcentry_24xx_t *inot)
 			wwpn = be64dec(&ptr[IN24XX_PRLI_WWPN_OFF]);
 			isp_add_wwn_entry(isp, chan, wwpn, wwnn,
 			    nphdl, portid, prli_options);
+			break;
+		case TPRLO:
+			msg = "TPRLO";
 			break;
 		case PDISC:
 			msg = "PDISC";
