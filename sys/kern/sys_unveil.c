@@ -555,7 +555,7 @@ unveil_traverse(struct thread *td, struct unveil_traversal *trav,
 		if (node) {
 			trav->cover = node;
 			trav->depth = 0;
-		} else {
+		} else if (dvp != vp) {
 			if (!++trav->depth)
 				trav->depth = -1;
 		}
