@@ -803,9 +803,9 @@ struct proc {
  * The general notion of a process being "restricted" is used for checks that
  * should be done for both Capsicum and pledge().
  */
-#define	PROC_IN_RESTRICTED_MODE(p)	CRED_IN_RESTRICTED_MODE(p->p_ucred)
-#define	PROC_IN_RESTRICTED_EXEC_MODE(p)	CRED_IN_RESTRICTED_EXEC_MODE(p->p_ucred)
-#define	PROC_IN_CAPABILITY_MODE(p)	CRED_IN_CAPABILITY_MODE(p->p_ucred)
+#define	PROC_IN_RESTRICTED_MODE(p)	CRED_IN_RESTRICTED_MODE((p)->p_ucred)
+#define	PROC_IN_RESTRICTED_EXEC_MODE(p)	CRED_IN_RESTRICTED_EXEC_MODE((p)->p_ucred)
+#define	PROC_IN_CAPABILITY_MODE(p)	CRED_IN_CAPABILITY_MODE((p)->p_ucred)
 
 #define	IN_RESTRICTED_MODE(td)		PROC_IN_RESTRICTED_MODE((td)->td_proc)
 #define	IN_RESTRICTED_EXEC_MODE(td)	PROC_IN_RESTRICTED_EXEC_MODE((td)->td_proc)

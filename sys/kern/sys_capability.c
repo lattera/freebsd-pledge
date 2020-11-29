@@ -79,7 +79,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/ucred.h>
 #include <sys/uio.h>
 #include <sys/ktrace.h>
-#include <sys/sysfil.h>
 
 #include <security/audit/audit.h>
 
@@ -112,12 +111,10 @@ sys_cap_enter(struct thread *td, struct cap_enter_args *uap)
 	p = td->td_proc;
 	PROC_LOCK(p);
 	oldcred = crcopysafe(p, newcred);
-	newcred->cr_flags |= CRED_FLAG_CAPMODE;
-#ifdef SYSFIL
-	sysfil_cred_sandbox(newcred);
-#endif
-	KASSERT(CRED_IN_RESTRICTED_MODE(newcred), ("CRED_IN_RESTRICTED_MODE() bogus"));
-	KASSERT(CRED_IN_CAPABILITY_MODE(newcred), ("CRED_IN_CAPABILITY_MODE() bogus"));
+	CRED_SET_CAPABILITY_MODE(newcred);
+	MPASS(CRED_IN_CAPABILITY_MODE(newcred));
+	MPASS(CRED_IN_RESTRICTED_MODE(newcred));
+	MPASS(CRED_IN_RESTRICTED_EXEC_MODE(newcred));
 	proc_set_cred(p, newcred);
 	if (!PROC_IN_RESTRICTED_MODE(p))
 		panic("PROC_IN_RESTRICTED_MODE() bogus after cap_enter(2)");

@@ -320,6 +320,7 @@ sysfil_cred_update(struct ucred *cr,
 {
 	sysfilset_t sysfilset = SYSFILSET_INITIALIZER;
 	SYSFILSET_FILL(&sysfilset, SYSFIL_ALWAYS);
+	SYSFILSET_FILL(&sysfilset, SYSFIL_UNCAPSICUM);
 	while (count--) {
 		int sf = *sysfils++;
 		if (!SYSFIL_USER_VALID(sf))

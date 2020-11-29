@@ -22,10 +22,13 @@
  */
 #define	SYSFIL_DEFAULT		0
 /*
- * SYSFIL_NOCAPSICUM will be lost after entering Capsicum capability mode.  It
- * is only there to make some checks faster.
+ * SYSFIL_UNCAPSICUM represents the state of not being in Capsicum capability
+ * mode.  It will be lost after entering capability mode (and like any other
+ * sysfil, it cannot be regained).  Its index is also defined in
+ * <sys/_sysfil.h> (to avoid having to include all of the sysfil stuff to test
+ * for capability mode).
  */
-#define	SYSFIL_NOCAPSICUM	1
+#define	SYSFIL_UNCAPSICUM	1
 /*
  * SYSFIL_ALWAYS is for various operations that should always be allowed.  It
  * should never be lost.
@@ -94,6 +97,11 @@
 #define	SYSFIL_PROT_EXEC_LOOSE	62 /* SYSFIL_LAST! */
 #define	SYSFIL_LAST		SYSFIL_PROT_EXEC_LOOSE
 
+#ifdef _KERNEL
+CTASSERT(SYSFIL_UNCAPSICUM == SYSFILSET_NOT_IN_CAPABILITY_MODE_BIT);
+CTASSERT(SYSFIL_LAST < SYSFIL_SIZE);
+#endif
+
 /*
  * Some syscalls are assigned to sysfils that may seem to be less restrictive
  * than they should be.  Usually these syscalls will be doing their own
@@ -142,8 +150,6 @@ int sysfilctl(int flags, const int *sysfils, size_t count);
 
 
 #ifdef _KERNEL
-
-CTASSERT(SYSFIL_LAST < SYSFIL_SIZE);
 
 #define	SYSFIL_FAILED_ERRNO	ECAPMODE
 
@@ -226,15 +232,6 @@ sysfil_cred_exec_switch(struct ucred *cr)
 {
 #ifdef SYSFIL
 	cr->cr_sysfilset = cr->cr_sysfilset_exec;
-#endif
-}
-
-static inline void
-sysfil_cred_sandbox(struct ucred *cr)
-{
-#ifdef SYSFIL
-	SYSFILSET_CLEAR(&cr->cr_sysfilset, SYSFIL_NOCAPSICUM);
-	SYSFILSET_CLEAR(&cr->cr_sysfilset_exec, SYSFIL_NOCAPSICUM);
 #endif
 }
 

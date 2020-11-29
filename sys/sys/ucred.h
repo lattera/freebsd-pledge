@@ -78,11 +78,12 @@ struct ucred {
 	struct uidinfo	*cr_ruidinfo;	/* per ruid resource consumption */
 	struct prison	*cr_prison;	/* jail(2) */
 	struct loginclass	*cr_loginclass; /* login class */
-	u_int		cr_flags;	/* credential flags */
 #ifdef SYSFIL
 	sysfilset_t	cr_sysfilset;	/* syscall filter flags */
 	sysfilset_t	cr_sysfilset_exec; /* on-exec syscall filter flags */
+	void		*cr_pspare;	/* general use */
 #else
+	u_int		cr_flags;	/* credential flags */
 	void		*cr_pspare2[2];	/* general use 2 */
 #endif
 #define	cr_endcopy	cr_label
@@ -95,14 +96,21 @@ struct ucred {
 #define	NOCRED	((struct ucred *)0)	/* no credential available */
 #define	FSCRED	((struct ucred *)-1)	/* filesystem credential */
 
-#define	CRED_IN_CAPABILITY_MODE(cr) (((cr)->cr_flags & CRED_FLAG_CAPMODE) != 0)
 
 #ifdef SYSFIL
+#define	CRED_IN_CAPABILITY_MODE(cr) \
+	SYSFILSET_IN_CAPABILITY_MODE(&(cr)->cr_sysfilset)
+#define	CRED_SET_CAPABILITY_MODE(cr) do { \
+		SYSFILSET_SET_CAPABILITY_MODE(&(cr)->cr_sysfilset); \
+		SYSFILSET_SET_CAPABILITY_MODE(&(cr)->cr_sysfilset_exec); \
+	} while (0)
 #define	CRED_IN_RESTRICTED_MODE(cr) \
 	SYSFILSET_IS_RESTRICTED(&(cr)->cr_sysfilset)
 #define	CRED_IN_RESTRICTED_EXEC_MODE(cr) \
 	SYSFILSET_IS_RESTRICTED(&(cr)->cr_sysfilset_exec)
 #else
+#define	CRED_IN_CAPABILITY_MODE(cr) (((cr)->cr_flags & CRED_FLAG_CAPMODE) != 0)
+#define	CRED_SET_CAPABILITY_MODE(cr) ((cr)->cr_flags |= CRED_FLAG_CAPMODE)
 #define	CRED_IN_RESTRICTED_MODE(cr)		CRED_IN_CAPABILITY_MODE(cr)
 #define	CRED_IN_RESTRICTED_EXEC_MODE(cr)	CRED_IN_CAPABILITY_MODE(cr)
 #endif
