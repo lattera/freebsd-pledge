@@ -807,9 +807,9 @@ struct proc {
 #define	PROC_IN_RESTRICTED_EXEC_MODE(p)	CRED_IN_RESTRICTED_EXEC_MODE((p)->p_ucred)
 #define	PROC_IN_CAPABILITY_MODE(p)	CRED_IN_CAPABILITY_MODE((p)->p_ucred)
 
-#define	IN_RESTRICTED_MODE(td)		PROC_IN_RESTRICTED_MODE((td)->td_proc)
-#define	IN_RESTRICTED_EXEC_MODE(td)	PROC_IN_RESTRICTED_EXEC_MODE((td)->td_proc)
-#define	IN_CAPABILITY_MODE(td)		PROC_IN_CAPABILITY_MODE((td)->td_proc)
+#define	IN_RESTRICTED_MODE(td)		CRED_IN_RESTRICTED_MODE((td)->td_ucred)
+#define	IN_RESTRICTED_EXEC_MODE(td)	CRED_IN_RESTRICTED_EXEC_MODE((td)->td_ucred)
+#define	IN_CAPABILITY_MODE(td)		CRED_IN_CAPABILITY_MODE((td)->td_ucred)
 
 /*
  * These were process status values (p_stat), now they are only used in

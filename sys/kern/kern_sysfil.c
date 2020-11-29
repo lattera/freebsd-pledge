@@ -431,15 +431,15 @@ sysfil_cred_rights(struct ucred *cr, cap_rights_t *rights)
 		return;
 	}
 	CAP_NONE(rights);
-	if (sysfil_match(&cr->cr_sysfilset, SYSFIL_RPATH))
+	if (sysfil_match_cred(cr, SYSFIL_RPATH))
 		cap_rights_merge(rights, &cap_sysfil_rpath_rights);
-	if (sysfil_match(&cr->cr_sysfilset, SYSFIL_WPATH))
+	if (sysfil_match_cred(cr, SYSFIL_WPATH))
 		cap_rights_merge(rights, &cap_sysfil_wpath_rights);
-	if (sysfil_match(&cr->cr_sysfilset, SYSFIL_CPATH))
+	if (sysfil_match_cred(cr, SYSFIL_CPATH))
 		cap_rights_merge(rights, &cap_sysfil_cpath_rights);
-	if (sysfil_match(&cr->cr_sysfilset, SYSFIL_EXEC))
+	if (sysfil_match_cred(cr, SYSFIL_EXEC))
 		cap_rights_merge(rights, &cap_sysfil_exec_rights);
-	if (sysfil_match(&cr->cr_sysfilset, SYSFIL_FATTR))
+	if (sysfil_match_cred(cr, SYSFIL_FATTR))
 		cap_rights_merge(rights, &cap_sysfil_fattr_rights);
 }
 

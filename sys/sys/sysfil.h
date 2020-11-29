@@ -154,8 +154,8 @@ int sysfilctl(int flags, const int *sysfils, size_t count);
 #define	SYSFIL_FAILED_ERRNO	ECAPMODE
 
 static inline int
-sysfil_match(const sysfilset_t *sysfilset, int sf) {
-	return (SYSFILSET_MATCH(sysfilset, sf));
+sysfil_match_cred(const struct ucred *cr, int sf) {
+	return (SYSFILSET_MATCH(&cr->cr_sysfilset, sf));
 }
 
 static inline int
@@ -164,7 +164,7 @@ sysfil_check_cred(const struct ucred *cr, int sf)
 	if (__predict_false(!SYSFIL_VALID(sf)))
 		return (EINVAL);
 #ifdef SYSFIL
-	if (__predict_false(!sysfil_match(&cr->cr_sysfilset, sf)))
+	if (__predict_false(!sysfil_match_cred(cr, sf)))
 		return (SYSFIL_FAILED_ERRNO);
 #endif
 	return (0);

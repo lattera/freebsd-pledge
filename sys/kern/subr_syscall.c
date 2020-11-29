@@ -62,6 +62,9 @@ syscallenter(struct thread *td)
 	struct syscall_args *sa;
 	struct sysent *se;
 	int error, traced;
+#ifdef	SYSFIL
+	int sysfil;
+#endif
 	bool sy_thr_static;
 
 	VM_CNT_INC(v_syscall);
@@ -129,15 +132,15 @@ syscallenter(struct thread *td)
 		goto retval;
 	}
 #endif
-
 #ifdef SYSFIL
 	/*
 	 * In addition to that, check that the system call's filter index is
 	 * enabled in the process' sysfilset.
 	 */
-	if (__predict_false(error = sysfil_require(td,
-	    (sa->callp->sy_flags & SYF_SYSFIL_MASK) >> SYF_SYSFIL_SHIFT))) {
-		td->td_errno = error;
+	sysfil = (se->sy_flags & SYF_SYSFIL_MASK) >> SYF_SYSFIL_SHIFT;
+	if (__predict_false(!sysfil_match_cred(td->td_ucred, sysfil))) {
+		td->td_errno = error = SYSFIL_FAILED_ERRNO;
+		sysfil_violation(td, sysfil, error);
 		goto retval;
 	}
 #endif
