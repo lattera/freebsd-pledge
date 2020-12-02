@@ -65,9 +65,6 @@
 #include <net/route.h>
 #include <net/route/route_ctl.h>
 #include <net/route/route_var.h>
-#ifdef RADIX_MPATH
-#include <net/radix_mpath.h>
-#endif
 #include <net/vnet.h>
 
 #include <netinet/in.h>
