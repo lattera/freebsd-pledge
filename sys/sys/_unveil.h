@@ -3,9 +3,10 @@
 
 #include <sys/types.h>
 #include <sys/tree.h>
-#ifndef _KERNEL
+#ifdef _KERNEL
+#include <sys/_sx.h>
+#else
 #include <stdbool.h>
-#include <_sx.h>
 #endif
 
 typedef uint8_t unveil_perms_t;

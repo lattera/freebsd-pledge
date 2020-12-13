@@ -175,7 +175,7 @@ unveil_base_init(struct unveil_base *base)
 	*base = (struct unveil_base){
 		.root = RB_INITIALIZER(&base->root),
 	};
-	sx_init_flags(&base->sx, "unveil base", SX_DUPOK | SX_NEW);
+	sx_init_flags(&base->sx, "unveil base", SX_NEW);
 }
 
 static struct unveil_node *unveil_insert(struct unveil_base *, struct vnode *,
@@ -734,17 +734,14 @@ static void
 unveil_proc_fork(void *arg __unused, struct proc *parent, struct proc *child, int flags)
 {
 	struct unveil_base *src, *dst;
-	MPASS(parent != child);
 	src = &parent->p_unveils;
 	dst = &child->p_unveils;
 	UNVEIL_SLOCK(src);
 	unveil_base_check(src);
-	UNVEIL_XLOCK(dst);
 	unveil_base_check(dst);
 	unveil_base_merge(dst, src);
 	unveil_base_check(dst);
 	MPASS(dst->node_count == src->node_count);
-	UNVEIL_XUNLOCK(dst);
 	UNVEIL_SUNLOCK(src);
 }
 
