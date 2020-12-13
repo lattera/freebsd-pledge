@@ -68,13 +68,21 @@ enum unveil_role {
 static inline bool
 unveil_is_active(struct thread *td)
 {
+#ifdef UNVEIL
 	return (td->td_proc->p_unveils.flags[UNVEIL_ROLE_CURR].active);
+#else
+	return (false);
+#endif
 }
 
 static inline bool
 unveil_exec_is_active(struct thread *td)
 {
+#ifdef UNVEIL
 	return (td->td_proc->p_unveils.flags[UNVEIL_ROLE_EXEC].active);
+#else
+	return (false);
+#endif
 }
 
 
