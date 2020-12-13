@@ -74,9 +74,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/sx.h>
 #include <sys/sysent.h>
 #include <sys/signalvar.h>
-#ifdef UNVEIL
-#include <sys/unveil.h>
-#endif
 
 #include <security/audit/audit.h>
 #include <security/mac/mac_framework.h>
@@ -873,12 +870,6 @@ fork1(struct thread *td, struct fork_req *fr)
 		if ((fr->fr_pd_flags & ~PD_ALLOWED_AT_FORK) != 0)
 			return (EINVAL);
 	}
-
-#ifdef UNVEIL
-	/* XXX unveils probably shouldn't be associated with the filedesc table anymore */
-	if ((flags & RFCFDG) != 0 && unveil_is_active(td))
-		return (ECAPMODE);
-#endif
 
 	p1 = td->td_proc;
 

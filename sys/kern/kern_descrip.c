@@ -79,7 +79,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/user.h>
 #include <sys/vnode.h>
 #include <sys/sysfil.h>
-#include <sys/unveil.h>
 #ifdef KTRACE
 #include <sys/ktrace.h>
 #endif
@@ -2096,9 +2095,6 @@ fdinit(struct filedesc *fdp, bool prepfiles, int *lastfile)
 	newfdp->fd_map = newfdp0->fd_dmap;
 	newfdp->fd_files = (struct fdescenttbl *)&newfdp0->fd_dfiles;
 	newfdp->fd_files->fdt_nfiles = NDFILE;
-#ifdef UNVEIL
-	unveil_fd_init(newfdp);
-#endif
 
 	if (fdp == NULL)
 		return (newfdp);
@@ -2291,10 +2287,6 @@ fdcopy(struct filedesc *fdp)
 	MPASS(fdp != NULL);
 
 	newfdp = fdinit(fdp, true, &lastfile);
-#ifdef UNVEIL
-	if (fdp)
-		unveil_fd_merge(newfdp, fdp);
-#endif
 	/* copy all passable descriptors (i.e. not kqueue) */
 	newfdp->fd_freefile = -1;
 	for (i = 0; i <= lastfile; ++i) {
@@ -2537,9 +2529,6 @@ fdescfree(struct thread *td)
 	if (refcount_release(&fdp->fd_refcnt) == 0)
 		return;
 
-#ifdef UNVEIL
-	unveil_fd_free(fdp);
-#endif
 	fdescfree_fds(td, fdp, 1);
 }
 

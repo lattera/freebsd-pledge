@@ -5,9 +5,12 @@
 #include <sys/tree.h>
 #ifndef _KERNEL
 #include <stdbool.h>
+#include <_sx.h>
 #endif
 
 typedef uint8_t unveil_perms_t;
+
+#ifdef _KERNEL
 
 struct unveil_node;
 
@@ -21,12 +24,15 @@ struct unveil_traversal {
 enum { UNVEIL_ROLE_COUNT = 2 };
 
 struct unveil_base {
+	struct sx sx;
 	RB_HEAD(unveil_node_tree, unveil_node) root;
 	u_int node_count;
-	struct {
+	struct unveil_base_flags {
 		bool active : 1;
 		bool frozen : 1;
 	} flags[UNVEIL_ROLE_COUNT];
 };
+
+#endif /* _KERNEL */
 
 #endif

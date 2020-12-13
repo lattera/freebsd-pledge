@@ -72,6 +72,7 @@
 #include <sys/_sysfil.h>
 #include <sys/types.h>
 #include <sys/_domainset.h>
+#include <sys/_unveil.h>
 
 #include <machine/proc.h>		/* Machine-dependent proc substruct. */
 #ifdef _KERNEL
@@ -714,6 +715,9 @@ struct proc {
 	 */
 	LIST_ENTRY(proc) p_orphan;	/* (e) List of orphan processes. */
 	LIST_HEAD(, proc) p_orphans;	/* (e) Pointer to list of orphans. */
+#ifdef	UNVEIL
+	struct unveil_base p_unveils;
+#endif
 };
 
 #define	p_session	p_pgrp->pg_session

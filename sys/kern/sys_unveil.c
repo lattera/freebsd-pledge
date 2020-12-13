@@ -4,9 +4,8 @@ __FBSDID("$FreeBSD$");
 #include "opt_capsicum.h"
 
 #include <sys/param.h>
+#include <sys/types.h>
 #include <sys/capsicum.h>
-#include <sys/file.h>
-#include <sys/filedesc.h>
 #include <sys/kernel.h>
 #include <sys/limits.h>
 #include <sys/lock.h>
@@ -17,10 +16,12 @@ __FBSDID("$FreeBSD$");
 #include <sys/systm.h>
 #include <sys/ucred.h>
 #include <sys/syslog.h>
-#include <sys/jail.h>
 #include <sys/namei.h>
 #include <sys/vnode.h>
 #include <sys/mount.h>
+#include <sys/sysctl.h>
+#include <sys/sx.h>
+#include <sys/eventhandler.h>
 #include <sys/unveil.h>
 
 #ifdef UNVEIL
@@ -150,23 +151,31 @@ unveil_node_cmp(struct unveil_node *n0, struct unveil_node *n1)
 RB_GENERATE_STATIC(unveil_node_tree, unveil_node, entry, unveil_node_cmp);
 
 
+#define UNVEIL_XLOCK(base)     sx_xlock(&(base)->sx)
+#define UNVEIL_XUNLOCK(base)   sx_xunlock(&(base)->sx)
+#define UNVEIL_SLOCK(base)     sx_slock(&(base)->sx)
+#define UNVEIL_SUNLOCK(base)   sx_sunlock(&(base)->sx)
+
 static void
-unveil_check(struct unveil_base *base)
+unveil_base_check(struct unveil_base *base)
 {
 #ifdef INVARIANTS
 	for (int i = 0; i < UNVEIL_ROLE_COUNT; i++)
 		KASSERT(base->flags[i].active || !base->flags[i].frozen,
 		    ("unveils frozen but not active"));
+	MPASS((base->node_count == 0) == RB_EMPTY(&base->root));
+#else
+	(void)base;
 #endif
 }
 
-static void
-unveil_init(struct unveil_base *base)
+void
+unveil_base_init(struct unveil_base *base)
 {
 	*base = (struct unveil_base){
 		.root = RB_INITIALIZER(&base->root),
 	};
-	unveil_check(base);
+	sx_init_flags(&base->sx, "unveil base", SX_DUPOK | SX_NEW);
 }
 
 static struct unveil_node *unveil_insert(struct unveil_base *, struct vnode *,
@@ -174,8 +183,8 @@ static struct unveil_node *unveil_insert(struct unveil_base *, struct vnode *,
 static struct unveil_node *unveil_lookup(struct unveil_base *, struct vnode *,
     const char *name, size_t name_len);
 
-static void
-unveil_merge(struct unveil_base *dst, struct unveil_base *src)
+void
+unveil_base_merge(struct unveil_base *dst, struct unveil_base *src)
 {
 	struct unveil_node *dst_node, *src_node;
 	int i, j;
@@ -205,7 +214,6 @@ unveil_merge(struct unveil_base *dst, struct unveil_base *src)
 		    src_node->cover->name, src_node->cover->name_len);
 		KASSERT(dst_node->cover, ("cover unveil node missing"));
 	}
-	unveil_check(dst);
 }
 
 static void
@@ -217,19 +225,27 @@ unveil_node_remove(struct unveil_base *base, struct unveil_node *node)
 	free(node, M_UNVEIL);
 }
 
-static void
-unveil_clear(struct unveil_base *base)
+void
+unveil_base_clear(struct unveil_base *base)
 {
 	struct unveil_node *node, *node_tmp;
 	RB_FOREACH_SAFE(node, unveil_node_tree, &base->root, node_tmp)
 	    unveil_node_remove(base, node);
-	MPASS(base->node_count == 0);
 }
 
-static void
-unveil_free(struct unveil_base *base)
+void
+unveil_base_reset(struct unveil_base *base)
 {
-	unveil_clear(base);
+	unveil_base_clear(base);
+	for (int i = 0; i < UNVEIL_ROLE_COUNT; i++)
+		base->flags[i] = (struct unveil_base_flags){ 0 };
+}
+
+void
+unveil_base_free(struct unveil_base *base)
+{
+	unveil_base_clear(base);
+	sx_destroy(&base->sx);
 }
 
 static struct unveil_node *
@@ -273,42 +289,22 @@ unveil_lookup(struct unveil_base *base, struct vnode *vp, const char *name, size
 }
 
 
-void
-unveil_fd_init(struct filedesc *fd)
-{
-	unveil_init(&fd->fd_unveil);
-}
-
-void
-unveil_fd_merge(struct filedesc *dst_fdp, struct filedesc *src_fdp)
-{
-	unveil_merge(&dst_fdp->fd_unveil, &src_fdp->fd_unveil);
-}
-
-void
-unveil_fd_free(struct filedesc *fdp)
-{
-	unveil_free(&fdp->fd_unveil);
-}
-
-
 bool
 unveil_is_active(struct thread *td)
 {
-	return (td->td_proc->p_fd->fd_unveil.flags[UNVEIL_ROLE_CURR].active);
+	return (td->td_proc->p_unveils.flags[UNVEIL_ROLE_CURR].active);
 }
 
 bool
 unveil_exec_is_active(struct thread *td)
 {
-	return (td->td_proc->p_fd->fd_unveil.flags[UNVEIL_ROLE_EXEC].active);
+	return (td->td_proc->p_unveils.flags[UNVEIL_ROLE_EXEC].active);
 }
 
 void
 unveil_proc_exec_switch(struct thread *td)
 {
-	struct filedesc *fdp = td->td_proc->p_fd;
-	struct unveil_base *base = &fdp->fd_unveil;
+	struct unveil_base *base = &td->td_proc->p_unveils;
 	if ((base->flags[UNVEIL_ROLE_CURR].active = base->flags[UNVEIL_ROLE_EXEC].active)) {
 		base->flags[UNVEIL_ROLE_CURR].frozen = base->flags[UNVEIL_ROLE_EXEC].frozen = true;
 		struct unveil_node *node, *node_tmp;
@@ -337,9 +333,9 @@ unveil_proc_exec_switch(struct thread *td)
 		 * elevated privileges.
 		 */
 		base->flags[UNVEIL_ROLE_CURR].frozen = base->flags[UNVEIL_ROLE_EXEC].frozen = false;
-		unveil_clear(base);
+		unveil_base_clear(base);
 	}
-	unveil_check(base);
+	unveil_base_check(base);
 }
 
 #define	FOREACH_ROLE_FLAGS(flags, i) \
@@ -419,8 +415,7 @@ static int
 unveil_find_cover(struct thread *td, struct vnode *dp,
     struct unveil_node **cover, uint8_t *depth)
 {
-	struct filedesc *fdp = td->td_proc->p_fd;
-	struct unveil_base *base = &fdp->fd_unveil;
+	struct unveil_base *base = &td->td_proc->p_unveils;
 	int error = 0;
 	struct vnode *vp;
 	struct componentname cn;
@@ -432,9 +427,9 @@ unveil_find_cover(struct thread *td, struct vnode *dp,
 	while (true) {
 		/* At the start of the loop, dp is locked (and referenced). */
 
-		FILEDESC_SLOCK(fdp);
+		UNVEIL_SLOCK(base);
 		*cover = unveil_lookup(base, dp, NULL, 0);
-		FILEDESC_SUNLOCK(fdp);
+		UNVEIL_SUNLOCK(base);
 		if (*cover)
 			break; /* found unveil node */
 
@@ -523,8 +518,7 @@ int
 unveil_traverse(struct thread *td, struct unveil_traversal *trav,
     struct vnode *dvp, const char *name, size_t name_len, struct vnode *vp, bool final)
 {
-	struct filedesc *fdp = td->td_proc->p_fd;
-	struct unveil_base *base = &fdp->fd_unveil;
+	struct unveil_base *base = &td->td_proc->p_unveils;
 
 	if (trav->save && (final || (trav->save->flags & UNVEILCTL_INTERMEDIATE))) {
 		int error;
@@ -533,25 +527,25 @@ unveil_traverse(struct thread *td, struct unveil_traversal *trav,
 		if (base->node_count >= unveil_max_nodes_per_process)
 			return (E2BIG);
 
-		FILEDESC_XLOCK(fdp);
+		UNVEIL_XLOCK(base);
 		error = unveil_remember(base, &trav->cover,
 		    trav->save->flags, trav->save->perms,
 		    dvp, name, name_len, vp, final);
-		FILEDESC_XUNLOCK(fdp);
+		UNVEIL_XUNLOCK(base);
 		if (error)
 			return (error);
 		trav->depth = 0;
 
 	} else {
 		struct unveil_node *node;
-		FILEDESC_SLOCK(fdp);
+		UNVEIL_SLOCK(base);
 		if (vp)
 			node = unveil_lookup(base, vp, NULL, 0);
 		else
 			node = NULL;
 		if (!node)
 			node = unveil_lookup(base, dvp, name, name_len);
-		FILEDESC_SUNLOCK(fdp);
+		UNVEIL_SUNLOCK(base);
 		if (node) {
 			trav->cover = node;
 			trav->depth = 0;
@@ -569,11 +563,11 @@ void
 unveil_traverse_dotdot(struct thread *td, struct unveil_traversal *trav,
     struct vnode *dvp)
 {
-	struct filedesc *fdp = td->td_proc->p_fd;
+	struct unveil_base *base = &td->td_proc->p_unveils;
 	if (trav->cover && trav->depth == 0) {
-		FILEDESC_SLOCK(fdp);
+		UNVEIL_SLOCK(base);
 		trav->cover = trav->cover->fully_covered ? NULL : trav->cover->cover;
-		FILEDESC_SUNLOCK(fdp);
+		UNVEIL_SUNLOCK(base);
 	}
 	trav->depth = -1;
 	trav->type = VDIR;
@@ -582,10 +576,9 @@ unveil_traverse_dotdot(struct thread *td, struct unveil_traversal *trav,
 unveil_perms_t
 unveil_traverse_effective_uperms(struct thread *td, struct unveil_traversal *trav)
 {
-	struct filedesc *fdp = td->td_proc->p_fd;
-	struct unveil_base *base = &fdp->fd_unveil;
+	struct unveil_base *base = &td->td_proc->p_unveils;
 	unveil_perms_t perms;
-	FILEDESC_SLOCK(fdp);
+	UNVEIL_SLOCK(base);
 	if (trav->cover) {
 		perms = unveil_uperms_expand(
 		    trav->cover->frozen_perms[UNVEIL_ROLE_CURR]);
@@ -598,7 +591,7 @@ unveil_traverse_effective_uperms(struct thread *td, struct unveil_traversal *tra
 		else
 			perms = base->flags[UNVEIL_ROLE_CURR].active ? UPERM_NONE : UPERM_ALL;
 	}
-	FILEDESC_SUNLOCK(fdp);
+	UNVEIL_SUNLOCK(base);
 	/* NOTE: This function does not take the depth into consideration. */
 	return (perms);
 }
@@ -666,8 +659,7 @@ int
 sys_unveilctl(struct thread *td, struct unveilctl_args *uap)
 {
 #ifdef UNVEIL
-	struct filedesc *fdp = td->td_proc->p_fd;
-	struct unveil_base *base = &fdp->fd_unveil;
+	struct unveil_base *base = &td->td_proc->p_unveils;
 	int flags = uap->flags;
 	unveil_perms_t perms = uap->perms;
 
@@ -689,8 +681,7 @@ sys_unveilctl(struct thread *td, struct unveilctl_args *uap)
 		NDFREE(&nd, 0);
 	}
 
-	FILEDESC_XLOCK(fdp);
-
+	UNVEIL_XLOCK(base);
 	if (flags & UNVEILCTL_ACTIVATE) {
 		int i;
 		FOREACH_ROLE_FLAGS(flags, i)
@@ -702,16 +693,61 @@ sys_unveilctl(struct thread *td, struct unveilctl_args *uap)
 		do_unveil_freeze(base, flags, perms);
 	if (flags & UNVEILCTL_SWEEP)
 		do_unveil_sweep(base, flags);
-
-	unveil_check(base);
-	FILEDESC_XUNLOCK(fdp);
+	unveil_base_check(base);
+	UNVEIL_XUNLOCK(base);
 	return (0);
 #else
 	return (ENOSYS);
 #endif /* UNVEIL */
 }
 
+
 #if defined(UNVEIL)
+
+static void
+unveil_proc_init(void *arg __unused, struct proc *p)
+{
+	unveil_base_init(&p->p_unveils);
+	unveil_base_check(&p->p_unveils);
+}
+
+static void
+unveil_proc_ctor(void *arg __unused, struct proc *p)
+{
+	unveil_base_check(&p->p_unveils);
+}
+
+static void
+unveil_proc_dtor(void *arg __unused, struct proc *p)
+{
+	unveil_base_reset(&p->p_unveils);
+	unveil_base_check(&p->p_unveils);
+}
+
+static void
+unveil_proc_fini(void *arg __unused, struct proc *p)
+{
+	unveil_base_free(&p->p_unveils);
+}
+
+static void
+unveil_proc_fork(void *arg __unused, struct proc *parent, struct proc *child, int flags)
+{
+	struct unveil_base *src, *dst;
+	MPASS(parent != child);
+	src = &parent->p_unveils;
+	dst = &child->p_unveils;
+	UNVEIL_SLOCK(src);
+	unveil_base_check(src);
+	UNVEIL_XLOCK(dst);
+	unveil_base_check(dst);
+	unveil_base_merge(dst, src);
+	unveil_base_check(dst);
+	MPASS(dst->node_count == src->node_count);
+	UNVEIL_XUNLOCK(dst);
+	UNVEIL_SUNLOCK(src);
+}
+
 
 static cap_rights_t __read_mostly inspect_rights;
 static cap_rights_t __read_mostly rpath_rights;
@@ -761,7 +797,7 @@ unveil_uperms_rights(unveil_perms_t perms, cap_rights_t *rights)
 }
 
 static void
-unveil_sysinit(void *arg)
+unveil_sysinit(void *arg __unused)
 {
 	cap_rights_init(&inspect_rights,
 	    CAP_LOOKUP,
@@ -849,8 +885,14 @@ unveil_sysinit(void *arg)
 	 */
 	cap_rights_init(&rwcapath_rights,
 	    CAP_LINKAT_SOURCE);
+
+	EVENTHANDLER_REGISTER(process_init, unveil_proc_init, NULL, EVENTHANDLER_PRI_ANY);
+	EVENTHANDLER_REGISTER(process_ctor, unveil_proc_ctor, NULL, EVENTHANDLER_PRI_ANY);
+	EVENTHANDLER_REGISTER(process_dtor, unveil_proc_dtor, NULL, EVENTHANDLER_PRI_ANY);
+	EVENTHANDLER_REGISTER(process_fini, unveil_proc_fini, NULL, EVENTHANDLER_PRI_ANY);
+	EVENTHANDLER_REGISTER(process_fork, unveil_proc_fork, NULL, EVENTHANDLER_PRI_ANY);
 }
 
-SYSINIT(unveil_sysinit, SI_SUB_COPYRIGHT, SI_ORDER_ANY, unveil_sysinit, NULL);
+SYSINIT(unveil_sysinit, SI_SUB_KLD, SI_ORDER_ANY, unveil_sysinit, NULL);
 
-#endif
+#endif /* UNVEIL */

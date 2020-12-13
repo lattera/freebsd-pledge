@@ -43,7 +43,6 @@
 #include <sys/priority.h>
 #include <sys/seqc.h>
 #include <sys/sx.h>
-#include <sys/_unveil.h>
 #include <sys/_smr.h>
 #include <sys/smr_types.h>
 
@@ -111,9 +110,6 @@ struct filedesc {
 	struct	kqlist fd_kqlist;	/* list of kqueues on this filedesc */
 	int	fd_holdleaderscount;	/* block fdfree() for shared close() */
 	int	fd_holdleaderswakeup;	/* fdfree() needs wakeup */
-#ifdef UNVEIL
-	struct	unveil_base fd_unveil;
-#endif
 };
 
 /*

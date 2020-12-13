@@ -64,9 +64,11 @@ bool unveil_exec_is_active(struct thread *);
 
 void unveil_proc_exec_switch(struct thread *);
 
-void unveil_fd_init(struct filedesc *);
-void unveil_fd_merge(struct filedesc *dst, struct filedesc *src);
-void unveil_fd_free(struct filedesc *);
+void unveil_base_init(struct unveil_base *);
+void unveil_base_merge(struct unveil_base *dst, struct unveil_base *src);
+void unveil_base_clear(struct unveil_base *);
+void unveil_base_reset(struct unveil_base *);
+void unveil_base_free(struct unveil_base *);
 
 int unveil_traverse_begin(struct thread *, struct unveil_traversal *,
     struct vnode *);
