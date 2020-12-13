@@ -11,6 +11,7 @@
 #include <sys/systm.h>
 #include <sys/limits.h>
 #include <sys/capsicum.h>
+#include <sys/proc.h>
 #endif
 
 enum {
@@ -59,8 +60,23 @@ int unveilctl(int atfd, const char *path, int flags, int perms);
 MALLOC_DECLARE(M_UNVEIL);
 #endif
 
-bool unveil_is_active(struct thread *);
-bool unveil_exec_is_active(struct thread *);
+enum unveil_role {
+	UNVEIL_ROLE_CURR,
+	UNVEIL_ROLE_EXEC,
+};
+
+static inline bool
+unveil_is_active(struct thread *td)
+{
+	return (td->td_proc->p_unveils.flags[UNVEIL_ROLE_CURR].active);
+}
+
+static inline bool
+unveil_exec_is_active(struct thread *td)
+{
+	return (td->td_proc->p_unveils.flags[UNVEIL_ROLE_EXEC].active);
+}
+
 
 void unveil_proc_exec_switch(struct thread *);
 

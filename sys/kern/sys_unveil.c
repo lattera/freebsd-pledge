@@ -37,11 +37,6 @@ SYSCTL_UINT(_kern, OID_AUTO, maxunveilsperproc, CTLFLAG_RW,
 	&unveil_max_nodes_per_process, 0, "Maximum unveils allowed per process");
 
 
-enum unveil_role {
-	UNVEIL_ROLE_CURR,
-	UNVEIL_ROLE_EXEC,
-};
-
 enum { UNVEIL_SLOT_COUNT = 2 };
 
 struct unveil_node {
@@ -288,18 +283,6 @@ unveil_lookup(struct unveil_base *base, struct vnode *vp, const char *name, size
 	return (RB_FIND(unveil_node_tree, &base->root, &key));
 }
 
-
-bool
-unveil_is_active(struct thread *td)
-{
-	return (td->td_proc->p_unveils.flags[UNVEIL_ROLE_CURR].active);
-}
-
-bool
-unveil_exec_is_active(struct thread *td)
-{
-	return (td->td_proc->p_unveils.flags[UNVEIL_ROLE_EXEC].active);
-}
 
 void
 unveil_proc_exec_switch(struct thread *td)
