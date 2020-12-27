@@ -689,10 +689,34 @@ unveil_traverse_end(struct thread *td, struct unveil_traversal *trav)
 	if (trav->save) {
 		UNVEIL_WRITE_BEGIN(base);
 		MPASS(base->tree == trav->tree);
+		MPASS(base->writers != 0);
 		base->writers--;
 		UNVEIL_WRITE_END(base);
 	} else if (trav->tree)
 		unveil_tree_free(trav->tree);
+}
+
+
+static int
+do_unveil_add(struct thread *td, struct unveil_base *base, int flags, struct unveilctl ctl)
+{
+	struct unveil_save save = { flags, ctl.uperms };
+	struct nameidata nd;
+	uint64_t ndflags;
+	int error;
+	if ((ctl.atflags & ~(AT_SYMLINK_NOFOLLOW | AT_BENEATH | AT_RESOLVE_BENEATH)) != 0)
+		return (EINVAL);
+	ndflags = (ctl.atflags & AT_SYMLINK_NOFOLLOW ? NOFOLLOW : FOLLOW) |
+	    (ctl.atflags & AT_BENEATH ? BENEATH : 0) |
+	    (ctl.atflags & AT_RESOLVE_BENEATH ? RBENEATH : 0);
+	NDINIT_ATRIGHTS(&nd, LOOKUP, ndflags,
+	    UIO_USERSPACE, ctl.path, ctl.atfd, &cap_fstat_rights, td);
+	nd.ni_unveil.save = &save; /* checked in unveil_traverse() */
+	error = namei(&nd);
+	if (error)
+		return (error);
+	NDFREE(&nd, 0);
+	return (0);
 }
 
 static void
@@ -748,22 +772,9 @@ sys_unveilctl(struct thread *td, struct unveilctl_args *uap)
 		return (error);
 
 	if (flags & UNVEILCTL_UNVEIL) {
-		struct unveil_save save = { flags, ctl.uperms };
-		struct nameidata nd;
-		uint64_t ndflags;
-		if ((ctl.atflags &
-		    ~(AT_SYMLINK_NOFOLLOW | AT_BENEATH | AT_RESOLVE_BENEATH)) != 0)
-			return (EINVAL);
-		ndflags = (ctl.atflags & AT_SYMLINK_NOFOLLOW ? NOFOLLOW : FOLLOW) |
-		    (ctl.atflags & AT_BENEATH ? BENEATH : 0) |
-		    (ctl.atflags & AT_RESOLVE_BENEATH ? RBENEATH : 0);
-		NDINIT_ATRIGHTS(&nd, LOOKUP, ndflags,
-		    UIO_USERSPACE, ctl.path, ctl.atfd, &cap_fstat_rights, td);
-		nd.ni_unveil.save = &save; /* checked in unveil_traverse() */
-		error = namei(&nd);
+		error = do_unveil_add(td, base, flags, ctl);
 		if (error)
 			return (error);
-		NDFREE(&nd, 0);
 	}
 
 	UNVEIL_WRITE_BEGIN(base);
