@@ -60,7 +60,8 @@ struct unveil_node {
 
 struct unveil_tree {
 	RB_HEAD(unveil_node_tree, unveil_node) root;
-	int refcount;
+	unsigned refcount;
+	unsigned node_count;
 };
 
 CTASSERT(NAME_MAX <= UCHAR_MAX);
@@ -140,6 +141,7 @@ unveil_tree_insert(struct unveil_tree *tree, struct vnode *vp,
 		new->name[name_len] = '\0'; /* not required by this code */
 	}
 	vref(vp);
+	tree->node_count++;
 	if (inserted)
 		*inserted = true;
 	return (new);
@@ -200,8 +202,10 @@ unveil_base_check(struct unveil_base *base)
 	for (int i = 0; i < UNVEIL_ROLE_COUNT; i++)
 		KASSERT(base->flags[i].active || !base->flags[i].frozen,
 		    ("unveils frozen but not active"));
-	MPASS((base->node_count == 0) == (base->tree == NULL || RB_EMPTY(&base->tree->root)));
-	MPASS(base->tree == NULL || base->tree->refcount != 0);
+	if (base->tree) {
+		MPASS(base->tree->refcount != 0);
+		MPASS((base->tree->node_count == 0) == RB_EMPTY(&base->tree->root));
+	}
 #else
 	(void)base;
 #endif
@@ -235,7 +239,6 @@ unveil_base_copy(struct unveil_base *dst, struct unveil_base *src)
 		dst->tree = unveil_base_tree_snap(src);
 		if (old_tree)
 			unveil_tree_free(old_tree);
-		dst->node_count = src->node_count;
 	} else
 		unveil_base_clear(dst);
 }
@@ -259,7 +262,6 @@ unveil_base_clear(struct unveil_base *base)
 	if (base->tree) {
 		unveil_tree_free(base->tree);
 		base->tree = NULL;
-		base->node_count = 0;
 	}
 }
 
@@ -417,7 +419,6 @@ unveil_remember(struct unveil_base *base, struct unveil_tree *tree,
 		node = unveil_tree_insert(tree, vp, NULL, 0, &inserted);
 	else
 		return (ENOENT);
-	base->node_count += inserted;
 
 	/*
 	 * Update the cover link of the node.  If directories move around, the
@@ -593,10 +594,11 @@ unveil_traverse(struct thread *td, struct unveil_traversal *trav,
 		int error;
 		if (name_len > NAME_MAX)
 			return (ENAMETOOLONG);
-		if (base->node_count >= unveil_max_nodes_per_process)
-			return (E2BIG);
-
 		UNVEIL_XLOCK(base);
+		if (trav->tree->node_count >= unveil_max_nodes_per_process) {
+			UNVEIL_XUNLOCK(base);
+			return (E2BIG);
+		}
 		error = unveil_remember(base, trav->tree, &trav->cover,
 		    trav->save->flags, trav->save->perms,
 		    dvp, name, name_len, vp, final);
@@ -828,7 +830,8 @@ unveil_proc_fork(void *arg __unused, struct proc *parent, struct proc *child, in
 	unveil_base_check(dst);
 	unveil_base_copy(dst, src);
 	unveil_base_check(dst);
-	MPASS(dst->node_count == src->node_count);
+	MPASS((src->tree ? src->tree->node_count : 0) ==
+	      (dst->tree ? dst->tree->node_count : 0));
 	UNVEIL_SUNLOCK(src);
 }
 

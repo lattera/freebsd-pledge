@@ -27,7 +27,6 @@ enum { UNVEIL_ROLE_COUNT = 2 };
 struct unveil_base {
 	struct sx sx;
 	struct unveil_tree *tree;
-	unsigned node_count;
 	unsigned writers;
 	struct unveil_base_flags {
 		bool active : 1;
