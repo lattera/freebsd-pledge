@@ -97,23 +97,29 @@ unveil_tree_new(void)
 	tree = malloc(sizeof *tree, M_UNVEIL, M_WAITOK);
 	*tree = (struct unveil_tree){
 		.root = RB_INITIALIZER(&tree->root),
-		.refcount = 1,
 	};
+	refcount_init(&tree->refcount, 1);
 	return (tree);
+}
+
+static void
+unveil_tree_free_1(struct unveil_tree *tree)
+{
+	struct unveil_node *node, *node_tmp;
+	MPASS(tree->refcount == 0);
+	RB_FOREACH_SAFE(node, unveil_node_tree, &tree->root, node_tmp) {
+		RB_REMOVE(unveil_node_tree, &tree->root, node);
+		vrele(node->vp);
+		free(node, M_UNVEIL);
+	}
+	free(tree, M_UNVEIL);
 }
 
 static void
 unveil_tree_free(struct unveil_tree *tree)
 {
-	if (refcount_release(&tree->refcount)) {
-		struct unveil_node *node, *node_tmp;
-		RB_FOREACH_SAFE(node, unveil_node_tree, &tree->root, node_tmp) {
-			RB_REMOVE(unveil_node_tree, &tree->root, node);
-			vrele(node->vp);
-			free(node, M_UNVEIL);
-		}
-		free(tree, M_UNVEIL);
-	}
+	if (refcount_release(&tree->refcount))
+		unveil_tree_free_1(tree);
 }
 
 static struct unveil_node *
