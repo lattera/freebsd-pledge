@@ -345,10 +345,11 @@ unveil_node_exec_to_curr(struct unveil_node *node)
 }
 
 
-#define UNVEIL_XLOCK(base)     sx_xlock(&(base)->sx)
-#define UNVEIL_XUNLOCK(base)   sx_xunlock(&(base)->sx)
-#define UNVEIL_SLOCK(base)     sx_slock(&(base)->sx)
-#define UNVEIL_SUNLOCK(base)   sx_sunlock(&(base)->sx)
+#define UNVEIL_WRITE_BEGIN(base) \
+    do { sx_xlock(&(base)->sx); unveil_base_own(base); } while (0)
+#define UNVEIL_WRITE_END(base)	sx_xunlock(&(base)->sx)
+#define UNVEIL_READ_BEGIN(base)	sx_slock(&(base)->sx)
+#define UNVEIL_READ_END(base)	sx_sunlock(&(base)->sx)
 
 #define	UNVEIL_FOREACH(node, base) \
 	if ((base)->tree) \
@@ -554,15 +555,14 @@ unveil_traverse_begin(struct thread *td, struct unveil_traversal *trav,
 		 * new CoW references from being made by bumping the writers
 		 * count.
 		 */
-		UNVEIL_XLOCK(base);
-		unveil_base_own(base);
+		UNVEIL_WRITE_BEGIN(base);
 		base->writers++;
 		trav->tree = base->tree;
-		UNVEIL_XUNLOCK(base);
+		UNVEIL_WRITE_END(base);
 	} else {
-		UNVEIL_SLOCK(base);
+		UNVEIL_READ_BEGIN(base);
 		trav->tree = unveil_base_tree_snap(base);
-		UNVEIL_SUNLOCK(base);
+		UNVEIL_READ_END(base);
 	}
 	/* TODO: caching */
 	trav->cover = NULL;
@@ -594,15 +594,16 @@ unveil_traverse(struct thread *td, struct unveil_traversal *trav,
 		int error;
 		if (name_len > NAME_MAX)
 			return (ENAMETOOLONG);
-		UNVEIL_XLOCK(base);
+		UNVEIL_WRITE_BEGIN(base);
+		MPASS(base->tree == trav->tree);
 		if (trav->tree->node_count >= unveil_max_nodes_per_process) {
-			UNVEIL_XUNLOCK(base);
+			UNVEIL_WRITE_END(base);
 			return (E2BIG);
 		}
 		error = unveil_remember(base, trav->tree, &trav->cover,
 		    trav->save->flags, trav->save->perms,
 		    dvp, name, name_len, vp, final);
-		UNVEIL_XUNLOCK(base);
+		UNVEIL_WRITE_END(base);
 		if (error)
 			return (error);
 		trav->depth = 0;
@@ -689,9 +690,10 @@ unveil_traverse_end(struct thread *td, struct unveil_traversal *trav)
 {
 	struct unveil_base *base = &td->td_proc->p_unveils;
 	if (trav->save) {
-		UNVEIL_XLOCK(base);
+		UNVEIL_WRITE_BEGIN(base);
+		MPASS(base->tree == trav->tree);
 		base->writers--;
-		UNVEIL_XUNLOCK(base);
+		UNVEIL_WRITE_END(base);
 	} else if (trav->tree)
 		unveil_tree_free(trav->tree);
 }
@@ -701,7 +703,6 @@ do_unveil_limit(struct unveil_base *base, int flags, unveil_perms_t perms)
 {
 	struct unveil_node *node;
 	int i, j;
-	unveil_base_own(base);
 	UNVEIL_FOREACH(node, base)
 		FOREACH_SLOT_FLAGS(flags, i, j)
 			node->wanted_perms[i][j] &= unveil_uperms_expand(perms);
@@ -712,7 +713,6 @@ do_unveil_freeze(struct unveil_base *base, int flags, unveil_perms_t perms)
 {
 	struct unveil_node *node;
 	int i;
-	unveil_base_own(base);
 	FOREACH_ROLE_FLAGS(flags, i)
 	    base->flags[i].frozen = base->flags[i].active = true;
 	UNVEIL_FOREACH(node, base)
@@ -725,7 +725,6 @@ do_unveil_sweep(struct unveil_base *base, int flags)
 {
 	struct unveil_node *node;
 	int i, j;
-	unveil_base_own(base);
 	UNVEIL_FOREACH(node, base)
 		FOREACH_SLOT_FLAGS(flags, i, j) {
 			node->wanted_perms[i][j] = UPERM_NONE;
@@ -770,7 +769,7 @@ sys_unveilctl(struct thread *td, struct unveilctl_args *uap)
 		NDFREE(&nd, 0);
 	}
 
-	UNVEIL_XLOCK(base);
+	UNVEIL_WRITE_BEGIN(base);
 	if (flags & UNVEILCTL_ACTIVATE) {
 		int i;
 		FOREACH_ROLE_FLAGS(flags, i)
@@ -783,7 +782,7 @@ sys_unveilctl(struct thread *td, struct unveilctl_args *uap)
 	if (flags & UNVEILCTL_SWEEP)
 		do_unveil_sweep(base, flags);
 	unveil_base_check(base);
-	UNVEIL_XUNLOCK(base);
+	UNVEIL_WRITE_END(base);
 	return (0);
 #else
 	return (ENOSYS);
@@ -825,14 +824,14 @@ unveil_proc_fork(void *arg __unused, struct proc *parent, struct proc *child, in
 	struct unveil_base *src, *dst;
 	src = &parent->p_unveils;
 	dst = &child->p_unveils;
-	UNVEIL_SLOCK(src);
+	UNVEIL_READ_BEGIN(src);
 	unveil_base_check(src);
 	unveil_base_check(dst);
 	unveil_base_copy(dst, src);
 	unveil_base_check(dst);
 	MPASS((src->tree ? src->tree->node_count : 0) ==
 	      (dst->tree ? dst->tree->node_count : 0));
-	UNVEIL_SUNLOCK(src);
+	UNVEIL_READ_END(src);
 }
 
 
