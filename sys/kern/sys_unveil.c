@@ -402,10 +402,13 @@ unveil_proc_exec_switch(struct thread *td)
 		for (j = 0; j < UNVEIL_SLOT_COUNT; j++) \
 			if ((flags) & (1 << (UNVEILCTL_SLOT_SHIFT + j)))
 
+struct unveil_save {
+	int flags;
+	unveil_perms_t perms;
+};
+
 static int
-unveil_remember(struct unveil_base *base, struct unveil_tree *tree,
-    struct unveil_node **cover,
-    int flags, unveil_perms_t perms,
+unveil_remember(struct unveil_base *base, struct unveil_traversal *trav,
     struct vnode *dvp, const char *name, size_t name_len, struct vnode *vp, bool final)
 {
 	struct unveil_node *node, *iter;
@@ -413,11 +416,11 @@ unveil_remember(struct unveil_base *base, struct unveil_tree *tree,
 	int i, j;
 
 	if (!name)
-		node = unveil_tree_insert(tree, dvp, NULL, 0, &inserted);
-	else if ((flags & UNVEILCTL_NONDIRBYNAME) && (!vp || vp->v_type != VDIR))
-		node = unveil_tree_insert(tree, dvp, name, name_len, &inserted);
+		node = unveil_tree_insert(trav->tree, dvp, NULL, 0, &inserted);
+	else if ((trav->save->flags & UNVEILCTL_NONDIRBYNAME) && (!vp || vp->v_type != VDIR))
+		node = unveil_tree_insert(trav->tree, dvp, name, name_len, &inserted);
 	else if (vp)
-		node = unveil_tree_insert(tree, vp, NULL, 0, &inserted);
+		node = unveil_tree_insert(trav->tree, vp, NULL, 0, &inserted);
 	else
 		return (ENOENT);
 
@@ -430,12 +433,12 @@ unveil_remember(struct unveil_base *base, struct unveil_tree *tree,
 	 * the covering hierarchy has security implications on how the cover
 	 * links are to be trusted.
 	 */
-	if (*cover) {
-		for (iter = *cover; iter; iter = iter->cover)
+	if (trav->cover) {
+		for (iter = trav->cover; iter; iter = iter->cover)
 			if (iter == node)
 				break;
 		if (!iter) /* prevent loops */
-			node->cover = *cover;
+			node->cover = trav->cover;
 	}
 
 	/*
@@ -447,20 +450,20 @@ unveil_remember(struct unveil_base *base, struct unveil_tree *tree,
 	if (inserted)
 		for (int i = 0; i < UNVEIL_ROLE_COUNT; i++)
 			node->frozen_perms[i] =
-			    *cover ? (*cover)->frozen_perms[i] & ~uperms_noninheritable :
+			    trav->cover ? (trav->cover)->frozen_perms[i] & ~uperms_noninheritable :
 			    base->flags[i].frozen ? UPERM_NONE : UPERM_ALL;
-	*cover = node;
+	trav->cover = node;
 
-	if (flags & UNVEILCTL_INTERMEDIATE)
+	if (trav->save->flags & UNVEILCTL_INTERMEDIATE)
 		node->fully_covered = true; /* cannot be turned off */
 
 	if (name && final) {
-		FOREACH_SLOT_FLAGS(flags, i, j) {
-			node->wanted_perms[i][j] = perms;
-			node->wanted_final[i][j] = (flags & UNVEILCTL_NOINHERIT) != 0;
+		FOREACH_SLOT_FLAGS(trav->save->flags, i, j) {
+			node->wanted_perms[i][j] = trav->save->perms;
+			node->wanted_final[i][j] = (trav->save->flags & UNVEILCTL_NOINHERIT) != 0;
 		}
-	} else if (flags & UNVEILCTL_INSPECTABLE) {
-		FOREACH_SLOT_FLAGS(flags, i, j)
+	} else if (trav->save->flags & UNVEILCTL_INSPECTABLE) {
+		FOREACH_SLOT_FLAGS(trav->save->flags, i, j)
 			node->wanted_perms[i][j] |= UPERM_INSPECT;
 	}
 	return (0);
@@ -537,11 +540,6 @@ unveil_find_cover(struct thread *td, struct unveil_tree *tree,
 }
 
 
-struct unveil_save {
-	int flags;
-	unveil_perms_t perms;
-};
-
 int
 unveil_traverse_begin(struct thread *td, struct unveil_traversal *trav,
     struct vnode *dvp)
@@ -600,9 +598,7 @@ unveil_traverse(struct thread *td, struct unveil_traversal *trav,
 			UNVEIL_WRITE_END(base);
 			return (E2BIG);
 		}
-		error = unveil_remember(base, trav->tree, &trav->cover,
-		    trav->save->flags, trav->save->perms,
-		    dvp, name, name_len, vp, final);
+		error = unveil_remember(base, trav, dvp, name, name_len, vp, final);
 		UNVEIL_WRITE_END(base);
 		if (error)
 			return (error);
