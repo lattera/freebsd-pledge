@@ -302,7 +302,6 @@ unveil_uperms_expand(unveil_perms_t perms)
 
 
 static unveil_perms_t
-__noinline
 unveil_node_wanted_perms(struct unveil_node *node, enum unveil_role role)
 {
 	struct unveil_node *node1;
@@ -413,13 +412,16 @@ struct unveil_save {
 	unveil_perms_t perms;
 };
 
-static int
+static struct unveil_node *
 unveil_remember(struct unveil_base *base, struct unveil_traversal *trav,
     struct vnode *dvp, const char *name, size_t name_len, struct vnode *vp, bool final)
 {
 	struct unveil_node *node, *iter;
 	bool inserted;
 	int i, j;
+
+	if (trav->tree->node_count >= unveil_max_nodes_per_process)
+		return (NULL);
 
 	if (!name)
 		node = unveil_tree_insert(trav->tree, dvp, NULL, 0, &inserted);
@@ -428,7 +430,7 @@ unveil_remember(struct unveil_base *base, struct unveil_traversal *trav,
 	else if (vp)
 		node = unveil_tree_insert(trav->tree, vp, NULL, 0, &inserted);
 	else
-		return (ENOENT);
+		return (NULL);
 
 	/*
 	 * Update the cover link of the node.  If directories move around, the
@@ -458,7 +460,6 @@ unveil_remember(struct unveil_base *base, struct unveil_traversal *trav,
 			node->frozen_perms[i] =
 			    trav->cover ? (trav->cover)->frozen_perms[i] & ~uperms_noninheritable :
 			    base->flags[i].frozen ? UPERM_NONE : UPERM_ALL;
-	trav->cover = node;
 
 	if (trav->save->flags & UNVEILCTL_INTERMEDIATE)
 		node->fully_covered = true; /* cannot be turned off */
@@ -472,7 +473,7 @@ unveil_remember(struct unveil_base *base, struct unveil_traversal *trav,
 		FOREACH_SLOT_FLAGS(trav->save->flags, i, j)
 			node->wanted_perms[i][j] |= UPERM_INSPECT;
 	}
-	return (0);
+	return (node);
 }
 
 static int
@@ -593,25 +594,19 @@ unveil_traverse(struct thread *td, struct unveil_traversal *trav,
     struct vnode *dvp, const char *name, size_t name_len, struct vnode *vp, bool final)
 {
 	struct unveil_base *base = &td->td_proc->p_unveils;
+	struct unveil_node *node;
 
 	if (trav->save && (final || (trav->save->flags & UNVEILCTL_INTERMEDIATE))) {
-		int error;
 		if (name_len > NAME_MAX)
 			return (ENAMETOOLONG);
 		UNVEIL_WRITE_BEGIN(base);
 		MPASS(base->tree == trav->tree);
-		if (trav->tree->node_count >= unveil_max_nodes_per_process) {
-			UNVEIL_WRITE_END(base);
-			return (E2BIG);
-		}
-		error = unveil_remember(base, trav, dvp, name, name_len, vp, final);
+		node = unveil_remember(base, trav, dvp, name, name_len, vp, final);
 		UNVEIL_WRITE_END(base);
-		if (error)
-			return (error);
-		trav->depth = 0;
+		if (!node)
+			return (E2BIG);
 
 	} else {
-		struct unveil_node *node;
 		if (trav->tree) {
 			if (vp)
 				node = unveil_tree_lookup(trav->tree, vp, NULL, 0);
@@ -621,16 +616,16 @@ unveil_traverse(struct thread *td, struct unveil_traversal *trav,
 				node = unveil_tree_lookup(trav->tree, dvp, name, name_len);
 		} else
 			node = NULL;
-		if (node) {
-			trav->cover = node;
-			trav->depth = 0;
-		} else if (dvp != vp) {
-			if (!++trav->depth)
-				trav->depth = -1;
-		}
 	}
 
 	trav->type = vp ? vp->v_type : VNON;
+	if (node) {
+		trav->cover = node;
+		trav->depth = 0;
+	} else if (dvp != vp) {
+		if (!++trav->depth)
+			trav->depth = -1;
+	}
 	return (0);
 }
 
