@@ -680,8 +680,8 @@ static struct syscall decoded_syscalls[] = {
 	{ .name = "cloudabi_sys_thread_exit", .ret_type = 1, .nargs = 2,
 	  .args = { { Ptr, 0 }, { CloudABIMFlags, 1 } } },
 	{ .name = "cloudabi_sys_thread_yield", .ret_type = 1, .nargs = 0 },
-	{ .name = "unveilctl", .ret_type = 1, .nargs = 4,
-	  .args = { { Atfd, 0 }, { Name | IN, 1 }, { Int, 2 }, { Octal, 3 } } },
+	{ .name = "unveilctl", .ret_type = 1, .nargs = 2,
+	  .args = { { Int, 0 }, { Ptr, 1 } } },
 
 	{ .name = 0 },
 };
