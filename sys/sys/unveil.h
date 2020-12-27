@@ -88,7 +88,7 @@ unveil_exec_is_active(struct thread *td)
 void unveil_proc_exec_switch(struct thread *);
 
 void unveil_base_init(struct unveil_base *);
-void unveil_base_merge(struct unveil_base *dst, struct unveil_base *src);
+void unveil_base_copy(struct unveil_base *dst, struct unveil_base *src);
 void unveil_base_clear(struct unveil_base *);
 void unveil_base_reset(struct unveil_base *);
 void unveil_base_free(struct unveil_base *);
@@ -103,6 +103,7 @@ void unveil_traverse_dotdot(struct thread *, struct unveil_traversal *,
 unveil_perms_t unveil_traverse_effective_uperms(struct thread *, struct unveil_traversal *);
 void unveil_traverse_effective_rights(struct thread *, struct unveil_traversal *,
     cap_rights_t *, int *suggested_error);
+void unveil_traverse_end(struct thread *, struct unveil_traversal *);
 
 void unveil_uperms_rights(unveil_perms_t, cap_rights_t *);
 

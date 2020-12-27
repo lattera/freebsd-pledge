@@ -2,7 +2,6 @@
 #define	_SYS__UNVEIL_H_
 
 #include <sys/types.h>
-#include <sys/tree.h>
 #ifdef _KERNEL
 #include <sys/_sx.h>
 #else
@@ -16,8 +15,9 @@ typedef uint8_t unveil_perms_t;
 struct unveil_node;
 
 struct unveil_traversal {
-	struct unveil_node *cover; /* last unveil encountered */
 	struct unveil_save *save;
+	struct unveil_tree *tree;
+	struct unveil_node *cover; /* last unveil encountered */
 	int8_t type; /* type of last file encountered */
 	uint8_t depth; /* depth under cover of last file */
 };
@@ -26,8 +26,9 @@ enum { UNVEIL_ROLE_COUNT = 2 };
 
 struct unveil_base {
 	struct sx sx;
-	RB_HEAD(unveil_node_tree, unveil_node) root;
-	u_int node_count;
+	struct unveil_tree *tree;
+	unsigned node_count;
+	unsigned writers;
 	struct unveil_base_flags {
 		bool active : 1;
 		bool frozen : 1;

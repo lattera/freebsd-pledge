@@ -809,6 +809,15 @@ unveil_lookup_check(struct nameidata *ndp)
 	return (error);
 }
 
+static inline void
+unveil_lookup_end(struct nameidata *ndp)
+{
+	struct componentname *cnp = &ndp->ni_cnd;
+	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
+		return;
+	unveil_traverse_end(cnp->cn_thread, &ndp->ni_unveil);
+}
+
 #endif
 
 static int
@@ -1460,6 +1469,9 @@ success:
 	}
 	if (ndp->ni_vp != NULL && ndp->ni_vp->v_type == VDIR)
 		nameicap_tracker_add(ndp, ndp->ni_vp);
+#ifdef UNVEIL
+	unveil_lookup_end(ndp);
+#endif
 	return (0);
 
 bad2:
@@ -1476,6 +1488,9 @@ bad:
 		else
 			vrele(dp);
 	}
+#ifdef UNVEIL
+	unveil_lookup_end(ndp);
+#endif
 	ndp->ni_vp = NULL;
 	return (error);
 }
