@@ -3251,10 +3251,8 @@
 	}
 578	AUE_UNVEILCTL	STD|SYSFIL_UNVEIL {
 		int unveilctl(
-		    int atfd,
-		    _In_z_ const char *path,
 		    int flags,
-		    int perms,
+		    struct unveilctl *ctl
 		);
 	}
 

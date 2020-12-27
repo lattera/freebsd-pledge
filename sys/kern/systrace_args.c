@@ -3388,11 +3388,9 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 	/* unveilctl */
 	case 578: {
 		struct unveilctl_args *p = params;
-		iarg[0] = p->atfd; /* int */
-		uarg[1] = (intptr_t) p->path; /* const char * */
-		iarg[2] = p->flags; /* int */
-		iarg[3] = p->perms; /* int */
-		*n_args = 4;
+		iarg[0] = p->flags; /* int */
+		uarg[1] = (intptr_t) p->ctl; /* struct unveilctl * */
+		*n_args = 2;
 		break;
 	}
 	default:
@@ -9071,13 +9069,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			p = "int";
 			break;
 		case 1:
-			p = "userland const char *";
-			break;
-		case 2:
-			p = "int";
-			break;
-		case 3:
-			p = "int";
+			p = "userland struct unveilctl *";
 			break;
 		default:
 			break;

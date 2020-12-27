@@ -27,15 +27,15 @@ enum {
 };
 
 enum {
-	UNVEILCTL_SWEEP = 1 << 0,
-	UNVEILCTL_FREEZE = 1 << 1,
-	UNVEILCTL_LIMIT = 1 << 2,
-	UNVEILCTL_ACTIVATE = 1 << 3,
-	UNVEILCTL_NOFOLLOW = 1 << 8,
-	UNVEILCTL_NOINHERIT = 1 << 9,
-	UNVEILCTL_INTERMEDIATE = 1 << 10,
-	UNVEILCTL_INSPECTABLE = 1 << 11,
-	UNVEILCTL_NONDIRBYNAME = 1 << 12,
+	UNVEILCTL_UNVEIL = 1 << 0,
+	UNVEILCTL_SWEEP = 1 << 1,
+	UNVEILCTL_FREEZE = 1 << 2,
+	UNVEILCTL_LIMIT = 1 << 3,
+	UNVEILCTL_ACTIVATE = 1 << 4,
+	UNVEILCTL_NOINHERIT = 1 << 8,
+	UNVEILCTL_INTERMEDIATE = 1 << 9,
+	UNVEILCTL_INSPECTABLE = 1 << 10,
+	UNVEILCTL_NONDIRBYNAME = 1 << 11,
 	UNVEILCTL_ROLE_SHIFT = 16,
 	UNVEILCTL_ROLE_WIDTH = 8,
 	UNVEILCTL_FOR_CURR = 1 << 16,
@@ -52,7 +52,14 @@ enum {
 	    UNVEILCTL_FOR_ALL_ROLES | UNVEILCTL_FOR_ALL_SLOTS,
 };
 
-int unveilctl(int atfd, const char *path, int flags, int perms);
+struct unveilctl {
+	int atfd;
+	const char *path;
+	int atflags;
+	int uperms;
+};
+
+int unveilctl(int flags, struct unveilctl *);
 
 #ifdef _KERNEL
 
@@ -68,21 +75,13 @@ enum unveil_role {
 static inline bool
 unveil_is_active(struct thread *td)
 {
-#ifdef UNVEIL
 	return (td->td_proc->p_unveils.flags[UNVEIL_ROLE_CURR].active);
-#else
-	return (false);
-#endif
 }
 
 static inline bool
 unveil_exec_is_active(struct thread *td)
 {
-#ifdef UNVEIL
 	return (td->td_proc->p_unveils.flags[UNVEIL_ROLE_EXEC].active);
-#else
-	return (false);
-#endif
 }
 
 

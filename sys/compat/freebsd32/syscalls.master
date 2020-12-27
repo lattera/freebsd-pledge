@@ -1167,9 +1167,5 @@
 ; 576 is initialised by the krpc code, if present.
 576	AUE_NULL	NOSTD|NOPROTO	{ int rpctls_syscall(int op, \
 				    const char *path); }
-577	AUE_SYSFILCTL	NOPROTO { int sysfilctl(int flags, \
-				    const int *sysfils, size_t count); }
-578	AUE_UNVEILCTL	NOPROTO { int unveilctl(int atfd, const char *path, \
-				    int flags, int perms); }
 
 ; vim: syntax=off

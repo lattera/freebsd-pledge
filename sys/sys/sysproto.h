@@ -1842,10 +1842,8 @@ struct sysfilctl_args {
 	char count_l_[PADL_(size_t)]; size_t count; char count_r_[PADR_(size_t)];
 };
 struct unveilctl_args {
-	char atfd_l_[PADL_(int)]; int atfd; char atfd_r_[PADR_(int)];
-	char path_l_[PADL_(const char *)]; const char * path; char path_r_[PADR_(const char *)];
 	char flags_l_[PADL_(int)]; int flags; char flags_r_[PADR_(int)];
-	char perms_l_[PADL_(int)]; int perms; char perms_r_[PADR_(int)];
+	char ctl_l_[PADL_(struct unveilctl *)]; struct unveilctl * ctl; char ctl_r_[PADR_(struct unveilctl *)];
 };
 int	nosys(struct thread *, struct nosys_args *);
 void	sys_sys_exit(struct thread *, struct sys_exit_args *);

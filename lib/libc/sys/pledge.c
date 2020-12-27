@@ -386,6 +386,28 @@ retained_uperms_for_promises(const bool *promises)
 	return (uperms);
 }
 
+static int
+unveil_path(int flags, const char *path, unveil_perms_t uperms)
+{
+	struct unveilctl ctl = { .atfd = AT_FDCWD, .path = path, .uperms = uperms };
+	int r;
+	r = unveilctl(flags | UNVEILCTL_UNVEIL, &ctl);
+	if (r < 0 && errno != ENOENT && errno != EACCES)
+		warn("unveil: %s", path);
+	return (r);
+}
+
+static int
+unveil_op(int flags, unveil_perms_t uperms)
+{
+	struct unveilctl ctl = { .atfd = -1, .path = NULL, .uperms = uperms };
+	int r;
+	r = unveilctl(flags, &ctl);
+	if (r < 0)
+		err(EX_OSERR, "unveilctl");
+	return (r);
+}
+
 static size_t
 do_pledge_unveils(const bool *req_promises, bool for_exec, int *sysfils)
 {
@@ -395,7 +417,7 @@ do_pledge_unveils(const bool *req_promises, bool for_exec, int *sysfils)
 	const char *path;
 	bool tainted;
 	unveil_perms_t need_uperms, req_uperms;
-	int flags, flags1, r;
+	int flags, flags1;
 	bool need_promises[PROMISE_COUNT];
 
 	flags = for_exec ? UNVEILCTL_FOR_EXEC : UNVEILCTL_FOR_CURR;
@@ -408,11 +430,8 @@ do_pledge_unveils(const bool *req_promises, bool for_exec, int *sysfils)
 	 * track of their "frozen" permissions.  This allows to re-add them
 	 * with those permissions if needed.
 	 */
-	if (!has_pledge_unveils[for_exec]) {
-		r = unveilctl(-1, NULL, flags1 | UNVEILCTL_SWEEP, -1);
-		if (r < 0)
-			err(EX_OSERR, "unveilctl sweep");
-	}
+	if (!has_pledge_unveils[for_exec])
+		unveil_op(flags1 | UNVEILCTL_SWEEP, UPERM_NONE);
 
 	/*
 	 * Do unveils for the promises added or removed.
@@ -432,11 +451,8 @@ do_pledge_unveils(const bool *req_promises, bool for_exec, int *sysfils)
 		} while (strcmp(pu->path, path) == 0);
 		/* maximum unveil permissions we'll need for those promises */
 		need_uperms |= uperms;
-		if (modified && (path = pledge_unveil_fixup_path(tainted, for_exec, path))) {
-			r = unveilctl(AT_FDCWD, path, flags1, uperms);
-			if (r < 0 && errno != ENOENT && errno != EACCES)
-				warn("unveil: %s", path);
-		}
+		if (modified && (path = pledge_unveil_fixup_path(tainted, for_exec, path)))
+			unveil_path(flags1, path, uperms);
 	}
 
 	/*
@@ -471,11 +487,8 @@ do_pledge_unveils(const bool *req_promises, bool for_exec, int *sysfils)
 	 * restrictions to the user's unveils to get a similar effect.
 	 */
 	flags1 = flags | UNVEILCTL_FOR_CUSTOM;
-	if (need_uperms & ~req_uperms) {
-		r = unveilctl(-1, NULL, flags1 | UNVEILCTL_LIMIT, req_uperms);
-		if (r < 0)
-			err(EX_OSERR, "unveilctl limit");
-	}
+	if (need_uperms & ~req_uperms)
+		unveil_op(flags1 | UNVEILCTL_LIMIT, req_uperms);
 
 	/*
 	 * Permanently drop permissions that aren't explicitly requested.
@@ -487,10 +500,8 @@ do_pledge_unveils(const bool *req_promises, bool for_exec, int *sysfils)
 	 * promise or doing an unveil(NULL, NULL).
 	 */
 	flags1 = flags | UNVEILCTL_ACTIVATE;
-	r = unveilctl(-1, NULL, flags1 | UNVEILCTL_FREEZE,
+	unveil_op(flags1 | UNVEILCTL_FREEZE,
 	    req_promises[PROMISE_UNVEIL] ? req_uperms : UPERM_NONE);
-	if (r < 0)
-		err(EX_OSERR, "unveilctl freeze");
 
 	has_pledge_unveils[for_exec] = true;
 	return (sysfils - orig_sysfils);
@@ -502,12 +513,10 @@ reserve_pledge_unveils(bool for_exec)
 	const struct promise_unveil *pu;
 	const char *path;
 	bool tainted;
-	int r, i, flags, flags1;
+	int i, flags, flags1;
 	flags = (for_exec ? UNVEILCTL_FOR_EXEC : UNVEILCTL_FOR_CURR) |
 	    UNVEILCTL_FOR_PLEDGE;
-	r = unveilctl(-1, NULL, flags | UNVEILCTL_SWEEP, -1);
-	if (r < 0)
-		err(EX_OSERR, "unveilctl sweep");
+	unveil_op(flags | UNVEILCTL_SWEEP, UPERM_NONE);
 	tainted = issetugid() != 0;
 	flags1 = flags | unveil_global_flags;
 	for (pu = unveils_table; (*(path = pu->path)); ) {
@@ -516,11 +525,8 @@ reserve_pledge_unveils(bool for_exec)
 			uperms |= pu->perms;
 			pu++;
 		} while (strcmp(pu->path, path) == 0);
-		if ((path = pledge_unveil_fixup_path(tainted, for_exec, path))) {
-			r = unveilctl(AT_FDCWD, path, flags1, uperms);
-			if (r < 0 && errno != ENOENT && errno != EACCES)
-				warn("unveil: %s", path);
-		}
+		if ((path = pledge_unveil_fixup_path(tainted, for_exec, path)))
+			unveil_path(flags1, path, uperms);
 	}
 	for (i = 0; i < PROMISE_COUNT; i++)
 		cur_promises[for_exec][i] = true;
@@ -631,7 +637,7 @@ unveil_parse_perms(unveil_perms_t *perms, const char *s)
 static int
 do_unveil(const char *path, int flags, unveil_perms_t perms)
 {
-	int r, flags1, flags2, req_custom_flags, has_pledge_flags, has_custom_flags;
+	int flags1, flags2, req_custom_flags, has_pledge_flags, has_custom_flags;
 
 	has_pledge_flags =
 	    (has_pledge_unveils[false] ? UNVEILCTL_FOR_CURR : 0) |
@@ -651,16 +657,12 @@ do_unveil(const char *path, int flags, unveil_perms_t perms)
 		 * promises.  This must be undone.
 		 */
 		flags1 |= UNVEILCTL_FOR_PLEDGE;
-		r = unveilctl(AT_FDCWD, root_path, flags1, UPERM_NONE);
-		if (r < 0)
-			warn("unveil: %s", root_path);
+		unveil_path(flags1, root_path, UPERM_NONE);
 	}
 
 	if ((flags1 = ~has_custom_flags & req_custom_flags)) {
 		flags1 |= UNVEILCTL_FOR_CUSTOM;
-		r = unveilctl(-1, NULL, flags1 | UNVEILCTL_SWEEP, -1);
-		if (r < 0)
-			err(EX_OSERR, "unveilctl sweep");
+		unveil_op(flags1 | UNVEILCTL_SWEEP, UPERM_NONE);
 	}
 
 	if (flags & UNVEILCTL_FOR_CURR)
@@ -679,14 +681,12 @@ do_unveil(const char *path, int flags, unveil_perms_t perms)
 				reserve_pledge_unveils(true);
 		}
 		/* Forbid ever raising unveil permissions. */
-		r = unveilctl(-1, NULL, flags1 | UNVEILCTL_FREEZE, UPERM_NONE);
-		if (r < 0)
-			err(EX_OSERR, "unveilctl freeze");
+		unveil_op(flags1 | UNVEILCTL_FREEZE, UPERM_NONE);
 		return (0);
 	}
 
 	flags1 |= UNVEILCTL_FOR_CUSTOM | unveil_global_flags;
-	return (unveilctl(AT_FDCWD, path, flags1 | UNVEILCTL_NOINHERIT, perms));
+	return (unveil_path(flags1 | UNVEILCTL_NOINHERIT, path, perms));
 }
 
 int
