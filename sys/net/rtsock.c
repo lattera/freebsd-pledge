@@ -800,11 +800,11 @@ static void
 export_rtaddrs(const struct rtentry *rt, struct sockaddr *dst,
     struct sockaddr *mask)
 {
-	uint32_t scopeid = 0;
 #ifdef INET
 	if (dst->sa_family == AF_INET) {
 		struct sockaddr_in *dst4 = (struct sockaddr_in *)dst;
 		struct sockaddr_in *mask4 = (struct sockaddr_in *)mask;
+		uint32_t scopeid = 0;
 		rt_get_inet_prefix_pmask(rt, &dst4->sin_addr, &mask4->sin_addr,
 		    &scopeid);
 		return;
@@ -814,8 +814,9 @@ export_rtaddrs(const struct rtentry *rt, struct sockaddr *dst,
 	if (dst->sa_family == AF_INET6) {
 		struct sockaddr_in6 *dst6 = (struct sockaddr_in6 *)dst;
 		struct sockaddr_in6 *mask6 = (struct sockaddr_in6 *)mask;
-		rt_get_inet6_prefix_pmask(rt, &dst6->sin6_addr, &mask6->sin6_addr,
-		    &scopeid);
+		uint32_t scopeid = 0;
+		rt_get_inet6_prefix_pmask(rt, &dst6->sin6_addr,
+		    &mask6->sin6_addr, &scopeid);
 		dst6->sin6_scope_id = scopeid;
 		return;
 	}
@@ -1259,12 +1260,12 @@ rtsock_fix_netmask(const struct sockaddr *dst, const struct sockaddr *smask,
 static struct mbuf *
 rtsock_msg_mbuf(int type, struct rt_addrinfo *rtinfo)
 {
+	struct sockaddr_storage ss;
 	struct rt_msghdr *rtm;
 	struct mbuf *m;
 	int i;
 	struct sockaddr *sa;
 #ifdef INET6
-	struct sockaddr_storage ss;
 	struct sockaddr_in6 *sin6;
 #endif
 	int len, dlen;
@@ -1309,13 +1310,17 @@ rtsock_msg_mbuf(int type, struct rt_addrinfo *rtinfo)
 		if ((sa = rtinfo->rti_info[i]) == NULL)
 			continue;
 		rtinfo->rti_addrs |= (1 << i);
+
 		dlen = SA_SIZE(sa);
+		KASSERT(dlen <= sizeof(ss),
+		    ("%s: sockaddr size overflow", __func__));
+		bzero(&ss, sizeof(ss));
+		bcopy(sa, &ss, sa->sa_len);
+		sa = (struct sockaddr *)&ss;
 #ifdef INET6
 		if (sa->sa_family == AF_INET6) {
-			sin6 = (struct sockaddr_in6 *)&ss;
-			bcopy(sa, sin6, sizeof(*sin6));
-			if (sa6_recoverscope(sin6) == 0)
-				sa = (struct sockaddr *)sin6;
+			sin6 = (struct sockaddr_in6 *)sa;
+			(void)sa6_recoverscope(sin6);
 		}
 #endif
 		m_copyback(m, len, dlen, (caddr_t)sa);
@@ -1343,12 +1348,11 @@ rtsock_msg_mbuf(int type, struct rt_addrinfo *rtinfo)
 static int
 rtsock_msg_buffer(int type, struct rt_addrinfo *rtinfo, struct walkarg *w, int *plen)
 {
-	int i;
-	int len, buflen = 0, dlen;
+	struct sockaddr_storage ss;
+	int len, buflen = 0, dlen, i;
 	caddr_t cp = NULL;
 	struct rt_msghdr *rtm = NULL;
 #ifdef INET6
-	struct sockaddr_storage ss;
 	struct sockaddr_in6 *sin6;
 #endif
 #ifdef COMPAT_FREEBSD32
@@ -1415,12 +1419,15 @@ rtsock_msg_buffer(int type, struct rt_addrinfo *rtinfo, struct walkarg *w, int *
 #endif
 			dlen = SA_SIZE(sa);
 		if (cp != NULL && buflen >= dlen) {
+			KASSERT(dlen <= sizeof(ss),
+			    ("%s: sockaddr size overflow", __func__));
+			bzero(&ss, sizeof(ss));
+			bcopy(sa, &ss, sa->sa_len);
+			sa = (struct sockaddr *)&ss;
 #ifdef INET6
 			if (sa->sa_family == AF_INET6) {
-				sin6 = (struct sockaddr_in6 *)&ss;
-				bcopy(sa, sin6, sizeof(*sin6));
-				if (sa6_recoverscope(sin6) == 0)
-					sa = (struct sockaddr *)sin6;
+				sin6 = (struct sockaddr_in6 *)sa;
+				(void)sa6_recoverscope(sin6);
 			}
 #endif
 			bcopy((caddr_t)sa, cp, (unsigned)dlen);

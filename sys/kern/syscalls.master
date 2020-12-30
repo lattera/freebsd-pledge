@@ -3242,14 +3242,21 @@
 		    _In_z_ const char *path
 		);
 	}
-577	AUE_SYSFILCTL	STD|SYSFIL_ALWAYS {
+577	AUE_SPECIALFD	STD|SYSFIL_STDIO {
+		int __specialfd(
+		    int type,
+		    _In_reads_bytes_(len) const void *req,
+		    size_t len
+		);
+	}
+578	AUE_SYSFILCTL	STD|SYSFIL_ALWAYS {
 		int sysfilctl(
 		    int flags,
 		    const int *sysfils,
 		    size_t count
 		);
 	}
-578	AUE_UNVEILCTL	STD|SYSFIL_UNVEIL {
+579	AUE_UNVEILCTL	STD|SYSFIL_UNVEIL {
 		int unveilctl(
 		    int flags,
 		    struct unveilctl *ctl

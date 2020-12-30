@@ -418,5 +418,6 @@ MIASM =  \
 	__realpathat.o \
 	close_range.o \
 	rpctls_syscall.o \
+	__specialfd.o \
 	sysfilctl.o \
 	unveilctl.o

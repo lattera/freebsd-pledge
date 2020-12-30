@@ -583,6 +583,7 @@ const char *syscallnames[] = {
 	"__realpathat",			/* 574 = __realpathat */
 	"close_range",			/* 575 = close_range */
 	"rpctls_syscall",			/* 576 = rpctls_syscall */
-	"sysfilctl",			/* 577 = sysfilctl */
-	"unveilctl",			/* 578 = unveilctl */
+	"__specialfd",			/* 577 = __specialfd */
+	"sysfilctl",			/* 578 = sysfilctl */
+	"unveilctl",			/* 579 = unveilctl */
 };

@@ -288,6 +288,8 @@ static void		 pf_print_state_parts(struct pf_state *,
 			    struct pf_state_key *, struct pf_state_key *);
 static int		 pf_addr_wrap_neq(struct pf_addr_wrap *,
 			    struct pf_addr_wrap *);
+static void		 pf_patch_8(struct mbuf *, u_int16_t *, u_int8_t *, u_int8_t,
+			    bool, u_int8_t);
 static struct pf_state	*pf_find_state(struct pfi_kif *,
 			    struct pf_state_key_cmp *, u_int);
 static int		 pf_src_connlimit(struct pf_state **);
@@ -1712,6 +1714,13 @@ pf_free_state(struct pf_state *cur)
 	KASSERT(cur->timeout == PFTM_UNLINKED, ("%s: timeout %u", __func__,
 	    cur->timeout));
 
+	for (int i = 0; i < 2; i++) {
+		if (cur->bytes[i] != NULL)
+			counter_u64_free(cur->bytes[i]);
+		if (cur->packets[i] != NULL)
+			counter_u64_free(cur->packets[i]);
+	}
+
 	pf_normalize_tcp_cleanup(cur);
 	uma_zfree(V_pf_state_z, cur);
 	counter_u64_add(V_pf_status.fcounters[FCNT_STATE_REMOVALS], 1);
@@ -2084,16 +2093,60 @@ pf_addr_wrap_neq(struct pf_addr_wrap *aw1, struct pf_addr_wrap *aw2)
 u_int16_t
 pf_cksum_fixup(u_int16_t cksum, u_int16_t old, u_int16_t new, u_int8_t udp)
 {
-	u_int32_t	l;
+	u_int32_t x;
 
-	if (udp && !cksum)
-		return (0x0000);
-	l = cksum + old - new;
-	l = (l >> 16) + (l & 65535);
-	l = l & 65535;
-	if (udp && !l)
-		return (0xFFFF);
-	return (l);
+	x = cksum + old - new;
+	x = (x + (x >> 16)) & 0xffff;
+
+	/* optimise: eliminate a branch when not udp */
+	if (udp && cksum == 0x0000)
+		return cksum;
+	if (udp && x == 0x0000)
+		x = 0xffff;
+
+	return (u_int16_t)(x);
+}
+
+static void
+pf_patch_8(struct mbuf *m, u_int16_t *cksum, u_int8_t *f, u_int8_t v, bool hi,
+    u_int8_t udp)
+{
+	u_int16_t old = htons(hi ? (*f << 8) : *f);
+	u_int16_t new = htons(hi ? ( v << 8) :  v);
+
+	if (*f == v)
+		return;
+
+	*f = v;
+
+	if (m->m_pkthdr.csum_flags & (CSUM_DELAY_DATA | CSUM_DELAY_DATA_IPV6))
+		return;
+
+	*cksum = pf_cksum_fixup(*cksum, old, new, udp);
+}
+
+void
+pf_patch_16_unaligned(struct mbuf *m, u_int16_t *cksum, void *f, u_int16_t v,
+    bool hi, u_int8_t udp)
+{
+	u_int8_t *fb = (u_int8_t *)f;
+	u_int8_t *vb = (u_int8_t *)&v;
+
+	pf_patch_8(m, cksum, fb++, *vb++, hi, udp);
+	pf_patch_8(m, cksum, fb++, *vb++, !hi, udp);
+}
+
+void
+pf_patch_32_unaligned(struct mbuf *m, u_int16_t *cksum, void *f, u_int32_t v,
+    bool hi, u_int8_t udp)
+{
+	u_int8_t *fb = (u_int8_t *)f;
+	u_int8_t *vb = (u_int8_t *)&v;
+
+	pf_patch_8(m, cksum, fb++, *vb++, hi, udp);
+	pf_patch_8(m, cksum, fb++, *vb++, !hi, udp);
+	pf_patch_8(m, cksum, fb++, *vb++, hi, udp);
+	pf_patch_8(m, cksum, fb++, *vb++, !hi, udp);
 }
 
 u_int16_t
@@ -2319,6 +2372,7 @@ pf_modulate_sack(struct mbuf *m, int off, struct pf_pdesc *pd,
 		return 0;
 
 	while (hlen >= TCPOLEN_SACKLEN) {
+		size_t startoff = opt - opts;
 		olen = opt[1];
 		switch (*opt) {
 		case TCPOPT_EOL:	/* FALLTHROUGH */
@@ -2333,10 +2387,16 @@ pf_modulate_sack(struct mbuf *m, int off, struct pf_pdesc *pd,
 				for (i = 2; i + TCPOLEN_SACK <= olen;
 				    i += TCPOLEN_SACK) {
 					memcpy(&sack, &opt[i], sizeof(sack));
-					pf_change_proto_a(m, &sack.start, &th->th_sum,
-					    htonl(ntohl(sack.start) - dst->seqdiff), 0);
-					pf_change_proto_a(m, &sack.end, &th->th_sum,
-					    htonl(ntohl(sack.end) - dst->seqdiff), 0);
+					pf_patch_32_unaligned(m,
+					    &th->th_sum, &sack.start,
+					    htonl(ntohl(sack.start) - dst->seqdiff),
+					    PF_ALGNMNT(startoff),
+					    0);
+					pf_patch_32_unaligned(m, &th->th_sum,
+					    &sack.end,
+					    htonl(ntohl(sack.end) - dst->seqdiff),
+					    PF_ALGNMNT(startoff),
+					    0);
 					memcpy(&opt[i], &sack, sizeof(sack));
 				}
 				copyback = 1;
@@ -3651,6 +3711,16 @@ pf_create_state(struct pf_rule *r, struct pf_rule *nr, struct pf_rule *a,
 		REASON_SET(&reason, PFRES_MEMORY);
 		goto csfailed;
 	}
+	for (int i = 0; i < 2; i++) {
+		s->bytes[i] = counter_u64_alloc(M_NOWAIT);
+		s->packets[i] = counter_u64_alloc(M_NOWAIT);
+
+		if (s->bytes[i] == NULL || s->packets[i] == NULL) {
+			pf_free_state(s);
+			REASON_SET(&reason, PFRES_MEMORY);
+			goto csfailed;
+		}
+	}
 	s->rule.ptr = r;
 	s->nat_rule.ptr = nr;
 	s->anchor.ptr = a;
@@ -4210,8 +4280,9 @@ pf_tcp_track_full(struct pf_state_peer *src, struct pf_state_peer *dst,
 			pf_print_flags(th->th_flags);
 			printf(" seq=%u (%u) ack=%u len=%u ackskew=%d "
 			    "pkts=%llu:%llu dir=%s,%s\n", seq, orig_seq, ack,
-			    pd->p_len, ackskew, (unsigned long long)(*state)->packets[0],
-			    (unsigned long long)(*state)->packets[1],
+			    pd->p_len, ackskew,
+			    (unsigned long long)counter_u64_fetch((*state)->packets[0]),
+			    (unsigned long long)counter_u64_fetch((*state)->packets[1]),
 			    pd->dir == PF_IN ? "in" : "out",
 			    pd->dir == (*state)->direction ? "fwd" : "rev");
 		}
@@ -4266,8 +4337,8 @@ pf_tcp_track_full(struct pf_state_peer *src, struct pf_state_peer *dst,
 			printf(" seq=%u (%u) ack=%u len=%u ackskew=%d "
 			    "pkts=%llu:%llu dir=%s,%s\n",
 			    seq, orig_seq, ack, pd->p_len, ackskew,
-			    (unsigned long long)(*state)->packets[0],
-			    (unsigned long long)(*state)->packets[1],
+			    (unsigned long long)counter_u64_fetch((*state)->packets[0]),
+			    (unsigned long long)counter_u64_fetch((*state)->packets[1]),
 			    pd->dir == PF_IN ? "in" : "out",
 			    pd->dir == (*state)->direction ? "fwd" : "rev");
 			printf("pf: State failure on: %c %c %c %c | %c %c\n",
@@ -6126,8 +6197,8 @@ done:
 				s->nat_src_node->bytes[dirndx] += pd.tot_len;
 			}
 			dirndx = (dir == s->direction) ? 0 : 1;
-			s->packets[dirndx]++;
-			s->bytes[dirndx] += pd.tot_len;
+			counter_u64_add(s->packets[dirndx], 1);
+			counter_u64_add(s->bytes[dirndx], pd.tot_len);
 		}
 		tr = r;
 		nr = (s != NULL) ? s->nat_rule.ptr : pd.nat_rule;
@@ -6522,8 +6593,8 @@ done:
 				s->nat_src_node->bytes[dirndx] += pd.tot_len;
 			}
 			dirndx = (dir == s->direction) ? 0 : 1;
-			s->packets[dirndx]++;
-			s->bytes[dirndx] += pd.tot_len;
+			counter_u64_add(s->packets[dirndx], 1);
+			counter_u64_add(s->bytes[dirndx], pd.tot_len);
 		}
 		tr = r;
 		nr = (s != NULL) ? s->nat_rule.ptr : pd.nat_rule;
