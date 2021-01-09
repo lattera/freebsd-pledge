@@ -1841,6 +1841,12 @@ struct __specialfd_args {
 	char req_l_[PADL_(const void *)]; const void * req; char req_r_[PADR_(const void *)];
 	char len_l_[PADL_(size_t)]; size_t len; char len_r_[PADR_(size_t)];
 };
+struct aio_writev_args {
+	char aiocbp_l_[PADL_(struct aiocb *)]; struct aiocb * aiocbp; char aiocbp_r_[PADR_(struct aiocb *)];
+};
+struct aio_readv_args {
+	char aiocbp_l_[PADL_(struct aiocb *)]; struct aiocb * aiocbp; char aiocbp_r_[PADR_(struct aiocb *)];
+};
 struct sysfilctl_args {
 	char flags_l_[PADL_(int)]; int flags; char flags_r_[PADR_(int)];
 	char sysfils_l_[PADL_(const int *)]; const int * sysfils; char sysfils_r_[PADR_(const int *)];
@@ -2242,6 +2248,8 @@ int	sys___realpathat(struct thread *, struct __realpathat_args *);
 int	sys_close_range(struct thread *, struct close_range_args *);
 int	sys_rpctls_syscall(struct thread *, struct rpctls_syscall_args *);
 int	sys___specialfd(struct thread *, struct __specialfd_args *);
+int	sys_aio_writev(struct thread *, struct aio_writev_args *);
+int	sys_aio_readv(struct thread *, struct aio_readv_args *);
 int	sys_sysfilctl(struct thread *, struct sysfilctl_args *);
 int	sys_unveilctl(struct thread *, struct unveilctl_args *);
 
@@ -3176,6 +3184,8 @@ int	freebsd12_closefrom(struct thread *, struct freebsd12_closefrom_args *);
 #define	SYS_AUE_close_range	AUE_CLOSERANGE
 #define	SYS_AUE_rpctls_syscall	AUE_NULL
 #define	SYS_AUE___specialfd	AUE_SPECIALFD
+#define	SYS_AUE_aio_writev	AUE_AIO_WRITEV
+#define	SYS_AUE_aio_readv	AUE_AIO_READV
 #define	SYS_AUE_sysfilctl	AUE_SYSFILCTL
 #define	SYS_AUE_unveilctl	AUE_UNVEILCTL
 

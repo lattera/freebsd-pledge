@@ -584,6 +584,8 @@ const char *syscallnames[] = {
 	"close_range",			/* 575 = close_range */
 	"rpctls_syscall",			/* 576 = rpctls_syscall */
 	"__specialfd",			/* 577 = __specialfd */
-	"sysfilctl",			/* 578 = sysfilctl */
-	"unveilctl",			/* 579 = unveilctl */
+	"aio_writev",			/* 578 = aio_writev */
+	"aio_readv",			/* 579 = aio_readv */
+	"sysfilctl",			/* 580 = sysfilctl */
+	"unveilctl",			/* 581 = unveilctl */
 };

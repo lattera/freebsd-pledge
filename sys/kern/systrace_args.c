@@ -3385,8 +3385,22 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		*n_args = 3;
 		break;
 	}
-	/* sysfilctl */
+	/* aio_writev */
 	case 578: {
+		struct aio_writev_args *p = params;
+		uarg[0] = (intptr_t) p->aiocbp; /* struct aiocb * */
+		*n_args = 1;
+		break;
+	}
+	/* aio_readv */
+	case 579: {
+		struct aio_readv_args *p = params;
+		uarg[0] = (intptr_t) p->aiocbp; /* struct aiocb * */
+		*n_args = 1;
+		break;
+	}
+	/* sysfilctl */
+	case 580: {
 		struct sysfilctl_args *p = params;
 		iarg[0] = p->flags; /* int */
 		uarg[1] = (intptr_t) p->sysfils; /* const int * */
@@ -3395,7 +3409,7 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		break;
 	}
 	/* unveilctl */
-	case 579: {
+	case 581: {
 		struct unveilctl_args *p = params;
 		iarg[0] = p->flags; /* int */
 		uarg[1] = (intptr_t) p->ctl; /* struct unveilctl * */
@@ -9071,8 +9085,28 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
-	/* sysfilctl */
+	/* aio_writev */
 	case 578:
+		switch(ndx) {
+		case 0:
+			p = "userland struct aiocb *";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* aio_readv */
+	case 579:
+		switch(ndx) {
+		case 0:
+			p = "userland struct aiocb *";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* sysfilctl */
+	case 580:
 		switch(ndx) {
 		case 0:
 			p = "int";
@@ -9088,7 +9122,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		};
 		break;
 	/* unveilctl */
-	case 579:
+	case 581:
 		switch(ndx) {
 		case 0:
 			p = "int";
@@ -11036,13 +11070,23 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
-	/* sysfilctl */
+	/* aio_writev */
 	case 578:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
-	/* unveilctl */
+	/* aio_readv */
 	case 579:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* sysfilctl */
+	case 580:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* unveilctl */
+	case 581:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;

@@ -157,6 +157,7 @@ union fuse_payloads_in {
 	uint8_t		bytes[
 	    max_max_write + 0x1000 - sizeof(struct fuse_in_header)
 	];
+	fuse_copy_file_range_in	copy_file_range;
 	fuse_create_in	create;
 	fuse_flush_in	flush;
 	fuse_fsync_in	fsync;
@@ -170,6 +171,7 @@ union fuse_payloads_in {
 	fuse_link_in	link;
 	fuse_listxattr_in listxattr;
 	char		lookup[0];
+	fuse_lseek_in	lseek;
 	fuse_mkdir_in	mkdir;
 	fuse_mknod_in	mknod;
 	fuse_open_in	open;
@@ -210,6 +212,7 @@ union fuse_payloads_out {
 	fuse_getxattr_out	getxattr;
 	fuse_init_out		init;
 	fuse_init_out_7_22	init_7_22;
+	fuse_lseek_out		lseek;
 	/* The inval_entry structure should be followed by the entry's name */
 	fuse_notify_inval_entry_out	inval_entry;
 	fuse_notify_inval_inode_out	inval_inode;
