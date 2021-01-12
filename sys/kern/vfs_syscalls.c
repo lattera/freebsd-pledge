@@ -342,7 +342,7 @@ kern_statfs(struct thread *td, const char *path, enum uio_seg pathseg,
 		return (error);
 	mp = nd.ni_vp->v_mount;
 	vfs_ref(mp);
-	NDFREE(&nd, NDF_ONLY_PNBUF);
+	NDFREE_NOTHING(&nd);
 	vput(nd.ni_vp);
 	return (kern_do_statfs(td, mp, buf));
 }
@@ -951,11 +951,11 @@ kern_chdir(struct thread *td, const char *path, enum uio_seg pathseg)
 		return (error);
 	if ((error = change_dir(nd.ni_vp, td)) != 0) {
 		vput(nd.ni_vp);
-		NDFREE(&nd, NDF_ONLY_PNBUF);
+		NDFREE_NOTHING(&nd);
 		return (error);
 	}
 	VOP_UNLOCK(nd.ni_vp);
-	NDFREE(&nd, NDF_ONLY_PNBUF);
+	NDFREE_NOTHING(&nd);
 	pwd_chdir(td, nd.ni_vp);
 	return (0);
 }
@@ -993,12 +993,12 @@ sys_chroot(struct thread *td, struct chroot_args *uap)
 	VOP_UNLOCK(nd.ni_vp);
 	error = pwd_chroot(td, nd.ni_vp);
 	vrele(nd.ni_vp);
-	NDFREE(&nd, NDF_ONLY_PNBUF);
+	NDFREE_NOTHING(&nd);
 	return (error);
 e_vunlock:
 	vput(nd.ni_vp);
 error:
-	NDFREE(&nd, NDF_ONLY_PNBUF);
+	NDFREE_NOTHING(&nd);
 	return (error);
 }
 
@@ -2137,7 +2137,7 @@ kern_accessat(struct thread *td, int fd, const char *path,
 	vp = nd.ni_vp;
 
 	error = vn_access(vp, amode, usecred, td);
-	NDFREE(&nd, NDF_ONLY_PNBUF);
+	NDFREE_NOTHING(&nd);
 	vput(vp);
 out:
 	if (usecred != cred) {
@@ -2436,7 +2436,7 @@ kern_statat(struct thread *td, int flag, int fd, const char *path,
 		if (__predict_false(hook != NULL))
 			hook(nd.ni_vp, sbp);
 	}
-	NDFREE(&nd, NDF_ONLY_PNBUF);
+	NDFREE_NOTHING(&nd);
 	vput(nd.ni_vp);
 #ifdef __STAT_TIME_T_EXT
 	sbp->st_atim_ext = 0;
@@ -2576,7 +2576,7 @@ kern_pathconf(struct thread *td, const char *path, enum uio_seg pathseg,
 	    pathseg, path, AT_FDCWD, &cap_fpathconf_rights, td);
 	if ((error = namei(&nd)) != 0)
 		return (error);
-	NDFREE(&nd, NDF_ONLY_PNBUF);
+	NDFREE_NOTHING(&nd);
 
 	error = VOP_PATHCONF(nd.ni_vp, name, valuep);
 	vput(nd.ni_vp);
@@ -2632,7 +2632,7 @@ kern_readlinkat(struct thread *td, int fd, const char *path,
 
 	if ((error = namei(&nd)) != 0)
 		return (error);
-	NDFREE(&nd, NDF_ONLY_PNBUF);
+	NDFREE_NOTHING(&nd);
 	vp = nd.ni_vp;
 
 	error = kern_readlink_vp(vp, buf, bufseg, count, td);
@@ -2783,7 +2783,7 @@ kern_chflagsat(struct thread *td, int fd, const char *path,
 	    &cap_fchflags_rights, td);
 	if ((error = namei(&nd)) != 0)
 		return (error);
-	NDFREE(&nd, NDF_ONLY_PNBUF);
+	NDFREE_NOTHING(&nd);
 	error = setfflags(td, nd.ni_vp, flags);
 	vrele(nd.ni_vp);
 	return (error);
@@ -2914,7 +2914,7 @@ kern_fchmodat(struct thread *td, int fd, const char *path,
 	    &cap_fchmod_rights, td);
 	if ((error = namei(&nd)) != 0)
 		return (error);
-	NDFREE(&nd, NDF_ONLY_PNBUF);
+	NDFREE_NOTHING(&nd);
 	error = setfmode(td, td->td_ucred, nd.ni_vp, mode);
 	vrele(nd.ni_vp);
 	return (error);
@@ -3027,7 +3027,7 @@ kern_fchownat(struct thread *td, int fd, const char *path,
 
 	if ((error = namei(&nd)) != 0)
 		return (error);
-	NDFREE(&nd, NDF_ONLY_PNBUF);
+	NDFREE_NOTHING(&nd);
 	error = setfown(td, td->td_ucred, nd.ni_vp, uid, gid);
 	vrele(nd.ni_vp);
 	return (error);
@@ -3240,7 +3240,7 @@ kern_utimesat(struct thread *td, int fd, const char *path,
 
 	if ((error = namei(&nd)) != 0)
 		return (error);
-	NDFREE(&nd, NDF_ONLY_PNBUF);
+	NDFREE_NOTHING(&nd);
 	error = setutimes(td, nd.ni_vp, ts, 2, tptr == NULL);
 	vrele(nd.ni_vp);
 	return (error);
@@ -3277,7 +3277,7 @@ kern_lutimes(struct thread *td, const char *path, enum uio_seg pathseg,
 	    pathseg, path, AT_FDCWD, &cap_futimes_rights, td);
 	if ((error = namei(&nd)) != 0)
 		return (error);
-	NDFREE(&nd, NDF_ONLY_PNBUF);
+	NDFREE_NOTHING(&nd);
 	error = setutimes(td, nd.ni_vp, ts, 2, tptr == NULL);
 	vrele(nd.ni_vp);
 	return (error);
@@ -3392,7 +3392,7 @@ kern_utimensat(struct thread *td, int fd, const char *path,
 	 * "If both tv_nsec fields are UTIME_OMIT... EACCESS may be detected."
 	 * "Search permission is denied by a component of the path prefix."
 	 */
-	NDFREE(&nd, NDF_ONLY_PNBUF);
+	NDFREE_NOTHING(&nd);
 	if ((flags & UTIMENS_EXIT) == 0)
 		error = setutimes(td, nd.ni_vp, ts, 2, flags & UTIMENS_NULL);
 	vrele(nd.ni_vp);
@@ -4251,7 +4251,7 @@ sys_revoke(struct thread *td, struct revoke_args *uap)
 	if ((error = namei(&nd)) != 0)
 		return (error);
 	vp = nd.ni_vp;
-	NDFREE(&nd, NDF_ONLY_PNBUF);
+	NDFREE_NOTHING(&nd);
 	if (vp->v_type != VCHR || vp->v_rdev == NULL) {
 		error = EINVAL;
 		goto out;
@@ -4386,7 +4386,7 @@ kern_getfhat(struct thread *td, int flags, int fd, const char *path,
 	error = namei(&nd);
 	if (error != 0)
 		return (error);
-	NDFREE(&nd, NDF_ONLY_PNBUF);
+	NDFREE_NOTHING(&nd);
 	vp = nd.ni_vp;
 	bzero(&fh, sizeof(fh));
 	fh.fh_fsid = vp->v_mount->mnt_stat.f_fsid;
