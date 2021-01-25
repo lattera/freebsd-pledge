@@ -126,8 +126,6 @@ __DEFAULT_YES_OPTIONS = \
     LDNS_UTILS \
     LEGACY_CONSOLE \
     LIBCPLUSPLUS \
-    LIBPTHREAD \
-    LIBTHR \
     LLD \
     LLD_BOOTSTRAP \
     LLD_IS_LD \
@@ -378,10 +376,6 @@ BROKEN_OPTIONS+=CLANG_BOOTSTRAP LLD_BOOTSTRAP
 MK_CASPER:=	no
 .endif
 
-.if ${MK_LIBPTHREAD} == "no"
-MK_LIBTHR:=	no
-.endif
-
 .if ${MK_SOURCELESS} == "no"
 MK_SOURCELESS_HOST:=	no
 MK_SOURCELESS_UCODE:= no
@@ -438,7 +432,6 @@ MK_LDNS:=	no
 MK_PKGBOOTSTRAP:=	no
 MK_SVN:=		no
 MK_SVNLITE:=		no
-MK_WIRELESS:=		no
 .endif
 
 .if ${MK_LDNS} == "no"

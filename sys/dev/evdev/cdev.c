@@ -78,7 +78,8 @@ static d_kqfilter_t	evdev_kqfilter;
 static int evdev_kqread(struct knote *kn, long hint);
 static void evdev_kqdetach(struct knote *kn);
 static void evdev_dtor(void *);
-static int evdev_ioctl_eviocgbit(struct evdev_dev *, int, int, caddr_t);
+static int evdev_ioctl_eviocgbit(struct evdev_dev *, int, int, caddr_t,
+    struct thread *);
 static void evdev_client_filter_queue(struct evdev_client *, uint16_t);
 
 static struct cdevsw evdev_cdevsw = {
@@ -396,6 +397,7 @@ evdev_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int fflag,
 	struct evdev_dev *evdev = dev->si_drv1;
 	struct evdev_client *client;
 	struct input_keymap_entry *ke;
+	struct epoch_tracker et;
 	int ret, len, limit, type_num;
 	uint32_t code;
 	size_t nvalues;
@@ -415,7 +417,11 @@ evdev_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int fflag,
 		EVDEV_LOCK(evdev);
 		if (evdev->ev_kdb_active) {
 			evdev->ev_kdb_active = false;
+			if (evdev->ev_lock_type == EV_LOCK_EXT_EPOCH)
+				epoch_enter_preempt(INPUT_EPOCH, &et);
 			evdev_restore_after_kdb(evdev);
+			if (evdev->ev_lock_type == EV_LOCK_EXT_EPOCH)
+				epoch_exit_preempt(INPUT_EPOCH, &et);
 		}
 		EVDEV_UNLOCK(evdev);
 	}
@@ -571,29 +577,38 @@ evdev_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int fflag,
 	/* evdev variable-length ioctls handling */
 	switch (IOCBASECMD(cmd)) {
 	case EVIOCGNAME(0):
-		strlcpy(data, evdev->ev_name, len);
+		/* Linux evdev does not terminate truncated strings with 0 */
+		limit = MIN(strlen(evdev->ev_name) + 1, len);
+		memcpy(data, evdev->ev_name, limit);
+		td->td_retval[0] = limit;
 		return (0);
 
 	case EVIOCGPHYS(0):
 		if (evdev->ev_shortname[0] == 0)
 			return (ENOENT);
 
-		strlcpy(data, evdev->ev_shortname, len);
+		limit = MIN(strlen(evdev->ev_shortname) + 1, len);
+		memcpy(data, evdev->ev_shortname, limit);
+		td->td_retval[0] = limit;
 		return (0);
 
 	case EVIOCGUNIQ(0):
 		if (evdev->ev_serial[0] == 0)
 			return (ENOENT);
 
-		strlcpy(data, evdev->ev_serial, len);
+		limit = MIN(strlen(evdev->ev_serial) + 1, len);
+		memcpy(data, evdev->ev_serial, limit);
+		td->td_retval[0] = limit;
 		return (0);
 
 	case EVIOCGPROP(0):
 		limit = MIN(len, bitstr_size(INPUT_PROP_CNT));
 		memcpy(data, evdev->ev_prop_flags, limit);
+		td->td_retval[0] = limit;
 		return (0);
 
 	case EVIOCGMTSLOTS(0):
+		/* EVIOCGMTSLOTS always returns 0 on success */
 		if (evdev->ev_mt == NULL)
 			return (EINVAL);
 		if (len < sizeof(uint32_t))
@@ -615,6 +630,7 @@ evdev_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int fflag,
 		evdev_client_filter_queue(client, EV_KEY);
 		memcpy(data, evdev->ev_key_states, limit);
 		EVDEV_UNLOCK(evdev);
+		td->td_retval[0] = limit;
 		return (0);
 
 	case EVIOCGLED(0):
@@ -623,6 +639,7 @@ evdev_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int fflag,
 		evdev_client_filter_queue(client, EV_LED);
 		memcpy(data, evdev->ev_led_states, limit);
 		EVDEV_UNLOCK(evdev);
+		td->td_retval[0] = limit;
 		return (0);
 
 	case EVIOCGSND(0):
@@ -631,6 +648,7 @@ evdev_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int fflag,
 		evdev_client_filter_queue(client, EV_SND);
 		memcpy(data, evdev->ev_snd_states, limit);
 		EVDEV_UNLOCK(evdev);
+		td->td_retval[0] = limit;
 		return (0);
 
 	case EVIOCGSW(0):
@@ -639,20 +657,22 @@ evdev_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int fflag,
 		evdev_client_filter_queue(client, EV_SW);
 		memcpy(data, evdev->ev_sw_states, limit);
 		EVDEV_UNLOCK(evdev);
+		td->td_retval[0] = limit;
 		return (0);
 
 	case EVIOCGBIT(0, 0) ... EVIOCGBIT(EV_MAX, 0):
 		type_num = IOCBASECMD(cmd) - EVIOCGBIT(0, 0);
 		debugf(client, "EVIOCGBIT(%d): data=%p, len=%d", type_num,
 		    data, len);
-		return (evdev_ioctl_eviocgbit(evdev, type_num, len, data));
+		return (evdev_ioctl_eviocgbit(evdev, type_num, len, data, td));
 	}
 
 	return (EINVAL);
 }
 
 static int
-evdev_ioctl_eviocgbit(struct evdev_dev *evdev, int type, int len, caddr_t data)
+evdev_ioctl_eviocgbit(struct evdev_dev *evdev, int type, int len, caddr_t data,
+    struct thread *td)
 {
 	unsigned long *bitmap;
 	int limit;
@@ -696,6 +716,7 @@ evdev_ioctl_eviocgbit(struct evdev_dev *evdev, int type, int len, caddr_t data)
 		 * just fake it returning only zeros.
 		 */
 		bzero(data, len);
+		td->td_retval[0] = len;
 		return (0);
 	default:
 		return (ENOTTY);
@@ -710,6 +731,7 @@ evdev_ioctl_eviocgbit(struct evdev_dev *evdev, int type, int len, caddr_t data)
 	limit = bitstr_size(limit);
 	len = MIN(limit, len);
 	memcpy(data, bitmap, len);
+	td->td_retval[0] = len;
 	return (0);
 }
 

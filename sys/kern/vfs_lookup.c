@@ -596,6 +596,7 @@ namei(struct nameidata *ndp)
 	    ndp->ni_startdir->v_type == VBAD);
 
 	ndp->ni_lcf = 0;
+	ndp->ni_loopcnt = 0;
 	ndp->ni_vp = NULL;
 
 	error = namei_getpath(ndp);
@@ -635,8 +636,16 @@ namei(struct nameidata *ndp)
 		TAILQ_INIT(&ndp->ni_cap_tracker);
 		dp = ndp->ni_startdir;
 		break;
+	case CACHE_FPL_STATUS_DESTROYED:
+		ndp->ni_loopcnt = 0;
+		error = namei_getpath(ndp);
+		if (__predict_false(error != 0)) {
+			return (error);
+		}
+		/* FALLTHROUGH */
 	case CACHE_FPL_STATUS_ABORTED:
 		TAILQ_INIT(&ndp->ni_cap_tracker);
+		MPASS(ndp->ni_lcf == 0);
 		error = namei_setup(ndp, &dp, &pwd);
 		if (error != 0) {
 			namei_cleanup_cnp(cnp);
@@ -644,8 +653,6 @@ namei(struct nameidata *ndp)
 		}
 		break;
 	}
-
-	ndp->ni_loopcnt = 0;
 
 	/*
 	 * Locked lookup.

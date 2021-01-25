@@ -1444,11 +1444,37 @@ tmpfs_readlink(struct vop_readlink_args *v)
 
 	node = VP_TO_TMPFS_NODE(vp);
 
-	error = uiomove(node->tn_link, MIN(node->tn_size, uio->uio_resid),
+	error = uiomove(node->tn_link_target, MIN(node->tn_size, uio->uio_resid),
 	    uio);
 	tmpfs_set_accessed(VFS_TO_TMPFS(vp->v_mount), node);
 
 	return (error);
+}
+
+/*
+ * VOP_FPLOOKUP_SYMLINK routines are subject to special circumstances, see
+ * the comment above cache_fplookup for details.
+ *
+ * Check tmpfs_alloc_node for tmpfs-specific synchronisation notes.
+ */
+static int
+tmpfs_fplookup_symlink(struct vop_fplookup_symlink_args *v)
+{
+	struct vnode *vp;
+	struct tmpfs_node *node;
+	char *symlink;
+
+	vp = v->a_vp;
+	node = VP_TO_TMPFS_NODE_SMR(vp);
+	if (__predict_false(node == NULL))
+		return (EAGAIN);
+	if (!atomic_load_char(&node->tn_link_smr))
+		return (EAGAIN);
+	symlink = atomic_load_ptr(&node->tn_link_target);
+	if (symlink == NULL)
+		return (EAGAIN);
+
+	return (cache_symlink_resolve(v->a_fpl, symlink, node->tn_size));
 }
 
 static int
@@ -1490,34 +1516,53 @@ need:
 int
 tmpfs_reclaim(struct vop_reclaim_args *v)
 {
-	struct vnode *vp = v->a_vp;
-
+	struct vnode *vp;
 	struct tmpfs_mount *tmp;
 	struct tmpfs_node *node;
+	bool unlock, tm_locked;
 
+	vp = v->a_vp;
 	node = VP_TO_TMPFS_NODE(vp);
 	tmp = VFS_TO_TMPFS(vp->v_mount);
+	tm_locked = false;
 
 	if (vp->v_type == VREG)
 		tmpfs_destroy_vobject(vp, node->tn_reg.tn_aobj);
 	vp->v_object = NULL;
 
+relock:
 	TMPFS_NODE_LOCK(node);
+	if (!tm_locked && node->tn_links == 0 &&
+	    (node->tn_vpstate & TMPFS_VNODE_ALLOCATING) == 0) {
+		TMPFS_NODE_UNLOCK(node);
+		TMPFS_LOCK(tmp);
+		tm_locked = true;
+		goto relock;
+	}
 	tmpfs_free_vp(vp);
 
-	/* If the node referenced by this vnode was deleted by the user,
+	/*
+	 * If the node referenced by this vnode was deleted by the user,
 	 * we must free its associated data structures (now that the vnode
-	 * is being reclaimed). */
+	 * is being reclaimed).
+	 */
 	if (node->tn_links == 0 &&
 	    (node->tn_vpstate & TMPFS_VNODE_ALLOCATING) == 0) {
+		MPASS(tm_locked);
 		node->tn_vpstate = TMPFS_VNODE_DOOMED;
+		unlock = !tmpfs_free_node_locked(tmp, node, true);
+	} else {
+		unlock = true;
+	}
+
+	if (unlock) {
 		TMPFS_NODE_UNLOCK(node);
-		tmpfs_free_node(tmp, node);
-	} else
-		TMPFS_NODE_UNLOCK(node);
+		if (tm_locked)
+			TMPFS_UNLOCK(tmp);
+	}
 
 	MPASS(vp->v_data == NULL);
-	return 0;
+	return (0);
 }
 
 int
@@ -1725,6 +1770,7 @@ tmpfs_vptocnp(struct vop_vptocnp_args *ap)
 	}
 restart:
 	TMPFS_LOCK(tm);
+restart_locked:
 	LIST_FOREACH_SAFE(tnp, &tm->tm_nodes_used, tn_entries, tnp1) {
 		if (tnp->tn_type != VDIR)
 			continue;
@@ -1762,8 +1808,13 @@ restart:
 		} else {
 			KASSERT(tnp->tn_refcount > 0,
 			    ("node %p refcount zero", tnp));
-			tnp1 = LIST_NEXT(tnp, tn_entries);
-			TMPFS_NODE_UNLOCK(tnp);
+			if (tnp->tn_attached) {
+				tnp1 = LIST_NEXT(tnp, tn_entries);
+				TMPFS_NODE_UNLOCK(tnp);
+			} else {
+				TMPFS_NODE_UNLOCK(tnp);
+				goto restart_locked;
+			}
 		}
 	}
 	TMPFS_UNLOCK(tm);
@@ -1782,6 +1833,7 @@ struct vop_vector tmpfs_vnodeop_entries = {
 	.vop_open =			tmpfs_open,
 	.vop_close =			tmpfs_close,
 	.vop_fplookup_vexec =		tmpfs_fplookup_vexec,
+	.vop_fplookup_symlink =		tmpfs_fplookup_symlink,
 	.vop_access =			tmpfs_access,
 	.vop_stat =			tmpfs_stat,
 	.vop_getattr =			tmpfs_getattr,

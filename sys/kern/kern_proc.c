@@ -2095,9 +2095,13 @@ sysctl_kern_proc_args(SYSCTL_HANDLER_ARGS)
 	if (namelen != 1)
 		return (EINVAL);
 
+	p = curproc;
 	pid = (pid_t)name[0];
+	if (pid == -1) {
+		pid = p->p_pid;
+	}
 
-	if (pid != req->td->td_proc->p_pid) {
+	if (pid != p->p_pid) {
 		error = sysfil_require(req->td, SYSFIL_PS);
 		if (error)
 			return (error);
@@ -2107,7 +2111,6 @@ sysctl_kern_proc_args(SYSCTL_HANDLER_ARGS)
 	 * If the query is for this process and it is single-threaded, there
 	 * is nobody to modify pargs, thus we can just read.
 	 */
-	p = curproc;
 	if (pid == p->p_pid && p->p_numthreads == 1 && req->newptr == NULL &&
 	    (pa = p->p_args) != NULL)
 		return (SYSCTL_OUT(req, pa->ar_args, pa->ar_length));

@@ -1462,6 +1462,7 @@ OLD_FILES+=usr/lib/clang/11.0.1/lib/freebsd/libclang_rt.profile-armhf.a
 OLD_FILES+=usr/lib/clang/11.0.1/lib/freebsd/libclang_rt.profile-i386.a
 OLD_FILES+=usr/lib/clang/11.0.1/lib/freebsd/libclang_rt.profile-powerpc.a
 OLD_FILES+=usr/lib/clang/11.0.1/lib/freebsd/libclang_rt.profile-powerpc64.a
+OLD_FILES+=usr/lib/clang/11.0.1/lib/freebsd/libclang_rt.profile-powerpc64le.a
 OLD_FILES+=usr/lib/clang/11.0.1/lib/freebsd/libclang_rt.profile-x86_64.a
 OLD_FILES+=usr/lib/clang/11.0.1/lib/freebsd/libclang_rt.safestack-aarch64.a
 OLD_FILES+=usr/lib/clang/11.0.1/lib/freebsd/libclang_rt.safestack-i386.a
@@ -4109,13 +4110,6 @@ OLD_DIRS+=usr/include/c++/v1/ext
 OLD_DIRS+=usr/include/c++/v1
 .endif
 
-.if ${MK_LIBTHR} == no
-OLD_LIBS+=lib/libthr.so.3
-OLD_FILES+=usr/lib/libthr.a
-OLD_FILES+=usr/lib/libthr_p.a
-OLD_FILES+=usr/share/man/man3/libthr.3.gz
-.endif
-
 .if ${MK_LLD} == no
 OLD_FILES+=usr/bin/ld.lld
 .endif
@@ -5942,14 +5936,6 @@ OLD_FILES+=usr/share/man/man8/makewhatis.local.8.gz
 OLD_FILES+=usr/share/man/man8/manctl.8.gz
 OLD_FILES+=usr/share/man/whatis
 OLD_FILES+=usr/share/openssl/man/whatis
-.endif
-
-.if ${MK_NDIS} == no
-OLD_FILES+=usr/sbin/ndiscvt
-OLD_FILES+=usr/sbin/ndisgen
-OLD_FILES+=usr/share/man/man8/ndiscvt.8.gz
-OLD_FILES+=usr/share/man/man8/ndisgen.8.gz
-OLD_FILES+=usr/share/misc/windrv_stub.c
 .endif
 
 .if ${MK_NETCAT} == no
