@@ -4231,7 +4231,7 @@ iflib_if_qflush(if_t ifp)
 #define IFCAP_FLAGS (IFCAP_HWCSUM_IPV6 | IFCAP_HWCSUM | IFCAP_LRO | \
 		     IFCAP_TSO | IFCAP_VLAN_HWTAGGING | IFCAP_HWSTATS | \
 		     IFCAP_VLAN_MTU | IFCAP_VLAN_HWFILTER | \
-		     IFCAP_VLAN_HWTSO | IFCAP_VLAN_HWCSUM | IFCAP_NOMAP)
+		     IFCAP_VLAN_HWTSO | IFCAP_VLAN_HWCSUM | IFCAP_MEXTPG)
 
 static int
 iflib_if_ioctl(if_t ifp, u_long command, caddr_t data)
@@ -4358,7 +4358,7 @@ iflib_if_ioctl(if_t ifp, u_long command, caddr_t data)
 
 		oldmask = if_getcapenable(ifp);
 		mask = ifr->ifr_reqcap ^ oldmask;
-		mask &= ctx->ifc_softc_ctx.isc_capabilities | IFCAP_NOMAP;
+		mask &= ctx->ifc_softc_ctx.isc_capabilities | IFCAP_MEXTPG;
 		setmask = 0;
 #ifdef TCP_OFFLOAD
 		setmask |= mask & (IFCAP_TOE4|IFCAP_TOE6);
@@ -4759,9 +4759,9 @@ iflib_device_register(device_t dev, void *sc, if_shared_ctx_t sctx, if_ctx_t *ct
 #endif
 
 	if_setcapabilities(ifp,
-	    scctx->isc_capabilities | IFCAP_HWSTATS | IFCAP_NOMAP);
+	    scctx->isc_capabilities | IFCAP_HWSTATS | IFCAP_MEXTPG);
 	if_setcapenable(ifp,
-	    scctx->isc_capenable | IFCAP_HWSTATS | IFCAP_NOMAP);
+	    scctx->isc_capenable | IFCAP_HWSTATS | IFCAP_MEXTPG);
 
 	if (scctx->isc_ntxqsets == 0 || (scctx->isc_ntxqsets_max && scctx->isc_ntxqsets_max < scctx->isc_ntxqsets))
 		scctx->isc_ntxqsets = scctx->isc_ntxqsets_max;
@@ -4900,7 +4900,7 @@ iflib_device_register(device_t dev, void *sc, if_shared_ctx_t sctx, if_ctx_t *ct
 		device_printf(dev,
 		    "Cannot use iflib with only 1 MSI-X interrupt!\n");
 		err = ENODEV;
-		goto fail_intr_free;
+		goto fail_queues;
 	}
 
 	ether_ifattach(ctx->ifc_ifp, ctx->ifc_mac.octet);
@@ -4936,13 +4936,14 @@ iflib_device_register(device_t dev, void *sc, if_shared_ctx_t sctx, if_ctx_t *ct
 
 fail_detach:
 	ether_ifdetach(ctx->ifc_ifp);
-fail_intr_free:
-	iflib_free_intr_mem(ctx);
 fail_queues:
+	iflib_tqg_detach(ctx);
 	iflib_tx_structures_free(ctx);
 	iflib_rx_structures_free(ctx);
-	iflib_tqg_detach(ctx);
 	IFDI_DETACH(ctx);
+	IFDI_QUEUES_FREE(ctx);
+fail_intr_free:
+	iflib_free_intr_mem(ctx);
 fail_unlock:
 	CTX_UNLOCK(ctx);
 	iflib_deregister(ctx);
@@ -5139,11 +5140,12 @@ iflib_pseudo_register(device_t dev, if_shared_ctx_t sctx, if_ctx_t *ctxp,
 fail_detach:
 	ether_ifdetach(ctx->ifc_ifp);
 fail_queues:
+	iflib_tqg_detach(ctx);
 	iflib_tx_structures_free(ctx);
 	iflib_rx_structures_free(ctx);
-	iflib_tqg_detach(ctx);
 fail_iflib_detach:
 	IFDI_DETACH(ctx);
+	IFDI_QUEUES_FREE(ctx);
 fail_unlock:
 	CTX_UNLOCK(ctx);
 	iflib_deregister(ctx);
@@ -5173,6 +5175,8 @@ iflib_pseudo_deregister(if_ctx_t ctx)
 	iflib_tqg_detach(ctx);
 	iflib_tx_structures_free(ctx);
 	iflib_rx_structures_free(ctx);
+	IFDI_DETACH(ctx);
+	IFDI_QUEUES_FREE(ctx);
 
 	iflib_deregister(ctx);
 
@@ -5233,17 +5237,18 @@ iflib_device_deregister(if_ctx_t ctx)
 		led_destroy(ctx->ifc_led_dev);
 
 	iflib_tqg_detach(ctx);
+	iflib_tx_structures_free(ctx);
+	iflib_rx_structures_free(ctx);
+
 	CTX_LOCK(ctx);
 	IFDI_DETACH(ctx);
+	IFDI_QUEUES_FREE(ctx);
 	CTX_UNLOCK(ctx);
 
 	/* ether_ifdetach calls if_qflush - lock must be destroy afterwards*/
 	iflib_free_intr_mem(ctx);
 
 	bus_generic_detach(dev);
-
-	iflib_tx_structures_free(ctx);
-	iflib_rx_structures_free(ctx);
 
 	iflib_deregister(ctx);
 
@@ -5828,7 +5833,6 @@ iflib_tx_structures_free(if_ctx_t ctx)
 	}
 	free(ctx->ifc_txqs, M_IFLIB);
 	ctx->ifc_txqs = NULL;
-	IFDI_QUEUES_FREE(ctx);
 }
 
 /*********************************************************************
