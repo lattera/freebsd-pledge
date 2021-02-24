@@ -513,8 +513,7 @@ static int ctl_scsiio_lun_check(struct ctl_lun *lun,
 				const struct ctl_cmd_entry *entry,
 				struct ctl_scsiio *ctsio);
 static void ctl_failover_lun(union ctl_io *io);
-static int ctl_scsiio_precheck(struct ctl_softc *ctl_softc,
-			       struct ctl_scsiio *ctsio);
+static void ctl_scsiio_precheck(struct ctl_scsiio *ctsio);
 static int ctl_scsiio(struct ctl_scsiio *ctsio);
 
 static int ctl_target_reset(union ctl_io *io);
@@ -536,9 +535,9 @@ static void ctl_done_timer_wakeup(void *arg);
 
 static void ctl_send_datamove_done(union ctl_io *io, int have_lock);
 static void ctl_datamove_remote_write_cb(struct ctl_ha_dt_req *rq);
-static int ctl_datamove_remote_dm_write_cb(union ctl_io *io);
+static int ctl_datamove_remote_dm_write_cb(union ctl_io *io, bool samethr);
 static void ctl_datamove_remote_write(union ctl_io *io);
-static int ctl_datamove_remote_dm_read_cb(union ctl_io *io);
+static int ctl_datamove_remote_dm_read_cb(union ctl_io *io, bool samethr);
 static void ctl_datamove_remote_read_cb(struct ctl_ha_dt_req *rq);
 static int ctl_datamove_remote_sgl_setup(union ctl_io *io);
 static int ctl_datamove_remote_xfer(union ctl_io *io, unsigned command,
@@ -737,7 +736,7 @@ ctl_ha_datamove(union ctl_io *io)
 		    sizeof(struct ctl_sg_entry) * msg.dt.cur_sg_entries,
 		    M_WAITOK) > CTL_HA_STATUS_SUCCESS) {
 			io->io_hdr.port_status = 31341;
-			io->scsiio.be_move_done(io);
+			ctl_datamove_done(io, true);
 			return;
 		}
 		msg.dt.sent_sg_entries = sg_entries_sent;
@@ -754,7 +753,7 @@ ctl_ha_datamove(union ctl_io *io)
 		if (lun)
 			mtx_unlock(&lun->lun_lock);
 		io->io_hdr.port_status = 31342;
-		io->scsiio.be_move_done(io);
+		ctl_datamove_done(io, true);
 		return;
 	}
 	io->io_hdr.flags &= ~CTL_FLAG_IO_ACTIVE;
@@ -2327,12 +2326,12 @@ ctl_serialize_other_sc_cmd(struct ctl_scsiio *ctsio)
 	 * particular LUN, and stays there until completion.
 	 */
 #ifdef CTL_TIME_IO
-	if (TAILQ_EMPTY(&lun->ooa_queue))
+	if (LIST_EMPTY(&lun->ooa_queue))
 		lun->idle_time += getsbinuptime() - lun->last_busy;
 #endif
-	TAILQ_INSERT_TAIL(&lun->ooa_queue, &ctsio->io_hdr, ooa_links);
+	LIST_INSERT_HEAD(&lun->ooa_queue, &ctsio->io_hdr, ooa_links);
 
-	bio = (union ctl_io *)TAILQ_PREV(&ctsio->io_hdr, ctl_ooaq, ooa_links);
+	bio = (union ctl_io *)LIST_NEXT(&ctsio->io_hdr, ooa_links);
 	switch (ctl_check_ooa(lun, (union ctl_io *)ctsio, &bio)) {
 	case CTL_ACTION_BLOCK:
 		ctsio->io_hdr.blocker = bio;
@@ -2359,18 +2358,18 @@ ctl_serialize_other_sc_cmd(struct ctl_scsiio *ctsio)
 		}
 		break;
 	case CTL_ACTION_OVERLAP:
-		TAILQ_REMOVE(&lun->ooa_queue, &ctsio->io_hdr, ooa_links);
+		LIST_REMOVE(&ctsio->io_hdr, ooa_links);
 		mtx_unlock(&lun->lun_lock);
 		ctl_set_overlapped_cmd(ctsio);
 		goto badjuju;
 	case CTL_ACTION_OVERLAP_TAG:
-		TAILQ_REMOVE(&lun->ooa_queue, &ctsio->io_hdr, ooa_links);
+		LIST_REMOVE(&ctsio->io_hdr, ooa_links);
 		mtx_unlock(&lun->lun_lock);
 		ctl_set_overlapped_tag(ctsio, ctsio->tag_num);
 		goto badjuju;
 	case CTL_ACTION_ERROR:
 	default:
-		TAILQ_REMOVE(&lun->ooa_queue, &ctsio->io_hdr, ooa_links);
+		LIST_REMOVE(&ctsio->io_hdr, ooa_links);
 		mtx_unlock(&lun->lun_lock);
 
 		ctl_set_internal_failure(ctsio, /*sks_valid*/ 0,
@@ -2394,20 +2393,28 @@ static void
 ctl_ioctl_fill_ooa(struct ctl_lun *lun, uint32_t *cur_fill_num,
 		   struct ctl_ooa *ooa_hdr, struct ctl_ooa_entry *kern_entries)
 {
-	union ctl_io *io;
+	struct ctl_io_hdr *ioh;
 
 	mtx_lock(&lun->lun_lock);
-	for (io = (union ctl_io *)TAILQ_FIRST(&lun->ooa_queue); (io != NULL);
-	     (*cur_fill_num)++, io = (union ctl_io *)TAILQ_NEXT(&io->io_hdr,
-	     ooa_links)) {
+	ioh = LIST_FIRST(&lun->ooa_queue);
+	if (ioh == NULL) {
+		mtx_unlock(&lun->lun_lock);
+		return;
+	}
+	while (LIST_NEXT(ioh, ooa_links) != NULL)
+		ioh = LIST_NEXT(ioh, ooa_links);
+	for ( ; ioh; ioh = LIST_PREV(ioh, &lun->ooa_queue, ctl_io_hdr, ooa_links)) {
+		union ctl_io *io = (union ctl_io *)ioh;
 		struct ctl_ooa_entry *entry;
 
 		/*
 		 * If we've got more than we can fit, just count the
 		 * remaining entries.
 		 */
-		if (*cur_fill_num >= ooa_hdr->alloc_num)
+		if (*cur_fill_num >= ooa_hdr->alloc_num) {
+			(*cur_fill_num)++;
 			continue;
+		}
 
 		entry = &kern_entries[*cur_fill_num];
 
@@ -2438,6 +2445,7 @@ ctl_ioctl_fill_ooa(struct ctl_lun *lun, uint32_t *cur_fill_num,
 
 		if (io->io_hdr.flags & CTL_FLAG_STATUS_SENT)
 			entry->cmd_flags |= CTL_OOACMD_FLAG_STATUS_SENT;
+		(*cur_fill_num)++;
 	}
 	mtx_unlock(&lun->lun_lock);
 }
@@ -4671,7 +4679,7 @@ fail:
 #ifdef CTL_TIME_IO
 	lun->last_busy = getsbinuptime();
 #endif
-	TAILQ_INIT(&lun->ooa_queue);
+	LIST_INIT(&lun->ooa_queue);
 	STAILQ_INIT(&lun->error_list);
 	lun->ie_reported = 1;
 	callout_init_mtx(&lun->ie_callout, &lun->lun_lock, 0);
@@ -4734,7 +4742,7 @@ ctl_free_lun(struct ctl_lun *lun)
 	struct ctl_lun *nlun;
 	int i;
 
-	KASSERT(TAILQ_EMPTY(&lun->ooa_queue),
+	KASSERT(LIST_EMPTY(&lun->ooa_queue),
 	    ("Freeing a LUN %p with outstanding I/O!\n", lun));
 
 	mtx_lock(&softc->ctl_lock);
@@ -4981,7 +4989,7 @@ ctl_remove_lun(struct ctl_be_lun *be_lun)
 	 * If we have something in the OOA queue, we'll free it when the
 	 * last I/O completes.
 	 */
-	if (TAILQ_EMPTY(&lun->ooa_queue)) {
+	if (LIST_EMPTY(&lun->ooa_queue)) {
 		mtx_unlock(&lun->lun_lock);
 		ctl_free_lun(lun);
 	} else
@@ -5020,25 +5028,13 @@ ctl_lun_capacity_changed(struct ctl_be_lun *be_lun)
  * make it down to say RAIDCore's configuration code.
  */
 int
-ctl_config_move_done(union ctl_io *io)
+ctl_config_move_done(union ctl_io *io, bool samethr)
 {
 	int retval;
 
 	CTL_DEBUG_PRINT(("ctl_config_move_done\n"));
 	KASSERT(io->io_hdr.io_type == CTL_IO_SCSI,
-	    ("Config I/O type isn't CTL_IO_SCSI (%d)!", io->io_hdr.io_type));
-
-	if ((io->io_hdr.port_status != 0) &&
-	    ((io->io_hdr.status & CTL_STATUS_MASK) == CTL_STATUS_NONE ||
-	     (io->io_hdr.status & CTL_STATUS_MASK) == CTL_SUCCESS)) {
-		ctl_set_internal_failure(&io->scsiio, /*sks_valid*/ 1,
-		    /*retry_count*/ io->io_hdr.port_status);
-	} else if (io->scsiio.kern_data_resid != 0 &&
-	    (io->io_hdr.flags & CTL_FLAG_DATA_MASK) == CTL_FLAG_DATA_OUT &&
-	    ((io->io_hdr.status & CTL_STATUS_MASK) == CTL_STATUS_NONE ||
-	     (io->io_hdr.status & CTL_STATUS_MASK) == CTL_SUCCESS)) {
-		ctl_set_invalid_field_ciu(&io->scsiio);
-	}
+	    ("%s: unexpected I/O type %x", __func__, io->io_hdr.io_type));
 
 	if (ctl_debug & CTL_DEBUG_CDB_DATA)
 		ctl_data_print(io);
@@ -10672,8 +10668,9 @@ ctl_read_toc(struct ctl_scsiio *ctsio)
 static int
 ctl_get_lba_len(union ctl_io *io, uint64_t *lba, uint64_t *len)
 {
-	if (io->io_hdr.io_type != CTL_IO_SCSI)
-		return (1);
+
+	KASSERT(io->io_hdr.io_type == CTL_IO_SCSI,
+	    ("%s: unexpected I/O type %x", __func__, io->io_hdr.io_type));
 
 	switch (io->scsiio.cdb[0]) {
 	case COMPARE_AND_WRITE: {
@@ -10852,9 +10849,11 @@ ctl_extent_check_unmap(union ctl_io *io, uint64_t lba2, uint64_t len2)
 	uint64_t lba;
 	uint32_t len;
 
+	KASSERT(io->io_hdr.io_type == CTL_IO_SCSI,
+	    ("%s: unexpected I/O type %x", __func__, io->io_hdr.io_type));
+
 	/* If not UNMAP -- go other way. */
-	if (io->io_hdr.io_type != CTL_IO_SCSI ||
-	    io->scsiio.cdb[0] != UNMAP)
+	if (io->scsiio.cdb[0] != UNMAP)
 		return (CTL_ACTION_ERROR);
 
 	/* If UNMAP without data -- block and wait for data. */
@@ -11075,8 +11074,7 @@ ctl_check_ooa(struct ctl_lun *lun, union ctl_io *pending_io,
 	 * CTL_ACTION_PASS.
 	 */
 	for (ooa_io = *starting_io; ooa_io != NULL;
-	     ooa_io = (union ctl_io *)TAILQ_PREV(&ooa_io->io_hdr, ctl_ooaq,
-	     ooa_links)){
+	     ooa_io = (union ctl_io *)LIST_NEXT(&ooa_io->io_hdr, ooa_links)) {
 		action = ctl_check_for_blockage(lun, pending_io, ooa_io);
 		if (action != CTL_ACTION_PASS) {
 			*starting_io = ooa_io;
@@ -11111,8 +11109,7 @@ ctl_try_unblock_io(struct ctl_lun *lun, union ctl_io *io, bool skip)
 
 	obio = bio = io->io_hdr.blocker;
 	if (skip)
-		bio = (union ctl_io *)TAILQ_PREV(&bio->io_hdr, ctl_ooaq,
-		    ooa_links);
+		bio = (union ctl_io *)LIST_NEXT(&bio->io_hdr, ooa_links);
 	action = ctl_check_ooa(lun, io, &bio);
 	if (action == CTL_ACTION_BLOCK) {
 		/* Still blocked, but may be by different I/O now. */
@@ -11178,7 +11175,7 @@ error:
 		if ((io->io_hdr.flags & CTL_FLAG_FROM_OTHER_SC) &&
 		    (softc->ha_mode != CTL_HA_MODE_XFER)) {
 			ctl_try_unblock_others(lun, io, TRUE);
-			TAILQ_REMOVE(&lun->ooa_queue, &io->io_hdr, ooa_links);
+			LIST_REMOVE(&io->io_hdr, ooa_links);
 
 			ctl_copy_sense_data_back(io, &msg_info);
 			msg_info.hdr.original_sc = io->io_hdr.remote_io;
@@ -11381,7 +11378,7 @@ ctl_failover_lun(union ctl_io *rio)
 	}
 
 	if (softc->ha_mode == CTL_HA_MODE_XFER) {
-		TAILQ_FOREACH_SAFE(io, &lun->ooa_queue, ooa_links, next_io) {
+		LIST_FOREACH_SAFE(io, &lun->ooa_queue, ooa_links, next_io) {
 			/* We are master */
 			if (io->flags & CTL_FLAG_FROM_OTHER_SC) {
 				if (io->flags & CTL_FLAG_IO_ACTIVE) {
@@ -11410,7 +11407,7 @@ ctl_failover_lun(union ctl_io *rio)
 			}
 		}
 	} else { /* SERIALIZE modes */
-		TAILQ_FOREACH_SAFE(io, &lun->ooa_queue, ooa_links, next_io) {
+		LIST_FOREACH_SAFE(io, &lun->ooa_queue, ooa_links, next_io) {
 			/* We are master */
 			if (io->flags & CTL_FLAG_FROM_OTHER_SC) {
 				if (io->blocker != NULL) {
@@ -11420,7 +11417,7 @@ ctl_failover_lun(union ctl_io *rio)
 				}
 				ctl_try_unblock_others(lun, (union ctl_io *)io,
 				    TRUE);
-				TAILQ_REMOVE(&lun->ooa_queue, io, ooa_links);
+				LIST_REMOVE(io, ooa_links);
 				ctl_free_io((union ctl_io *)io);
 			} else
 			/* We are slave */
@@ -11437,14 +11434,14 @@ ctl_failover_lun(union ctl_io *rio)
 	mtx_unlock(&lun->lun_lock);
 }
 
-static int
-ctl_scsiio_precheck(struct ctl_softc *softc, struct ctl_scsiio *ctsio)
+static void
+ctl_scsiio_precheck(struct ctl_scsiio *ctsio)
 {
+	struct ctl_softc *softc = CTL_SOFTC(ctsio);
 	struct ctl_lun *lun;
 	const struct ctl_cmd_entry *entry;
 	union ctl_io *bio;
 	uint32_t initidx, targ_lun;
-	int retval = 0;
 
 	lun = NULL;
 	targ_lun = ctsio->io_hdr.nexus.targ_mapped_lun;
@@ -11471,10 +11468,10 @@ ctl_scsiio_precheck(struct ctl_softc *softc, struct ctl_scsiio *ctsio)
 		 * and stays there until completion.
 		 */
 #ifdef CTL_TIME_IO
-		if (TAILQ_EMPTY(&lun->ooa_queue))
+		if (LIST_EMPTY(&lun->ooa_queue))
 			lun->idle_time += getsbinuptime() - lun->last_busy;
 #endif
-		TAILQ_INSERT_TAIL(&lun->ooa_queue, &ctsio->io_hdr, ooa_links);
+		LIST_INSERT_HEAD(&lun->ooa_queue, &ctsio->io_hdr, ooa_links);
 	}
 
 	/* Get command entry and return error if it is unsuppotyed. */
@@ -11482,7 +11479,7 @@ ctl_scsiio_precheck(struct ctl_softc *softc, struct ctl_scsiio *ctsio)
 	if (entry == NULL) {
 		if (lun)
 			mtx_unlock(&lun->lun_lock);
-		return (retval);
+		return;
 	}
 
 	ctsio->io_hdr.flags &= ~CTL_FLAG_DATA_MASK;
@@ -11499,13 +11496,13 @@ ctl_scsiio_precheck(struct ctl_softc *softc, struct ctl_scsiio *ctsio)
 		if (entry->flags & CTL_CMD_FLAG_OK_ON_NO_LUN) {
 			ctsio->io_hdr.flags |= CTL_FLAG_IS_WAS_ON_RTR;
 			ctl_enqueue_rtr((union ctl_io *)ctsio);
-			return (retval);
+			return;
 		}
 
 		ctl_set_unsupported_lun(ctsio);
 		ctl_done((union ctl_io *)ctsio);
 		CTL_DEBUG_PRINT(("ctl_scsiio_precheck: bailing out due to invalid LUN\n"));
-		return (retval);
+		return;
 	} else {
 		/*
 		 * Make sure we support this particular command on this LUN.
@@ -11515,7 +11512,7 @@ ctl_scsiio_precheck(struct ctl_softc *softc, struct ctl_scsiio *ctsio)
 			mtx_unlock(&lun->lun_lock);
 			ctl_set_invalid_opcode(ctsio);
 			ctl_done((union ctl_io *)ctsio);
-			return (retval);
+			return;
 		}
 	}
 
@@ -11569,14 +11566,14 @@ ctl_scsiio_precheck(struct ctl_softc *softc, struct ctl_scsiio *ctsio)
 			ctsio->io_hdr.status = CTL_SCSI_ERROR | CTL_AUTOSENSE;
 			ctsio->sense_len = sense_len;
 			ctl_done((union ctl_io *)ctsio);
-			return (retval);
+			return;
 		}
 	}
 
 	if (ctl_scsiio_lun_check(lun, entry, ctsio) != 0) {
 		mtx_unlock(&lun->lun_lock);
 		ctl_done((union ctl_io *)ctsio);
-		return (retval);
+		return;
 	}
 
 	/*
@@ -11613,19 +11610,19 @@ ctl_scsiio_precheck(struct ctl_softc *softc, struct ctl_scsiio *ctsio)
 		    M_WAITOK)) > CTL_HA_STATUS_SUCCESS) {
 			ctl_set_busy(ctsio);
 			ctl_done((union ctl_io *)ctsio);
-			return (retval);
+			return;
 		}
-		return (retval);
+		return;
 	}
 
-	bio = (union ctl_io *)TAILQ_PREV(&ctsio->io_hdr, ctl_ooaq, ooa_links);
+	bio = (union ctl_io *)LIST_NEXT(&ctsio->io_hdr, ooa_links);
 	switch (ctl_check_ooa(lun, (union ctl_io *)ctsio, &bio)) {
 	case CTL_ACTION_BLOCK:
 		ctsio->io_hdr.blocker = bio;
 		TAILQ_INSERT_TAIL(&bio->io_hdr.blocked_queue, &ctsio->io_hdr,
 				  blocked_links);
 		mtx_unlock(&lun->lun_lock);
-		return (retval);
+		break;
 	case CTL_ACTION_PASS:
 	case CTL_ACTION_SKIP:
 		ctsio->io_hdr.flags |= CTL_FLAG_IS_WAS_ON_RTR;
@@ -11651,7 +11648,6 @@ ctl_scsiio_precheck(struct ctl_softc *softc, struct ctl_scsiio *ctsio)
 		ctl_done((union ctl_io *)ctsio);
 		break;
 	}
-	return (retval);
 }
 
 const struct ctl_cmd_entry *
@@ -11827,15 +11823,14 @@ ctl_target_reset(union ctl_io *io)
 static void
 ctl_do_lun_reset(struct ctl_lun *lun, uint32_t initidx, ctl_ua_type ua_type)
 {
-	union ctl_io *xio;
+	struct ctl_io_hdr *xioh;
 	int i;
 
 	mtx_lock(&lun->lun_lock);
 	/* Abort tasks. */
-	for (xio = (union ctl_io *)TAILQ_FIRST(&lun->ooa_queue); xio != NULL;
-	     xio = (union ctl_io *)TAILQ_NEXT(&xio->io_hdr, ooa_links)) {
-		xio->io_hdr.flags |= CTL_FLAG_ABORT | CTL_FLAG_ABORT_STATUS;
-		ctl_try_unblock_io(lun, xio, FALSE);
+	LIST_FOREACH(xioh, &lun->ooa_queue, ooa_links) {
+		xioh->flags |= CTL_FLAG_ABORT | CTL_FLAG_ABORT_STATUS;
+		ctl_try_unblock_io(lun, (union ctl_io *)xioh, FALSE);
 	}
 	/* Clear CA. */
 	for (i = 0; i < ctl_max_ports; i++) {
@@ -11899,7 +11894,7 @@ static void
 ctl_abort_tasks_lun(struct ctl_lun *lun, uint32_t targ_port, uint32_t init_id,
     int other_sc)
 {
-	union ctl_io *xio;
+	struct ctl_io_hdr *xioh;
 
 	mtx_assert(&lun->lun_lock, MA_OWNED);
 
@@ -11910,20 +11905,20 @@ ctl_abort_tasks_lun(struct ctl_lun *lun, uint32_t targ_port, uint32_t init_id,
 	 * untagged command to abort, simply abort the first untagged command
 	 * we come to.  We only allow one untagged command at a time of course.
 	 */
-	for (xio = (union ctl_io *)TAILQ_FIRST(&lun->ooa_queue); xio != NULL;
-	     xio = (union ctl_io *)TAILQ_NEXT(&xio->io_hdr, ooa_links)) {
+	LIST_FOREACH(xioh, &lun->ooa_queue, ooa_links) {
+		union ctl_io *xio = (union ctl_io *)xioh;
 		if ((targ_port == UINT32_MAX ||
-		     targ_port == xio->io_hdr.nexus.targ_port) &&
+		     targ_port == xioh->nexus.targ_port) &&
 		    (init_id == UINT32_MAX ||
-		     init_id == xio->io_hdr.nexus.initid)) {
-			if (targ_port != xio->io_hdr.nexus.targ_port ||
-			    init_id != xio->io_hdr.nexus.initid)
-				xio->io_hdr.flags |= CTL_FLAG_ABORT_STATUS;
-			xio->io_hdr.flags |= CTL_FLAG_ABORT;
+		     init_id == xioh->nexus.initid)) {
+			if (targ_port != xioh->nexus.targ_port ||
+			    init_id != xioh->nexus.initid)
+				xioh->flags |= CTL_FLAG_ABORT_STATUS;
+			xioh->flags |= CTL_FLAG_ABORT;
 			if (!other_sc && !(lun->flags & CTL_LUN_PRIMARY_SC)) {
 				union ctl_ha_msg msg_info;
 
-				msg_info.hdr.nexus = xio->io_hdr.nexus;
+				msg_info.hdr.nexus = xioh->nexus;
 				msg_info.task.task_action = CTL_TASK_ABORT_TASK;
 				msg_info.task.tag_num = xio->scsiio.tag_num;
 				msg_info.task.tag_type = xio->scsiio.tag_type;
@@ -12036,7 +12031,7 @@ static int
 ctl_abort_task(union ctl_io *io)
 {
 	struct ctl_softc *softc = CTL_SOFTC(io);
-	union ctl_io *xio;
+	struct ctl_io_hdr *xioh;
 	struct ctl_lun *lun;
 	uint32_t targ_lun;
 
@@ -12061,11 +12056,11 @@ ctl_abort_task(union ctl_io *io)
 	 * untagged command to abort, simply abort the first untagged command
 	 * we come to.  We only allow one untagged command at a time of course.
 	 */
-	for (xio = (union ctl_io *)TAILQ_FIRST(&lun->ooa_queue); xio != NULL;
-	     xio = (union ctl_io *)TAILQ_NEXT(&xio->io_hdr, ooa_links)) {
-		if ((xio->io_hdr.nexus.targ_port != io->io_hdr.nexus.targ_port)
-		 || (xio->io_hdr.nexus.initid != io->io_hdr.nexus.initid)
-		 || (xio->io_hdr.flags & CTL_FLAG_ABORT))
+	LIST_FOREACH(xioh, &lun->ooa_queue, ooa_links) {
+		union ctl_io *xio = (union ctl_io *)xioh;
+		if ((xioh->nexus.targ_port != io->io_hdr.nexus.targ_port)
+		 || (xioh->nexus.initid != io->io_hdr.nexus.initid)
+		 || (xioh->flags & CTL_FLAG_ABORT))
 			continue;
 
 		/*
@@ -12090,7 +12085,7 @@ ctl_abort_task(union ctl_io *io)
 		 */
 		if (xio->scsiio.tag_num == io->taskio.tag_num) {
 #endif
-			xio->io_hdr.flags |= CTL_FLAG_ABORT;
+			xioh->flags |= CTL_FLAG_ABORT;
 			if ((io->io_hdr.flags & CTL_FLAG_FROM_OTHER_SC) == 0 &&
 			    !(lun->flags & CTL_LUN_PRIMARY_SC)) {
 				union ctl_ha_msg msg_info;
@@ -12117,7 +12112,7 @@ static int
 ctl_query_task(union ctl_io *io, int task_set)
 {
 	struct ctl_softc *softc = CTL_SOFTC(io);
-	union ctl_io *xio;
+	struct ctl_io_hdr *xioh;
 	struct ctl_lun *lun;
 	int found = 0;
 	uint32_t targ_lun;
@@ -12132,11 +12127,11 @@ ctl_query_task(union ctl_io *io, int task_set)
 	}
 	mtx_lock(&lun->lun_lock);
 	mtx_unlock(&softc->ctl_lock);
-	for (xio = (union ctl_io *)TAILQ_FIRST(&lun->ooa_queue); xio != NULL;
-	     xio = (union ctl_io *)TAILQ_NEXT(&xio->io_hdr, ooa_links)) {
-		if ((xio->io_hdr.nexus.targ_port != io->io_hdr.nexus.targ_port)
-		 || (xio->io_hdr.nexus.initid != io->io_hdr.nexus.initid)
-		 || (xio->io_hdr.flags & CTL_FLAG_ABORT))
+	LIST_FOREACH(xioh, &lun->ooa_queue, ooa_links) {
+		union ctl_io *xio = (union ctl_io *)xioh;
+		if ((xioh->nexus.targ_port != io->io_hdr.nexus.targ_port)
+		 || (xioh->nexus.initid != io->io_hdr.nexus.initid)
+		 || (xioh->flags & CTL_FLAG_ABORT))
 			continue;
 
 		if (task_set || xio->scsiio.tag_num == io->taskio.tag_num) {
@@ -12281,7 +12276,7 @@ ctl_handle_isc(union ctl_io *io)
 		}
 		mtx_lock(&lun->lun_lock);
 		ctl_try_unblock_others(lun, io, TRUE);
-		TAILQ_REMOVE(&lun->ooa_queue, &io->io_hdr, ooa_links);
+		LIST_REMOVE(&io->io_hdr, ooa_links);
 		mtx_unlock(&lun->lun_lock);
 		ctl_free_io(io);
 		break;
@@ -12296,7 +12291,7 @@ ctl_handle_isc(union ctl_io *io)
 		ctl_datamove_remote(io);
 		break;
 	case CTL_MSG_DATAMOVE_DONE:	/* Only used in XFER mode */
-		io->scsiio.be_move_done(io);
+		ctl_datamove_done(io, false);
 		break;
 	case CTL_MSG_FAILOVER:
 		ctl_failover_lun(io);
@@ -12455,6 +12450,45 @@ ctl_datamove_timer_wakeup(void *arg)
 }
 #endif /* CTL_IO_DELAY */
 
+static void
+ctl_datamove_done_process(union ctl_io *io)
+{
+#ifdef CTL_TIME_IO
+	struct bintime cur_bt;
+#endif
+
+	KASSERT(io->io_hdr.io_type == CTL_IO_SCSI,
+	    ("%s: unexpected I/O type %x", __func__, io->io_hdr.io_type));
+
+#ifdef CTL_TIME_IO
+	getbinuptime(&cur_bt);
+	bintime_sub(&cur_bt, &io->io_hdr.dma_start_bt);
+	bintime_add(&io->io_hdr.dma_bt, &cur_bt);
+#endif
+	io->io_hdr.num_dmas++;
+
+	if ((io->io_hdr.port_status != 0) &&
+	    ((io->io_hdr.status & CTL_STATUS_MASK) == CTL_STATUS_NONE ||
+	     (io->io_hdr.status & CTL_STATUS_MASK) == CTL_SUCCESS)) {
+		ctl_set_internal_failure(&io->scsiio, /*sks_valid*/ 1,
+		    /*retry_count*/ io->io_hdr.port_status);
+	} else if (io->scsiio.kern_data_resid != 0 &&
+	    (io->io_hdr.flags & CTL_FLAG_DATA_MASK) == CTL_FLAG_DATA_OUT &&
+	    ((io->io_hdr.status & CTL_STATUS_MASK) == CTL_STATUS_NONE ||
+	     (io->io_hdr.status & CTL_STATUS_MASK) == CTL_SUCCESS)) {
+		ctl_set_invalid_field_ciu(&io->scsiio);
+	} else if (ctl_debug & CTL_DEBUG_CDB_DATA)
+		ctl_data_print(io);
+}
+
+void
+ctl_datamove_done(union ctl_io *io, bool samethr)
+{
+
+	ctl_datamove_done_process(io);
+	io->scsiio.be_move_done(io, samethr);
+}
+
 void
 ctl_datamove(union ctl_io *io)
 {
@@ -12468,39 +12502,7 @@ ctl_datamove(union ctl_io *io)
 	io->scsiio.kern_data_resid = io->scsiio.kern_data_len;
 
 #ifdef CTL_TIME_IO
-	if ((time_uptime - io->io_hdr.start_time) > ctl_time_io_secs) {
-		char str[256];
-		char path_str[64];
-		struct sbuf sb;
-
-		ctl_scsi_path_string(io, path_str, sizeof(path_str));
-		sbuf_new(&sb, str, sizeof(str), SBUF_FIXEDLEN);
-
-		sbuf_cat(&sb, path_str);
-		switch (io->io_hdr.io_type) {
-		case CTL_IO_SCSI:
-			ctl_scsi_command_string(&io->scsiio, NULL, &sb);
-			sbuf_printf(&sb, "\n");
-			sbuf_cat(&sb, path_str);
-			sbuf_printf(&sb, "Tag: 0x%04x/%d, Prio: %d\n",
-				    io->scsiio.tag_num, io->scsiio.tag_type,
-				    io->scsiio.priority);
-			break;
-		case CTL_IO_TASK:
-			sbuf_printf(&sb, "Task Action: %d Tag: 0x%04x/%d\n",
-				    io->taskio.task_action,
-				    io->taskio.tag_num, io->taskio.tag_type);
-			break;
-		default:
-			panic("%s: Invalid CTL I/O type %d\n",
-			    __func__, io->io_hdr.io_type);
-		}
-		sbuf_cat(&sb, path_str);
-		sbuf_printf(&sb, "ctl_datamove: %jd seconds\n",
-			    (intmax_t)time_uptime - io->io_hdr.start_time);
-		sbuf_finish(&sb);
-		printf("%s", sbuf_data(&sb));
-	}
+	getbinuptime(&io->io_hdr.dma_start_bt);
 #endif /* CTL_TIME_IO */
 
 #ifdef CTL_IO_DELAY
@@ -12535,18 +12537,15 @@ ctl_datamove(union ctl_io *io)
 		       io->io_hdr.nexus.targ_port,
 		       io->io_hdr.nexus.targ_lun);
 		io->io_hdr.port_status = 31337;
-		/*
-		 * Note that the backend, in this case, will get the
-		 * callback in its context.  In other cases it may get
-		 * called in the frontend's interrupt thread context.
-		 */
-		io->scsiio.be_move_done(io);
+		ctl_datamove_done_process(io);
+		io->scsiio.be_move_done(io, true);
 		return;
 	}
 
 	/* Don't confuse frontend with zero length data move. */
 	if (io->scsiio.kern_data_len == 0) {
-		io->scsiio.be_move_done(io);
+		ctl_datamove_done_process(io);
+		io->scsiio.be_move_done(io, true);
 		return;
 	}
 
@@ -12633,7 +12632,7 @@ ctl_datamove_remote_write_cb(struct ctl_ha_dt_req *rq)
  * need to push it over to the remote controller's memory.
  */
 static int
-ctl_datamove_remote_dm_write_cb(union ctl_io *io)
+ctl_datamove_remote_dm_write_cb(union ctl_io *io, bool samethr)
 {
 	int retval;
 
@@ -12672,7 +12671,7 @@ ctl_datamove_remote_write(union ctl_io *io)
 }
 
 static int
-ctl_datamove_remote_dm_read_cb(union ctl_io *io)
+ctl_datamove_remote_dm_read_cb(union ctl_io *io, bool samethr)
 {
 	uint32_t i;
 
@@ -13113,9 +13112,9 @@ ctl_process_done(union ctl_io *io)
 	/*
 	 * Remove this from the OOA queue.
 	 */
-	TAILQ_REMOVE(&lun->ooa_queue, &io->io_hdr, ooa_links);
+	LIST_REMOVE(&io->io_hdr, ooa_links);
 #ifdef CTL_TIME_IO
-	if (TAILQ_EMPTY(&lun->ooa_queue))
+	if (LIST_EMPTY(&lun->ooa_queue))
 		lun->last_busy = getsbinuptime();
 #endif
 
@@ -13124,7 +13123,7 @@ ctl_process_done(union ctl_io *io)
 	 * left on its OOA queue.
 	 */
 	if ((lun->flags & CTL_LUN_INVALID)
-	 && TAILQ_EMPTY(&lun->ooa_queue)) {
+	 && LIST_EMPTY(&lun->ooa_queue)) {
 		mtx_unlock(&lun->lun_lock);
 		ctl_free_lun(lun);
 	} else
@@ -13247,6 +13246,41 @@ ctl_queue(union ctl_io *io)
 		break;
 	default:
 		printf("ctl_queue: unknown I/O type %d\n", io->io_hdr.io_type);
+		return (EINVAL);
+	}
+
+	return (CTL_RETVAL_COMPLETE);
+}
+
+int
+ctl_run(union ctl_io *io)
+{
+	struct ctl_port *port = CTL_PORT(io);
+
+	CTL_DEBUG_PRINT(("ctl_run cdb[0]=%02X\n", io->scsiio.cdb[0]));
+
+#ifdef CTL_TIME_IO
+	io->io_hdr.start_time = time_uptime;
+	getbinuptime(&io->io_hdr.start_bt);
+#endif /* CTL_TIME_IO */
+
+	/* Map FE-specific LUN ID into global one. */
+	io->io_hdr.nexus.targ_mapped_lun =
+	    ctl_lun_map_from_port(port, io->io_hdr.nexus.targ_lun);
+
+	switch (io->io_hdr.io_type) {
+	case CTL_IO_SCSI:
+		if (ctl_debug & CTL_DEBUG_CDB)
+			ctl_io_print(io);
+		ctl_scsiio_precheck(&io->scsiio);
+		break;
+	case CTL_IO_TASK:
+		if (ctl_debug & CTL_DEBUG_CDB)
+			ctl_io_print(io);
+		ctl_run_task(io);
+		break;
+	default:
+		printf("ctl_run: unknown I/O type %d\n", io->io_hdr.io_type);
 		return (EINVAL);
 	}
 
@@ -13384,7 +13418,7 @@ ctl_work_thread(void *arg)
 			if (io->io_hdr.io_type == CTL_IO_TASK)
 				ctl_run_task(io);
 			else
-				ctl_scsiio_precheck(softc, &io->scsiio);
+				ctl_scsiio_precheck(&io->scsiio);
 			continue;
 		}
 		io = (union ctl_io *)STAILQ_FIRST(&thr->rtr_queue);

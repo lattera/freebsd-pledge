@@ -237,8 +237,10 @@ vn_open_cred(struct nameidata *ndp, int *flagp, int cmode, u_int vn_open_flags,
 	struct vattr vat;
 	struct vattr *vap = &vat;
 	int fmode, error;
+	bool first_open;
 
 restart:
+	first_open = false;
 	fmode = *flagp;
 	if ((fmode & (O_CREAT | O_EXCL | O_DIRECTORY)) == (O_CREAT |
 	    O_EXCL | O_DIRECTORY))
@@ -284,8 +286,16 @@ restart:
 #endif
 				error = VOP_CREATE(ndp->ni_dvp, &ndp->ni_vp,
 				    &ndp->ni_cnd, vap);
-			VOP_VPUT_PAIR(ndp->ni_dvp, error == 0 ? &ndp->ni_vp :
-			    NULL, false);
+			vp = ndp->ni_vp;
+			if (error == 0 && (fmode & O_EXCL) != 0 &&
+			    (fmode & (O_EXLOCK | O_SHLOCK)) != 0) {
+				VI_LOCK(vp);
+				vp->v_iflag |= VI_FOPENING;
+				VI_UNLOCK(vp);
+				first_open = true;
+			}
+			VOP_VPUT_PAIR(ndp->ni_dvp, error == 0 ? &vp : NULL,
+			    false);
 			vn_finished_write(mp);
 			if (error) {
 				NDFREE(ndp, NDF_ONLY_PNBUF);
@@ -296,7 +306,6 @@ restart:
 				return (error);
 			}
 			fmode &= ~O_TRUNC;
-			vp = ndp->ni_vp;
 		} else {
 			if (ndp->ni_dvp == ndp->ni_vp)
 				vrele(ndp->ni_dvp);
@@ -326,6 +335,12 @@ restart:
 		vp = ndp->ni_vp;
 	}
 	error = vn_open_vnode(vp, fmode, cred, td, fp);
+	if (first_open) {
+		VI_LOCK(vp);
+		vp->v_iflag &= ~VI_FOPENING;
+		wakeup(vp);
+		VI_UNLOCK(vp);
+	}
 	if (error)
 		goto bad;
 	*flagp = fmode;
@@ -361,6 +376,8 @@ vn_open_vnode_advlock(struct vnode *vp, int fmode, struct file *fp)
 	type = F_FLOCK;
 	if ((fmode & FNONBLOCK) == 0)
 		type |= F_WAIT;
+	if ((fmode & (O_CREAT | O_EXCL)) == (O_CREAT | O_EXCL))
+		type |= F_FIRSTOPEN;
 	error = VOP_ADVLOCK(vp, (caddr_t)fp, F_SETLK, &lf, type);
 	if (error == 0)
 		fp->f_flag |= FHASLOCK;

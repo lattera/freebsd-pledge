@@ -42,6 +42,10 @@
 #ifndef	_CTL_IO_H_
 #define	_CTL_IO_H_
 
+#ifndef _KERNEL
+#include <stdbool.h>
+#endif
+
 #define	CTL_MAX_CDBLEN	32
 /*
  * Uncomment this next line to enable printing out times for I/Os
@@ -242,7 +246,7 @@ struct ctl_io_hdr {
 	union ctl_priv	  ctl_private[CTL_NUM_PRIV];/* CTL private area */
 	TAILQ_HEAD(, ctl_io_hdr) blocked_queue;	/* I/Os blocked by this one */
 	STAILQ_ENTRY(ctl_io_hdr) links;	/* linked list pointer */
-	TAILQ_ENTRY(ctl_io_hdr) ooa_links;	/* ooa_queue links */
+	LIST_ENTRY(ctl_io_hdr) ooa_links;	/* ooa_queue links */
 	TAILQ_ENTRY(ctl_io_hdr) blocked_links;	/* blocked_queue links */
 };
 
@@ -329,7 +333,7 @@ struct ctl_scsiio {
 	ctl_tag_type tag_type;		/* simple, ordered, head of queue,etc.*/
 	uint8_t    cdb_len;		/* CDB length */
 	uint8_t	   cdb[CTL_MAX_CDBLEN];	/* CDB */
-	int	   (*be_move_done)(union ctl_io *io); /* called by fe */
+	int	   (*be_move_done)(union ctl_io *io, bool samethr); /* called by fe */
 	int        (*io_cont)(union ctl_io *io); /* to continue processing */
 	ctl_ref	    kern_data_ref;	/* Method to reference/release data */
 	void	   *kern_data_arg;	/* Opaque argument for kern_data_ref() */

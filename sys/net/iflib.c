@@ -2454,7 +2454,7 @@ iflib_init_locked(if_ctx_t ctx)
 		callout_stop(&txq->ift_netmap_timer);
 #endif /* DEV_NETMAP */
 		CALLOUT_UNLOCK(txq);
-		iflib_netmap_txq_init(ctx, txq);
+		(void)iflib_netmap_txq_init(ctx, txq);
 	}
 
 	/*
@@ -2973,8 +2973,6 @@ iflib_rxeof(iflib_rxq_t rxq, qidx_t budget)
 		if (!IP_ALIGNED(m) && (m = iflib_fixup_rx(m)) == NULL)
 			continue;
 #endif
-		rx_bytes += m->m_pkthdr.len;
-		rx_pkts++;
 #if defined(INET6) || defined(INET)
 		if (lro_enabled) {
 			if (!lro_possible) {

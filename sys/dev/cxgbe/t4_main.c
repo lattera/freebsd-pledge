@@ -4754,13 +4754,19 @@ get_params__post_init(struct adapter *sc)
 		sc->vres.key.size = val[1] - val[0] + 1;
 	}
 
-	t4_init_sge_params(sc);
-
 	/*
-	 * We've got the params we wanted to query via the firmware.  Now grab
-	 * some others directly from the chip.
+	 * We've got the params we wanted to query directly from the firmware.
+	 * Grab some others via other means.
 	 */
-	rc = t4_read_chip_settings(sc);
+	t4_init_sge_params(sc);
+	t4_init_tp_params(sc);
+	t4_read_mtu_tbl(sc, sc->params.mtus, NULL);
+	t4_load_mtus(sc, sc->params.mtus, sc->params.a_wnd, sc->params.b_wnd);
+
+	rc = t4_verify_chip_settings(sc);
+	if (rc != 0)
+		return (rc);
+	t4_init_rx_buf_info(sc);
 
 	return (rc);
 }
@@ -10963,6 +10969,9 @@ t4_ioctl(struct cdev *dev, unsigned long cmd, caddr_t data, int fflag,
 		break;
 	case CHELSIO_T4_SET_FILTER_MODE:
 		rc = set_filter_mode(sc, *(uint32_t *)data);
+		break;
+	case CHELSIO_T4_SET_FILTER_MASK:
+		rc = set_filter_mask(sc, *(uint32_t *)data);
 		break;
 	case CHELSIO_T4_GET_FILTER:
 		rc = get_filter(sc, (struct t4_filter *)data);

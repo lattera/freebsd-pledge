@@ -423,10 +423,25 @@ int
 vop_stdadvlock(struct vop_advlock_args *ap)
 {
 	struct vnode *vp;
+	struct mount *mp;
 	struct vattr vattr;
 	int error;
 
 	vp = ap->a_vp;
+
+	/*
+	 * Provide atomicity of open(O_CREAT | O_EXCL | O_EXLOCK) for
+	 * local filesystems.  See vn_open_cred() for reciprocal part.
+	 */
+	mp = vp->v_mount;
+	if (mp != NULL && (mp->mnt_flag & MNT_LOCAL) != 0 &&
+	    ap->a_op == F_SETLK && (ap->a_flags & F_FIRSTOPEN) == 0) {
+		VI_LOCK(vp);
+		while ((vp->v_iflag & VI_FOPENING) != 0)
+			msleep(vp, VI_MTX(vp), PLOCK, "lockfo", 0);
+		VI_UNLOCK(vp);
+	}
+
 	if (ap->a_fl->l_whence == SEEK_END) {
 		/*
 		 * The NFSv4 server must avoid doing a vn_lock() here, since it
@@ -665,7 +680,6 @@ vop_stdgetwritemount(ap)
 	} */ *ap;
 {
 	struct mount *mp;
-	struct mount_pcpu *mpcpu;
 	struct vnode *vp;
 
 	/*
@@ -678,29 +692,7 @@ vop_stdgetwritemount(ap)
 	 * with releasing it.
 	 */
 	vp = ap->a_vp;
-	mp = vp->v_mount;
-	if (mp == NULL) {
-		*(ap->a_mpp) = NULL;
-		return (0);
-	}
-	if (vfs_op_thread_enter(mp, mpcpu)) {
-		if (mp == vp->v_mount) {
-			vfs_mp_count_add_pcpu(mpcpu, ref, 1);
-			vfs_op_thread_exit(mp, mpcpu);
-		} else {
-			vfs_op_thread_exit(mp, mpcpu);
-			mp = NULL;
-		}
-	} else {
-		MNT_ILOCK(mp);
-		if (mp == vp->v_mount) {
-			MNT_REF(mp);
-			MNT_IUNLOCK(mp);
-		} else {
-			MNT_IUNLOCK(mp);
-			mp = NULL;
-		}
-	}
+	mp = vfs_ref_from_vp(vp);
 	*(ap->a_mpp) = mp;
 	return (0);
 }

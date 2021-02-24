@@ -470,6 +470,7 @@ tcp_lro_rx_ipv4(struct lro_ctrl *lc, struct mbuf *m, struct ip *ip4,
 }
 #endif
 
+#ifdef TCPHPTS
 static void
 tcp_lro_log(struct tcpcb *tp, struct lro_ctrl *lc,
 	    struct lro_entry *le, struct mbuf *m, int frm, int32_t tcp_data_len,
@@ -520,6 +521,7 @@ tcp_lro_log(struct tcpcb *tp, struct lro_ctrl *lc,
 			       0, &log, false, &tv);
 	}
 }
+#endif
 
 static void
 tcp_flush_out_le(struct tcpcb *tp, struct lro_ctrl *lc, struct lro_entry *le)
@@ -1293,6 +1295,7 @@ lro_set_mtime(struct timeval *tv, struct timespec *ts)
 	tv->tv_usec = ts->tv_nsec / 1000;
 }
 
+#ifdef TCPHPTS
 static void
 build_ack_entry(struct tcp_ackent *ae, struct tcphdr *th, struct mbuf *m, uint16_t hdr_len, uint16_t iptos)
 {
@@ -1353,7 +1356,9 @@ do_bpf_and_csum(struct inpcb *inp, struct lro_ctrl *lc, struct lro_entry *le,
 
 	uint16_t drop_hdrlen;
 	int etype, tlen;
+#ifdef INET
 	uint8_t iptos;
+#endif
 
 	/* Let the BPF see the packet */
 	if (bpf_req && lc->ifp)
@@ -1487,6 +1492,7 @@ do_bpf_and_csum(struct inpcb *inp, struct lro_ctrl *lc, struct lro_entry *le,
 	} /* end switch */
 	return (m);
 }
+#endif
 
 static int
 tcp_lro_rx2(struct lro_ctrl *lc, struct mbuf *m, uint32_t csum, int use_hash)

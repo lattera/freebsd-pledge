@@ -42,6 +42,9 @@
 #include <libxo/xo.h>
 #include <ucl.h>
 
+#define BHYVE_RUN_DIR "/var/run/bhyve/"
+#define MAX_SNAPSHOT_VMNAME 100
+
 struct vmctx;
 
 struct restore_state {
@@ -55,6 +58,16 @@ struct restore_state {
 
 	struct ucl_parser *meta_parser;
 	ucl_object_t *meta_root_obj;
+};
+
+enum checkpoint_opcodes {
+	START_CHECKPOINT = 0,
+	START_SUSPEND = 1,
+};
+
+struct checkpoint_op {
+	unsigned int op;
+	char snapshot_filename[MAX_SNAPSHOT_VMNAME];
 };
 
 struct checkpoint_thread_info {

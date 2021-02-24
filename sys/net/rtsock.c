@@ -1324,10 +1324,36 @@ fill_sockaddr_inet6(struct sockaddr_in6 *sin6, const struct in6_addr *addr6,
 }
 #endif
 
+/*
+ * Checks if gateway is suitable for lltable operations.
+ * Lltable code requires AF_LINK gateway with ifindex
+ *  and mac address specified.
+ * Returns 0 on success.
+ */
+static int
+cleanup_xaddrs_lladdr(struct rt_addrinfo *info)
+{
+	struct sockaddr_dl *sdl = (struct sockaddr_dl *)info->rti_info[RTAX_GATEWAY];
+
+	if (sdl->sdl_family != AF_LINK)
+		return (EINVAL);
+
+	if (sdl->sdl_index == 0)
+		return (EINVAL);
+
+	if (offsetof(struct sockaddr_dl, sdl_data) + sdl->sdl_nlen + sdl->sdl_alen > sdl->sdl_len)
+		return (EINVAL);
+
+	return (0);
+}
+
 static int
 cleanup_xaddrs_gateway(struct rt_addrinfo *info)
 {
 	struct sockaddr *gw = info->rti_info[RTAX_GATEWAY];
+
+	if (info->rti_flags & RTF_LLDATA)
+		return (cleanup_xaddrs_lladdr(info));
 
 	switch (gw->sa_family) {
 #ifdef INET
@@ -1377,6 +1403,14 @@ cleanup_xaddrs_gateway(struct rt_addrinfo *info)
 	return (0);
 }
 
+static void
+remove_netmask(struct rt_addrinfo *info)
+{
+	info->rti_info[RTAX_NETMASK] = NULL;
+	info->rti_flags |= RTF_HOST;
+	info->rti_addrs &= ~RTA_NETMASK;
+}
+
 #ifdef INET
 static int
 cleanup_xaddrs_inet(struct rt_addrinfo *info)
@@ -1406,11 +1440,8 @@ cleanup_xaddrs_inet(struct rt_addrinfo *info)
 
 	if (mask.s_addr != INADDR_BROADCAST)
 		fill_sockaddr_inet(mask_sa, mask);
-	else {
-		info->rti_info[RTAX_NETMASK] = NULL;
-		info->rti_flags |= RTF_HOST;
-		info->rti_addrs &= ~RTA_NETMASK;
-	}
+	else
+		remove_netmask(info);
 
 	/* Check gateway */
 	if (info->rti_info[RTAX_GATEWAY] != NULL)
@@ -1446,11 +1477,8 @@ cleanup_xaddrs_inet6(struct rt_addrinfo *info)
 
 	if (!IN6_ARE_ADDR_EQUAL(&mask, &in6mask128))
 		fill_sockaddr_inet6(mask_sa, &mask, 0);
-	else {
-		info->rti_info[RTAX_NETMASK] = NULL;
-		info->rti_flags |= RTF_HOST;
-		info->rti_addrs &= ~RTA_NETMASK;
-	}
+	else
+		remove_netmask(info);
 
 	/* Check gateway */
 	if (info->rti_info[RTAX_GATEWAY] != NULL)
@@ -1467,6 +1495,15 @@ cleanup_xaddrs(struct rt_addrinfo *info)
 
 	if (info->rti_info[RTAX_DST] == NULL)
 		return (EINVAL);
+
+	if (info->rti_flags & RTF_LLDATA) {
+		/*
+		 * arp(8)/ndp(8) sends RTA_NETMASK for the associated
+		 * prefix along with the actual address in RTA_DST.
+		 * Remove netmask to avoid unnecessary address masking.
+		 */
+		remove_netmask(info);
+	}
 
 	switch (info->rti_info[RTAX_DST]->sa_family) {
 #ifdef INET
