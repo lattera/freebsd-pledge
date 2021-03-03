@@ -704,10 +704,9 @@ do_unveil_add(struct thread *td, struct unveil_base *base, int flags, struct unv
 	struct nameidata nd;
 	uint64_t ndflags;
 	int error;
-	if ((ctl.atflags & ~(AT_SYMLINK_NOFOLLOW | AT_BENEATH | AT_RESOLVE_BENEATH)) != 0)
+	if ((ctl.atflags & ~(AT_SYMLINK_NOFOLLOW | AT_RESOLVE_BENEATH)) != 0)
 		return (EINVAL);
 	ndflags = (ctl.atflags & AT_SYMLINK_NOFOLLOW ? NOFOLLOW : FOLLOW) |
-	    (ctl.atflags & AT_BENEATH ? BENEATH : 0) |
 	    (ctl.atflags & AT_RESOLVE_BENEATH ? RBENEATH : 0);
 	NDINIT_ATRIGHTS(&nd, LOOKUP, ndflags,
 	    UIO_USERSPACE, ctl.path, ctl.atfd, &cap_fstat_rights, td);
