@@ -340,18 +340,6 @@ unveil_node_freeze(struct unveil_node *node, enum unveil_on on, unveil_perms kee
 	node->frozen_uperms[on] &= uperms_expand(keep | unveil_node_wanted_perms(node, on));
 }
 
-static void
-unveil_node_exec_to_curr(struct unveil_node *node)
-{
-	const int s = UNVEIL_ON_EXEC, d = UNVEIL_ON_SELF;
-	unveil_node_freeze(node, s, UPERM_NONE);
-	node->frozen_uperms[d] = node->frozen_uperms[s];
-	for (int j = 0; j < UNVEIL_SLOT_COUNT; j++) {
-		node->wanted_uperms[d][j] = node->wanted_uperms[s][j];
-		node->wanted_final[d][j] = node->wanted_final[s][j];
-	}
-}
-
 
 #define UNVEIL_WRITE_BEGIN(base) \
     do { sx_xlock(&(base)->sx); unveil_base_own(base); } while (0)
@@ -366,13 +354,20 @@ unveil_node_exec_to_curr(struct unveil_node *node)
 void
 unveil_proc_exec_switch(struct thread *td)
 {
+	const int s = UNVEIL_ON_EXEC, d = UNVEIL_ON_SELF;
 	struct unveil_base *base = &td->td_proc->p_unveils;
-	if ((base->on[UNVEIL_ON_SELF].active = base->on[UNVEIL_ON_EXEC].active)) {
+	if ((base->on[d].active = base->on[s].active)) {
 		struct unveil_node *node;
-		base->on[UNVEIL_ON_SELF].frozen = base->on[UNVEIL_ON_EXEC].frozen = true;
+		base->on[d].frozen = base->on[s].frozen = true;
 		unveil_base_own(base);
-		UNVEIL_FOREACH(node, base)
-			unveil_node_exec_to_curr(node);
+		UNVEIL_FOREACH(node, base) {
+			unveil_node_freeze(node, s, UPERM_NONE);
+			node->frozen_uperms[d] = node->frozen_uperms[s];
+			for (int j = 0; j < UNVEIL_SLOT_COUNT; j++) {
+				node->wanted_uperms[d][j] = node->wanted_uperms[s][j];
+				node->wanted_final[d][j] = node->wanted_final[s][j];
+			}
+		}
 #if 0
 		/*
 		 * Since unveil_node_exec_to_curr() freezes the nodes (in a
@@ -395,7 +390,7 @@ unveil_proc_exec_switch(struct thread *td)
 		 * must provide a clean execution environment for programs with
 		 * elevated privileges.
 		 */
-		base->on[UNVEIL_ON_SELF].frozen = base->on[UNVEIL_ON_EXEC].frozen = false;
+		base->on[d].frozen = base->on[s].frozen = false;
 		unveil_base_clear(base);
 	}
 	unveil_base_check(base);
