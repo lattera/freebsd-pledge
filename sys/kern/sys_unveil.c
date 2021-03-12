@@ -337,9 +337,7 @@ unveil_node_wanted_perms(struct unveil_node *node, enum unveil_on on)
 static void
 unveil_node_freeze(struct unveil_node *node, enum unveil_on on, unveil_perms keep)
 {
-	node->frozen_uperms[on] =
-	    uperms_expand(node->frozen_uperms[on]) &
-	    uperms_expand(keep | unveil_node_wanted_perms(node, on));
+	node->frozen_uperms[on] &= uperms_expand(keep | unveil_node_wanted_perms(node, on));
 }
 
 static void
@@ -471,7 +469,7 @@ unveil_remember(struct unveil_base *base, struct unveil_traversal *trav,
 
 	if (name && final) {
 		FOREACH_FLAGS_SLOT(trav->save->flags, i, j) {
-			node->wanted_uperms[i][j] = trav->save->uperms;
+			node->wanted_uperms[i][j] = uperms_expand(trav->save->uperms);
 			node->wanted_final[i][j] = (trav->save->flags & UNVEILCTL_NOINHERIT) != 0;
 		}
 	} else if (trav->save->flags & UNVEILCTL_INSPECTABLE) {
