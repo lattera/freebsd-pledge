@@ -232,7 +232,7 @@ static bool unveils_table_sorted = false;
 
 static struct promise_unveil {
 	const char *path;
-	unveil_perms_t perms : 8;
+	unveil_perms uperms : 8;
 	enum promise_type type : 8;
 } unveils_table[] = {
 #define	I UPERM_INSPECT
@@ -356,7 +356,7 @@ pledge_unveil_fixup_path(bool tainted, bool for_exec, const char *path)
 }
 
 static void
-promises_needed_for_uperms(bool *promises, unveil_perms_t uperms)
+promises_needed_for_uperms(bool *promises, unveil_perms uperms)
 {
 	if (uperms & UPERM_RPATH) promises[PROMISE_RPATH] = true;
 	if (uperms & UPERM_WPATH) promises[PROMISE_WPATH] = true;
@@ -370,10 +370,10 @@ promises_needed_for_uperms(bool *promises, unveil_perms_t uperms)
 	}
 }
 
-static unveil_perms_t
+static unveil_perms
 retained_uperms_for_promises(const bool *promises)
 {
-	unveil_perms_t uperms = UPERM_INSPECT;
+	unveil_perms uperms = UPERM_INSPECT;
 	if (promises[PROMISE_RPATH]) uperms |= UPERM_RPATH;
 	if (promises[PROMISE_WPATH]) uperms |= UPERM_WPATH;
 	if (promises[PROMISE_CPATH]) uperms |= UPERM_CPATH;
@@ -387,7 +387,7 @@ retained_uperms_for_promises(const bool *promises)
 }
 
 static int
-unveil_path(int flags, const char *path, unveil_perms_t uperms)
+unveil_path(int flags, const char *path, unveil_perms uperms)
 {
 	struct unveilctl ctl = { .atfd = AT_FDCWD, .path = path, .uperms = uperms };
 	int r;
@@ -398,7 +398,7 @@ unveil_path(int flags, const char *path, unveil_perms_t uperms)
 }
 
 static int
-unveil_op(int flags, unveil_perms_t uperms)
+unveil_op(int flags, unveil_perms uperms)
 {
 	struct unveilctl ctl = { .atfd = -1, .path = NULL, .uperms = uperms };
 	int r;
@@ -416,7 +416,7 @@ do_pledge_unveils(const bool *req_promises, bool for_exec, int *sysfils)
 	const struct promise_unveil *pu;
 	const char *path;
 	bool tainted;
-	unveil_perms_t need_uperms, req_uperms;
+	unveil_perms need_uperms, req_uperms;
 	int flags, flags1;
 	bool need_promises[PROMISE_COUNT];
 
@@ -440,13 +440,13 @@ do_pledge_unveils(const bool *req_promises, bool for_exec, int *sysfils)
 	flags1 |= unveil_global_flags;
 	need_uperms = UPERM_NONE;
 	for (pu = unveils_table; (*(path = pu->path)); ) {
-		unveil_perms_t uperms = UPERM_NONE;
+		unveil_perms uperms = UPERM_NONE;
 		bool modified = false;
 		do {
 			if (cur_promises[for_exec][pu->type] != req_promises[pu->type])
 				modified = true;
 			if (req_promises[pu->type])
-				uperms |= pu->perms;
+				uperms |= pu->uperms;
 			pu++;
 		} while (strcmp(pu->path, path) == 0);
 		/* maximum unveil permissions we'll need for those promises */
@@ -520,9 +520,9 @@ reserve_pledge_unveils(bool for_exec)
 	tainted = issetugid() != 0;
 	flags1 = flags | unveil_global_flags;
 	for (pu = unveils_table; (*(path = pu->path)); ) {
-		unveil_perms_t uperms = UPERM_NONE;
+		unveil_perms uperms = UPERM_NONE;
 		do {
-			uperms |= pu->perms;
+			uperms |= pu->uperms;
 			pu++;
 		} while (strcmp(pu->path, path) == 0);
 		if ((path = pledge_unveil_fixup_path(tainted, for_exec, path)))
@@ -615,19 +615,19 @@ pledge(const char *promises_str, const char *execpromises_str)
 
 
 static int
-unveil_parse_perms(unveil_perms_t *perms, const char *s)
+unveil_parse_perms(unveil_perms *uperms, const char *s)
 {
-	*perms = UPERM_NONE;
+	*uperms = UPERM_NONE;
 	while (*s)
 		switch (*s++) {
-		case 'r': *perms |= UPERM_RPATH; break;
-		case 'm': *perms |= UPERM_WPATH; break;
-		case 'w': *perms |= UPERM_WPATH; /* FALLTHROUGH */
-		case 'a': *perms |= UPERM_APATH; break;
-		case 'c': *perms |= UPERM_CPATH; break;
-		case 'x': *perms |= UPERM_XPATH; break;
-		case 'i': *perms |= UPERM_INSPECT; break;
-		case 't': *perms |= UPERM_TMPPATH; break;
+		case 'r': *uperms |= UPERM_RPATH; break;
+		case 'm': *uperms |= UPERM_WPATH; break;
+		case 'w': *uperms |= UPERM_WPATH; /* FALLTHROUGH */
+		case 'a': *uperms |= UPERM_APATH; break;
+		case 'c': *uperms |= UPERM_CPATH; break;
+		case 'x': *uperms |= UPERM_XPATH; break;
+		case 'i': *uperms |= UPERM_INSPECT; break;
+		case 't': *uperms |= UPERM_TMPPATH; break;
 		default:
 			return (-1);
 		}
@@ -635,7 +635,7 @@ unveil_parse_perms(unveil_perms_t *perms, const char *s)
 }
 
 static int
-do_unveil(const char *path, int flags, unveil_perms_t perms)
+do_unveil(const char *path, int flags, unveil_perms uperms)
 {
 	int flags1, flags2, req_custom_flags, has_pledge_flags, has_custom_flags;
 
@@ -686,26 +686,26 @@ do_unveil(const char *path, int flags, unveil_perms_t perms)
 	}
 
 	flags1 |= UNVEILCTL_FOR_CUSTOM | unveil_global_flags;
-	return (unveil_path(flags1 | UNVEILCTL_NOINHERIT, path, perms));
+	return (unveil_path(flags1 | UNVEILCTL_NOINHERIT, path, uperms));
 }
 
 int
 unveil_1(const char *path, int flags, const char *perms_str)
 {
-	unveil_perms_t perms;
+	unveil_perms uperms;
 	int r;
 	if ((perms_str == NULL) != (path == NULL)) {
 		errno = EINVAL;
 		return (-1);
 	}
 	if (perms_str) {
-		r = unveil_parse_perms(&perms, perms_str);
+		r = unveil_parse_perms(&uperms, perms_str);
 		if (r < 0) {
 			errno = EINVAL;
 			return (-1);
 		}
 	}
-	return (do_unveil(path, flags, perms));
+	return (do_unveil(path, flags, uperms));
 }
 
 int

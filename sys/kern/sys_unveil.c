@@ -53,8 +53,8 @@ struct unveil_node {
 	char *name;
 	u_char name_len;
 	bool fully_covered;
-	unveil_perms_t frozen_perms[UNVEIL_ON_COUNT];
-	unveil_perms_t wanted_perms[UNVEIL_ON_COUNT][UNVEIL_SLOT_COUNT];
+	unveil_perms frozen_uperms[UNVEIL_ON_COUNT];
+	unveil_perms wanted_uperms[UNVEIL_ON_COUNT][UNVEIL_SLOT_COUNT];
 	bool wanted_final[UNVEIL_ON_COUNT][UNVEIL_SLOT_COUNT];
 };
 
@@ -178,9 +178,9 @@ unveil_tree_dup(struct unveil_tree *old_tree)
 		MPASS(inserted);
 		new_node->fully_covered = old_node->fully_covered;
 		for (int i = 0; i < UNVEIL_ON_COUNT; i++) {
-			new_node->frozen_perms[i] = old_node->frozen_perms[i];
+			new_node->frozen_uperms[i] = old_node->frozen_uperms[i];
 			for (int j = 0; j < UNVEIL_SLOT_COUNT; j++) {
-				new_node->wanted_perms[i][j] = old_node->wanted_perms[i][j];
+				new_node->wanted_uperms[i][j] = old_node->wanted_uperms[i][j];
 				new_node->wanted_final[i][j] = old_node->wanted_final[i][j];
 			}
 		}
@@ -287,30 +287,30 @@ unveil_base_free(struct unveil_base *base)
 }
 
 
-static const unveil_perms_t uperms_noninheritable = UPERM_INSPECT | UPERM_TMPPATH;
+static const unveil_perms uperms_noninheritable = UPERM_INSPECT | UPERM_TMPPATH;
 
-static inline unveil_perms_t
-unveil_uperms_expand(unveil_perms_t perms)
+static inline unveil_perms
+unveil_uperms_expand(unveil_perms uperms)
 {
-	if (perms & UPERM_RPATH) {
-		perms |= UPERM_INSPECT;
-		if (perms & UPERM_WPATH && perms & UPERM_CPATH)
-			perms |= UPERM_TMPPATH;
+	if (uperms & UPERM_RPATH) {
+		uperms |= UPERM_INSPECT;
+		if (uperms & UPERM_WPATH && uperms & UPERM_CPATH)
+			uperms |= UPERM_TMPPATH;
 	}
-	return (perms);
+	return (uperms);
 }
 
 
-static unveil_perms_t
+static unveil_perms
 unveil_node_wanted_perms(struct unveil_node *node, enum unveil_on on)
 {
 	struct unveil_node *node1;
 	bool wanted_final[UNVEIL_SLOT_COUNT], all_final;
-	unveil_perms_t merged_perms;
+	unveil_perms merged_perms;
 	int j;
 	merged_perms = UPERM_NONE;
 	for (all_final = true, j = 0; j < UNVEIL_SLOT_COUNT; j++) {
-		merged_perms |= node->wanted_perms[on][j];
+		merged_perms |= node->wanted_uperms[on][j];
 		if (!(wanted_final[j] = node->wanted_final[on][j]))
 			all_final = false;
 	}
@@ -321,7 +321,7 @@ unveil_node_wanted_perms(struct unveil_node *node, enum unveil_on on)
 	for (node1 = node->cover; !all_final && node1; node1 = node1->cover)
 		for (all_final = true, j = 0; j < UNVEIL_SLOT_COUNT; j++)
 			if (!wanted_final[j]) {
-				merged_perms |= node1->wanted_perms[on][j] &
+				merged_perms |= node1->wanted_uperms[on][j] &
 				    ~uperms_noninheritable;
 				if (!(wanted_final[j] = node1->wanted_final[on][j]))
 					all_final = false;
@@ -330,10 +330,10 @@ unveil_node_wanted_perms(struct unveil_node *node, enum unveil_on on)
 }
 
 static void
-unveil_node_freeze(struct unveil_node *node, enum unveil_on on, unveil_perms_t keep)
+unveil_node_freeze(struct unveil_node *node, enum unveil_on on, unveil_perms keep)
 {
-	node->frozen_perms[on] =
-	    unveil_uperms_expand(node->frozen_perms[on]) &
+	node->frozen_uperms[on] =
+	    unveil_uperms_expand(node->frozen_uperms[on]) &
 	    unveil_uperms_expand(keep | unveil_node_wanted_perms(node, on));
 }
 
@@ -342,9 +342,9 @@ unveil_node_exec_to_curr(struct unveil_node *node)
 {
 	const int s = UNVEIL_ON_EXEC, d = UNVEIL_ON_SELF;
 	unveil_node_freeze(node, s, UPERM_NONE);
-	node->frozen_perms[d] = node->frozen_perms[s];
+	node->frozen_uperms[d] = node->frozen_uperms[s];
 	for (int j = 0; j < UNVEIL_SLOT_COUNT; j++) {
-		node->wanted_perms[d][j] = node->wanted_perms[s][j];
+		node->wanted_uperms[d][j] = node->wanted_uperms[s][j];
 		node->wanted_final[d][j] = node->wanted_final[s][j];
 	}
 }
@@ -378,9 +378,9 @@ unveil_proc_exec_switch(struct thread *td)
 		 */
 		UNVEIL_FOREACH(node, base)
 			for (int i = 0; i < UNVEIL_ON_COUNT; i++) {
-				unveil_perms_t perms = unveil_node_wanted_perms(node, i);
+				unveil_perms uperms = unveil_node_wanted_perms(node, i);
 				for (int j = 0; j < UNVEIL_SLOT_COUNT; j++) {
-					node->wanted_perms[i][j] = perms;
+					node->wanted_uperms[i][j] = uperms;
 					node->wanted_final[i][j] = true;
 				}
 			}
@@ -409,7 +409,7 @@ unveil_proc_exec_switch(struct thread *td)
 
 struct unveil_save {
 	int flags;
-	unveil_perms_t perms;
+	unveil_perms uperms;
 };
 
 static struct unveil_node *
@@ -457,8 +457,8 @@ unveil_remember(struct unveil_base *base, struct unveil_traversal *trav,
 	 */
 	if (inserted)
 		for (int i = 0; i < UNVEIL_ON_COUNT; i++)
-			node->frozen_perms[i] =
-			    trav->cover ? (trav->cover)->frozen_perms[i] & ~uperms_noninheritable :
+			node->frozen_uperms[i] =
+			    trav->cover ? (trav->cover)->frozen_uperms[i] & ~uperms_noninheritable :
 			    base->on[i].frozen ? UPERM_NONE : UPERM_ALL;
 
 	if (trav->save->flags & UNVEILCTL_INTERMEDIATE)
@@ -466,12 +466,12 @@ unveil_remember(struct unveil_base *base, struct unveil_traversal *trav,
 
 	if (name && final) {
 		FOREACH_FLAGS_SLOT(trav->save->flags, i, j) {
-			node->wanted_perms[i][j] = trav->save->perms;
+			node->wanted_uperms[i][j] = trav->save->uperms;
 			node->wanted_final[i][j] = (trav->save->flags & UNVEILCTL_NOINHERIT) != 0;
 		}
 	} else if (trav->save->flags & UNVEILCTL_INSPECTABLE) {
 		FOREACH_FLAGS_SLOT(trav->save->flags, i, j)
-			node->wanted_perms[i][j] |= UPERM_INSPECT;
+			node->wanted_uperms[i][j] |= UPERM_INSPECT;
 	}
 	return (node);
 }
@@ -639,47 +639,47 @@ unveil_traverse_dotdot(struct thread *td, struct unveil_traversal *trav,
 	trav->type = VDIR;
 }
 
-unveil_perms_t
+unveil_perms
 unveil_traverse_effective_uperms(struct thread *td, struct unveil_traversal *trav)
 {
 	struct unveil_base *base = &td->td_proc->p_unveils;
-	unveil_perms_t perms;
+	unveil_perms uperms;
 	if (trav->cover) {
-		perms = unveil_uperms_expand(
-		    trav->cover->frozen_perms[UNVEIL_ON_SELF]);
+		uperms = unveil_uperms_expand(
+		    trav->cover->frozen_uperms[UNVEIL_ON_SELF]);
 		if (!trav->save)
-			perms &= unveil_uperms_expand(
+			uperms &= unveil_uperms_expand(
 			    unveil_node_wanted_perms(trav->cover, UNVEIL_ON_SELF));
 	} else {
 		if (trav->save)
-			perms = base->on[UNVEIL_ON_SELF].frozen ? UPERM_NONE : UPERM_ALL;
+			uperms = base->on[UNVEIL_ON_SELF].frozen ? UPERM_NONE : UPERM_ALL;
 		else
-			perms = base->on[UNVEIL_ON_SELF].active ? UPERM_NONE : UPERM_ALL;
+			uperms = base->on[UNVEIL_ON_SELF].active ? UPERM_NONE : UPERM_ALL;
 	}
 	/* NOTE: This function does not take the depth into consideration. */
-	return (perms);
+	return (uperms);
 }
 
-static void unveil_uperms_rights_1(unveil_perms_t, enum vtype type, uint8_t depth,
+static void unveil_uperms_rights_1(unveil_perms, enum vtype type, uint8_t depth,
     cap_rights_t *);
 
 void
 unveil_traverse_effective_rights(struct thread *td, struct unveil_traversal *trav,
     cap_rights_t *rights, int *suggested_error)
 {
-	unveil_perms_t perms;
-	perms = unveil_traverse_effective_uperms(td, trav);
-	unveil_uperms_rights_1(perms, trav->type, trav->depth, rights);
+	unveil_perms uperms;
+	uperms = unveil_traverse_effective_uperms(td, trav);
+	unveil_uperms_rights_1(uperms, trav->type, trav->depth, rights);
 
 	/* Kludge for directory O_EXEC/O_SEARCH opens. */
-	if (trav->type == VDIR && (perms & UPERM_RPATH))
+	if (trav->type == VDIR && (uperms & UPERM_RPATH))
 		cap_rights_set(rights, CAP_FEXECVE, CAP_EXECAT);
 	/* Kludge for O_CREAT opens. */
-	if (trav->type != VNON && (perms & UPERM_WPATH))
+	if (trav->type != VNON && (uperms & UPERM_WPATH))
 		cap_rights_set(rights, CAP_CREATE);
 
 	if (suggested_error)
-		*suggested_error = perms & ~UPERM_INSPECT ? EACCES : ENOENT;
+		*suggested_error = uperms & ~UPERM_INSPECT ? EACCES : ENOENT;
 }
 
 void
@@ -719,17 +719,17 @@ do_unveil_add(struct thread *td, struct unveil_base *base, int flags, struct unv
 }
 
 static void
-do_unveil_limit(struct unveil_base *base, int flags, unveil_perms_t perms)
+do_unveil_limit(struct unveil_base *base, int flags, unveil_perms uperms)
 {
 	struct unveil_node *node;
 	int i, j;
 	UNVEIL_FOREACH(node, base)
 		FOREACH_FLAGS_SLOT(flags, i, j)
-			node->wanted_perms[i][j] &= unveil_uperms_expand(perms);
+			node->wanted_uperms[i][j] &= unveil_uperms_expand(uperms);
 }
 
 static void
-do_unveil_freeze(struct unveil_base *base, int flags, unveil_perms_t perms)
+do_unveil_freeze(struct unveil_base *base, int flags, unveil_perms uperms)
 {
 	struct unveil_node *node;
 	int i;
@@ -737,7 +737,7 @@ do_unveil_freeze(struct unveil_base *base, int flags, unveil_perms_t perms)
 	    base->on[i].frozen = base->on[i].active = true;
 	UNVEIL_FOREACH(node, base)
 		FOREACH_FLAGS_ON(flags, i)
-			unveil_node_freeze(node, i, perms);
+			unveil_node_freeze(node, i, uperms);
 }
 
 static void
@@ -747,7 +747,7 @@ do_unveil_sweep(struct unveil_base *base, int flags)
 	int i, j;
 	UNVEIL_FOREACH(node, base)
 		FOREACH_FLAGS_SLOT(flags, i, j) {
-			node->wanted_perms[i][j] = UPERM_NONE;
+			node->wanted_uperms[i][j] = UPERM_NONE;
 			node->wanted_final[i][j] = false;
 		}
 }
@@ -853,29 +853,29 @@ static cap_rights_t __read_mostly rcpath_rights;
 static cap_rights_t __read_mostly rwcapath_rights;
 
 static void
-unveil_uperms_rights_1(unveil_perms_t perms, enum vtype type, uint8_t depth,
+unveil_uperms_rights_1(unveil_perms uperms, enum vtype type, uint8_t depth,
     cap_rights_t *rights)
 {
 	CAP_NONE(rights);
-	if (perms & UPERM_INSPECT && depth == 0)
+	if (uperms & UPERM_INSPECT && depth == 0)
 		cap_rights_merge(rights, &inspect_rights);
-	if (perms & UPERM_RPATH)
+	if (uperms & UPERM_RPATH)
 		cap_rights_merge(rights, &rpath_rights);
-	if (perms & UPERM_WPATH)
+	if (uperms & UPERM_WPATH)
 		cap_rights_merge(rights, &wpath_rights);
-	if (perms & UPERM_CPATH) {
+	if (uperms & UPERM_CPATH) {
 		cap_rights_merge(rights, &cpath_rights);
-		if (perms & UPERM_RPATH)
+		if (uperms & UPERM_RPATH)
 			cap_rights_merge(rights, &rcpath_rights);
 	}
-	if (perms & UPERM_XPATH)
+	if (uperms & UPERM_XPATH)
 		cap_rights_merge(rights, &xpath_rights);
-	if (perms & UPERM_APATH) {
+	if (uperms & UPERM_APATH) {
 		cap_rights_merge(rights, &apath_rights);
-		if (perms & UPERM_CPATH && perms & UPERM_WPATH && perms & UPERM_RPATH)
+		if (uperms & UPERM_CPATH && uperms & UPERM_WPATH && uperms & UPERM_RPATH)
 			cap_rights_merge(rights, &rwcapath_rights);
 	}
-	if (perms & UPERM_TMPPATH) {
+	if (uperms & UPERM_TMPPATH) {
 		if (depth == 0)
 			cap_rights_merge(rights, &inspect_rights);
 		else if (depth == 1 && (type == VNON || type == VREG))
@@ -884,9 +884,9 @@ unveil_uperms_rights_1(unveil_perms_t perms, enum vtype type, uint8_t depth,
 }
 
 void
-unveil_uperms_rights(unveil_perms_t perms, cap_rights_t *rights)
+unveil_uperms_rights(unveil_perms uperms, cap_rights_t *rights)
 {
-	return (unveil_uperms_rights_1(perms, VBAD, 0, rights));
+	return (unveil_uperms_rights_1(uperms, VBAD, 0, rights));
 }
 
 static void

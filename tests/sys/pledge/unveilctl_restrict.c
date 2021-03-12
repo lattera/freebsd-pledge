@@ -6,14 +6,14 @@
 #include "util.h"
 
 static int
-unveil_path(int flags, const char *path, unveil_perms_t uperms)
+unveil_path(int flags, const char *path, unveil_perms uperms)
 {
 	struct unveilctl ctl = { .atfd = AT_FDCWD, .path = path, .uperms = uperms };
 	return (unveilctl(flags | UNVEILCTL_UNVEIL, &ctl));
 }
 
 static int
-unveil_op(int flags, unveil_perms_t uperms)
+unveil_op(int flags, unveil_perms uperms)
 {
 	struct unveilctl ctl = { .atfd = -1, .path = NULL, .uperms = uperms };
 	return (unveilctl(flags, &ctl));

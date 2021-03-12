@@ -8,7 +8,7 @@
 #include <stdbool.h>
 #endif
 
-typedef uint8_t unveil_perms_t;
+typedef uint8_t unveil_perms;
 
 #ifdef _KERNEL
 
