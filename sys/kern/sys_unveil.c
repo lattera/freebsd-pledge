@@ -717,37 +717,33 @@ do_unveil_add(struct thread *td, struct unveil_base *base, int flags, struct unv
 }
 
 static void
-do_unveil_limit(struct unveil_base *base, int flags, unveil_perms uperms)
+do_unveil_misc(struct unveil_base *base, int flags, unveil_perms uperms)
 {
 	struct unveil_node *node;
 	int i, j;
-	UNVEIL_FOREACH(node, base)
-		FOREACH_FLAGS_SLOT(flags, i, j)
-			node->wanted_uperms[i][j] &= uperms_expand(uperms);
-}
-
-static void
-do_unveil_freeze(struct unveil_base *base, int flags, unveil_perms uperms)
-{
-	struct unveil_node *node;
-	int i;
-	FOREACH_FLAGS_ON(flags, i)
-	    base->on[i].frozen = base->on[i].active = true;
-	UNVEIL_FOREACH(node, base)
+	if (flags & UNVEILCTL_ACTIVATE) {
 		FOREACH_FLAGS_ON(flags, i)
-			unveil_node_freeze(node, i, uperms);
-}
-
-static void
-do_unveil_sweep(struct unveil_base *base, int flags)
-{
-	struct unveil_node *node;
-	int i, j;
-	UNVEIL_FOREACH(node, base)
-		FOREACH_FLAGS_SLOT(flags, i, j) {
-			node->wanted_uperms[i][j] = UPERM_NONE;
-			node->wanted_final[i][j] = false;
-		}
+			base->on[i].active = true;
+	}
+	if (flags & UNVEILCTL_LIMIT) {
+		UNVEIL_FOREACH(node, base)
+			FOREACH_FLAGS_SLOT(flags, i, j)
+				node->wanted_uperms[i][j] &= uperms_expand(uperms);
+	}
+	if (flags & UNVEILCTL_FREEZE) {
+		FOREACH_FLAGS_ON(flags, i)
+			base->on[i].frozen = base->on[i].active = true;
+		UNVEIL_FOREACH(node, base)
+			FOREACH_FLAGS_ON(flags, i)
+				unveil_node_freeze(node, i, uperms);
+	}
+	if (flags & UNVEILCTL_SWEEP) {
+		UNVEIL_FOREACH(node, base)
+			FOREACH_FLAGS_SLOT(flags, i, j) {
+				node->wanted_uperms[i][j] = UPERM_NONE;
+				node->wanted_final[i][j] = false;
+			}
+	}
 }
 
 #endif /* UNVEIL */
@@ -775,17 +771,7 @@ sys_unveilctl(struct thread *td, struct unveilctl_args *uap)
 	}
 
 	UNVEIL_WRITE_BEGIN(base);
-	if (flags & UNVEILCTL_ACTIVATE) {
-		int i;
-		FOREACH_FLAGS_ON(flags, i)
-		    base->on[i].active = true;
-	}
-	if (flags & UNVEILCTL_LIMIT)
-		do_unveil_limit(base, flags, ctl.uperms);
-	if (flags & UNVEILCTL_FREEZE)
-		do_unveil_freeze(base, flags, ctl.uperms);
-	if (flags & UNVEILCTL_SWEEP)
-		do_unveil_sweep(base, flags);
+	do_unveil_misc(base, flags, ctl.uperms);
 	unveil_base_check(base);
 	UNVEIL_WRITE_END(base);
 	return (0);
