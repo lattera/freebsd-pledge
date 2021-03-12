@@ -22,7 +22,7 @@ unveil_op(int flags, unveil_perms_t uperms)
 int
 main()
 {
-	int fl = UNVEILCTL_FOR_CURR | UNVEILCTL_FOR_SLOT1;
+	int fl = UNVEILCTL_ON_SELF | UNVEILCTL_FOR_SLOT1;
 	int fd;
 
 	EXPECT(unveil_path(fl, "/etc", UPERM_RPATH));

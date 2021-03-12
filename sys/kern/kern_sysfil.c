@@ -327,9 +327,9 @@ sysfil_cred_update(struct ucred *cr,
 			return (EINVAL);
 		sysfilset_fill(&sysfilset, sf);
 		if (!(flags & SYSFILCTL_OPTIONAL) &&
-		     (((flags & SYSFILCTL_FOR_CURR) &&
+		     (((flags & SYSFILCTL_ON_SELF) &&
 		        !SYSFILSET_MATCH(&cr->cr_sysfilset, sf)) ||
-		      ((flags & SYSFILCTL_FOR_EXEC) &&
+		      ((flags & SYSFILCTL_ON_EXEC) &&
 		        !SYSFILSET_MATCH(&cr->cr_sysfilset_exec, sf))))
 				return (EPERM);
 	}
@@ -338,12 +338,12 @@ sysfil_cred_update(struct ucred *cr,
 	 * isn't SYSFIL_USER_VALID()), which means that the sysfilset should
 	 * always be considered to be in "restricted" mode.
 	 */
-	if (flags & SYSFILCTL_FOR_CURR) {
+	if (flags & SYSFILCTL_ON_SELF) {
 		SYSFILSET_MASK(&cr->cr_sysfilset, &sysfilset);
 		MPASS(SYSFILSET_IS_RESTRICTED(&cr->cr_sysfilset));
 		MPASS(CRED_IN_RESTRICTED_MODE(cr));
 	}
-	if (flags & SYSFILCTL_FOR_EXEC) {
+	if (flags & SYSFILCTL_ON_EXEC) {
 		if (SYSFILSET_MATCH(&cr->cr_sysfilset, SYSFIL_EXEC) ||
 		    SYSFILSET_MATCH(&sysfilset, SYSFIL_EXEC))
 			/*
@@ -376,9 +376,9 @@ do_sysfilctl(struct thread *td, int flags, size_t count, const int *sysfils)
 	error = sysfil_cred_update(newcred, flags, count, sysfils);
 	if (!error) {
 		proc_set_cred(p, newcred);
-		if (flags & SYSFILCTL_FOR_CURR && !PROC_IN_RESTRICTED_MODE(p))
+		if (flags & SYSFILCTL_ON_SELF && !PROC_IN_RESTRICTED_MODE(p))
 			panic("PROC_IN_RESTRICTED_MODE() bogus after sysfil(2)");
-		if (flags & SYSFILCTL_FOR_EXEC && !PROC_IN_RESTRICTED_EXEC_MODE(p))
+		if (flags & SYSFILCTL_ON_EXEC && !PROC_IN_RESTRICTED_EXEC_MODE(p))
 			panic("PROC_IN_RESTRICTED_EXEC_MODE() bogus after sysfil(2)");
 	}
 	PROC_UNLOCK(p);
@@ -401,8 +401,8 @@ sys_sysfilctl(struct thread *td, struct sysfilctl_args *uap)
 		return (EINVAL);
 	if (!uap->sysfils)
 		return (EINVAL);
-	if (!(flags & (SYSFILCTL_FOR_CURR | SYSFILCTL_FOR_EXEC)))
-		flags |= SYSFILCTL_FOR_CURR | SYSFILCTL_FOR_EXEC;
+	if (!(flags & (SYSFILCTL_ON_SELF | SYSFILCTL_ON_EXEC)))
+		flags |= SYSFILCTL_ON_SELF | SYSFILCTL_ON_EXEC;
 	sysfils = mallocarray(count, sizeof *sysfils, M_TEMP, M_WAITOK);
 	error = copyin(uap->sysfils, sysfils, count * sizeof *sysfils);
 	if (error)

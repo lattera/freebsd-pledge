@@ -53,9 +53,9 @@ struct unveil_node {
 	char *name;
 	u_char name_len;
 	bool fully_covered;
-	unveil_perms_t frozen_perms[UNVEIL_ROLE_COUNT];
-	unveil_perms_t wanted_perms[UNVEIL_ROLE_COUNT][UNVEIL_SLOT_COUNT];
-	bool wanted_final[UNVEIL_ROLE_COUNT][UNVEIL_SLOT_COUNT];
+	unveil_perms_t frozen_perms[UNVEIL_ON_COUNT];
+	unveil_perms_t wanted_perms[UNVEIL_ON_COUNT][UNVEIL_SLOT_COUNT];
+	bool wanted_final[UNVEIL_ON_COUNT][UNVEIL_SLOT_COUNT];
 };
 
 struct unveil_tree {
@@ -177,7 +177,7 @@ unveil_tree_dup(struct unveil_tree *old_tree)
 		    old_node->name, old_node->name_len, &inserted);
 		MPASS(inserted);
 		new_node->fully_covered = old_node->fully_covered;
-		for (int i = 0; i < UNVEIL_ROLE_COUNT; i++) {
+		for (int i = 0; i < UNVEIL_ON_COUNT; i++) {
 			new_node->frozen_perms[i] = old_node->frozen_perms[i];
 			for (int j = 0; j < UNVEIL_SLOT_COUNT; j++) {
 				new_node->wanted_perms[i][j] = old_node->wanted_perms[i][j];
@@ -205,8 +205,8 @@ static void
 unveil_base_check(struct unveil_base *base)
 {
 #ifdef INVARIANTS
-	for (int i = 0; i < UNVEIL_ROLE_COUNT; i++)
-		KASSERT(base->flags[i].active || !base->flags[i].frozen,
+	for (int i = 0; i < UNVEIL_ON_COUNT; i++)
+		KASSERT(base->on[i].active || !base->on[i].frozen,
 		    ("unveils frozen but not active"));
 	if (base->tree) {
 		MPASS(base->tree->refcount != 0);
@@ -238,8 +238,8 @@ unveil_base_tree_snap(struct unveil_base *base)
 void
 unveil_base_copy(struct unveil_base *dst, struct unveil_base *src)
 {
-	for (int i = 0; i < UNVEIL_ROLE_COUNT; i++)
-		dst->flags[i] = src->flags[i];
+	for (int i = 0; i < UNVEIL_ON_COUNT; i++)
+		dst->on[i] = src->on[i];
 	if (src->tree) {
 		struct unveil_tree *old_tree = dst->tree;
 		dst->tree = unveil_base_tree_snap(src);
@@ -275,8 +275,8 @@ void
 unveil_base_reset(struct unveil_base *base)
 {
 	unveil_base_clear(base);
-	for (int i = 0; i < UNVEIL_ROLE_COUNT; i++)
-		base->flags[i] = (struct unveil_base_flags){ 0 };
+	for (int i = 0; i < UNVEIL_ON_COUNT; i++)
+		base->on[i] = (struct unveil_base_flags){ 0 };
 }
 
 void
@@ -302,7 +302,7 @@ unveil_uperms_expand(unveil_perms_t perms)
 
 
 static unveil_perms_t
-unveil_node_wanted_perms(struct unveil_node *node, enum unveil_role role)
+unveil_node_wanted_perms(struct unveil_node *node, enum unveil_on on)
 {
 	struct unveil_node *node1;
 	bool wanted_final[UNVEIL_SLOT_COUNT], all_final;
@@ -310,8 +310,8 @@ unveil_node_wanted_perms(struct unveil_node *node, enum unveil_role role)
 	int j;
 	merged_perms = UPERM_NONE;
 	for (all_final = true, j = 0; j < UNVEIL_SLOT_COUNT; j++) {
-		merged_perms |= node->wanted_perms[role][j];
-		if (!(wanted_final[j] = node->wanted_final[role][j]))
+		merged_perms |= node->wanted_perms[on][j];
+		if (!(wanted_final[j] = node->wanted_final[on][j]))
 			all_final = false;
 	}
 	/*
@@ -321,26 +321,26 @@ unveil_node_wanted_perms(struct unveil_node *node, enum unveil_role role)
 	for (node1 = node->cover; !all_final && node1; node1 = node1->cover)
 		for (all_final = true, j = 0; j < UNVEIL_SLOT_COUNT; j++)
 			if (!wanted_final[j]) {
-				merged_perms |= node1->wanted_perms[role][j] &
+				merged_perms |= node1->wanted_perms[on][j] &
 				    ~uperms_noninheritable;
-				if (!(wanted_final[j] = node1->wanted_final[role][j]))
+				if (!(wanted_final[j] = node1->wanted_final[on][j]))
 					all_final = false;
 			}
 	return (merged_perms);
 }
 
 static void
-unveil_node_freeze(struct unveil_node *node, enum unveil_role role, unveil_perms_t keep)
+unveil_node_freeze(struct unveil_node *node, enum unveil_on on, unveil_perms_t keep)
 {
-	node->frozen_perms[role] =
-	    unveil_uperms_expand(node->frozen_perms[role]) &
-	    unveil_uperms_expand(keep | unveil_node_wanted_perms(node, role));
+	node->frozen_perms[on] =
+	    unveil_uperms_expand(node->frozen_perms[on]) &
+	    unveil_uperms_expand(keep | unveil_node_wanted_perms(node, on));
 }
 
 static void
 unveil_node_exec_to_curr(struct unveil_node *node)
 {
-	const int s = UNVEIL_ROLE_EXEC, d = UNVEIL_ROLE_CURR;
+	const int s = UNVEIL_ON_EXEC, d = UNVEIL_ON_SELF;
 	unveil_node_freeze(node, s, UPERM_NONE);
 	node->frozen_perms[d] = node->frozen_perms[s];
 	for (int j = 0; j < UNVEIL_SLOT_COUNT; j++) {
@@ -364,9 +364,9 @@ void
 unveil_proc_exec_switch(struct thread *td)
 {
 	struct unveil_base *base = &td->td_proc->p_unveils;
-	if ((base->flags[UNVEIL_ROLE_CURR].active = base->flags[UNVEIL_ROLE_EXEC].active)) {
+	if ((base->on[UNVEIL_ON_SELF].active = base->on[UNVEIL_ON_EXEC].active)) {
 		struct unveil_node *node;
-		base->flags[UNVEIL_ROLE_CURR].frozen = base->flags[UNVEIL_ROLE_EXEC].frozen = true;
+		base->on[UNVEIL_ON_SELF].frozen = base->on[UNVEIL_ON_EXEC].frozen = true;
 		unveil_base_own(base);
 		UNVEIL_FOREACH(node, base)
 			unveil_node_exec_to_curr(node);
@@ -377,7 +377,7 @@ unveil_proc_exec_switch(struct thread *td)
 		 * possible to drop the inheritance from the wanted permissions.
 		 */
 		UNVEIL_FOREACH(node, base)
-			for (int i = 0; i < UNVEIL_ROLE_COUNT; i++) {
+			for (int i = 0; i < UNVEIL_ON_COUNT; i++) {
 				unveil_perms_t perms = unveil_node_wanted_perms(node, i);
 				for (int j = 0; j < UNVEIL_SLOT_COUNT; j++) {
 					node->wanted_perms[i][j] = perms;
@@ -392,18 +392,18 @@ unveil_proc_exec_switch(struct thread *td)
 		 * must provide a clean execution environment for programs with
 		 * elevated privileges.
 		 */
-		base->flags[UNVEIL_ROLE_CURR].frozen = base->flags[UNVEIL_ROLE_EXEC].frozen = false;
+		base->on[UNVEIL_ON_SELF].frozen = base->on[UNVEIL_ON_EXEC].frozen = false;
 		unveil_base_clear(base);
 	}
 	unveil_base_check(base);
 }
 
-#define	FOREACH_ROLE_FLAGS(flags, i) \
-	for (i = 0; i < UNVEIL_ROLE_COUNT; i++) \
-		if ((flags) & (1 << (UNVEILCTL_ROLE_SHIFT + i)))
+#define	FOREACH_FLAGS_ON(flags, i) \
+	for (i = 0; i < UNVEIL_ON_COUNT; i++) \
+		if ((flags) & UNVEILCTL_ON_BOTH & (UNVEILCTL_ON_SELF << i))
 
-#define	FOREACH_SLOT_FLAGS(flags, i, j) \
-	FOREACH_ROLE_FLAGS(flags, i) \
+#define	FOREACH_FLAGS_SLOT(flags, i, j) \
+	FOREACH_FLAGS_ON(flags, i) \
 		for (j = 0; j < UNVEIL_SLOT_COUNT; j++) \
 			if ((flags) & (1 << (UNVEILCTL_SLOT_SHIFT + j)))
 
@@ -456,21 +456,21 @@ unveil_remember(struct unveil_base *base, struct unveil_traversal *trav,
 	 * not come from a node's cover link.
 	 */
 	if (inserted)
-		for (int i = 0; i < UNVEIL_ROLE_COUNT; i++)
+		for (int i = 0; i < UNVEIL_ON_COUNT; i++)
 			node->frozen_perms[i] =
 			    trav->cover ? (trav->cover)->frozen_perms[i] & ~uperms_noninheritable :
-			    base->flags[i].frozen ? UPERM_NONE : UPERM_ALL;
+			    base->on[i].frozen ? UPERM_NONE : UPERM_ALL;
 
 	if (trav->save->flags & UNVEILCTL_INTERMEDIATE)
 		node->fully_covered = true; /* cannot be turned off */
 
 	if (name && final) {
-		FOREACH_SLOT_FLAGS(trav->save->flags, i, j) {
+		FOREACH_FLAGS_SLOT(trav->save->flags, i, j) {
 			node->wanted_perms[i][j] = trav->save->perms;
 			node->wanted_final[i][j] = (trav->save->flags & UNVEILCTL_NOINHERIT) != 0;
 		}
 	} else if (trav->save->flags & UNVEILCTL_INSPECTABLE) {
-		FOREACH_SLOT_FLAGS(trav->save->flags, i, j)
+		FOREACH_FLAGS_SLOT(trav->save->flags, i, j)
 			node->wanted_perms[i][j] |= UPERM_INSPECT;
 	}
 	return (node);
@@ -646,15 +646,15 @@ unveil_traverse_effective_uperms(struct thread *td, struct unveil_traversal *tra
 	unveil_perms_t perms;
 	if (trav->cover) {
 		perms = unveil_uperms_expand(
-		    trav->cover->frozen_perms[UNVEIL_ROLE_CURR]);
+		    trav->cover->frozen_perms[UNVEIL_ON_SELF]);
 		if (!trav->save)
 			perms &= unveil_uperms_expand(
-			    unveil_node_wanted_perms(trav->cover, UNVEIL_ROLE_CURR));
+			    unveil_node_wanted_perms(trav->cover, UNVEIL_ON_SELF));
 	} else {
 		if (trav->save)
-			perms = base->flags[UNVEIL_ROLE_CURR].frozen ? UPERM_NONE : UPERM_ALL;
+			perms = base->on[UNVEIL_ON_SELF].frozen ? UPERM_NONE : UPERM_ALL;
 		else
-			perms = base->flags[UNVEIL_ROLE_CURR].active ? UPERM_NONE : UPERM_ALL;
+			perms = base->on[UNVEIL_ON_SELF].active ? UPERM_NONE : UPERM_ALL;
 	}
 	/* NOTE: This function does not take the depth into consideration. */
 	return (perms);
@@ -724,7 +724,7 @@ do_unveil_limit(struct unveil_base *base, int flags, unveil_perms_t perms)
 	struct unveil_node *node;
 	int i, j;
 	UNVEIL_FOREACH(node, base)
-		FOREACH_SLOT_FLAGS(flags, i, j)
+		FOREACH_FLAGS_SLOT(flags, i, j)
 			node->wanted_perms[i][j] &= unveil_uperms_expand(perms);
 }
 
@@ -733,10 +733,10 @@ do_unveil_freeze(struct unveil_base *base, int flags, unveil_perms_t perms)
 {
 	struct unveil_node *node;
 	int i;
-	FOREACH_ROLE_FLAGS(flags, i)
-	    base->flags[i].frozen = base->flags[i].active = true;
+	FOREACH_FLAGS_ON(flags, i)
+	    base->on[i].frozen = base->on[i].active = true;
 	UNVEIL_FOREACH(node, base)
-		FOREACH_ROLE_FLAGS(flags, i)
+		FOREACH_FLAGS_ON(flags, i)
 			unveil_node_freeze(node, i, perms);
 }
 
@@ -746,7 +746,7 @@ do_unveil_sweep(struct unveil_base *base, int flags)
 	struct unveil_node *node;
 	int i, j;
 	UNVEIL_FOREACH(node, base)
-		FOREACH_SLOT_FLAGS(flags, i, j) {
+		FOREACH_FLAGS_SLOT(flags, i, j) {
 			node->wanted_perms[i][j] = UPERM_NONE;
 			node->wanted_final[i][j] = false;
 		}
@@ -779,8 +779,8 @@ sys_unveilctl(struct thread *td, struct unveilctl_args *uap)
 	UNVEIL_WRITE_BEGIN(base);
 	if (flags & UNVEILCTL_ACTIVATE) {
 		int i;
-		FOREACH_ROLE_FLAGS(flags, i)
-		    base->flags[i].active = true;
+		FOREACH_FLAGS_ON(flags, i)
+		    base->on[i].active = true;
 	}
 	if (flags & UNVEILCTL_LIMIT)
 		do_unveil_limit(base, flags, ctl.uperms);

@@ -36,20 +36,16 @@ enum {
 	UNVEILCTL_INTERMEDIATE = 1 << 9,
 	UNVEILCTL_INSPECTABLE = 1 << 10,
 	UNVEILCTL_NONDIRBYNAME = 1 << 11,
-	UNVEILCTL_ROLE_SHIFT = 16,
-	UNVEILCTL_ROLE_WIDTH = 8,
-	UNVEILCTL_FOR_CURR = 1 << 16,
-	UNVEILCTL_FOR_EXEC = 1 << 17,
-	UNVEILCTL_FOR_ALL_ROLES =
-	    ((1 << UNVEILCTL_ROLE_WIDTH) - 1) << UNVEILCTL_ROLE_SHIFT,
+	UNVEILCTL_ON_SELF = 1 << 16,
+	UNVEILCTL_ON_EXEC = 1 << 17,
+	UNVEILCTL_ON_BOTH = UNVEILCTL_ON_SELF | UNVEILCTL_ON_EXEC,
 	UNVEILCTL_SLOT_SHIFT = 24,
 	UNVEILCTL_SLOT_WIDTH = 8,
 	UNVEILCTL_FOR_SLOT0 = 1 << 24,
 	UNVEILCTL_FOR_SLOT1 = 1 << 25,
 	UNVEILCTL_FOR_ALL_SLOTS =
 	    ((1 << UNVEILCTL_SLOT_WIDTH) - 1) << UNVEILCTL_SLOT_SHIFT,
-	UNVEILCTL_FOR_ALL =
-	    UNVEILCTL_FOR_ALL_ROLES | UNVEILCTL_FOR_ALL_SLOTS,
+	UNVEILCTL_FOR_ALL = UNVEILCTL_ON_BOTH | UNVEILCTL_FOR_ALL_SLOTS,
 };
 
 struct unveilctl {
@@ -67,16 +63,16 @@ int unveilctl(int flags, struct unveilctl *);
 MALLOC_DECLARE(M_UNVEIL);
 #endif
 
-enum unveil_role {
-	UNVEIL_ROLE_CURR,
-	UNVEIL_ROLE_EXEC,
+enum unveil_on {
+	UNVEIL_ON_SELF,
+	UNVEIL_ON_EXEC,
 };
 
 static inline bool
 unveil_is_active(struct thread *td)
 {
 #ifdef UNVEIL
-	return (td->td_proc->p_unveils.flags[UNVEIL_ROLE_CURR].active);
+	return (td->td_proc->p_unveils.on[UNVEIL_ON_SELF].active);
 #else
 	return (false);
 #endif
@@ -86,7 +82,7 @@ static inline bool
 unveil_exec_is_active(struct thread *td)
 {
 #ifdef UNVEIL
-	return (td->td_proc->p_unveils.flags[UNVEIL_ROLE_EXEC].active);
+	return (td->td_proc->p_unveils.on[UNVEIL_ON_EXEC].active);
 #else
 	return (false);
 #endif
