@@ -243,7 +243,7 @@ int	cache_fplookup(struct nameidata *ndp, enum cache_fpl_status *status,
 
 #ifdef UNVEIL
 #define	NDINIT_UNVEIL(_ndp) do { \
-	_ndp->ni_unveil.save = NULL; \
+	_ndp->ni_unveil.save_flags = 0; \
 } while (0)
 #else
 #define	NDINIT_UNVEIL(ndp) do { } while (0)

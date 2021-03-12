@@ -405,11 +405,6 @@ unveil_proc_exec_switch(struct thread *td)
 		for (j = 0; j < UNVEIL_SLOT_COUNT; j++) \
 			if ((flags) & (1 << (UNVEILCTL_SLOT_SHIFT + j)))
 
-struct unveil_save {
-	int flags;
-	unveil_perms uperms;
-};
-
 static struct unveil_node *
 unveil_remember(struct unveil_base *base, struct unveil_traversal *trav,
     struct vnode *dvp, const char *name, size_t name_len, struct vnode *vp, bool final)
@@ -423,7 +418,7 @@ unveil_remember(struct unveil_base *base, struct unveil_traversal *trav,
 
 	if (!name)
 		node = unveil_tree_insert(trav->tree, dvp, NULL, 0, &inserted);
-	else if ((trav->save->flags & UNVEILCTL_NONDIRBYNAME) && (!vp || vp->v_type != VDIR))
+	else if ((trav->save_flags & UNVEILCTL_NONDIRBYNAME) && (!vp || vp->v_type != VDIR))
 		node = unveil_tree_insert(trav->tree, dvp, name, name_len, &inserted);
 	else if (vp)
 		node = unveil_tree_insert(trav->tree, vp, NULL, 0, &inserted);
@@ -459,16 +454,16 @@ unveil_remember(struct unveil_base *base, struct unveil_traversal *trav,
 			    trav->cover ? uperms_inherit(trav->cover->frozen_uperms[i]) :
 			    base->on[i].frozen ? UPERM_NONE : UPERM_ALL;
 
-	if (trav->save->flags & UNVEILCTL_INTERMEDIATE)
+	if (trav->save_flags & UNVEILCTL_INTERMEDIATE)
 		node->fully_covered = true; /* cannot be turned off */
 
 	if (name && final) {
-		FOREACH_FLAGS_SLOT(trav->save->flags, i, j) {
-			node->wanted_uperms[i][j] = uperms_expand(trav->save->uperms);
-			node->wanted_final[i][j] = (trav->save->flags & UNVEILCTL_NOINHERIT) != 0;
+		FOREACH_FLAGS_SLOT(trav->save_flags, i, j) {
+			node->wanted_uperms[i][j] = uperms_expand(trav->save_uperms);
+			node->wanted_final[i][j] = (trav->save_flags & UNVEILCTL_NOINHERIT) != 0;
 		}
-	} else if (trav->save->flags & UNVEILCTL_INSPECTABLE) {
-		FOREACH_FLAGS_SLOT(trav->save->flags, i, j)
+	} else if (trav->save_flags & UNVEILCTL_INSPECTABLE) {
+		FOREACH_FLAGS_SLOT(trav->save_flags, i, j)
 			node->wanted_uperms[i][j] |= UPERM_INSPECT;
 	}
 	return (node);
@@ -550,7 +545,7 @@ unveil_traverse_begin(struct thread *td, struct unveil_traversal *trav,
     struct vnode *dvp)
 {
 	struct unveil_base *base = &td->td_proc->p_unveils;
-	if (trav->save) {
+	if (trav->save_flags != 0) {
 		/*
 		 * The tree must not be replaced while traversing because it
 		 * could render the traversal cover pointer invalid.  If we're
@@ -594,7 +589,7 @@ unveil_traverse(struct thread *td, struct unveil_traversal *trav,
 	struct unveil_base *base = &td->td_proc->p_unveils;
 	struct unveil_node *node;
 
-	if (trav->save && (final || (trav->save->flags & UNVEILCTL_INTERMEDIATE))) {
+	if (trav->save_flags != 0 && (final || (trav->save_flags & UNVEILCTL_INTERMEDIATE))) {
 		if (name_len > NAME_MAX)
 			return (ENAMETOOLONG);
 		UNVEIL_WRITE_BEGIN(base);
@@ -645,14 +640,14 @@ unveil_traverse_effective_uperms(struct thread *td, struct unveil_traversal *tra
 	if (trav->cover) {
 		uperms = uperms_expand(
 		    trav->cover->frozen_uperms[UNVEIL_ON_SELF]);
-		if (!trav->save)
+		if (trav->save_flags == 0)
 			uperms &= uperms_expand(
 			    unveil_node_wanted_perms(trav->cover, UNVEIL_ON_SELF));
 	} else {
-		if (trav->save)
-			uperms = base->on[UNVEIL_ON_SELF].frozen ? UPERM_NONE : UPERM_ALL;
-		else
+		if (trav->save_flags == 0)
 			uperms = base->on[UNVEIL_ON_SELF].active ? UPERM_NONE : UPERM_ALL;
+		else
+			uperms = base->on[UNVEIL_ON_SELF].frozen ? UPERM_NONE : UPERM_ALL;
 	}
 	/* NOTE: This function does not take the depth into consideration. */
 	return (uperms);
@@ -684,7 +679,7 @@ void
 unveil_traverse_end(struct thread *td, struct unveil_traversal *trav)
 {
 	struct unveil_base *base = &td->td_proc->p_unveils;
-	if (trav->save) {
+	if (trav->save_flags != 0) {
 		UNVEIL_WRITE_BEGIN(base);
 		MPASS(base->tree == trav->tree);
 		MPASS(base->writers != 0);
@@ -698,7 +693,6 @@ unveil_traverse_end(struct thread *td, struct unveil_traversal *trav)
 static int
 do_unveil_add(struct thread *td, struct unveil_base *base, int flags, struct unveilctl ctl)
 {
-	struct unveil_save save = { flags, ctl.uperms };
 	struct nameidata nd;
 	uint64_t ndflags;
 	int error;
@@ -708,7 +702,8 @@ do_unveil_add(struct thread *td, struct unveil_base *base, int flags, struct unv
 	    (ctl.atflags & AT_RESOLVE_BENEATH ? RBENEATH : 0);
 	NDINIT_ATRIGHTS(&nd, LOOKUP, ndflags,
 	    UIO_USERSPACE, ctl.path, ctl.atfd, &cap_fstat_rights, td);
-	nd.ni_unveil.save = &save; /* checked in unveil_traverse() */
+	nd.ni_unveil.save_flags = flags;
+	nd.ni_unveil.save_uperms = ctl.uperms;
 	error = namei(&nd);
 	if (error)
 		return (error);

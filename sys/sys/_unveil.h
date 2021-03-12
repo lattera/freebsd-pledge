@@ -15,9 +15,10 @@ typedef uint8_t unveil_perms;
 struct unveil_node;
 
 struct unveil_traversal {
-	struct unveil_save *save;
 	struct unveil_tree *tree;
 	struct unveil_node *cover; /* last unveil encountered */
+	int save_flags;
+	unveil_perms save_uperms;
 	int8_t type; /* type of last file encountered */
 	uint8_t depth; /* depth under cover of last file */
 };

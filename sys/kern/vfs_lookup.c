@@ -731,7 +731,7 @@ out:
 static inline bool
 unveil_lookup_tolerate_error(struct nameidata *ndp, int error)
 {
-	return (error == ENOENT && ndp->ni_unveil.save &&
+	return (error == ENOENT && ndp->ni_unveil.save_flags != 0 &&
 	    (ndp->ni_cnd.cn_flags & ISLASTCN));
 }
 
@@ -739,7 +739,7 @@ static int
 unveil_lookup_start(struct nameidata *ndp, struct vnode *dp)
 {
 	struct thread *td = ndp->ni_cnd.cn_thread;
-	if (!unveil_is_active(td) && !ndp->ni_unveil.save) {
+	if (!unveil_is_active(td) && ndp->ni_unveil.save_flags == 0) {
 		ndp->ni_lcf |= NI_LCF_UNVEIL_DISABLED;
 		return (0);
 	}
