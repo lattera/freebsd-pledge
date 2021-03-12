@@ -287,10 +287,10 @@ unveil_base_free(struct unveil_base *base)
 }
 
 
-static const unveil_perms uperms_noninheritable = UPERM_INSPECT | UPERM_TMPPATH;
+static const unveil_perms uperms_inheritable = ~(UPERM_INSPECT | UPERM_TMPPATH);
 
 static inline unveil_perms
-unveil_uperms_expand(unveil_perms uperms)
+uperms_expand(unveil_perms uperms)
 {
 	if (uperms & UPERM_RPATH) {
 		uperms |= UPERM_INSPECT;
@@ -298,6 +298,12 @@ unveil_uperms_expand(unveil_perms uperms)
 			uperms |= UPERM_TMPPATH;
 	}
 	return (uperms);
+}
+
+static inline unveil_perms
+uperms_inherit(unveil_perms uperms)
+{
+	return (uperms_expand(uperms & uperms_inheritable));
 }
 
 
@@ -321,8 +327,7 @@ unveil_node_wanted_perms(struct unveil_node *node, enum unveil_on on)
 	for (node1 = node->cover; !all_final && node1; node1 = node1->cover)
 		for (all_final = true, j = 0; j < UNVEIL_SLOT_COUNT; j++)
 			if (!wanted_final[j]) {
-				merged_perms |= node1->wanted_uperms[on][j] &
-				    ~uperms_noninheritable;
+				merged_perms |= uperms_inherit(node1->wanted_uperms[on][j]);
 				if (!(wanted_final[j] = node1->wanted_final[on][j]))
 					all_final = false;
 			}
@@ -333,8 +338,8 @@ static void
 unveil_node_freeze(struct unveil_node *node, enum unveil_on on, unveil_perms keep)
 {
 	node->frozen_uperms[on] =
-	    unveil_uperms_expand(node->frozen_uperms[on]) &
-	    unveil_uperms_expand(keep | unveil_node_wanted_perms(node, on));
+	    uperms_expand(node->frozen_uperms[on]) &
+	    uperms_expand(keep | unveil_node_wanted_perms(node, on));
 }
 
 static void
@@ -458,7 +463,7 @@ unveil_remember(struct unveil_base *base, struct unveil_traversal *trav,
 	if (inserted)
 		for (int i = 0; i < UNVEIL_ON_COUNT; i++)
 			node->frozen_uperms[i] =
-			    trav->cover ? (trav->cover)->frozen_uperms[i] & ~uperms_noninheritable :
+			    trav->cover ? uperms_inherit(trav->cover->frozen_uperms[i]) :
 			    base->on[i].frozen ? UPERM_NONE : UPERM_ALL;
 
 	if (trav->save->flags & UNVEILCTL_INTERMEDIATE)
@@ -645,10 +650,10 @@ unveil_traverse_effective_uperms(struct thread *td, struct unveil_traversal *tra
 	struct unveil_base *base = &td->td_proc->p_unveils;
 	unveil_perms uperms;
 	if (trav->cover) {
-		uperms = unveil_uperms_expand(
+		uperms = uperms_expand(
 		    trav->cover->frozen_uperms[UNVEIL_ON_SELF]);
 		if (!trav->save)
-			uperms &= unveil_uperms_expand(
+			uperms &= uperms_expand(
 			    unveil_node_wanted_perms(trav->cover, UNVEIL_ON_SELF));
 	} else {
 		if (trav->save)
@@ -725,7 +730,7 @@ do_unveil_limit(struct unveil_base *base, int flags, unveil_perms uperms)
 	int i, j;
 	UNVEIL_FOREACH(node, base)
 		FOREACH_FLAGS_SLOT(flags, i, j)
-			node->wanted_uperms[i][j] &= unveil_uperms_expand(uperms);
+			node->wanted_uperms[i][j] &= uperms_expand(uperms);
 }
 
 static void
