@@ -327,7 +327,7 @@ unveil_node_wanted_perms(struct unveil_node *node, enum unveil_on on)
 	for (node1 = node->cover; !all_final && node1; node1 = node1->cover)
 		for (all_final = true, j = 0; j < UNVEIL_SLOT_COUNT; j++)
 			if (!wanted_final[j]) {
-				merged_perms |= uperms_inherit(node1->wanted_uperms[on][j]);
+				merged_perms |= node1->wanted_uperms[on][j] & uperms_inheritable;
 				if (!(wanted_final[j] = node1->wanted_final[on][j]))
 					all_final = false;
 			}
