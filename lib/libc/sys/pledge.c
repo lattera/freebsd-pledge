@@ -311,8 +311,8 @@ int sysfil_flags_on[ON_COUNT] = {
 
 /* Global state for not-on-exec and on-exec cases. */
 
-static bool has_pledge_unveils[ON_COUNT], has_custom_unveils[ON_COUNT];
 static bool has_reserved_pledge_unveils[ON_COUNT];
+static bool has_pledge_unveils[ON_COUNT], has_custom_unveils[ON_COUNT];
 static bool cur_promises[ON_COUNT][PROMISE_COUNT];
 
 
@@ -643,7 +643,6 @@ do_unveil(const char *path, const bool on[ON_COUNT], unveil_perms uperms)
 	for (int i = 0; i < ON_COUNT; i++) {
 		if (!on[i] || has_custom_unveils[i])
 			continue;
-		has_custom_unveils[i] = true;
 		if (has_pledge_unveils[i]) {
 			/*
 			 * After the first call to unveil(), filesystem access
@@ -656,15 +655,11 @@ do_unveil(const char *path, const bool on[ON_COUNT], unveil_perms uperms)
 			 */
 			unveil_path(0, unveil_slots_for[i][FOR_PLEDGE],
 			    root_path, UPERM_NONE);
-		} else {
-			/* Make calling pledge() after unveil() work. */
-			if (!has_reserved_pledge_unveils[i])
-				reserve_pledge_unveils(i);
 		}
+		has_custom_unveils[i] = true;
 		if (i == ON_EXEC && on[ON_SELF] && !has_pledge_unveils[i])
 			continue;
 		unveil_op(UNVEILCTL_ENABLE, i,
-		    unveil_slots_for[i][FOR_PLEDGE] |
 		    unveil_slots_for[i][FOR_CUSTOM],
 		    UPERM_NONE);
 	}
@@ -679,11 +674,22 @@ do_unveil(const char *path, const bool on[ON_COUNT], unveil_perms uperms)
 
 	/* Forbid ever raising current unveil permissions. */
 	for (int i = 0; i < ON_COUNT; i++) {
+		bool reserve;
 		if (!on[i])
 			continue;
 		if (i == ON_EXEC && on[ON_SELF] && !has_pledge_unveils[i])
 			continue;
+		if ((reserve = !has_pledge_unveils[i] && !has_reserved_pledge_unveils[i])) {
+			/* Make calling pledge() after unveil(NULL, NULL) work. */
+			reserve_pledge_unveils(i);
+			unveil_op(UNVEILCTL_ENABLE, i,
+			    unveil_slots_for[i][FOR_PLEDGE], UPERM_NONE);
+		}
 		unveil_op(UNVEILCTL_FREEZE, i, 0, UPERM_NONE);
+		if (reserve)
+			/* The reserved pledge unveils should not be visible. */
+			unveil_op(UNVEILCTL_DISABLE, i,
+			    unveil_slots_for[i][FOR_PLEDGE], UPERM_NONE);
 	}
 	return (0);
 }
