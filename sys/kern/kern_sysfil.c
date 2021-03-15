@@ -235,17 +235,17 @@ sysfil_priv_check(struct ucred *cr, int priv)
 #endif
 }
 
+#ifdef SYSFIL
 static void
 sysfil_log_violation(struct thread *td, int sf, bool signaled)
 {
-#ifdef SYSFIL
 	struct proc *p = td->td_proc;
 	struct ucred *cr = td->td_ucred;
 	log(LOG_ERR, "pid %d (%s), jid %d, uid %d: violated sysfil #%d restrictions%s\n",
 	    p->p_pid, p->p_comm, cr->cr_prison->pr_id, cr->cr_uid, sf,
 	    signaled ? " and was signaled" : "");
-#endif
 }
+#endif
 
 void
 sysfil_violation(struct thread *td, int sf, int error)

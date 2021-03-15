@@ -667,7 +667,9 @@ kern_mprotect(struct thread *td, uintptr_t addr0, size_t size, int prot)
 	vm_size_t pageoff;
 	int vm_error, max_prot;
 	int flags;
+#ifdef SYSFIL
 	int error;
+#endif
 
 	addr = addr0;
 	if ((prot & ~(_PROT_ALL | PROT_MAX(_PROT_ALL))) != 0)
