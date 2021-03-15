@@ -30,6 +30,7 @@ enum { UNVEIL_ON_COUNT = 2 };
 struct unveil_base {
 	struct sx sx;
 	struct unveil_tree *tree;
+	bool modified;
 	struct unveil_base_flags {
 		bool active : 1;
 		bool frozen : 1;

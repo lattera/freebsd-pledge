@@ -269,6 +269,7 @@ void
 unveil_base_reset(struct unveil_base *base)
 {
 	unveil_base_clear(base);
+	base->modified = false;
 	for (int i = 0; i < UNVEIL_ON_COUNT; i++)
 		base->on[i] = (struct unveil_base_flags){ 0 };
 }
@@ -343,28 +344,8 @@ unveil_proc_exec_switch(struct thread *td)
 {
 	const int s = UNVEIL_ON_EXEC, d = UNVEIL_ON_SELF;
 	struct unveil_base *base = &td->td_proc->p_unveils;
-	if (base->on[s].active) {
-		struct unveil_node *node;
-		unveil_base_own(base);
-		if (base->on[s].wanted) {
-			UNVEIL_FOREACH(node, base)
-				node->frozen_uperms[s] &=
-				    uperms_expand(unveil_node_wanted_uperms(
-				        node, base->on[s].slots));
-		}
-		base->on[s].frozen = true;
-		base->on[s].wanted = false;
-		base->on[s].slots = 0;
-
-		base->on[d] = base->on[s];
-		UNVEIL_FOREACH(node, base) {
-			node->frozen_uperms[d] = node->frozen_uperms[s];
-			for (int j = 0; j < UNVEIL_SUPPORTED_SLOTS; j++)
-				node->slots_uperms[j] = UPERM_NONE;
-			node->slots_inherit = -1;
-		}
-
-	} else {
+	struct unveil_node *node;
+	if (!base->on[s].active) {
 		/*
 		 * This is very important for SUID/SGID execution checks.  When
 		 * unveil_exec_is_active() is false, unveil_proc_exec_switch()
@@ -372,7 +353,30 @@ unveil_proc_exec_switch(struct thread *td)
 		 * elevated privileges.
 		 */
 		unveil_base_reset(base);
+		return;
 	}
+	if (!base->modified)
+		return;
+
+	unveil_base_own(base);
+	if (base->on[s].wanted) {
+		UNVEIL_FOREACH(node, base)
+			node->frozen_uperms[s] &=
+			    uperms_expand(unveil_node_wanted_uperms(
+				node, base->on[s].slots));
+	}
+	base->on[s].frozen = true;
+	base->on[s].wanted = false;
+	base->on[s].slots = 0;
+
+	base->on[d] = base->on[s];
+	UNVEIL_FOREACH(node, base) {
+		node->frozen_uperms[d] = node->frozen_uperms[s];
+		for (int j = 0; j < UNVEIL_SUPPORTED_SLOTS; j++)
+			node->slots_uperms[j] = UPERM_NONE;
+		node->slots_inherit = -1;
+	}
+	base->modified = false;
 	unveil_base_check(base);
 }
 
@@ -445,6 +449,7 @@ unveil_remember(struct unveil_base *base, struct unveil_traversal *trav,
 		FOREACH_SLOTS(trav->save_slots, j)
 			node->slots_uperms[j] |= UPERM_INSPECT;
 	}
+	base->modified = true;
 	return (node);
 }
 
@@ -683,21 +688,25 @@ do_unveil_misc(struct unveil_base *base, int flags, struct unveilctl ctl)
 	int i, j;
 	UNVEIL_WRITE_ASSERT(base);
 	if (flags & UNVEILCTL_DISABLE) {
+		base->modified = true;
 		FOREACH_FLAGS_ON(flags, i)
 			base->on[i].slots &= ~ctl.slots;
 	}
 	if (flags & UNVEILCTL_ENABLE) {
+		base->modified = true;
 		FOREACH_FLAGS_ON(flags, i) {
 			base->on[i].active = base->on[i].wanted = true;
 			base->on[i].slots |= ctl.slots;
 		}
 	}
 	if (flags & UNVEILCTL_LIMIT) {
+		base->modified = true;
 		UNVEIL_FOREACH(node, base)
 			FOREACH_SLOTS(ctl.slots, j)
 				node->slots_uperms[j] &= uperms_expand(ctl.uperms);
 	}
 	if (flags & UNVEILCTL_FREEZE) {
+		base->modified = true;
 		FOREACH_FLAGS_ON(flags, i)
 			base->on[i].frozen = base->on[i].active = base->on[i].wanted = true;
 		UNVEIL_FOREACH(node, base)
@@ -710,6 +719,7 @@ do_unveil_misc(struct unveil_base *base, int flags, struct unveilctl ctl)
 			}
 	}
 	if (flags & UNVEILCTL_SWEEP) {
+		base->modified = true;
 		UNVEIL_FOREACH(node, base) {
 			FOREACH_SLOTS(ctl.slots, j)
 				node->slots_uperms[j] = UPERM_NONE;
