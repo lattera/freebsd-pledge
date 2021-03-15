@@ -28,10 +28,12 @@ enum {
 
 enum {
 	UNVEILCTL_UNVEIL = 1 << 0,
-	UNVEILCTL_SWEEP = 1 << 1,
+	UNVEILCTL_SELECT = 1 << 1,
 	UNVEILCTL_FREEZE = 1 << 2,
 	UNVEILCTL_LIMIT = 1 << 3,
-	UNVEILCTL_ACTIVATE = 1 << 4,
+	UNVEILCTL_SWEEP = 1 << 4,
+	UNVEILCTL_ENABLE = 1 << 5,
+	UNVEILCTL_DISABLE = 1 << 6,
 	UNVEILCTL_NOINHERIT = 1 << 8,
 	UNVEILCTL_INTERMEDIATE = 1 << 9,
 	UNVEILCTL_INSPECTABLE = 1 << 10,
@@ -39,20 +41,19 @@ enum {
 	UNVEILCTL_ON_SELF = 1 << 16,
 	UNVEILCTL_ON_EXEC = 1 << 17,
 	UNVEILCTL_ON_BOTH = UNVEILCTL_ON_SELF | UNVEILCTL_ON_EXEC,
-	UNVEILCTL_SLOT_SHIFT = 24,
-	UNVEILCTL_SLOT_WIDTH = 8,
-	UNVEILCTL_FOR_SLOT0 = 1 << 24,
-	UNVEILCTL_FOR_SLOT1 = 1 << 25,
-	UNVEILCTL_FOR_ALL_SLOTS =
-	    ((1 << UNVEILCTL_SLOT_WIDTH) - 1) << UNVEILCTL_SLOT_SHIFT,
-	UNVEILCTL_FOR_ALL = UNVEILCTL_ON_BOTH | UNVEILCTL_FOR_ALL_SLOTS,
+};
+
+enum {
+	UNVEIL_SUPPORTED_SLOTS = 8,
 };
 
 struct unveilctl {
+	int reserved;
 	int atfd;
 	const char *path;
 	int atflags;
-	int uperms;
+	unsigned slots;
+	unsigned uperms;
 };
 
 int unveilctl(int flags, struct unveilctl *);

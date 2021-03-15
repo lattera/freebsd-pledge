@@ -39,8 +39,6 @@ SYSCTL_UINT(_kern, OID_AUTO, maxunveilsperproc, CTLFLAG_RW,
 	&unveil_max_nodes_per_process, 0, "Maximum unveils allowed per process");
 
 
-enum { UNVEIL_SLOT_COUNT = 2 };
-
 struct unveil_node {
 	struct unveil_node *cover;
 	RB_ENTRY(unveil_node) entry;
@@ -54,8 +52,8 @@ struct unveil_node {
 	u_char name_len;
 	bool fully_covered;
 	unveil_perms frozen_uperms[UNVEIL_ON_COUNT];
-	unveil_perms wanted_uperms[UNVEIL_ON_COUNT][UNVEIL_SLOT_COUNT];
-	bool wanted_final[UNVEIL_ON_COUNT][UNVEIL_SLOT_COUNT];
+	unveil_perms slots_uperms[UNVEIL_SUPPORTED_SLOTS];
+	unveil_slots slots_inherit;
 };
 
 struct unveil_tree {
@@ -177,13 +175,11 @@ unveil_tree_dup(struct unveil_tree *old_tree)
 		    old_node->name, old_node->name_len, &inserted);
 		MPASS(inserted);
 		new_node->fully_covered = old_node->fully_covered;
-		for (int i = 0; i < UNVEIL_ON_COUNT; i++) {
+		for (int i = 0; i < UNVEIL_ON_COUNT; i++)
 			new_node->frozen_uperms[i] = old_node->frozen_uperms[i];
-			for (int j = 0; j < UNVEIL_SLOT_COUNT; j++) {
-				new_node->wanted_uperms[i][j] = old_node->wanted_uperms[i][j];
-				new_node->wanted_final[i][j] = old_node->wanted_final[i][j];
-			}
-		}
+		for (int j = 0; j < UNVEIL_SUPPORTED_SLOTS; j++)
+			new_node->slots_uperms[j] = old_node->slots_uperms[j];
+		new_node->slots_inherit = old_node->slots_inherit;
 	}
 	/* second pass, fixup the cover links */
 	RB_FOREACH(old_node, unveil_node_tree, &old_tree->root) {
@@ -287,8 +283,6 @@ unveil_base_free(struct unveil_base *base)
 }
 
 
-static const unveil_perms uperms_inheritable = ~(UPERM_INSPECT | UPERM_TMPPATH);
-
 static inline unveil_perms
 uperms_expand(unveil_perms uperms)
 {
@@ -300,6 +294,8 @@ uperms_expand(unveil_perms uperms)
 	return (uperms);
 }
 
+static const unveil_perms uperms_inheritable = ~(UPERM_INSPECT | UPERM_TMPPATH);
+
 static inline unveil_perms
 uperms_inherit(unveil_perms uperms)
 {
@@ -307,37 +303,29 @@ uperms_inherit(unveil_perms uperms)
 }
 
 
+#define	FOREACH_SLOTS(slots, j) \
+	for (j = 0; j < UNVEIL_SUPPORTED_SLOTS; j++) \
+		if ((slots) & (1U << j))
+
 static unveil_perms
-unveil_node_wanted_perms(struct unveil_node *node, enum unveil_on on)
+unveil_node_wanted_uperms(struct unveil_node *node, unveil_slots slots)
 {
-	struct unveil_node *node1;
-	bool wanted_final[UNVEIL_SLOT_COUNT], all_final;
-	unveil_perms merged_perms;
-	int j;
-	merged_perms = UPERM_NONE;
-	for (all_final = true, j = 0; j < UNVEIL_SLOT_COUNT; j++) {
-		merged_perms |= node->wanted_uperms[on][j];
-		if (!(wanted_final[j] = node->wanted_final[on][j]))
-			all_final = false;
-	}
 	/*
 	 * Go up the cover chain until all wanted permissions have been merged
 	 * without any more inheritance required.
 	 */
-	for (node1 = node->cover; !all_final && node1; node1 = node1->cover)
-		for (all_final = true, j = 0; j < UNVEIL_SLOT_COUNT; j++)
-			if (!wanted_final[j]) {
-				merged_perms |= node1->wanted_uperms[on][j] & uperms_inheritable;
-				if (!(wanted_final[j] = node1->wanted_final[on][j]))
-					all_final = false;
-			}
-	return (merged_perms);
-}
-
-static void
-unveil_node_freeze(struct unveil_node *node, enum unveil_on on, unveil_perms keep)
-{
-	node->frozen_uperms[on] &= uperms_expand(keep | unveil_node_wanted_perms(node, on));
+	int j;
+	unveil_perms merged_uperms = UPERM_NONE, mask = UPERM_ALL;
+	while (slots && node) {
+		unveil_perms uperms = UPERM_NONE;
+		FOREACH_SLOTS(slots, j)
+			uperms |= node->slots_uperms[j];
+		merged_uperms |= uperms & mask;
+		slots &= node->slots_inherit;
+		mask = uperms_inheritable;
+		node = node->cover;
+	}
+	return (merged_uperms);
 }
 
 
@@ -356,33 +344,27 @@ unveil_proc_exec_switch(struct thread *td)
 {
 	const int s = UNVEIL_ON_EXEC, d = UNVEIL_ON_SELF;
 	struct unveil_base *base = &td->td_proc->p_unveils;
-	if ((base->on[d].active = base->on[s].active)) {
+	if (base->on[s].active) {
 		struct unveil_node *node;
-		base->on[d].frozen = base->on[s].frozen = true;
 		unveil_base_own(base);
-		UNVEIL_FOREACH(node, base) {
-			unveil_node_freeze(node, s, UPERM_NONE);
-			node->frozen_uperms[d] = node->frozen_uperms[s];
-			for (int j = 0; j < UNVEIL_SLOT_COUNT; j++) {
-				node->wanted_uperms[d][j] = node->wanted_uperms[s][j];
-				node->wanted_final[d][j] = node->wanted_final[s][j];
-			}
+		if (base->on[s].wanted) {
+			UNVEIL_FOREACH(node, base)
+				node->frozen_uperms[s] &=
+				    uperms_expand(unveil_node_wanted_uperms(
+				        node, base->on[s].slots));
 		}
-#if 0
-		/*
-		 * Since unveil_node_exec_to_curr() freezes the nodes (in a
-		 * separate pass and with no extra retained permissions); it is
-		 * possible to drop the inheritance from the wanted permissions.
-		 */
-		UNVEIL_FOREACH(node, base)
-			for (int i = 0; i < UNVEIL_ON_COUNT; i++) {
-				unveil_perms uperms = unveil_node_wanted_perms(node, i);
-				for (int j = 0; j < UNVEIL_SLOT_COUNT; j++) {
-					node->wanted_uperms[i][j] = uperms;
-					node->wanted_final[i][j] = true;
-				}
-			}
-#endif
+		base->on[s].frozen = true;
+		base->on[s].wanted = false;
+		base->on[s].slots = 0;
+
+		base->on[d] = base->on[s];
+		UNVEIL_FOREACH(node, base) {
+			node->frozen_uperms[d] = node->frozen_uperms[s];
+			for (int j = 0; j < UNVEIL_SUPPORTED_SLOTS; j++)
+				node->slots_uperms[j] = UPERM_NONE;
+			node->slots_inherit = -1;
+		}
+
 	} else {
 		/*
 		 * This is very important for SUID/SGID execution checks.  When
@@ -390,8 +372,7 @@ unveil_proc_exec_switch(struct thread *td)
 		 * must provide a clean execution environment for programs with
 		 * elevated privileges.
 		 */
-		base->on[d].frozen = base->on[s].frozen = false;
-		unveil_base_clear(base);
+		unveil_base_reset(base);
 	}
 	unveil_base_check(base);
 }
@@ -399,11 +380,6 @@ unveil_proc_exec_switch(struct thread *td)
 #define	FOREACH_FLAGS_ON(flags, i) \
 	for (i = 0; i < UNVEIL_ON_COUNT; i++) \
 		if ((flags) & UNVEILCTL_ON_BOTH & (UNVEILCTL_ON_SELF << i))
-
-#define	FOREACH_FLAGS_SLOT(flags, i, j) \
-	FOREACH_FLAGS_ON(flags, i) \
-		for (j = 0; j < UNVEIL_SLOT_COUNT; j++) \
-			if ((flags) & (1 << (UNVEILCTL_SLOT_SHIFT + j)))
 
 static struct unveil_node *
 unveil_remember(struct unveil_base *base, struct unveil_traversal *trav,
@@ -448,23 +424,27 @@ unveil_remember(struct unveil_base *base, struct unveil_traversal *trav,
 	 * covering node that was discovered while traversing the path, it does
 	 * not come from a node's cover link.
 	 */
-	if (inserted)
-		for (int i = 0; i < UNVEIL_ON_COUNT; i++)
+	if (inserted) {
+		node->slots_inherit = -1;
+		for (i = 0; i < UNVEIL_ON_COUNT; i++)
 			node->frozen_uperms[i] =
 			    trav->cover ? uperms_inherit(trav->cover->frozen_uperms[i]) :
 			    base->on[i].frozen ? UPERM_NONE : UPERM_ALL;
+	}
 
 	if (trav->save_flags & UNVEILCTL_INTERMEDIATE)
 		node->fully_covered = true; /* cannot be turned off */
 
 	if (name && final) {
-		FOREACH_FLAGS_SLOT(trav->save_flags, i, j) {
-			node->wanted_uperms[i][j] = uperms_expand(trav->save_uperms);
-			node->wanted_final[i][j] = (trav->save_flags & UNVEILCTL_NOINHERIT) != 0;
-		}
+		FOREACH_SLOTS(trav->save_slots, j)
+			node->slots_uperms[j] = uperms_expand(trav->save_uperms);
+		if (trav->save_flags & UNVEILCTL_NOINHERIT)
+			node->slots_inherit &= ~trav->save_slots;
+		else
+			node->slots_inherit |= trav->save_slots;
 	} else if (trav->save_flags & UNVEILCTL_INSPECTABLE) {
-		FOREACH_FLAGS_SLOT(trav->save_flags, i, j)
-			node->wanted_uperms[i][j] |= UPERM_INSPECT;
+		FOREACH_SLOTS(trav->save_slots, j)
+			node->slots_uperms[j] |= UPERM_INSPECT;
 	}
 	return (node);
 }
@@ -538,7 +518,6 @@ unveil_find_cover(struct thread *td, struct unveil_tree *tree,
 	vput(dp);
 	return (error);
 }
-
 
 int
 unveil_traverse_begin(struct thread *td, struct unveil_traversal *trav,
@@ -638,11 +617,10 @@ unveil_traverse_effective_uperms(struct thread *td, struct unveil_traversal *tra
 	struct unveil_base *base = &td->td_proc->p_unveils;
 	unveil_perms uperms;
 	if (trav->cover) {
-		uperms = uperms_expand(
-		    trav->cover->frozen_uperms[UNVEIL_ON_SELF]);
-		if (trav->save_flags == 0)
-			uperms &= uperms_expand(
-			    unveil_node_wanted_perms(trav->cover, UNVEIL_ON_SELF));
+		uperms = uperms_expand(trav->cover->frozen_uperms[UNVEIL_ON_SELF]);
+		if (trav->save_flags == 0 && base->on[UNVEIL_ON_SELF].wanted)
+			uperms &= uperms_expand(unveil_node_wanted_uperms(trav->cover,
+			    base->on[UNVEIL_ON_SELF].slots));
 	} else {
 		if (trav->save_flags == 0)
 			uperms = base->on[UNVEIL_ON_SELF].active ? UPERM_NONE : UPERM_ALL;
@@ -704,6 +682,7 @@ do_unveil_add(struct thread *td, struct unveil_base *base, int flags, struct unv
 	    UIO_USERSPACE, ctl.path, ctl.atfd, &cap_fstat_rights, td);
 	nd.ni_unveil.save_flags = flags;
 	nd.ni_unveil.save_uperms = ctl.uperms;
+	nd.ni_unveil.save_slots = ctl.slots;
 	error = namei(&nd);
 	if (error)
 		return (error);
@@ -712,32 +691,49 @@ do_unveil_add(struct thread *td, struct unveil_base *base, int flags, struct unv
 }
 
 static void
-do_unveil_misc(struct unveil_base *base, int flags, unveil_perms uperms)
+do_unveil_misc(struct unveil_base *base, int flags, struct unveilctl ctl)
 {
 	struct unveil_node *node;
 	int i, j;
-	if (flags & UNVEILCTL_ACTIVATE) {
+	if (flags & UNVEILCTL_SELECT) {
+		FOREACH_FLAGS_ON(flags, i) {
+			base->on[i].active = base->on[i].wanted = true;
+			base->on[i].slots = ctl.slots;
+		}
+	}
+	if (flags & UNVEILCTL_DISABLE) {
 		FOREACH_FLAGS_ON(flags, i)
-			base->on[i].active = true;
+			base->on[i].slots &= ~ctl.slots;
+	}
+	if (flags & UNVEILCTL_ENABLE) {
+		FOREACH_FLAGS_ON(flags, i) {
+			base->on[i].active = base->on[i].wanted = true;
+			base->on[i].slots |= ctl.slots;
+		}
 	}
 	if (flags & UNVEILCTL_LIMIT) {
 		UNVEIL_FOREACH(node, base)
-			FOREACH_FLAGS_SLOT(flags, i, j)
-				node->wanted_uperms[i][j] &= uperms_expand(uperms);
+			FOREACH_SLOTS(ctl.slots, j)
+				node->slots_uperms[j] &= uperms_expand(ctl.uperms);
 	}
 	if (flags & UNVEILCTL_FREEZE) {
 		FOREACH_FLAGS_ON(flags, i)
-			base->on[i].frozen = base->on[i].active = true;
+			base->on[i].frozen = base->on[i].active = base->on[i].wanted = true;
 		UNVEIL_FOREACH(node, base)
-			FOREACH_FLAGS_ON(flags, i)
-				unveil_node_freeze(node, i, uperms);
+			FOREACH_FLAGS_ON(flags, i) {
+				unveil_perms wanted_uperms;
+				wanted_uperms = unveil_node_wanted_uperms(
+				    node, base->on[i].slots);
+				node->frozen_uperms[i] &=
+				    uperms_expand(ctl.uperms | wanted_uperms);
+			}
 	}
 	if (flags & UNVEILCTL_SWEEP) {
-		UNVEIL_FOREACH(node, base)
-			FOREACH_FLAGS_SLOT(flags, i, j) {
-				node->wanted_uperms[i][j] = UPERM_NONE;
-				node->wanted_final[i][j] = false;
-			}
+		UNVEIL_FOREACH(node, base) {
+			FOREACH_SLOTS(ctl.slots, j)
+				node->slots_uperms[j] = UPERM_NONE;
+			node->slots_inherit |= ctl.slots;
+		}
 	}
 }
 
@@ -766,7 +762,7 @@ sys_unveilctl(struct thread *td, struct unveilctl_args *uap)
 	}
 
 	UNVEIL_WRITE_BEGIN(base);
-	do_unveil_misc(base, flags, ctl.uperms);
+	do_unveil_misc(base, flags, ctl);
 	unveil_base_check(base);
 	UNVEIL_WRITE_END(base);
 	return (0);

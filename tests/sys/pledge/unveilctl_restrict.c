@@ -8,26 +8,26 @@
 static int
 unveil_path(int flags, const char *path, unveil_perms uperms)
 {
-	struct unveilctl ctl = { .atfd = AT_FDCWD, .path = path, .uperms = uperms };
+	struct unveilctl ctl = { .atfd = AT_FDCWD, .path = path, .slots = 1, .uperms = uperms };
 	return (unveilctl(flags | UNVEILCTL_UNVEIL, &ctl));
 }
 
 static int
 unveil_op(int flags, unveil_perms uperms)
 {
-	struct unveilctl ctl = { .atfd = -1, .path = NULL, .uperms = uperms };
+	struct unveilctl ctl = { .atfd = -1, .path = NULL, .slots = 1, .uperms = uperms };
 	return (unveilctl(flags, &ctl));
 }
 
 int
 main()
 {
-	int fl = UNVEILCTL_ON_SELF | UNVEILCTL_FOR_SLOT1;
+	int fl = UNVEILCTL_ON_SELF;
 	int fd;
-	EXPECT(unveil_op(UNVEILCTL_FOR_ALL | UNVEILCTL_SWEEP, -1));
+	EXPECT(unveil_op(fl | UNVEILCTL_SELECT, -1));
 	EXPECT(unveil_path(fl, "/etc", UPERM_INSPECT));
 	EXPECT(unveil_path(fl, "/dev", UPERM_INSPECT | UPERM_RPATH | UPERM_WPATH));
-	EXPECT(unveil_op(fl | UNVEILCTL_ACTIVATE | UNVEILCTL_FREEZE, 0));
+	EXPECT(unveil_op(fl | UNVEILCTL_FREEZE, 0));
 	REJECT(fd = open("/", O_RDONLY));
 	REJECT(fd = open("/etc", O_RDONLY));
 	EXPECT(fd = open("/dev", O_RDONLY)); EXPECT(close(fd));
