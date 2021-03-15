@@ -28,7 +28,6 @@ enum {
 
 enum {
 	UNVEILCTL_UNVEIL = 1 << 0,
-	UNVEILCTL_SELECT = 1 << 1,
 	UNVEILCTL_FREEZE = 1 << 2,
 	UNVEILCTL_LIMIT = 1 << 3,
 	UNVEILCTL_SWEEP = 1 << 4,

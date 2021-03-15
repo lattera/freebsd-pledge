@@ -25,7 +25,7 @@ main()
 	int fl = UNVEILCTL_ON_SELF;
 	int fd;
 
-	EXPECT(unveil_op(fl | UNVEILCTL_SELECT, -1));
+	EXPECT(unveil_op(fl | UNVEILCTL_ENABLE, -1));
 	EXPECT(unveil_path(fl, "/etc", UPERM_RPATH));
 	EXPECT(unveil_path(fl, "/etc/rc.conf", UPERM_RPATH));
 	EXPECT(unveil_path(fl, "/etc/defaults", UPERM_RPATH));

@@ -24,7 +24,7 @@ main()
 {
 	int fl = UNVEILCTL_ON_SELF;
 	int fd;
-	EXPECT(unveil_op(fl | UNVEILCTL_SELECT, -1));
+	EXPECT(unveil_op(fl | UNVEILCTL_ENABLE, -1));
 	EXPECT(unveil_path(fl, "/etc", UPERM_INSPECT));
 	EXPECT(unveil_path(fl, "/dev", UPERM_INSPECT | UPERM_RPATH | UPERM_WPATH));
 	EXPECT(unveil_op(fl | UNVEILCTL_FREEZE, 0));

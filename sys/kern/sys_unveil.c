@@ -695,12 +695,6 @@ do_unveil_misc(struct unveil_base *base, int flags, struct unveilctl ctl)
 {
 	struct unveil_node *node;
 	int i, j;
-	if (flags & UNVEILCTL_SELECT) {
-		FOREACH_FLAGS_ON(flags, i) {
-			base->on[i].active = base->on[i].wanted = true;
-			base->on[i].slots = ctl.slots;
-		}
-	}
 	if (flags & UNVEILCTL_DISABLE) {
 		FOREACH_FLAGS_ON(flags, i)
 			base->on[i].slots &= ~ctl.slots;
