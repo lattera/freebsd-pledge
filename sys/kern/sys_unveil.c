@@ -225,8 +225,6 @@ unveil_base_tree_snap(struct unveil_base *base)
 {
 	if (base->tree == NULL)
 		return (NULL);
-	if (base->writers != 0)
-		return (unveil_tree_dup(base->tree));
 	refcount_acquire(&base->tree->refcount);
 	return (base->tree);
 }
@@ -331,6 +329,7 @@ unveil_node_wanted_uperms(struct unveil_node *node, unveil_slots slots)
 
 #define UNVEIL_WRITE_BEGIN(base) \
     do { sx_xlock(&(base)->sx); unveil_base_own(base); } while (0)
+#define	UNVEIL_WRITE_ASSERT(base)	sx_assert(&(base)->sx, SA_XLOCKED)
 #define UNVEIL_WRITE_END(base)	sx_xunlock(&(base)->sx)
 #define UNVEIL_READ_BEGIN(base)	sx_slock(&(base)->sx)
 #define UNVEIL_READ_END(base)	sx_sunlock(&(base)->sx)
@@ -525,17 +524,8 @@ unveil_traverse_begin(struct thread *td, struct unveil_traversal *trav,
 {
 	struct unveil_base *base = &td->td_proc->p_unveils;
 	if (trav->save_flags != 0) {
-		/*
-		 * The tree must not be replaced while traversing because it
-		 * could render the traversal cover pointer invalid.  If we're
-		 * going to update it, get our own copy at the start and forbid
-		 * new CoW references from being made by bumping the writers
-		 * count.
-		 */
 		UNVEIL_WRITE_BEGIN(base);
-		base->writers++;
 		trav->tree = base->tree;
-		UNVEIL_WRITE_END(base);
 	} else {
 		UNVEIL_READ_BEGIN(base);
 		trav->tree = unveil_base_tree_snap(base);
@@ -571,10 +561,9 @@ unveil_traverse(struct thread *td, struct unveil_traversal *trav,
 	if (trav->save_flags != 0 && (final || (trav->save_flags & UNVEILCTL_INTERMEDIATE))) {
 		if (name_len > NAME_MAX)
 			return (ENAMETOOLONG);
-		UNVEIL_WRITE_BEGIN(base);
+		UNVEIL_WRITE_ASSERT(base);
 		MPASS(base->tree == trav->tree);
 		node = unveil_remember(base, trav, dvp, name, name_len, vp, final);
-		UNVEIL_WRITE_END(base);
 		if (!node)
 			return (E2BIG);
 
@@ -658,10 +647,7 @@ unveil_traverse_end(struct thread *td, struct unveil_traversal *trav)
 {
 	struct unveil_base *base = &td->td_proc->p_unveils;
 	if (trav->save_flags != 0) {
-		UNVEIL_WRITE_BEGIN(base);
 		MPASS(base->tree == trav->tree);
-		MPASS(base->writers != 0);
-		base->writers--;
 		UNVEIL_WRITE_END(base);
 	} else if (trav->tree)
 		unveil_tree_free(trav->tree);
@@ -695,6 +681,7 @@ do_unveil_misc(struct unveil_base *base, int flags, struct unveilctl ctl)
 {
 	struct unveil_node *node;
 	int i, j;
+	UNVEIL_WRITE_ASSERT(base);
 	if (flags & UNVEILCTL_DISABLE) {
 		FOREACH_FLAGS_ON(flags, i)
 			base->on[i].slots &= ~ctl.slots;
