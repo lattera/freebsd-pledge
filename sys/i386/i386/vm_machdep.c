@@ -167,13 +167,15 @@ cpu_fork(struct thread *td1, struct proc *p2, struct thread *td2, int flags)
 		return;
 	}
 
-	/* Ensure that td1's pcb is up to date. */
-	if (td1 == curthread)
+	/* Ensure that td1's pcb is up to date for user processes. */
+	if ((td2->td_pflags & TDP_KTHREAD) == 0) {
+		MPASS(td1 == curthread);
 		td1->td_pcb->pcb_gs = rgs();
-	critical_enter();
-	if (PCPU_GET(fpcurthread) == td1)
-		npxsave(td1->td_pcb->pcb_save);
-	critical_exit();
+		critical_enter();
+		if (PCPU_GET(fpcurthread) == td1)
+			npxsave(td1->td_pcb->pcb_save);
+		critical_exit();
+	}
 
 	/* Point the pcb to the top of the stack */
 	pcb2 = get_pcb_td(td2);
@@ -184,15 +186,25 @@ cpu_fork(struct thread *td1, struct proc *p2, struct thread *td2, int flags)
 
 	/* Properly initialize pcb_save */
 	pcb2->pcb_save = get_pcb_user_save_pcb(pcb2);
-	bcopy(get_pcb_user_save_td(td1), get_pcb_user_save_pcb(pcb2),
-	    cpu_max_ext_state_size);
+
+	/* Kernel processes start with clean NPX and segment bases. */
+	if ((td2->td_pflags & TDP_KTHREAD) != 0) {
+		pcb2->pcb_gs = _udatasel;
+		set_fsbase(td2, 0);
+		set_gsbase(td2, 0);
+		pcb2->pcb_flags &= ~(PCB_NPXINITDONE | PCB_NPXUSERINITDONE |
+		    PCB_KERNNPX | PCB_KERNNPX_THR);
+	} else {
+		MPASS((pcb2->pcb_flags & (PCB_KERNNPX | PCB_KERNNPX_THR)) == 0);
+		bcopy(get_pcb_user_save_td(td1), get_pcb_user_save_pcb(pcb2),
+		    cpu_max_ext_state_size);
+	}
 
 	/* Point mdproc and then copy over td1's contents */
 	mdp2 = &p2->p_md;
 	bcopy(&p1->p_md, mdp2, sizeof(*mdp2));
 
 	/*
-	 * Create a new fresh stack for the new process.
 	 * Copy the trap frame for the return to user mode as if from a
 	 * syscall.  This copies most of the user mode register values.
 	 * The -VM86_STACK_SPACE (-16) is so we can expand the trapframe
@@ -428,20 +440,42 @@ cpu_copy_thread(struct thread *td, struct thread *td0)
 	/* Point the pcb to the top of the stack. */
 	pcb2 = td->td_pcb;
 
+	/* Ensure that td0's pcb is up to date for user threads. */
+	if ((td->td_pflags & TDP_KTHREAD) == 0) {
+		MPASS(td0 == curthread);
+		td0->td_pcb->pcb_gs = rgs();
+		critical_enter();
+		if (PCPU_GET(fpcurthread) == td0)
+			npxsave(td0->td_pcb->pcb_save);
+		critical_exit();
+	}
+
 	/*
 	 * Copy the upcall pcb.  This loads kernel regs.
 	 * Those not loaded individually below get their default
 	 * values here.
 	 */
 	bcopy(td0->td_pcb, pcb2, sizeof(*pcb2));
-	pcb2->pcb_flags &= ~(PCB_NPXINITDONE | PCB_NPXUSERINITDONE |
-	    PCB_KERNNPX);
 	pcb2->pcb_save = get_pcb_user_save_pcb(pcb2);
-	bcopy(get_pcb_user_save_td(td0), pcb2->pcb_save,
-	    cpu_max_ext_state_size);
+
+	/* Kernel threads start with clean NPX and segment bases. */
+	if ((td->td_pflags & TDP_KTHREAD) != 0) {
+		pcb2->pcb_gs = _udatasel;
+		set_fsbase(td, 0);
+		set_gsbase(td, 0);
+		pcb2->pcb_flags &= ~(PCB_NPXINITDONE | PCB_NPXUSERINITDONE |
+		    PCB_KERNNPX | PCB_KERNNPX_THR);
+	} else {
+		MPASS((pcb2->pcb_flags & (PCB_KERNNPX | PCB_KERNNPX_THR)) == 0);
+		bcopy(get_pcb_user_save_td(td0), pcb2->pcb_save,
+		    cpu_max_ext_state_size);
+	}
 
 	/*
-	 * Create a new fresh stack for the new thread.
+	 * Copy user general-purpose registers.
+	 *
+	 * Some of these registers are rewritten by cpu_set_upcall()
+	 * and linux_set_upcall_kse().
 	 */
 	bcopy(td0->td_frame, td->td_frame, sizeof(struct trapframe));
 
@@ -463,7 +497,6 @@ cpu_copy_thread(struct thread *td, struct thread *td0)
 	pcb2->pcb_esp = (int)td->td_frame - sizeof(void *); /* trampoline arg */
 	pcb2->pcb_ebx = (int)td;			    /* trampoline arg */
 	pcb2->pcb_eip = (int)fork_trampoline + setidt_disp;
-	pcb2->pcb_gs = rgs();
 	/*
 	 * If we didn't copy the pcb, we'd need to do the following registers:
 	 * pcb2->pcb_cr3:	cloned above.
