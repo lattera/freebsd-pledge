@@ -713,7 +713,7 @@ do_unveil_misc(struct unveil_base *base, int flags, struct unveilctl ctl)
 			FOREACH_FLAGS_ON(flags, i) {
 				unveil_perms wanted_uperms;
 				wanted_uperms = unveil_node_wanted_uperms(
-				    node, base->on[i].slots);
+				    node, base->on[i].slots | ctl.slots);
 				node->frozen_uperms[i] &=
 				    uperms_expand(ctl.uperms | wanted_uperms);
 			}

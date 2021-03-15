@@ -679,17 +679,11 @@ do_unveil(const char *path, const bool on[ON_COUNT], unveil_perms uperms)
 			continue;
 		if (i == ON_EXEC && on[ON_SELF] && !has_pledge_unveils[i])
 			continue;
-		if ((reserve = !has_pledge_unveils[i] && !has_reserved_pledge_unveils[i])) {
+		if ((reserve = !has_pledge_unveils[i] && !has_reserved_pledge_unveils[i]))
 			/* Make calling pledge() after unveil(NULL, NULL) work. */
 			reserve_pledge_unveils(i);
-			unveil_op(UNVEILCTL_ENABLE, i,
-			    unveil_slots_for[i][FOR_PLEDGE], UPERM_NONE);
-		}
-		unveil_op(UNVEILCTL_FREEZE, i, 0, UPERM_NONE);
-		if (reserve)
-			/* The reserved pledge unveils should not be visible. */
-			unveil_op(UNVEILCTL_DISABLE, i,
-			    unveil_slots_for[i][FOR_PLEDGE], UPERM_NONE);
+		unveil_op(UNVEILCTL_FREEZE, i,
+		    reserve ? unveil_slots_for[i][FOR_PLEDGE] : 0, UPERM_NONE);
 	}
 	return (0);
 }
