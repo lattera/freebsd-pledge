@@ -617,7 +617,7 @@ unveil_traverse_effective_uperms(struct thread *td, struct unveil_traversal *tra
 	struct unveil_base *base = &td->td_proc->p_unveils;
 	unveil_perms uperms;
 	if (trav->cover) {
-		uperms = uperms_expand(trav->cover->frozen_uperms[UNVEIL_ON_SELF]);
+		uperms = trav->cover->frozen_uperms[UNVEIL_ON_SELF];
 		if (trav->save_flags == 0 && base->on[UNVEIL_ON_SELF].wanted)
 			uperms &= uperms_expand(unveil_node_wanted_uperms(trav->cover,
 			    base->on[UNVEIL_ON_SELF].slots));
