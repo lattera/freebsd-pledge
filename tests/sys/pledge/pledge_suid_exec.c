@@ -41,16 +41,16 @@ setup_curr_exec_pledge()
 static void
 setup_unveil_unfrozen()
 {
-	EXPECT(unveil("/", "rx"));
-	EXPECT(unveil("/etc", ""));
+	EXPECT(unveilexec("/", "rx"));
+	EXPECT(unveilexec("/etc", ""));
 }
 
 static void
 setup_unveil_frozen()
 {
-	EXPECT(unveil("/", "rx"));
-	EXPECT(unveil("/etc", ""));
-	EXPECT(unveil(NULL, NULL));
+	EXPECT(unveilexec("/", "rx"));
+	EXPECT(unveilexec("/etc", ""));
+	EXPECT(unveilexec(NULL, NULL));
 }
 
 static int

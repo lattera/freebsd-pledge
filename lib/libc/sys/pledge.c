@@ -312,6 +312,7 @@ int sysfil_flags_on[ON_COUNT] = {
 /* Global state for not-on-exec and on-exec cases. */
 
 static bool has_pledge_unveils[ON_COUNT], has_custom_unveils[ON_COUNT];
+static bool has_reserved_pledge_unveils[ON_COUNT];
 static bool cur_promises[ON_COUNT][PROMISE_COUNT];
 
 
@@ -509,7 +510,8 @@ do_pledge_unveils(const bool *req_promises, enum apply_on on, int *sysfils)
 	 * promise or doing an unveil(NULL, NULL).
 	 */
 	unveil_op(UNVEILCTL_ENABLE | UNVEILCTL_FREEZE,
-	    on, unveil_slots_for[on][FOR_PLEDGE],
+	    on, unveil_slots_for[on][FOR_PLEDGE] |
+	    (has_custom_unveils[on] ? unveil_slots_for[on][FOR_CUSTOM] : 0),
 	    req_promises[PROMISE_UNVEIL] ? req_uperms : UPERM_NONE);
 
 	memcpy(cur_promises[on], req_promises, PROMISE_COUNT * sizeof *req_promises);
@@ -536,7 +538,7 @@ reserve_pledge_unveils(enum apply_on on)
 	}
 	for (int i = 0; i < PROMISE_COUNT; i++)
 		cur_promises[on][i] = true;
-	has_pledge_unveils[on] = true;
+	has_reserved_pledge_unveils[on] = true;
 }
 
 static int
@@ -656,8 +658,11 @@ do_unveil(const char *path, const bool on[ON_COUNT], unveil_perms uperms)
 			    root_path, UPERM_NONE);
 		} else {
 			/* Make calling pledge() after unveil() work. */
-			reserve_pledge_unveils(i);
+			if (!has_reserved_pledge_unveils[i])
+				reserve_pledge_unveils(i);
 		}
+		if (i == ON_EXEC && on[ON_SELF] && !has_pledge_unveils[i])
+			continue;
 		unveil_op(UNVEILCTL_ENABLE, i,
 		    unveil_slots_for[i][FOR_PLEDGE] |
 		    unveil_slots_for[i][FOR_CUSTOM],
@@ -673,9 +678,13 @@ do_unveil(const char *path, const bool on[ON_COUNT], unveil_perms uperms)
 	}
 
 	/* Forbid ever raising current unveil permissions. */
-	for (int i = 0; i < ON_COUNT; i++)
-		if (on[i])
-			unveil_op(UNVEILCTL_FREEZE, i, 0, UPERM_NONE);
+	for (int i = 0; i < ON_COUNT; i++) {
+		if (!on[i])
+			continue;
+		if (i == ON_EXEC && on[ON_SELF] && !has_pledge_unveils[i])
+			continue;
+		unveil_op(UNVEILCTL_FREEZE, i, 0, UPERM_NONE);
+	}
 	return (0);
 }
 
