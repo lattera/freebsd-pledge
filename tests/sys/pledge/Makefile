@@ -10,6 +10,7 @@ BINMODE.suid-check=	4555
 
 ATF_TESTS_SH+=		execpledge_various
 ATF_TESTS_SH+=		execpledge_hard_link
+ATF_TESTS_SH+=		veilbox_various
 
 PLAIN_TESTS_C+= pledge_super_basic_test
 PLAIN_TESTS_C+= pledge_elevation
