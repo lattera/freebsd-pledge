@@ -163,7 +163,7 @@ enum {
 	ADAP_ERR	= (1 << 5),
 	BUF_PACKING_OK	= (1 << 6),
 	IS_VF		= (1 << 7),
-	KERN_TLS_OK	= (1 << 8),
+	KERN_TLS_ON	= (1 << 8),	/* HW is configured for KERN_TLS */
 	CXGBE_BUSY	= (1 << 9),
 
 	/* port flags */
@@ -1272,7 +1272,6 @@ int alloc_ring(struct adapter *, size_t, bus_dma_tag_t *, bus_dmamap_t *,
     bus_addr_t *, void **);
 int free_ring(struct adapter *, bus_dma_tag_t, bus_dmamap_t, bus_addr_t,
     void *);
-int sysctl_uint16(SYSCTL_HANDLER_ARGS);
 int t4_setup_adapter_queues(struct adapter *);
 int t4_teardown_adapter_queues(struct adapter *);
 int t4_setup_vi_queues(struct vi_info *);
