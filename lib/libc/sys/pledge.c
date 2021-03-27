@@ -354,28 +354,6 @@ inval:	errno = EINVAL;
 }
 
 
-static const char *
-pledge_unveil_fixup_path(bool tainted, enum apply_on on, const char *path)
-{
-	if (path == root_path) {
-		/*
-		 * The unveil on "/" is only there to
-		 * compensate for the other unveils that might
-		 * be needed for certain promises.  Once the
-		 * user does an explicit unveil(), filesystem
-		 * access must be restricted to what has been
-		 * explicitly unveiled.
-		 */
-		if (has_custom_unveils[on])
-			path = NULL;
-	} else if (!tainted && path == tmp_path) {
-		char *tmpdir;
-		if ((tmpdir = getenv("TMPDIR")))
-			path = tmpdir;
-	}
-	return (path);
-}
-
 static void
 promises_needed_for_uperms(bool *promises, unveil_perms uperms)
 {
@@ -457,8 +435,22 @@ do_promise_unveils(const bool *want_promises, enum apply_on on)
 			continue;
 		/* maximum unveil permissions we'll need for those promises */
 		need_uperms |= uperms;
-		if ((path = pledge_unveil_fixup_path(tainted, on, path)))
-			unveil_path(0, unveil_slots_for[on][FOR_PLEDGE], path, uperms);
+		if (path == root_path) {
+			/*
+			 * The unveil on "/" is only there to compensate for
+			 * the other unveils that might be needed for certain
+			 * promises.  Once the user does an explicit unveil(),
+			 * filesystem access must be restricted to what has
+			 * been explicitly unveiled.
+			 */
+			if (has_custom_unveils[on])
+				continue;
+		} else if (!tainted && path == tmp_path) {
+			char *tmpdir;
+			if ((tmpdir = getenv("TMPDIR")))
+				path = tmpdir;
+		}
+		unveil_path(0, unveil_slots_for[on][FOR_PLEDGE], path, uperms);
 	}
 	return (need_uperms);
 }
