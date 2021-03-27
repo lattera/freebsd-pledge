@@ -483,8 +483,9 @@ do_pledge_unveils(const bool *want_promises, enum apply_on on, int *sels)
 	 *
 	 * NOTE: do_pledge() must allocate a large enough array.
 	 */
-	/* to allow dropping permissions afterward */
-	*sels++ = SYSFIL_UNVEIL | sysfil_sel_flags_on[on];
+	if (want_promises != UPERM_NONE)
+		/* allow dropping unveil permissions afterward */
+		*sels++ = SYSFIL_UNVEIL | sysfil_sel_flags_on[on];
 	for (pa = sysfils_table; pa != &sysfils_table[nitems(sysfils_table)]; pa++)
 		if (need_promises[pa->type])
 			*sels++ = pa->sysfil | sysfil_sel_flags_on[on];
