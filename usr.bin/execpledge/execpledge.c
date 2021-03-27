@@ -4,6 +4,7 @@
 #include <sysexits.h>
 #include <string.h>
 #include <err.h>
+#include <pledge.h>
 
 static void
 usage(void)

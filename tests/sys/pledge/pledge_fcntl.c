@@ -4,6 +4,7 @@
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <pledge.h>
 
 #define EXPECT(expr) do { \
 	if ((expr) < 0) \

@@ -586,10 +586,6 @@ int	 undelete(const char *);
 int	 unwhiteout(const char *);
 void	*valloc(size_t);			/* obsoleted by malloc() */
 int	 funlinkat(int, const char *, int, int);
-int	 pledge(const char *, const char *);
-int	 unveil(const char *, const char *);
-int	 unveilself(const char *, const char *);
-int	 unveilexec(const char *, const char *);
 
 #ifndef _OPTRESET_DECLARED
 #define	_OPTRESET_DECLARED

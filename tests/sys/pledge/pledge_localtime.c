@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <err.h>
 #include <time.h>
+#include <pledge.h>
 
 int
 main()

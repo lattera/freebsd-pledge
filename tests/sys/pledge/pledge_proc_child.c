@@ -8,6 +8,7 @@
 #include <stdbool.h>
 #include <signal.h>
 #include <errno.h>
+#include <pledge.h>
 
 #include "util.h"
 

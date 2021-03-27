@@ -6,6 +6,7 @@
 #include <sys/wait.h>
 #include <sys/signal.h>
 #include <signal.h>
+#include <pledge.h>
 
 int
 main()

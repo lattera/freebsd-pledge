@@ -10,6 +10,7 @@
 #include <sysexits.h>
 #include <string.h>
 #include <libgen.h>
+#include <pledge.h>
 
 #include "util.h"
 

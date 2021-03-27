@@ -6,6 +6,7 @@
 #include <sys/mman.h>
 #include <err.h>
 #include <errno.h>
+#include <pledge.h>
 
 #include "util.h"
 

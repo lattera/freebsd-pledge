@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <fcntl.h>
+#include <pledge.h>
 
 #include "util.h"
 

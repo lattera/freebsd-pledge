@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <fcntl.h>
 #include <sys/file.h>
+#include <pledge.h>
 
 #define TRY(expr, should_work) do { \
 	if ((expr) < 0) { \

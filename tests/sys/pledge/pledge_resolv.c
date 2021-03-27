@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <err.h>
+#include <pledge.h>
 
 #include <sys/types.h>
 #include <netinet/in.h>

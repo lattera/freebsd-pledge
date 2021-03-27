@@ -4,6 +4,7 @@
 #include <err.h>
 #include <string.h>
 #include <netdb.h>
+#include <pledge.h>
 
 static void
 herr(int eval, const char *str)

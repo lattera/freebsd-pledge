@@ -4,6 +4,7 @@
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <pledge.h>
 
 static char *cleanup_path = NULL;
 static void

@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 #include <string.h>
 #include <assert.h>
+#include <pledge.h>
 
 static char *cleanup_path = NULL;
 static void

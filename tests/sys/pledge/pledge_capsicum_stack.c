@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <sys/capsicum.h>
+#include <pledge.h>
 
 int
 main()

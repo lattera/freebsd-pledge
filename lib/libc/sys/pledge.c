@@ -13,6 +13,7 @@ __FBSDID("$FreeBSD$");
 #include <sysexits.h>
 #include <unistd.h>
 #include <signal.h>
+#include <pledge.h>
 
 enum promise_type {
 	PROMISE_ERROR,

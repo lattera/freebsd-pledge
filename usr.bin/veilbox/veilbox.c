@@ -13,6 +13,7 @@
 #include <sys/types.h>
 #include <sysexits.h>
 #include <unistd.h>
+#include <pledge.h>
 
 /*
  * Creating a "blind" directory for the new TMPDIR.  Since secure usage of

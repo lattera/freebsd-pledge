@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <err.h>
 #include <stdbool.h>
+#include <pledge.h>
 
 static void
 try(const char *promises, bool should_work)
