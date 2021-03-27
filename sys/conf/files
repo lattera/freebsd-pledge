@@ -3954,7 +3954,6 @@ kern/sys_pipe.c			standard
 kern/sys_procdesc.c		standard
 kern/sys_process.c		standard
 kern/sys_socket.c		standard
-kern/sys_unveil.c		standard
 kern/syscalls.c			standard
 kern/sysv_ipc.c			standard
 kern/sysv_msg.c			optional sysvmsg
@@ -3997,6 +3996,7 @@ kern/vfs_mount.c		standard
 kern/vfs_mountroot.c		standard
 kern/vfs_subr.c			standard
 kern/vfs_syscalls.c		standard
+kern/vfs_unveil.c		standard
 kern/vfs_vnops.c		standard
 #
 # Kernel GSS-API
