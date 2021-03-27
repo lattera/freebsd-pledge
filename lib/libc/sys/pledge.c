@@ -548,12 +548,28 @@ reserve_pledge_unveils(enum apply_on on)
 }
 
 static int
-do_pledge(const bool *promises, enum apply_on on)
+do_pledge(bool *promises_on[ON_COUNT])
 {
-	int selv[nitems(sysfils_table) + 1];
-	size_t selc;
-	selc = do_pledge_unveils(promises, on, selv);
-	return (sysfilctl(SYSFILCTL_RESTRICT | sysfil_flags_on[on], selc, selv));
+	int selv[(nitems(sysfils_table) + 1) * ON_COUNT];
+	bool reset_sigtrap = false;
+	int flags = 0;
+	size_t selc = 0;
+	for (enum apply_on on = 0; on < ON_COUNT; on++) {
+		if (!promises_on[on])
+			continue;
+		flags |= sysfil_flags_on[on];
+		if (!promises_on[on][PROMISE_SIGTRAP])
+			reset_sigtrap = true;
+		selc += do_pledge_unveils(promises_on[on], on, &selv[selc]);
+	}
+	if (reset_sigtrap) {
+		sig_t osig;
+		/* XXX might not be sufficient */
+		osig = signal(SIGTRAP, SIG_DFL);
+		if (osig == SIG_ERR)
+			warn("signal SIGTRAP");
+	}
+	return (sysfilctl(SYSFILCTL_RESTRICT | flags, selc, selv));
 }
 
 
@@ -569,11 +585,8 @@ pledge(const char *promises_str, const char *execpromises_str)
 {
 	bool promises[PROMISE_COUNT] = { 0 };
 	bool execpromises[PROMISE_COUNT] = { 0 };
-	sig_t osig;
-	bool reset_sigtrap;
-	bool errors;
+	bool *promises_on[ON_COUNT] = { NULL };
 	int r;
-	/* TODO: global lock */
 	if (!unveils_table_sorted) {
 		qsort(unveils_table,
 		    (sizeof (unveils_table) / sizeof (*unveils_table)) - 1,
@@ -581,45 +594,19 @@ pledge(const char *promises_str, const char *execpromises_str)
 		    promise_unveil_cmp);
 		unveils_table_sorted = true;
 	}
-
 	if (promises_str) {
 		r = parse_promises(promises, promises_str);
 		if (r < 0)
 			return (-1);
+		promises_on[ON_SELF] = promises;
 	}
 	if (execpromises_str) {
 		r = parse_promises(execpromises, execpromises_str);
 		if (r < 0)
 			return (-1);
+		promises_on[ON_EXEC] = execpromises;
 	}
-
-	errors = false;
-	reset_sigtrap = false;
-	if (execpromises_str) {
-		if (!execpromises[PROMISE_SIGTRAP])
-			reset_sigtrap = true;
-		r = do_pledge(execpromises, ON_EXEC);
-		if (r < 0)
-			errors = true;
-	}
-	if (promises_str) {
-		if (!promises[PROMISE_SIGTRAP])
-			reset_sigtrap = true;
-		r = do_pledge(promises, ON_SELF);
-		if (r < 0)
-			errors = true;
-	}
-
-	if (reset_sigtrap) {
-		/* XXX might not be sufficient */
-		osig = signal(SIGTRAP, SIG_DFL);
-		if (osig == SIG_ERR) {
-			warn("signal SIGTRAP");
-			errors = true;
-		}
-	}
-
-	return (errors ? -1 : 0);
+	return (do_pledge(promises_on));
 }
 
 
