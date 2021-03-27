@@ -138,15 +138,21 @@ CTASSERT(SYSFIL_LAST < SYSFIL_SIZE);
 
 /* sysfilctl() flags and other constants */
 
-#define	SYSFILCTL_MASK		0
-#define	SYSFILCTL_OPTIONAL	(1 <<  0)
-#define	SYSFILCTL_MANDATORY	(1 <<  1)
+#define	SYSFILCTL_RESTRICT	(1 << 0)
+#define	SYSFILCTL_OPTIONAL	(1 << 1)
+#define	SYSFILCTL_REQUIRE	(1 << 2)
 #define	SYSFILCTL_ON_SELF	(1 << 16)
 #define	SYSFILCTL_ON_EXEC	(1 << 17)
+#define	SYSFILCTL_ON_BOTH	(SYSFILCTL_ON_SELF | SYSFILCTL_ON_EXEC)
 
-#define	SYSFILCTL_MAX_COUNT	1024
+#define	SYSFILCTL_MAX_SELS	1024
 
-int sysfilctl(int flags, const int *sysfils, size_t count);
+#define	SYSFILSEL_ON_SELF	(1 << 16)
+#define	SYSFILSEL_ON_EXEC	(1 << 17)
+#define	SYSFILSEL_ON_BOTH	(SYSFILSEL_ON_SELF | SYSFILSEL_ON_EXEC)
+#define	SYSFILSEL_SYSFIL(s)	(s & ((1 << 16) - 1))
+
+int sysfilctl(int flags, size_t selc, const int *selv);
 
 
 #ifdef _KERNEL

@@ -1849,8 +1849,8 @@ struct aio_readv_args {
 };
 struct sysfilctl_args {
 	char flags_l_[PADL_(int)]; int flags; char flags_r_[PADR_(int)];
-	char sysfils_l_[PADL_(const int *)]; const int * sysfils; char sysfils_r_[PADR_(const int *)];
-	char count_l_[PADL_(size_t)]; size_t count; char count_r_[PADR_(size_t)];
+	char selc_l_[PADL_(size_t)]; size_t selc; char selc_r_[PADR_(size_t)];
+	char selv_l_[PADL_(const int *)]; const int * selv; char selv_r_[PADR_(const int *)];
 };
 struct unveilctl_args {
 	char flags_l_[PADL_(int)]; int flags; char flags_r_[PADR_(int)];

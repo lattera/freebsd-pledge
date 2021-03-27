@@ -3403,8 +3403,8 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 	case 580: {
 		struct sysfilctl_args *p = params;
 		iarg[0] = p->flags; /* int */
-		uarg[1] = (intptr_t) p->sysfils; /* const int * */
-		uarg[2] = p->count; /* size_t */
+		uarg[1] = p->selc; /* size_t */
+		uarg[2] = (intptr_t) p->selv; /* const int * */
 		*n_args = 3;
 		break;
 	}
@@ -9112,10 +9112,10 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			p = "int";
 			break;
 		case 1:
-			p = "userland const int *";
+			p = "size_t";
 			break;
 		case 2:
-			p = "size_t";
+			p = "userland const int *";
 			break;
 		default:
 			break;

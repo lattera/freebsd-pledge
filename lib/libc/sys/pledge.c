@@ -304,9 +304,14 @@ static const int unveil_flags_on[ON_COUNT] = {
 static const int unveil_flags_path =
     UNVEILCTL_INTERMEDIATE | UNVEILCTL_INSPECTABLE | UNVEILCTL_NONDIRBYNAME;
 
-int sysfil_flags_on[ON_COUNT] = {
+static const int sysfil_flags_on[ON_COUNT] = {
 	[ON_SELF] = SYSFILCTL_ON_SELF,
 	[ON_EXEC] = SYSFILCTL_ON_EXEC,
+};
+
+static const int sysfil_sel_flags_on[ON_COUNT] = {
+	[ON_SELF] = SYSFILSEL_ON_SELF,
+	[ON_EXEC] = SYSFILSEL_ON_EXEC,
 };
 
 /* Global state for not-on-exec and on-exec cases. */
@@ -434,9 +439,9 @@ unveil_op(int flags, enum apply_on on, unveil_slots slots, unveil_perms uperms)
 }
 
 static size_t
-do_pledge_unveils(const bool *req_promises, enum apply_on on, int *sysfils)
+do_pledge_unveils(const bool *req_promises, enum apply_on on, int *sels)
 {
-	int *orig_sysfils = sysfils;
+	int *orig_sels = sels;
 	const struct promise_sysfil *pa;
 	const struct promise_unveil *pu;
 	const char *path;
@@ -478,10 +483,11 @@ do_pledge_unveils(const bool *req_promises, enum apply_on on, int *sysfils)
 	 *
 	 * NOTE: do_pledge() must allocate a large enough array.
 	 */
-	*sysfils++ = SYSFIL_UNVEIL; /* to allow dropping permissions afterward */
+	/* to allow dropping permissions afterward */
+	*sels++ = SYSFIL_UNVEIL | sysfil_sel_flags_on[on];
 	for (pa = sysfils_table; pa != &sysfils_table[nitems(sysfils_table)]; pa++)
 		if (need_promises[pa->type])
-			*sysfils++ = pa->sysfil;
+			*sels++ = pa->sysfil | sysfil_sel_flags_on[on];
 
 	/*
 	 * Figure out the uperms equivalent for the promises that were
@@ -516,7 +522,7 @@ do_pledge_unveils(const bool *req_promises, enum apply_on on, int *sysfils)
 
 	memcpy(cur_promises[on], req_promises, PROMISE_COUNT * sizeof *req_promises);
 	has_pledge_unveils[on] = true;
-	return (sysfils - orig_sysfils);
+	return (sels - orig_sels);
 }
 
 static void
@@ -544,10 +550,10 @@ reserve_pledge_unveils(enum apply_on on)
 static int
 do_pledge(const bool *promises, enum apply_on on)
 {
-	int sysfils[nitems(sysfils_table) + 1];
-	size_t count;
-	count = do_pledge_unveils(promises, on, sysfils);
-	return (sysfilctl(sysfil_flags_on[on], sysfils, count));
+	int selv[nitems(sysfils_table) + 1];
+	size_t selc;
+	selc = do_pledge_unveils(promises, on, selv);
+	return (sysfilctl(SYSFILCTL_RESTRICT | sysfil_flags_on[on], selc, selv));
 }
 
 

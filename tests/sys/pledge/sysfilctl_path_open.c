@@ -54,8 +54,11 @@ test_xpath(bool should_work)
 
 #define	DO_SYSFILCTL(...) \
 ({ \
-	int sysfils[] = { SYSFIL_ERROR, __VA_ARGS__ }; \
-	sysfilctl(SYSFILCTL_MASK, sysfils, nitems(sysfils)); \
+	int _sysfils[] = { SYSFIL_ERROR, __VA_ARGS__ }; \
+	int _sels[nitems(_sysfils)]; \
+	for (unsigned _i = 0; _i < nitems(_sysfils); _i++) \
+		_sels[_i] = _sysfils[_i] | SYSFILSEL_ON_SELF; \
+	sysfilctl(SYSFILCTL_RESTRICT | SYSFILCTL_ON_SELF, nitems(_sels), _sels); \
 })
 
 int

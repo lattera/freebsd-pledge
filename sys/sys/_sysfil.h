@@ -1,5 +1,5 @@
-#ifndef _SYS_SYSFILSET_H_
-#define	_SYS_SYSFILSET_H_
+#ifndef _SYS__SYSFIL_H_
+#define	_SYS__SYSFIL_H_
 
 #include <sys/types.h>
 #include <sys/_bitset.h>

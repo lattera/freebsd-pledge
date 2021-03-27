@@ -316,36 +316,42 @@ sysfilset_fill(sysfilset_t *sysfilset, int sf)
 
 static int
 sysfil_cred_update(struct ucred *cr,
-    int flags, size_t count, const int *sysfils)
+    int flags, size_t selc, const int *selv)
 {
-	sysfilset_t sysfilset = SYSFILSET_INITIALIZER;
-	SYSFILSET_FILL(&sysfilset, SYSFIL_ALWAYS);
-	SYSFILSET_FILL(&sysfilset, SYSFIL_UNCAPSICUM);
-	while (count--) {
-		int sf = *sysfils++;
+	sysfilset_t sysfilset_self = SYSFILSET_INITIALIZER, sysfilset_exec;
+	SYSFILSET_FILL(&sysfilset_self, SYSFIL_ALWAYS);
+	SYSFILSET_FILL(&sysfilset_self, SYSFIL_UNCAPSICUM);
+	memcpy(&sysfilset_exec, &sysfilset_self, sizeof sysfilset_exec);
+	while (selc--) {
+		int sel = *selv++, sf = SYSFILSEL_SYSFIL(sel);
+		bool on_self = flags & SYSFILCTL_ON_SELF && sel & SYSFILSEL_ON_SELF,
+		     on_exec = flags & SYSFILCTL_ON_EXEC && sel & SYSFILSEL_ON_EXEC;
 		if (!SYSFIL_USER_VALID(sf))
 			return (EINVAL);
-		sysfilset_fill(&sysfilset, sf);
-		if (!(flags & SYSFILCTL_OPTIONAL) &&
-		     (((flags & SYSFILCTL_ON_SELF) &&
-		        !SYSFILSET_MATCH(&cr->cr_sysfilset, sf)) ||
-		      ((flags & SYSFILCTL_ON_EXEC) &&
-		        !SYSFILSET_MATCH(&cr->cr_sysfilset_exec, sf))))
-				return (EPERM);
+		if (flags & SYSFILCTL_REQUIRE &&
+		     ((on_self && !SYSFILSET_MATCH(&cr->cr_sysfilset, sf)) ||
+		      (on_exec && !SYSFILSET_MATCH(&cr->cr_sysfilset_exec, sf))))
+			return (EPERM);
+		if (on_self)
+			sysfilset_fill(&sysfilset_self, sf);
+		if (on_exec)
+			sysfilset_fill(&sysfilset_exec, sf);
 	}
+	if (!(flags & SYSFILCTL_RESTRICT))
+		return (0);
 	/*
 	 * SYSFIL_DEFAULT should always be disabled after masking (since it
 	 * isn't SYSFIL_USER_VALID()), which means that the sysfilset should
 	 * always be considered to be in "restricted" mode.
 	 */
 	if (flags & SYSFILCTL_ON_SELF) {
-		SYSFILSET_MASK(&cr->cr_sysfilset, &sysfilset);
+		SYSFILSET_MASK(&cr->cr_sysfilset, &sysfilset_self);
 		MPASS(SYSFILSET_IS_RESTRICTED(&cr->cr_sysfilset));
 		MPASS(CRED_IN_RESTRICTED_MODE(cr));
 	}
 	if (flags & SYSFILCTL_ON_EXEC) {
 		if (SYSFILSET_MATCH(&cr->cr_sysfilset, SYSFIL_EXEC) ||
-		    SYSFILSET_MATCH(&sysfilset, SYSFIL_EXEC))
+		    SYSFILSET_MATCH(&sysfilset_exec, SYSFIL_EXEC))
 			/*
 			 * On OpenBSD, executing dynamically linked binaries
 			 * works with just the "exec" pledge (the "prot_exec"
@@ -353,8 +359,8 @@ sysfil_cred_update(struct ucred *cr,
 			 * done its job).  Not so for us, so implicitly allow
 			 * PROT_EXEC for now. XXX
 			 */
-			SYSFILSET_FILL(&sysfilset, SYSFIL_PROT_EXEC_LOOSE);
-		SYSFILSET_MASK(&cr->cr_sysfilset_exec, &sysfilset);
+			SYSFILSET_FILL(&sysfilset_exec, SYSFIL_PROT_EXEC_LOOSE);
+		SYSFILSET_MASK(&cr->cr_sysfilset_exec, &sysfilset_exec);
 		MPASS(SYSFILSET_IS_RESTRICTED(&cr->cr_sysfilset_exec));
 		MPASS(CRED_IN_RESTRICTED_EXEC_MODE(cr));
 	}
@@ -362,24 +368,26 @@ sysfil_cred_update(struct ucred *cr,
 }
 
 static int
-do_sysfilctl(struct thread *td, int flags, size_t count, const int *sysfils)
+do_sysfilctl(struct thread *td, int flags, size_t selc, const int *selv)
 {
 	struct proc *p = td->td_proc;
 	struct ucred *newcred, *oldcred;
 	int error;
-	if (!(flags & (SYSFILCTL_OPTIONAL | SYSFILCTL_MANDATORY)) &&
-	    sysfil_check(td, SYSFIL_ERROR) == 0)
-		flags |= SYSFILCTL_OPTIONAL;
+	if (!(flags & (SYSFILCTL_OPTIONAL | SYSFILCTL_REQUIRE)) &&
+	    sysfil_check(td, SYSFIL_ERROR) != 0)
+		flags |= SYSFILCTL_REQUIRE;
 	newcred = crget();
 	PROC_LOCK(p);
 	oldcred = crcopysafe(p, newcred);
-	error = sysfil_cred_update(newcred, flags, count, sysfils);
+	error = sysfil_cred_update(newcred, flags, selc, selv);
 	if (!error) {
 		proc_set_cred(p, newcred);
-		if (flags & SYSFILCTL_ON_SELF && !PROC_IN_RESTRICTED_MODE(p))
-			panic("PROC_IN_RESTRICTED_MODE() bogus after sysfil(2)");
-		if (flags & SYSFILCTL_ON_EXEC && !PROC_IN_RESTRICTED_EXEC_MODE(p))
-			panic("PROC_IN_RESTRICTED_EXEC_MODE() bogus after sysfil(2)");
+		if (flags & SYSFILCTL_RESTRICT) {
+			if (flags & SYSFILCTL_ON_SELF && !PROC_IN_RESTRICTED_MODE(p))
+				panic("PROC_IN_RESTRICTED_MODE() bogus after sysfil(2)");
+			if (flags & SYSFILCTL_ON_EXEC && !PROC_IN_RESTRICTED_EXEC_MODE(p))
+				panic("PROC_IN_RESTRICTED_EXEC_MODE() bogus after sysfil(2)");
+		}
 	}
 	PROC_UNLOCK(p);
 	crfree(error ? newcred : oldcred);
@@ -392,23 +400,21 @@ int
 sys_sysfilctl(struct thread *td, struct sysfilctl_args *uap)
 {
 #ifdef SYSFIL
-	size_t count;
-	int *sysfils;
+	size_t selc;
+	int *selv;
 	int flags, error;
 	flags = uap->flags;
-	count = uap->count;
-	if (count > SYSFILCTL_MAX_COUNT)
+	selc = uap->selc;
+	if (selc > SYSFILCTL_MAX_SELS)
 		return (EINVAL);
-	if (!uap->sysfils)
+	if (!uap->selv)
 		return (EINVAL);
-	if (!(flags & (SYSFILCTL_ON_SELF | SYSFILCTL_ON_EXEC)))
-		flags |= SYSFILCTL_ON_SELF | SYSFILCTL_ON_EXEC;
-	sysfils = mallocarray(count, sizeof *sysfils, M_TEMP, M_WAITOK);
-	error = copyin(uap->sysfils, sysfils, count * sizeof *sysfils);
+	selv = mallocarray(selc, sizeof *selv, M_TEMP, M_WAITOK);
+	error = copyin(uap->selv, selv, selc * sizeof *selv);
 	if (error)
 		goto out;
-	error = do_sysfilctl(td, flags, count, sysfils);
-out:	free(sysfils, M_TEMP);
+	error = do_sysfilctl(td, flags, selc, selv);
+out:	free(selv, M_TEMP);
 	return (error);
 #else
 	return (ENOSYS);
