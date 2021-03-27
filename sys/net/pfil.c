@@ -48,6 +48,7 @@
 #include <sys/queue.h>
 #include <sys/ucred.h>
 #include <sys/jail.h>
+#include <sys/sysfil.h>
 
 #include <net/if.h>
 #include <net/if_var.h>
@@ -60,6 +61,9 @@ static struct cdevsw pfil_cdevsw = {
 	.d_ioctl =	pfil_ioctl,
 	.d_name =	PFILDEV,
 	.d_version =	D_VERSION,
+#ifdef SYSFIL
+	.d_sysfil =	SYSFIL_PFIL,
+#endif
 };
 static struct cdev *pfil_dev;
 

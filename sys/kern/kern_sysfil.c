@@ -228,6 +228,12 @@ sysfil_priv_check(struct ucred *cr, int priv)
 		if (sysfil_check_cred(cr, SYSFIL_FH) == 0)
 			return (0);
 		break;
+	case PRIV_NETINET_IPFW:
+	case PRIV_NETINET_DUMMYNET:
+	case PRIV_NETINET_PF:
+		if (sysfil_check_cred(cr, SYSFIL_PFIL) == 0)
+			return (0);
+		break;
 	}
 	return (sysfil_check_cred(cr, SYSFIL_ANY_PRIV));
 #else
