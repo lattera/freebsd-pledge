@@ -318,7 +318,6 @@ static const int sysfil_sel_flags_on[ON_COUNT] = {
 
 static bool has_reserved_pledge_unveils[ON_COUNT];
 static bool has_pledge_unveils[ON_COUNT], has_custom_unveils[ON_COUNT];
-static bool last_promises[ON_COUNT][PROMISE_COUNT];
 
 
 static int __noinline
@@ -450,23 +449,24 @@ do_pledge_unveils(const bool *want_promises, enum apply_on on, int *sels)
 	bool need_promises[PROMISE_COUNT];
 
 	/*
-	 * Do unveils for the promises added or removed.
+	 * Do unveils for all requested promists.
 	 */
+	unveil_op(UNVEILCTL_SWEEP, on, unveil_slots_for[on][FOR_PLEDGE], UPERM_NONE);
+
 	tainted = issetugid() != 0;
 	need_uperms = UPERM_NONE;
 	for (pu = unveils_table; (*(path = pu->path)); ) {
 		unveil_perms uperms = UPERM_NONE;
-		bool modified = false;
 		do {
-			if (last_promises[on][pu->type] != want_promises[pu->type])
-				modified = true;
 			if (want_promises[pu->type])
 				uperms |= pu->uperms;
 			pu++;
 		} while (strcmp(pu->path, path) == 0);
+		if (uperms == UPERM_NONE)
+			continue;
 		/* maximum unveil permissions we'll need for those promises */
 		need_uperms |= uperms;
-		if (modified && (path = pledge_unveil_fixup_path(tainted, on, path)))
+		if ((path = pledge_unveil_fixup_path(tainted, on, path)))
 			unveil_path(0, unveil_slots_for[on][FOR_PLEDGE], path, uperms);
 	}
 
@@ -519,7 +519,6 @@ do_pledge_unveils(const bool *want_promises, enum apply_on on, int *sels)
 	    (has_custom_unveils[on] ? unveil_slots_for[on][FOR_CUSTOM] : 0),
 	    want_promises[PROMISE_UNVEIL] ? want_uperms : UPERM_NONE);
 
-	memcpy(last_promises[on], want_promises, PROMISE_COUNT * sizeof *want_promises);
 	has_pledge_unveils[on] = true;
 	return (sels - orig_sels);
 }
@@ -541,8 +540,6 @@ reserve_pledge_unveils(enum apply_on on)
 			unveil_path(0, unveil_slots_for[on][FOR_PLEDGE],
 			    path, uperms);
 	}
-	for (int i = 0; i < PROMISE_COUNT; i++)
-		last_promises[on][i] = true;
 	has_reserved_pledge_unveils[on] = true;
 }
 
