@@ -318,7 +318,7 @@ static const int sysfil_sel_flags_on[ON_COUNT] = {
 
 static bool has_reserved_pledge_unveils[ON_COUNT];
 static bool has_pledge_unveils[ON_COUNT], has_custom_unveils[ON_COUNT];
-static bool cur_promises[ON_COUNT][PROMISE_COUNT];
+static bool last_promises[ON_COUNT][PROMISE_COUNT];
 
 
 static int __noinline
@@ -439,14 +439,14 @@ unveil_op(int flags, enum apply_on on, unveil_slots slots, unveil_perms uperms)
 }
 
 static size_t
-do_pledge_unveils(const bool *req_promises, enum apply_on on, int *sels)
+do_pledge_unveils(const bool *want_promises, enum apply_on on, int *sels)
 {
 	int *orig_sels = sels;
 	const struct promise_sysfil *pa;
 	const struct promise_unveil *pu;
 	const char *path;
 	bool tainted;
-	unveil_perms need_uperms, req_uperms;
+	unveil_perms need_uperms, want_uperms;
 	bool need_promises[PROMISE_COUNT];
 
 	/*
@@ -458,9 +458,9 @@ do_pledge_unveils(const bool *req_promises, enum apply_on on, int *sels)
 		unveil_perms uperms = UPERM_NONE;
 		bool modified = false;
 		do {
-			if (cur_promises[on][pu->type] != req_promises[pu->type])
+			if (last_promises[on][pu->type] != want_promises[pu->type])
 				modified = true;
-			if (req_promises[pu->type])
+			if (want_promises[pu->type])
 				uperms |= pu->uperms;
 			pu++;
 		} while (strcmp(pu->path, path) == 0);
@@ -475,7 +475,7 @@ do_pledge_unveils(const bool *req_promises, enum apply_on on, int *sels)
 	 * unveils of the requested promises work.  Only the sysfils associated
 	 * with those implicitly enabled promises are needed, not their unveils.
 	 */
-	memcpy(need_promises, req_promises, PROMISE_COUNT * sizeof *req_promises);
+	memcpy(need_promises, want_promises, PROMISE_COUNT * sizeof *want_promises);
 	promises_needed_for_uperms(need_promises, need_uperms);
 
 	/*
@@ -493,7 +493,7 @@ do_pledge_unveils(const bool *req_promises, enum apply_on on, int *sels)
 	 * Figure out the uperms equivalent for the promises that were
 	 * explicitly required (NOT those that were implicitly enabled).
 	 */
-	req_uperms = retained_uperms_for_promises(req_promises);
+	want_uperms = retained_uperms_for_promises(want_promises);
 
 	/*
 	 * Alter user's explicit unveils to compensate for sysfils implicitly
@@ -502,9 +502,9 @@ do_pledge_unveils(const bool *req_promises, enum apply_on on, int *sels)
 	 * that.  Since we use unveils to implement these exceptions, add the
 	 * restrictions to the user's unveils to get a similar effect.
 	 */
-	if (need_uperms & ~req_uperms)
+	if (need_uperms & ~want_uperms)
 		unveil_op(UNVEILCTL_LIMIT, on, unveil_slots_for[on][FOR_CUSTOM],
-		    req_uperms);
+		    want_uperms);
 
 	/*
 	 * Permanently drop permissions that aren't explicitly requested.
@@ -518,9 +518,9 @@ do_pledge_unveils(const bool *req_promises, enum apply_on on, int *sels)
 	unveil_op(UNVEILCTL_ENABLE | UNVEILCTL_FREEZE,
 	    on, unveil_slots_for[on][FOR_PLEDGE] |
 	    (has_custom_unveils[on] ? unveil_slots_for[on][FOR_CUSTOM] : 0),
-	    req_promises[PROMISE_UNVEIL] ? req_uperms : UPERM_NONE);
+	    want_promises[PROMISE_UNVEIL] ? want_uperms : UPERM_NONE);
 
-	memcpy(cur_promises[on], req_promises, PROMISE_COUNT * sizeof *req_promises);
+	memcpy(last_promises[on], want_promises, PROMISE_COUNT * sizeof *want_promises);
 	has_pledge_unveils[on] = true;
 	return (sels - orig_sels);
 }
@@ -543,7 +543,7 @@ reserve_pledge_unveils(enum apply_on on)
 			    path, uperms);
 	}
 	for (int i = 0; i < PROMISE_COUNT; i++)
-		cur_promises[on][i] = true;
+		last_promises[on][i] = true;
 	has_reserved_pledge_unveils[on] = true;
 }
 
