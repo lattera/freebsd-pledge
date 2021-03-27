@@ -437,22 +437,13 @@ unveil_op(int flags, enum apply_on on, unveil_slots slots, unveil_perms uperms)
 	return (r);
 }
 
-static size_t
-do_pledge_unveils(const bool *want_promises, enum apply_on on, int *sels)
+static unveil_perms
+do_promise_unveils(const bool *want_promises, enum apply_on on)
 {
-	int *orig_sels = sels;
-	const struct promise_sysfil *pa;
+	unveil_perms need_uperms;
 	const struct promise_unveil *pu;
 	const char *path;
 	bool tainted;
-	unveil_perms need_uperms, want_uperms;
-	bool need_promises[PROMISE_COUNT];
-
-	/*
-	 * Do unveils for all requested promists.
-	 */
-	unveil_op(UNVEILCTL_SWEEP, on, unveil_slots_for[on][FOR_PLEDGE], UPERM_NONE);
-
 	tainted = issetugid() != 0;
 	need_uperms = UPERM_NONE;
 	for (pu = unveils_table; (*(path = pu->path)); ) {
@@ -469,6 +460,22 @@ do_pledge_unveils(const bool *want_promises, enum apply_on on, int *sels)
 		if ((path = pledge_unveil_fixup_path(tainted, on, path)))
 			unveil_path(0, unveil_slots_for[on][FOR_PLEDGE], path, uperms);
 	}
+	return (need_uperms);
+}
+
+static size_t
+do_pledge_unveils(const bool *want_promises, enum apply_on on, int *sels)
+{
+	int *orig_sels = sels;
+	const struct promise_sysfil *pa;
+	unveil_perms need_uperms, want_uperms;
+	bool need_promises[PROMISE_COUNT];
+
+	/*
+	 * Do unveils for all requested promists.
+	 */
+	unveil_op(UNVEILCTL_SWEEP, on, unveil_slots_for[on][FOR_PLEDGE], UPERM_NONE);
+	need_uperms = do_promise_unveils(want_promises, on);
 
 	/*
 	 * Figure out which promises must be implicitly enabled to make the
@@ -526,20 +533,10 @@ do_pledge_unveils(const bool *want_promises, enum apply_on on, int *sels)
 static void
 reserve_pledge_unveils(enum apply_on on)
 {
-	const struct promise_unveil *pu;
-	const char *path;
-	bool tainted;
-	tainted = issetugid() != 0;
-	for (pu = unveils_table; (*(path = pu->path)); ) {
-		unveil_perms uperms = UPERM_NONE;
-		do {
-			uperms |= pu->uperms;
-			pu++;
-		} while (strcmp(pu->path, path) == 0);
-		if ((path = pledge_unveil_fixup_path(tainted, on, path)))
-			unveil_path(0, unveil_slots_for[on][FOR_PLEDGE],
-			    path, uperms);
-	}
+	bool want_promises[PROMISE_COUNT];
+	for (int i = 0; i < PROMISE_COUNT; i++)
+		want_promises[i] = true;
+	do_promise_unveils(want_promises, on);
 	has_reserved_pledge_unveils[on] = true;
 }
 
