@@ -502,9 +502,7 @@ do_pledge_unveils(const bool *want_promises, enum apply_on on, int *sels)
 	 * that.  Since we use unveils to implement these exceptions, add the
 	 * restrictions to the user's unveils to get a similar effect.
 	 */
-	if (need_uperms & ~want_uperms)
-		unveil_op(UNVEILCTL_LIMIT, on, unveil_slots_for[on][FOR_CUSTOM],
-		    want_uperms);
+	unveil_op(UNVEILCTL_LIMIT, on, unveil_slots_for[on][FOR_CUSTOM], want_uperms);
 
 	/*
 	 * Permanently drop permissions that aren't explicitly requested.
