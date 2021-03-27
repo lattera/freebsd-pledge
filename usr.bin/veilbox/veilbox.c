@@ -43,7 +43,7 @@ static const char *network_promises = "ssl dns inet";
 
 static const char *protexec_promises = "prot_exec";
 
-static const char *error_promises = "error sigtrap";
+static const char *error_promises = "error ";
 
 struct unveil_entry {
 	const char *path;

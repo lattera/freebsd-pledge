@@ -28,7 +28,7 @@ main()
 	r = waitpid(pid, &status, WEXITED);
 	if (r < 0)
 		err(1, "waitpid");
-	if (r != pid || !WIFSIGNALED(status) || WTERMSIG(status) != SIGTRAP)
-		errx(1, "child process did not terminate with SIGTRAP");
+	if (r != pid || !WIFSIGNALED(status) || WTERMSIG(status) != SIGKILL)
+		errx(1, "child process did not terminate with SIGKILL");
 	return 0;
 }

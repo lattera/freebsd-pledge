@@ -702,12 +702,6 @@ kern_sigaction(struct thread *td, int sig, const struct sigaction *act,
 	    SA_NOCLDWAIT | SA_SIGINFO)) != 0)
 		return (EINVAL);
 
-	/* NOTE: sysfil_require() must not be called under PROC_LOCK() */
-	if (act && act->sa_handler != SIG_DFL &&
-	    (sig == SIGKILL || sig == SIGSTOP ||
-	    (sig == SIGTRAP && sysfil_check(td, SYSFIL_SIGTRAP) != 0)))
-		return (EINVAL);
-
 	PROC_LOCK(p);
 	ps = p->p_sigacts;
 	mtx_lock(&ps->ps_mtx);
@@ -734,6 +728,13 @@ kern_sigaction(struct thread *td, int sig, const struct sigaction *act,
 			oact->sa_flags |= SA_NOCLDWAIT;
 	}
 	if (act) {
+		if ((sig == SIGKILL || sig == SIGSTOP) &&
+		    act->sa_handler != SIG_DFL) {
+			mtx_unlock(&ps->ps_mtx);
+			PROC_UNLOCK(p);
+			return (EINVAL);
+		}
+
 		/*
 		 * Change setting atomically.
 		 */

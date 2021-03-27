@@ -36,7 +36,6 @@ enum promise_type {
 	PROMISE_EXEC,
 	PROMISE_PROT_EXEC,
 	PROMISE_TTY,
-	PROMISE_SIGTRAP,
 	PROMISE_RLIMIT,
 	PROMISE_SCHED,
 	PROMISE_SETTIME,
@@ -108,7 +107,6 @@ static const struct promise_name {
 	[PROMISE_EXEC] =		{ "exec" },
 	[PROMISE_PROT_EXEC] =		{ "prot_exec" },
 	[PROMISE_TTY] =			{ "tty" },
-	[PROMISE_SIGTRAP] =		{ "sigtrap" },
 	[PROMISE_RLIMIT] =		{ "rlimit" },
 	[PROMISE_SCHED] =		{ "sched" },
 	[PROMISE_SETTIME] =		{ "settime" },
@@ -187,7 +185,6 @@ static const struct promise_sysfil {
 	{ PROMISE_EXEC,			SYSFIL_EXEC },
 	{ PROMISE_PROT_EXEC,		SYSFIL_PROT_EXEC },
 	{ PROMISE_TTY,			SYSFIL_TTY },
-	{ PROMISE_SIGTRAP,		SYSFIL_SIGTRAP },
 	{ PROMISE_RLIMIT,		SYSFIL_RLIMIT },
 	{ PROMISE_SCHED,		SYSFIL_SCHED },
 	{ PROMISE_SETTIME,		SYSFIL_SETTIME },
@@ -553,23 +550,13 @@ static int
 do_pledge(bool *promises_on[ON_COUNT])
 {
 	int selv[(nitems(sysfils_table) + 1) * ON_COUNT];
-	bool reset_sigtrap = false;
 	int flags = 0;
 	size_t selc = 0;
 	for (enum apply_on on = 0; on < ON_COUNT; on++) {
 		if (!promises_on[on])
 			continue;
 		flags |= sysfil_flags_on[on];
-		if (!promises_on[on][PROMISE_SIGTRAP])
-			reset_sigtrap = true;
 		selc += do_pledge_unveils(promises_on[on], on, &selv[selc]);
-	}
-	if (reset_sigtrap) {
-		sig_t osig;
-		/* XXX might not be sufficient */
-		osig = signal(SIGTRAP, SIG_DFL);
-		if (osig == SIG_ERR)
-			warn("signal SIGTRAP");
 	}
 	return (sysfilctl(SYSFILCTL_RESTRICT | flags, selc, selv));
 }

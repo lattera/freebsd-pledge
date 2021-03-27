@@ -256,6 +256,9 @@ typedef	struct __siginfo {
 			long	_band;		/* band event for SIGPOLL */
 		} _poll;			/* was this ever used ? */
 		struct {
+			int _sysfil;
+		} _sysfil;
+		struct {
 			long	__spare1__;
 			int	__spare2__[7];
 		} __spare__;
@@ -267,6 +270,7 @@ typedef	struct __siginfo {
 #define si_overrun	_reason._timer._overrun
 #define si_mqd		_reason._mesgq._mqd
 #define si_band		_reason._poll._band
+#define	si_sysfil	_reason._sysfil._sysfil
 
 #if defined(_WANT_LWPINFO32) || (defined(_KERNEL) && defined(__LP64__))
 struct siginfo32 {
@@ -338,7 +342,6 @@ struct siginfo32 {
 #define TRAP_TRACE	2	/* Process trace trap.			*/
 #define	TRAP_DTRACE	3	/* DTrace induced trap.			*/
 #define	TRAP_CAP	4	/* Capabilities protective trap.	*/
-#define	TRAP_SYSFIL	5	/* Sysfil violation trap.		*/
 
 /* codes for SIGCHLD */
 #define CLD_EXITED	1	/* Child has exited			*/
@@ -412,6 +415,7 @@ struct sigaction {
 					/* message on an empty message queue. */
 #define	SI_KERNEL	0x10006
 #define	SI_LWP		0x10007		/* Signal sent by thr_kill */
+#define	SI_SYSFIL	0x10008		/* Signal sent due to sysfil violation */
 #endif
 #if __BSD_VISIBLE
 #define	SI_UNDEFINED	0

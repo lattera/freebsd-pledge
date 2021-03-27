@@ -266,13 +266,13 @@ sysfil_violation(struct thread *td, int sf, int error)
 		ksiginfo_t ksi;
 		/*
 		 * OpenBSD sends an "uncatchable" SIGABRT.  Not sure how to
-		 * correctly do that, so instead we restrict the ability to
-		 * handle SIGABRT in the first place.
+		 * correctly do that, so instead just send a SIGKILL.
 		 */
 		ksiginfo_init_trap(&ksi);
-		ksi.ksi_signo = SIGTRAP;
+		ksi.ksi_signo = SIGKILL;
+		ksi.ksi_code = SI_SYSFIL;
+		ksi.ksi_sysfil = sf;
 		ksi.ksi_errno = error;
-		ksi.ksi_code = TRAP_SYSFIL;
 		trapsignal(td, &ksi);
 	}
 #endif
