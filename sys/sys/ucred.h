@@ -81,7 +81,6 @@ struct ucred {
 #ifdef SYSFIL
 	sysfilset_t	cr_sysfilset;	/* syscall filter flags */
 	sysfilset_t	cr_sysfilset_exec; /* on-exec syscall filter flags */
-	void		*cr_pspare;	/* general use */
 #else
 	u_int		cr_flags;	/* credential flags */
 	void		*cr_pspare2[2];	/* general use 2 */
@@ -90,7 +89,11 @@ struct ucred {
 	struct label	*cr_label;	/* MAC label */
 	gid_t	*cr_groups;		/* groups */
 	int	cr_agroups;		/* Available groups */
+#ifdef SYSFIL
+	gid_t   cr_smallgroups[14];	/* storage for small groups */
+#else
 	gid_t   cr_smallgroups[XU_NGROUPS];	/* storage for small groups */
+#endif
 };
 
 #define	NOCRED	((struct ucred *)0)	/* no credential available */

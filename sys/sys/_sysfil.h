@@ -4,7 +4,7 @@
 #include <sys/types.h>
 #include <sys/_bitset.h>
 
-#define	SYSFIL_SHIFT		6	/* enough for 64 */
+#define	SYSFIL_SHIFT		7	/* enough for 128 */
 #define	SYSFIL_SIZE		(1U << SYSFIL_SHIFT)
 #define	SYSFIL_MASK		(SYSFIL_SIZE - 1)
 
