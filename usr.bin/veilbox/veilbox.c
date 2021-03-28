@@ -36,6 +36,8 @@ static const char *shell_promises = "proc_session ps_session";
 
 static const char *network_promises = "ssl dns inet";
 
+static const char *x11_promises = "";
+
 static const char *protexec_promises = "prot_exec";
 
 static const char *error_promises = "error";
@@ -75,6 +77,10 @@ static const struct unveil_entry default_unveils[] = {
 	{ "/usr/share", "r" },
 	/* NOTE: some packages install executables in /usr/local/share */
 	{ _PATH_LOCALBASE "/share", "rx" },
+};
+
+static const struct unveil_entry x11_unveils[] = {
+	{ _PATH_LOCALBASE "/etc/fonts", "r" },
 };
 
 
@@ -149,6 +155,78 @@ prepare_tmpdir(void)
 	r = setenv("TMPDIR", new_tmpdir, 1);
 	if (r < 0)
 		err(EX_OSERR, "setenv");
+}
+
+
+static char *tmp_xauth_file = NULL;
+
+static void
+cleanup_x11(void)
+{
+	int r;
+	r = unlink(tmp_xauth_file);
+	if (r < 0)
+		warn("%s", tmp_xauth_file);
+	free(tmp_xauth_file);
+	tmp_xauth_file = NULL;
+}
+
+static void
+prepare_x11(bool trusted)
+{
+	int r;
+	char *p, *display;
+	pid_t pid;
+	int status;
+
+	p = getenv("DISPLAY");
+	if (!p || !*p)
+		errx(EX_DATAERR, "DISPLAY environment variable not set");
+	display = p;
+
+	p = getenv("TMPDIR");
+	r = asprintf(&p, "%s/%s.xauth.XXXXXXXXXXXX",
+	    p && *p ? p : "/tmp", getprogname());
+	if (r < 0)
+		err(EX_TEMPFAIL, "asprintf");
+	r = mkstemp(p);
+	if (r < 0)
+		err(EX_OSERR, "mkstemp");
+	r = close(r);
+	if (r < 0)
+		warn("%s", p);
+	tmp_xauth_file = p;
+	atexit(cleanup_x11);
+
+	pid = vfork();
+	if (pid < 0)
+		err(EX_TEMPFAIL, "fork");
+	if (pid == 0) {
+		err_set_exit(_exit);
+		if (trusted) {
+			execlp("xauth", "xauth",
+			    "extract", tmp_xauth_file, display, NULL);
+		} else {
+			execlp("xauth", "xauth", "-f", tmp_xauth_file,
+			    "generate", display, ".", "untrusted", NULL);
+		}
+		err(EX_OSERR, "xauth");
+	}
+	err_set_exit(NULL);
+
+	r = waitpid(pid, &status, 0);
+	if (r < 0)
+		err(EX_OSERR, "waitpid");
+	if (!(WIFEXITED(status) && WEXITSTATUS(status) == 0)) {
+		if (WIFSIGNALED(status))
+			errx(EX_UNAVAILABLE, "xauth terminated with signal %d",
+			    WTERMSIG(status));
+		errx(EX_UNAVAILABLE, "xauth exited with code %d", WEXITSTATUS(status));
+	}
+
+	r = setenv("XAUTHORITY", tmp_xauth_file, 1);
+	if (r < 0)
+		err(EX_TEMPFAIL, "setenv");
 }
 
 
@@ -242,7 +320,7 @@ exec_cmd(bool wrap, char *cmd_name, char **argv)
 static void
 usage(void)
 {
-	fprintf(stderr, "usage: %s [-kgew] [-p promises] [-u unveil ...] [-sS] cmd [arg ...]\n", getprogname());
+	fprintf(stderr, "usage: %s [-kgewXY] [-p promises] [-u unveil ...] [-sS] cmd [arg ...]\n", getprogname());
 	exit(EX_USAGE);
 }
 
@@ -262,11 +340,12 @@ main(int argc, char *argv[])
 	     login_shell = false,
 	     new_pgrp = false,
 	     no_protexec = false;
+	enum { X11_NONE, X11_UNTRUSTED, X11_TRUSTED } x11_mode = X11_NONE;
 	char *cmd_arg0 = NULL;
 	char abspath[PATH_MAX];
 	size_t abspath_len = 0;
 
-	while ((ch = getopt(argc, argv, "kgep:u:0:sSw")) != -1)
+	while ((ch = getopt(argc, argv, "kgep:u:0:sSwXY")) != -1)
 		switch (ch) {
 		case 'k':
 			signaling = true;
@@ -321,6 +400,14 @@ main(int argc, char *argv[])
 		case 'w':
 			  wrap = true;
 			  break;
+		case 'X':
+			  x11_mode = X11_UNTRUSTED;
+			  wrap = true;
+			  break;
+		case 'Y':
+			  x11_mode = X11_TRUSTED;
+			  wrap = true;
+			  break;
 		default:
 			usage();
 		}
@@ -351,6 +438,10 @@ main(int argc, char *argv[])
 				err(EX_OSERR, "setpgid");
 		}
 	}
+	if (x11_mode != X11_NONE) {
+		*promises_fill++ = x11_promises;
+		prepare_x11(x11_mode == X11_TRUSTED);
+	};
 	if (!no_protexec)
 		*promises_fill++ = protexec_promises;
 
@@ -358,6 +449,12 @@ main(int argc, char *argv[])
 	do_pledge(promises_base, promises_fill);
 
 	do_unveils(nitems(default_unveils), default_unveils);
+	if (x11_mode != X11_NONE) {
+		r = unveilexec(tmp_xauth_file, "r");
+		if (r < 0)
+			err(EX_OSERR, "%s", tmp_xauth_file);
+		do_unveils(nitems(x11_unveils), x11_unveils);
+	}
 	if (wrap) {
 		r = unveilexec(new_tmpdir, "rwc");
 		if (r < 0)
