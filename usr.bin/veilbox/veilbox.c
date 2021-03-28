@@ -320,7 +320,7 @@ exec_cmd(bool wrap, char *cmd_name, char **argv)
 static void
 usage(void)
 {
-	fprintf(stderr, "usage: %s [-kgewXY] [-p promises] [-u unveil ...] [-sS] cmd [arg ...]\n", getprogname());
+	fprintf(stderr, "usage: %s [-kgenwXY] [-p promises] [-u unveil ...] [-sS] cmd [arg ...]\n", getprogname());
 	exit(EX_USAGE);
 }
 
@@ -339,13 +339,14 @@ main(int argc, char *argv[])
 	     run_shell = false,
 	     login_shell = false,
 	     new_pgrp = false,
+	     no_network = false,
 	     no_protexec = false;
 	enum { X11_NONE, X11_UNTRUSTED, X11_TRUSTED } x11_mode = X11_NONE;
 	char *cmd_arg0 = NULL;
 	char abspath[PATH_MAX];
 	size_t abspath_len = 0;
 
-	while ((ch = getopt(argc, argv, "kgep:u:0:sSwXY")) != -1)
+	while ((ch = getopt(argc, argv, "kgenp:u:0:sSwXY")) != -1)
 		switch (ch) {
 		case 'k':
 			signaling = true;
@@ -355,6 +356,9 @@ main(int argc, char *argv[])
 			  break;
 		case 'e':
 			  no_protexec = true;
+			  break;
+		case 'n':
+			  no_network = true;
 			  break;
 		case 'p': {
 			char *p;
@@ -418,7 +422,8 @@ main(int argc, char *argv[])
 		usage();
 
 	*promises_fill++ = default_promises;
-	*promises_fill++ = network_promises;
+	if (!no_network)
+		*promises_fill++ = network_promises;
 	if (custom_promises)
 		*promises_fill++ = custom_promises;
 
