@@ -70,6 +70,8 @@ __FBSDID("$FreeBSD$");
 #include <netgraph/bluetooth/include/ng_hci.h>
 #include <netgraph/bluetooth/include/ng_l2cap.h>
 #include <netgraph/bluetooth/include/ng_btsocket.h>
+#include <sys/sysfil.h>
+#include <sys/unveil.h>
 
 /*
  * This is taken from the xlat tables originally in truss which were
@@ -1297,4 +1299,19 @@ sysdecode_shmflags(FILE *fp, int flags, int *rem)
 {
 
 	return (print_mask_0(fp, shmflags, flags, rem));
+}
+
+
+bool
+sysdecode_sysfilctlflags(FILE *fp, int flags, int *rem)
+{
+
+	return (print_mask_0(fp, sysfilctlflags, flags, rem));
+}
+
+bool
+sysdecode_unveilctlflags(FILE *fp, int flags, int *rem)
+{
+
+	return (print_mask_0(fp, unveilctlflags, flags, rem));
 }
