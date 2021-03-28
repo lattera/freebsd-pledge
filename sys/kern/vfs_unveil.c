@@ -7,6 +7,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/types.h>
 #include <sys/tree.h>
 #include <sys/capsicum.h>
+#include <sys/counter.h>
 #include <sys/kernel.h>
 #include <sys/limits.h>
 #include <sys/lock.h>
@@ -31,12 +32,30 @@ __FBSDID("$FreeBSD$");
 MALLOC_DEFINE(M_UNVEIL, "unveil", "unveil");
 
 static bool __read_mostly unveil_enabled = true;
-SYSCTL_BOOL(_kern, OID_AUTO, unveil_enabled, CTLFLAG_RW,
+static unsigned int __read_mostly unveil_max_nodes_per_process = 128;
+
+static SYSCTL_NODE(_vfs, OID_AUTO, unveil, CTLFLAG_RW | CTLFLAG_MPSAFE, 0,
+    "");
+
+SYSCTL_BOOL(_vfs_unveil, OID_AUTO, enabled, CTLFLAG_RW,
 	&unveil_enabled, 0, "Allow unveil usage");
 
-static unsigned int __read_mostly unveil_max_nodes_per_process = 128;
-SYSCTL_UINT(_kern, OID_AUTO, maxunveilsperproc, CTLFLAG_RW,
+SYSCTL_UINT(_vfs_unveil, OID_AUTO, maxperproc, CTLFLAG_RW,
 	&unveil_max_nodes_per_process, 0, "Maximum unveils allowed per process");
+
+static SYSCTL_NODE(_vfs_unveil, OID_AUTO, stats, CTLFLAG_RW | CTLFLAG_MPSAFE, 0,
+    "");
+
+#define STATNODE_COUNTER(name, varname, descr)					\
+	static COUNTER_U64_DEFINE_EARLY(varname);				\
+	SYSCTL_COUNTER_U64(_vfs_unveil_stats, OID_AUTO, name, CTLFLAG_RD, &varname, \
+	    descr);
+
+STATNODE_COUNTER(lookups, unveil_stats_lookups, "");
+STATNODE_COUNTER(treedups, unveil_stats_treedups, "");
+STATNODE_COUNTER(traversals, unveil_stats_traversals, "");
+STATNODE_COUNTER(ascents, unveil_stats_ascents, "");
+STATNODE_COUNTER(ascent_total_depth, unveil_stats_ascent_total_depth, "");
 
 
 struct unveil_node {
@@ -159,6 +178,7 @@ unveil_tree_lookup(struct unveil_tree *tree, struct vnode *vp,
 	key.vp = vp;
 	key.name = __DECONST(char *, name);
 	key.name_len = name_len;
+	counter_u64_add(unveil_stats_lookups, 1);
 	return (RB_FIND(unveil_node_tree, &tree->root, &key));
 }
 
@@ -192,6 +212,7 @@ unveil_tree_dup(struct unveil_tree *old_tree)
 		    old_node->cover->name, old_node->cover->name_len);
 		KASSERT(new_node->cover, ("cover unveil node missing"));
 	}
+	counter_u64_add(unveil_stats_treedups, 1);
 	return (new_tree);
 }
 
@@ -528,6 +549,8 @@ unveil_traverse_begin(struct thread *td, struct unveil_traversal *trav,
     struct vnode *dvp)
 {
 	struct unveil_base *base = &td->td_proc->p_unveils;
+	int error;
+	counter_u64_add(unveil_stats_traversals, 1);
 	if (trav->save_flags != 0) {
 		UNVEIL_WRITE_BEGIN(base);
 		trav->tree = base->tree;
@@ -540,7 +563,14 @@ unveil_traverse_begin(struct thread *td, struct unveil_traversal *trav,
 	trav->cover = NULL;
 	trav->type = VDIR;
 	trav->depth = 0;
-	return (unveil_find_cover(td, trav->tree, dvp, &trav->cover, &trav->depth));
+	error = unveil_find_cover(td, trav->tree, dvp, &trav->cover, &trav->depth);
+	if (error)
+		return (error);
+	if (trav->depth > 0) {
+		counter_u64_add(unveil_stats_ascents, 1);
+		counter_u64_add(unveil_stats_ascent_total_depth, trav->depth);
+	}
+	return (0);
 }
 
 /*
