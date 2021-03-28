@@ -1,19 +1,19 @@
 #include <err.h>
+#include <errno.h>
 #include <limits.h>
 #include <paths.h>
+#include <pledge.h>
 #include <pwd.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/errno.h>
-#include <sys/stat.h>
 #include <sys/param.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sysexits.h>
 #include <unistd.h>
-#include <pledge.h>
 
 /*
  * Creating a "blind" directory for the new TMPDIR.  Since secure usage of
@@ -78,8 +78,8 @@ static const struct unveil_entry default_unveils[] = {
 	{ "/usr/sbin", "rx" },
 	{ _PATH_LOCALBASE "/bin", "rx" },
 	{ _PATH_LOCALBASE "/sbin", "rx" },
-	{ "/usr/share", "rx" },
-	{ _PATH_LOCALBASE "/share", "rx" },
+	{ "/usr/share", "r" },
+	{ _PATH_LOCALBASE "/share", "r" },
 };
 
 
