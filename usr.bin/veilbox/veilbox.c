@@ -159,6 +159,7 @@ prepare_tmpdir(void)
 
 
 static char *tmp_xauth_file = NULL;
+static char *display_unix_socket = NULL;
 
 static void
 cleanup_x11(void)
@@ -183,6 +184,18 @@ prepare_x11(bool trusted)
 	if (!p || !*p)
 		errx(EX_DATAERR, "DISPLAY environment variable not set");
 	display = p;
+	if (display[0] == ':')
+		p = display + 1;
+	else if (strncmp(display, "unix:", 5) == 0)
+		p = display + 5;
+	else
+		p = NULL;
+	if (p) {
+		r = asprintf(&display_unix_socket, "%s/X%.*s",
+		    "/tmp/.X11-unix", (unsigned)strspn(p, "0123456789"), p);
+		if (r < 0)
+			err(EX_TEMPFAIL, "asprintf");
+	}
 
 	p = getenv("TMPDIR");
 	r = asprintf(&p, "%s/%s.xauth.XXXXXXXXXXXX",
@@ -227,6 +240,21 @@ prepare_x11(bool trusted)
 	r = setenv("XAUTHORITY", tmp_xauth_file, 1);
 	if (r < 0)
 		err(EX_TEMPFAIL, "setenv");
+}
+
+static void
+unveil_x11(void)
+{
+	int r;
+	if (display_unix_socket) {
+		r = unveilexec(display_unix_socket, "rm");
+		if (r < 0)
+			err(EX_OSERR, "%s", display_unix_socket);
+	}
+	r = unveilexec(tmp_xauth_file, "r");
+	if (r < 0)
+		err(EX_OSERR, "%s", tmp_xauth_file);
+	do_unveils(nitems(x11_unveils), x11_unveils);
 }
 
 
@@ -464,12 +492,8 @@ main(int argc, char *argv[])
 	do_pledge(promises_base, promises_fill);
 
 	do_unveils(nitems(default_unveils), default_unveils);
-	if (x11_mode != X11_NONE) {
-		r = unveilexec(tmp_xauth_file, "r");
-		if (r < 0)
-			err(EX_OSERR, "%s", tmp_xauth_file);
-		do_unveils(nitems(x11_unveils), x11_unveils);
-	}
+	if (x11_mode != X11_NONE)
+		unveil_x11();
 	if (wrap) {
 		r = unveilexec(new_tmpdir, "rwc");
 		if (r < 0)
