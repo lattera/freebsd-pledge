@@ -1,9 +1,11 @@
+#include <assert.h>
 #include <err.h>
 #include <errno.h>
 #include <limits.h>
 #include <paths.h>
 #include <pledge.h>
 #include <pwd.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -12,17 +14,9 @@
 #include <sys/param.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <sysexits.h>
 #include <unistd.h>
-
-/*
- * Creating a "blind" directory for the new TMPDIR.  Since secure usage of
- * TMPDIR generally requires using unpredictable filenames, this should help
- * prevent different sandboxed applications from interfering with each others.
- *
- * This is (hopefully) better than nothing, but probably still risky.
- */
-static const mode_t tmpdir_mode = S_IWUSR|S_IXUSR;
 
 static const char *default_promises =
     "stdio "
@@ -44,11 +38,11 @@ static const char *network_promises = "ssl dns inet";
 
 static const char *protexec_promises = "prot_exec";
 
-static const char *error_promises = "error ";
+static const char *error_promises = "error";
 
 struct unveil_entry {
 	const char *path;
-	const char perms[8];
+	const char *perms;
 };
 
 static const struct unveil_entry default_unveils[] = {
@@ -85,68 +79,6 @@ static const struct unveil_entry default_unveils[] = {
 
 
 static void
-usage(void)
-{
-	fprintf(stderr, "usage: %s [-kge] [-p promises] [-u unveil ...] [-sS] cmd [arg ...]\n", getprogname());
-	exit(EX_USAGE);
-}
-
-static void
-new_tmpdir(char *newtmpdir, size_t newtmpdir_size)
-{
-	const char *tmpdir;
-	struct stat st;
-	uid_t uid;
-	int r;
-	uid = geteuid();
-	if (!((tmpdir = getenv("TMPDIR")) && *tmpdir))
-		tmpdir = _PATH_TMP;
-	r = snprintf(newtmpdir, newtmpdir_size,
-	    "%s/veilbox-%ju", tmpdir, (uintmax_t)uid);
-	if (r < 0)
-		err(EX_SOFTWARE, "snprintf");
-	if ((size_t)r >= newtmpdir_size)
-		errx(EX_OSFILE, "new TMPDIR too long");
-	r = mkdir(newtmpdir, tmpdir_mode);
-	if (r < 0 && errno != EEXIST)
-		warn("%s", newtmpdir);
-	r = lstat(newtmpdir, &st);
-	if (r < 0)
-		err(EX_OSERR, "%s", newtmpdir);
-	if (!S_ISDIR(st.st_mode))
-		errc(EX_OSFILE, ENOTDIR, "%s", newtmpdir);
-	if (st.st_uid != uid)
-		errx(EX_OSFILE, "new TMPDIR owned by wrong user (%ju): %s",
-		    (uintmax_t)st.st_uid, newtmpdir);
-	r = chmod(newtmpdir, tmpdir_mode);
-	if (r < 0)
-		err(EX_OSERR, "%s", newtmpdir);
-	r = setenv("TMPDIR", newtmpdir, 1);
-	if (r < 0)
-		err(EX_OSERR, "setenv");
-}
-
-static void
-do_default_unveils(void)
-{
-	int r;
-	const struct unveil_entry *entry;
-	for (entry = default_unveils;
-	    entry != &default_unveils[nitems(default_unveils)];
-	    entry++) {
-		r = unveilexec(entry->path, entry->perms);
-		if (r < 0)
-			err(EX_OSERR, "%s", entry->path);
-	}
-
-	char tmppath[PATH_MAX];
-	new_tmpdir(tmppath, sizeof tmppath);
-	r = unveilexec(tmppath, "rwc");
-	if (r < 0)
-		err(EX_OSERR, "%s", tmppath);
-}
-
-static void
 do_pledge(const char **base, const char **fill)
 {
 	size_t size;
@@ -167,13 +99,80 @@ do_pledge(const char **base, const char **fill)
 }
 
 static void
+do_unveils(size_t count, const struct unveil_entry *table)
+{
+	int r;
+	const struct unveil_entry *entry;
+	for (entry = table; entry != &table[count]; entry++) {
+		r = unveilexec(entry->path, entry->perms);
+		if (r < 0 && errno != ENOENT)
+			warn("%s", entry->path);
+	}
+}
+
+static void
+finish_unveils(void)
+{
+	int r;
+	r = unveilexec(NULL, NULL);
+	if (r < 0)
+		err(EX_OSERR, "unveil");
+}
+
+
+static char *new_tmpdir = NULL;
+
+static void
+cleanup_tmpdir(void)
+{
+	int r;
+	r = rmdir(new_tmpdir);
+	if (r < 0)
+		warn("%s", new_tmpdir);
+}
+
+static void
+prepare_tmpdir(char *newtmpdir, size_t newtmpdir_size)
+{
+	char *p;
+	int r;
+	p = getenv("TMPDIR");
+	r = snprintf(newtmpdir, newtmpdir_size,
+	    "%s/%s.tmpdir.XXXXXXXXXXXX",
+	    p && *p ? p : _PATH_TMP, getprogname());
+	if (r < 0)
+		err(EX_SOFTWARE, "snprintf");
+	if ((size_t)r >= newtmpdir_size)
+		errx(EX_OSFILE, "new TMPDIR too long");
+	p = mkdtemp(newtmpdir);
+	if (!p)
+		err(EX_OSERR, "%s", newtmpdir);
+	r = setenv("TMPDIR", newtmpdir, 1);
+	if (r < 0)
+		err(EX_OSERR, "setenv");
+	new_tmpdir = newtmpdir;
+	atexit(cleanup_tmpdir);
+}
+
+
+static pid_t child_pid;
+
+static void
+signal_handler(int sig)
+{
+	assert(child_pid >= 0);
+	if (child_pid)
+		kill(child_pid, sig);
+}
+
+static void
 preexec_cleanup(void)
 {
 	closefrom(3); /* Prevent potentially unintended FD passing. */
 }
 
-static void
-exec_shell(bool login_shell)
+static pid_t
+exec_shell(bool wrap, bool login_shell)
 {
 	const char *run, *name;
 
@@ -207,27 +206,71 @@ exec_shell(bool login_shell)
 	} else
 		name = run;
 
+	if (wrap) {
+		pid_t pid;
+		pid = vfork();
+		if (pid < 0)
+			err(EX_TEMPFAIL, "fork");
+		if (pid != 0) {
+			err_set_exit(NULL);
+			return (pid);
+		}
+		err_set_exit(_exit);
+	}
+
 	preexec_cleanup();
 	execlp(run, name, (char *)NULL);
 	err(EX_OSERR, "%s", run);
 }
 
+static pid_t
+exec_cmd(bool wrap, char *cmd_name, char **argv)
+{
+	if (wrap) {
+		pid_t pid;
+		pid = vfork();
+		if (pid < 0)
+			err(EX_TEMPFAIL, "fork");
+		if (pid != 0) {
+			err_set_exit(NULL);
+			return (pid);
+		}
+		err_set_exit(_exit);
+	}
+	preexec_cleanup();
+	execvp(cmd_name, argv);
+	err(EX_OSERR, "%s", cmd_name);
+}
+
+static void
+usage(void)
+{
+	fprintf(stderr, "usage: %s [-kgew] [-p promises] [-u unveil ...] [-sS] cmd [arg ...]\n", getprogname());
+	exit(EX_USAGE);
+}
+
+
 int
 main(int argc, char *argv[])
 {
 	int ch, r;
-	const char *promises_base[7], **promises_fill = promises_base,
+	const char *promises_base[10], **promises_fill = promises_base,
 	     *custom_promises = NULL;
+	struct unveil_entry custom_unveils_base[argc],
+	    *custom_unveils_fill = custom_unveils_base;
+	bool wrap = false;
+	int status;
 	bool signaling = false,
 	     run_shell = false,
 	     login_shell = false,
 	     new_pgrp = false,
 	     no_protexec = false;
 	char *cmd_arg0 = NULL;
+	char tmppath[PATH_MAX];
 	char abspath[PATH_MAX];
 	size_t abspath_len = 0;
 
-	while ((ch = getopt(argc, argv, "kgep:u:0:sS")) != -1)
+	while ((ch = getopt(argc, argv, "kgep:u:0:sSw")) != -1)
 		switch (ch) {
 		case 'k':
 			signaling = true;
@@ -267,9 +310,7 @@ main(int argc, char *argv[])
 					errc(EX_OSFILE, ENAMETOOLONG, "%s", path);
 				path = abspath;
 			}
-			r = unveilexec(path, perms);
-			if (r < 0)
-				err(EX_OSERR, "%s", optarg);
+			*custom_unveils_fill++ = (struct unveil_entry){ path, perms };
 			break;
 		}
 		case '0':
@@ -281,6 +322,9 @@ main(int argc, char *argv[])
 		case 's':
 			  run_shell = true;
 			  break;
+		case 'w':
+			  wrap = true;
+			  break;
 		default:
 			usage();
 		}
@@ -290,14 +334,15 @@ main(int argc, char *argv[])
 	if (run_shell == (argc != 0))
 		usage();
 
-	do_default_unveils();
-
+	*promises_fill++ = default_promises;
+	*promises_fill++ = network_promises;
 	if (custom_promises)
 		*promises_fill++ = custom_promises;
 
-	*promises_fill++ = default_promises;
-	*promises_fill++ = network_promises;
-
+	if (wrap)
+		prepare_tmpdir(tmppath, sizeof tmppath);
+	else
+		*promises_fill++ = "tmppath";
 	if (!signaling)
 		*promises_fill++ = error_promises;
 	if (run_shell)
@@ -313,18 +358,41 @@ main(int argc, char *argv[])
 	if (!no_protexec)
 		*promises_fill++ = protexec_promises;
 
+	*promises_fill++ = "unveil";
 	do_pledge(promises_base, promises_fill);
 
-	if (run_shell) {
-		exec_shell(login_shell);
+	do_unveils(nitems(default_unveils), default_unveils);
+	if (wrap) {
+		r = unveilexec(tmppath, "rwc");
+		if (r < 0)
+			err(EX_OSERR, "%s", tmppath);
+	}
+	do_unveils(custom_unveils_fill - custom_unveils_base, custom_unveils_base);
+	finish_unveils();
 
+	if (wrap) {
+		child_pid = 0;
+		signal(SIGHUP, signal_handler);
+		signal(SIGINT, signal_handler);
+		signal(SIGQUIT, signal_handler);
+		signal(SIGTERM, signal_handler);
+	}
+
+	if (run_shell) {
+		child_pid = exec_shell(wrap, login_shell);
 	} else {
 		char *cmd_name;
 		cmd_name = argv[0];
 		if (cmd_arg0)
 			argv[0] = cmd_arg0;
-		preexec_cleanup();
-		execvp(cmd_name, argv);
-		err(EX_OSERR, "%s", cmd_name);
+		child_pid = exec_cmd(wrap, cmd_name, argv);
 	}
+
+	assert(wrap);
+	r = waitpid(child_pid, &status, 0);
+	if (r < 0)
+		err(EX_OSERR, "waitpid");
+	child_pid = 0;
+	/* shell-like exit status */
+	exit(WIFSIGNALED(status) ? 128 + WTERMSIG(status) : WEXITSTATUS(status));
 }
