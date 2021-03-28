@@ -129,29 +129,26 @@ cleanup_tmpdir(void)
 	r = rmdir(new_tmpdir);
 	if (r < 0)
 		warn("%s", new_tmpdir);
+	free(new_tmpdir);
 }
 
 static void
-prepare_tmpdir(char *newtmpdir, size_t newtmpdir_size)
+prepare_tmpdir(void)
 {
 	char *p;
 	int r;
 	p = getenv("TMPDIR");
-	r = snprintf(newtmpdir, newtmpdir_size,
-	    "%s/%s.tmpdir.XXXXXXXXXXXX",
+	r = asprintf(&p, "%s/%s.tmpdir.XXXXXXXXXXXX",
 	    p && *p ? p : _PATH_TMP, getprogname());
 	if (r < 0)
-		err(EX_SOFTWARE, "snprintf");
-	if ((size_t)r >= newtmpdir_size)
-		errx(EX_OSFILE, "new TMPDIR too long");
-	p = mkdtemp(newtmpdir);
-	if (!p)
-		err(EX_OSERR, "%s", newtmpdir);
-	r = setenv("TMPDIR", newtmpdir, 1);
+		err(EX_TEMPFAIL, "snprintf");
+	new_tmpdir = mkdtemp(p);
+	if (!new_tmpdir)
+		err(EX_OSERR, "%s", p);
+	atexit(cleanup_tmpdir);
+	r = setenv("TMPDIR", new_tmpdir, 1);
 	if (r < 0)
 		err(EX_OSERR, "setenv");
-	new_tmpdir = newtmpdir;
-	atexit(cleanup_tmpdir);
 }
 
 
@@ -266,7 +263,6 @@ main(int argc, char *argv[])
 	     new_pgrp = false,
 	     no_protexec = false;
 	char *cmd_arg0 = NULL;
-	char tmppath[PATH_MAX];
 	char abspath[PATH_MAX];
 	size_t abspath_len = 0;
 
@@ -340,7 +336,7 @@ main(int argc, char *argv[])
 		*promises_fill++ = custom_promises;
 
 	if (wrap)
-		prepare_tmpdir(tmppath, sizeof tmppath);
+		prepare_tmpdir();
 	else
 		*promises_fill++ = "tmppath";
 	if (!signaling)
@@ -363,9 +359,9 @@ main(int argc, char *argv[])
 
 	do_unveils(nitems(default_unveils), default_unveils);
 	if (wrap) {
-		r = unveilexec(tmppath, "rwc");
+		r = unveilexec(new_tmpdir, "rwc");
 		if (r < 0)
-			err(EX_OSERR, "%s", tmppath);
+			err(EX_OSERR, "%s", new_tmpdir);
 	}
 	do_unveils(custom_unveils_fill - custom_unveils_base, custom_unveils_base);
 	finish_unveils();
