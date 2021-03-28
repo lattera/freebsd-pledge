@@ -253,6 +253,7 @@ unveil_base_tree_snap(struct unveil_base *base)
 void
 unveil_base_copy(struct unveil_base *dst, struct unveil_base *src)
 {
+	dst->modified = src->modified;
 	for (int i = 0; i < UNVEIL_ON_COUNT; i++)
 		dst->on[i] = src->on[i];
 	if (src->tree) {
