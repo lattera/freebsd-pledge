@@ -427,10 +427,6 @@ main(int argc, char *argv[])
 	if (custom_promises)
 		*promises_fill++ = custom_promises;
 
-	if (wrap)
-		prepare_tmpdir();
-	else
-		*promises_fill++ = "tmppath";
 	if (!signaling)
 		*promises_fill++ = error_promises;
 	if (run_shell)
@@ -449,6 +445,20 @@ main(int argc, char *argv[])
 	};
 	if (!no_protexec)
 		*promises_fill++ = protexec_promises;
+	if (wrap)
+		prepare_tmpdir();
+	else
+		/*
+		 * XXX This can be very unsafe.  The "tmppath" promise
+		 * disallows many operations on the temporary directory like
+		 * listing the files, accessing subdirectories, or creating or
+		 * connecting to local domain sockets, etc.  Files securely
+		 * created with randomized filenames should be safe from other
+		 * sandboxed processes using the same temporary directory.  But
+		 * files with known or predictable filenames are not.  KRB5's
+		 * krb5cc_<uid> is a pretty bad example of this.
+		 */
+		*promises_fill++ = "tmppath";
 
 	*promises_fill++ = "unveil";
 	do_pledge(promises_base, promises_fill);
