@@ -481,7 +481,8 @@ sysfil_sysinit(void *arg)
 	    CAP_FPATHCONF,
 	    CAP_MMAP,
 	    CAP_FSYNC,
-	    CAP_FTRUNCATE);
+	    CAP_FTRUNCATE,
+	    CAP_CONNECTAT);
 	cap_rights_init(&cap_sysfil_cpath_rights,
 	    CAP_LOOKUP,
 	    CAP_CREATE,
@@ -494,7 +495,6 @@ sysfil_sysinit(void *arg)
 	    CAP_SYMLINKAT,
 	    CAP_UNLINKAT,
 	    CAP_BINDAT,
-	    CAP_CONNECTAT,
 	    CAP_RENAMEAT_SOURCE,
 	    CAP_RENAMEAT_TARGET,
 	    CAP_UNDELETEAT);

@@ -917,7 +917,8 @@ unveil_sysinit(void *arg __unused)
 	    CAP_FPATHCONF,
 	    CAP_MMAP,
 	    CAP_FSYNC,
-	    CAP_FTRUNCATE);
+	    CAP_FTRUNCATE,
+	    CAP_CONNECTAT);
 	cap_rights_init(&cpath_rights,
 	    CAP_LOOKUP,
 	    CAP_CREATE,
@@ -929,7 +930,6 @@ unveil_sysinit(void *arg __unused)
 	    CAP_SYMLINKAT,
 	    CAP_UNLINKAT,
 	    CAP_BINDAT,
-	    CAP_CONNECTAT,
 	    CAP_RENAMEAT_TARGET,
 	    CAP_UNDELETEAT);
 	cap_rights_init(&xpath_rights,
