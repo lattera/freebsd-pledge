@@ -79,7 +79,8 @@ static const struct unveil_entry default_unveils[] = {
 	{ _PATH_LOCALBASE "/bin", "rx" },
 	{ _PATH_LOCALBASE "/sbin", "rx" },
 	{ "/usr/share", "r" },
-	{ _PATH_LOCALBASE "/share", "r" },
+	/* NOTE: some packages install executables in /usr/local/share */
+	{ _PATH_LOCALBASE "/share", "rx" },
 };
 
 
