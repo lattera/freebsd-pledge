@@ -81,6 +81,7 @@ static const struct unveil_entry default_unveils[] = {
 
 static const struct unveil_entry x11_unveils[] = {
 	{ _PATH_LOCALBASE "/etc/fonts", "r" },
+	{ _PATH_VARDB "/fontconfig", "r" },
 };
 
 
