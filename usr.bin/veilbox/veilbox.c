@@ -165,11 +165,17 @@ static void
 cleanup_x11(void)
 {
 	int r;
-	r = unlink(tmp_xauth_file);
-	if (r < 0)
-		warn("%s", tmp_xauth_file);
-	free(tmp_xauth_file);
-	tmp_xauth_file = NULL;
+	if (tmp_xauth_file) {
+		r = unlink(tmp_xauth_file);
+		if (r < 0)
+			warn("%s", tmp_xauth_file);
+		free(tmp_xauth_file);
+		tmp_xauth_file = NULL;
+	}
+	if (display_unix_socket) {
+		free(display_unix_socket);
+		display_unix_socket = NULL;
+	}
 }
 
 static void
@@ -181,8 +187,10 @@ prepare_x11(bool trusted)
 	int status;
 
 	p = getenv("DISPLAY");
-	if (!p || !*p)
-		errx(EX_DATAERR, "DISPLAY environment variable not set");
+	if (!p || !*p) {
+		warnx("DISPLAY environment variable not set");
+		return;
+	}
 	display = p;
 	if (display[0] == ':')
 		p = display + 1;
@@ -251,10 +259,12 @@ unveil_x11(void)
 		if (r < 0)
 			err(EX_OSERR, "%s", display_unix_socket);
 	}
-	r = unveilexec(tmp_xauth_file, "r");
-	if (r < 0)
-		err(EX_OSERR, "%s", tmp_xauth_file);
-	do_unveils(nitems(x11_unveils), x11_unveils);
+	if (tmp_xauth_file) {
+		r = unveilexec(tmp_xauth_file, "r");
+		if (r < 0)
+			err(EX_OSERR, "%s", tmp_xauth_file);
+		do_unveils(nitems(x11_unveils), x11_unveils);
+	}
 }
 
 
