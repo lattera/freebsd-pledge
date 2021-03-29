@@ -319,6 +319,9 @@ exec_shell(bool wrap, bool login_shell)
 			return (pid);
 		}
 		err_set_exit(_exit);
+		pid = setsid();
+		if (pid < 0)
+			err(EX_OSERR, "setsid");
 	}
 
 	preexec_cleanup();
