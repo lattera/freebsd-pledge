@@ -553,7 +553,7 @@ unveil_traverse_begin(struct thread *td, struct unveil_traversal *trav,
 	int error;
 	counter_u64_add(unveil_stats_traversals, 1);
 	if (trav->save_flags != 0) {
-		UNVEIL_WRITE_BEGIN(base);
+		UNVEIL_WRITE_ASSERT(base);
 		trav->tree = base->tree;
 	} else {
 		UNVEIL_READ_BEGIN(base);
@@ -684,7 +684,7 @@ unveil_traverse_end(struct thread *td, struct unveil_traversal *trav)
 	struct unveil_base *base = &td->td_proc->p_unveils;
 	if (trav->save_flags != 0) {
 		MPASS(base->tree == trav->tree);
-		UNVEIL_WRITE_END(base);
+		UNVEIL_WRITE_ASSERT(base);
 	} else if (trav->tree)
 		unveil_tree_free(trav->tree);
 }
@@ -777,13 +777,14 @@ sys_unveilctl(struct thread *td, struct unveilctl_args *uap)
 	if (error)
 		return (error);
 
+	UNVEIL_WRITE_BEGIN(base);
 	if (flags & UNVEILCTL_UNVEIL) {
 		error = do_unveil_add(td, base, flags, ctl);
-		if (error)
+		if (error) {
+			UNVEIL_WRITE_END(base);
 			return (error);
+		}
 	}
-
-	UNVEIL_WRITE_BEGIN(base);
 	do_unveil_misc(base, flags, ctl);
 	unveil_base_check(base);
 	UNVEIL_WRITE_END(base);
