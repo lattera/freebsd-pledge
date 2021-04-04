@@ -81,6 +81,7 @@ enum promise_type {
 	PROMISE_ANY_PRIV,
 	PROMISE_ANY_IOCTL,
 	PROMISE_ANY_SOCKOPT,
+	PROMISE_AUDIO,
 	PROMISE_COUNT /* must be last */
 };
 
@@ -153,6 +154,7 @@ static const struct promise_name {
 	[PROMISE_ANY_PRIV] =		{ "any_priv" },
 	[PROMISE_ANY_IOCTL] =		{ "any_ioctl" },
 	[PROMISE_ANY_SOCKOPT] =		{ "any_sockopt" },
+	[PROMISE_AUDIO] =		{ "audio" },
 };
 
 static const struct promise_sysfil {
@@ -238,6 +240,7 @@ static const struct promise_sysfil {
 	{ PROMISE_ANY_PRIV,		SYSFIL_ANY_PRIV },
 	{ PROMISE_ANY_IOCTL,		SYSFIL_ANY_IOCTL },
 	{ PROMISE_ANY_SOCKOPT,		SYSFIL_ANY_SOCKOPT },
+	{ PROMISE_AUDIO,		SYSFIL_AUDIO },
 };
 
 static const char *const root_path = "/";
@@ -292,6 +295,9 @@ static struct promise_unveil {
 	{ _PATH_DEV "/bpf", R|W,		PROMISE_BPF },
 	{ _PATH_DEV "/pfil", R|W,		PROMISE_PFIL },
 	{ _PATH_DEV "/pf", R|W,			PROMISE_PFIL },
+	{ _PATH_DEV "/sndstat", R|W,		PROMISE_AUDIO },
+	{ _PATH_DEV "/mixer", R|W,		PROMISE_AUDIO },
+	{ _PATH_DEV "/dsp", R|W,		PROMISE_AUDIO },
 	{ tmp_path, T,				PROMISE_TMPPATH },
 	{ "", 0, -1 }
 #undef	T

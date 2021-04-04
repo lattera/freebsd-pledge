@@ -61,6 +61,8 @@ __FBSDID("$FreeBSD$");
 #include <sys/kobj.h>
 #include <sys/module.h>
 
+#include <sys/sysfil.h>
+
 #ifdef HAVE_KERNEL_OPTION_HEADERS
 #include "opt_snd.h"
 #endif
@@ -226,6 +228,9 @@ static struct cdevsw midi_cdevsw = {
 	.d_ioctl = midi_ioctl,
 	.d_poll = midi_poll,
 	.d_name = "rmidi",
+#ifdef SYSFIL
+	.d_sysfil = SYSFIL_AUDIO,
+#endif
 };
 
 /*
