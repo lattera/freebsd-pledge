@@ -112,6 +112,7 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
 #include <sys/systm.h>
+#include <sys/capsicum.h>
 #include <sys/fcntl.h>
 #include <sys/limits.h>
 #include <sys/lock.h>
@@ -143,6 +144,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/uio.h>
 #include <sys/un.h>
 #include <sys/unpcb.h>
+#include <sys/ucred.h>
 #include <sys/jail.h>
 #include <sys/syslog.h>
 #include <netinet/in.h>
@@ -525,6 +527,9 @@ socreate(int dom, struct socket **aso, int type, int proto,
 	if (prp->pr_usrreqs->pru_attach == NULL ||
 	    prp->pr_usrreqs->pru_attach == pru_attach_notsupp)
 		return (EPROTONOSUPPORT);
+
+	if (IN_CAPABILITY_MODE(td) && (prp->pr_flags & PR_CAPATTACH) == 0)
+		return (ECAPMODE);
 
 	if (prison_check_af(cred, prp->pr_domain->dom_family) != 0)
 		return (EPROTONOSUPPORT);

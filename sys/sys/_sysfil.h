@@ -3,6 +3,7 @@
 
 #include <sys/types.h>
 #include <sys/_bitset.h>
+#include <sys/bitset.h>
 
 #define	SYSFIL_SHIFT		7	/* enough for 128 */
 #define	SYSFIL_SIZE		(1U << SYSFIL_SHIFT)

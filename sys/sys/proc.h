@@ -185,6 +185,7 @@ struct kaudit_record;
 struct kcov_info;
 struct kdtrace_proc;
 struct kdtrace_thread;
+struct kq_timer_cb_data;
 struct mqueue_notifier;
 struct p_sched;
 struct proc;
@@ -729,6 +730,9 @@ struct proc {
 	 */
 	LIST_ENTRY(proc) p_orphan;	/* (e) List of orphan processes. */
 	LIST_HEAD(, proc) p_orphans;	/* (e) Pointer to list of orphans. */
+
+	TAILQ_HEAD(, kq_timer_cb_data)	p_kqtim_stop;	/* (c) */
+
 #ifdef	UNVEIL
 	struct unveil_base p_unveils;
 #endif
@@ -830,6 +834,7 @@ struct proc {
 						   MAP_STACK */
 #define	P2_STKGAP_DISABLE_EXEC	0x00001000	/* Stack gap disabled
 						   after exec */
+#define	P2_ITSTOPPED		0x00002000
 
 /* Flags protected by proctree_lock, kept in p_treeflags. */
 #define	P_TREE_ORPHANED		0x00000001	/* Reparented, on orphan list */
@@ -1108,6 +1113,8 @@ void	fork_exit(void (*)(void *, struct trapframe *), void *,
 	    struct trapframe *);
 void	fork_return(struct thread *, struct trapframe *);
 int	inferior(struct proc *p);
+void	itimer_proc_continue(struct proc *p);
+void	kqtimer_proc_continue(struct proc *p);
 void	kern_proc_vmmap_resident(struct vm_map *map, struct vm_map_entry *entry,
 	    int *resident_count, bool *super);
 void	kern_yield(int);
