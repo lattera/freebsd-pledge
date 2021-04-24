@@ -61,6 +61,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/mutex.h>
 #include <sys/namei.h>
 #include <sys/selinfo.h>
+#include <sys/poll.h>
 #include <sys/priv.h>
 #include <sys/proc.h>
 #include <sys/protosw.h>
@@ -547,11 +548,16 @@ kern_fcntl(struct thread *td, int fd, int cmd, intptr_t arg)
 		error = fget_fcntl(td, fd, &cap_fcntl_rights, F_SETFL, &fp);
 		if (error != 0)
 			break;
+		if (fp->f_ops == &path_fileops) {
+			fdrop(fp, td);
+			error = EBADF;
+			break;
+		}
 		do {
 			tmp = flg = fp->f_flag;
 			tmp &= ~FCNTLFLAGS;
 			tmp |= FFLAGS(arg & ~O_ACCMODE) & FCNTLFLAGS;
-		} while(atomic_cmpset_int(&fp->f_flag, flg, tmp) == 0);
+		} while (atomic_cmpset_int(&fp->f_flag, flg, tmp) == 0);
 		tmp = fp->f_flag & FNONBLOCK;
 		error = fo_ioctl(fp, FIONBIO, &tmp, td->td_ucred, td);
 		if (error != 0) {
@@ -614,7 +620,7 @@ kern_fcntl(struct thread *td, int fd, int cmd, intptr_t arg)
 		error = fget_unlocked(fdp, fd, &cap_flock_rights, &fp);
 		if (error != 0)
 			break;
-		if (fp->f_type != DTYPE_VNODE) {
+		if (fp->f_type != DTYPE_VNODE || fp->f_ops == &path_fileops) {
 			error = EBADF;
 			fdrop(fp, td);
 			break;
@@ -722,7 +728,7 @@ kern_fcntl(struct thread *td, int fd, int cmd, intptr_t arg)
 		error = fget_unlocked(fdp, fd, &cap_flock_rights, &fp);
 		if (error != 0)
 			break;
-		if (fp->f_type != DTYPE_VNODE) {
+		if (fp->f_type != DTYPE_VNODE || fp->f_ops == &path_fileops) {
 			error = EBADF;
 			fdrop(fp, td);
 			break;
@@ -784,7 +790,7 @@ kern_fcntl(struct thread *td, int fd, int cmd, intptr_t arg)
 		error = fget_unlocked(fdp, fd, &cap_no_rights, &fp);
 		if (error != 0)
 			break;
-		if (fp->f_type != DTYPE_VNODE) {
+		if (fp->f_type != DTYPE_VNODE || fp->f_ops == &path_fileops) {
 			fdrop(fp, td);
 			error = EBADF;
 			break;
@@ -3441,7 +3447,7 @@ _fgetvp(struct thread *td, int fd, int flags, cap_rights_t *needrightsp,
 		error = EINVAL;
 	} else {
 		*vpp = fp->f_vnode;
-		vrefact(*vpp);
+		vref(*vpp);
 	}
 	fdrop(fp, td);
 
@@ -3477,7 +3483,7 @@ fgetvp_rights(struct thread *td, int fd, cap_rights_t *needrightsp,
 
 	*havecaps = caps;
 	*vpp = fp->f_vnode;
-	vrefact(*vpp);
+	vref(*vpp);
 	fdrop(fp, td);
 
 	return (0);
@@ -3561,7 +3567,7 @@ sys_flock(struct thread *td, struct flock_args *uap)
 	error = fget(td, uap->fd, &cap_flock_rights, &fp);
 	if (error != 0)
 		return (error);
-	if (fp->f_type != DTYPE_VNODE) {
+	if (fp->f_type != DTYPE_VNODE || fp->f_ops == &path_fileops) {
 		fdrop(fp, td);
 		return (EOPNOTSUPP);
 	}
@@ -4975,6 +4981,38 @@ struct fileops badfileops = {
 	.fo_chown = badfo_chown,
 	.fo_sendfile = badfo_sendfile,
 	.fo_fill_kinfo = badfo_fill_kinfo,
+};
+
+static int
+path_poll(struct file *fp, int events, struct ucred *active_cred,
+    struct thread *td)
+{
+	return (POLLNVAL);
+}
+
+static int
+path_close(struct file *fp, struct thread *td)
+{
+	MPASS(fp->f_type == DTYPE_VNODE);
+	fp->f_ops = &badfileops;
+	vdrop(fp->f_vnode);
+	return (0);
+}
+
+struct fileops path_fileops = {
+	.fo_read = badfo_readwrite,
+	.fo_write = badfo_readwrite,
+	.fo_truncate = badfo_truncate,
+	.fo_ioctl = badfo_ioctl,
+	.fo_poll = path_poll,
+	.fo_kqfilter = vn_kqfilter_opath,
+	.fo_stat = vn_statfile,
+	.fo_close = path_close,
+	.fo_chmod = badfo_chmod,
+	.fo_chown = badfo_chown,
+	.fo_sendfile = badfo_sendfile,
+	.fo_fill_kinfo = vn_fill_kinfo,
+	.fo_flags = DFLAG_PASSABLE,
 };
 
 int

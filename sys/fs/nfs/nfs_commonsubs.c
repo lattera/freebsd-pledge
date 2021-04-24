@@ -218,7 +218,7 @@ static struct nfsrv_lughash	*nfsgroupnamehash;
 static int nfs_bigreply[NFSV42_NPROCS] = { 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 0, 0, 1 };
+    1, 0, 0, 1, 0 };
 
 /* local functions */
 static int nfsrv_skipace(struct nfsrv_descript *nd, int *acesizep);
@@ -301,6 +301,7 @@ static struct {
 	{ NFSV4OP_SETXATTR, 2, "Setxattr", 8, },
 	{ NFSV4OP_REMOVEXATTR, 2, "Rmxattr", 7, },
 	{ NFSV4OP_LISTXATTRS, 2, "Listxattr", 9, },
+	{ NFSV4OP_BINDCONNTOSESS, 1, "BindConSess", 11, },
 };
 
 /*
@@ -309,7 +310,7 @@ static struct {
 static int nfs_bigrequest[NFSV42_NPROCS] = {
 	0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0
+	0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0
 };
 
 /*
@@ -4613,7 +4614,7 @@ nfsmout:
  * Handle an NFSv4.1 Sequence request for the session.
  * If reply != NULL, use it to return the cached reply, as required.
  * The client gets a cached reply via this call for callbacks, however the
- * server gets a cached reply via the nfsv4_seqsess_cachereply() call.
+ * server gets a cached reply via the nfsv4_seqsess_cacherep() call.
  */
 int
 nfsv4_seqsession(uint32_t seqid, uint32_t slotid, uint32_t highslot,
