@@ -310,8 +310,8 @@ static struct promise_unveil {
 };
 
 
-enum apply_on { ON_SELF, ON_EXEC, };
-enum apply_for { FOR_PLEDGE, FOR_CUSTOM, };
+enum apply_on { ON_SELF, ON_EXEC };
+enum apply_for { FOR_PLEDGE, FOR_CUSTOM };
 enum { ON_COUNT = 2 };
 
 /* Using slots 1 to 4; reserving slot 0 for user. */
@@ -507,9 +507,8 @@ do_pledge_unveils(const bool *want_promises, enum apply_on on, int *sels)
 	 *
 	 * NOTE: do_pledge() must allocate a large enough array.
 	 */
-	if (want_promises != UPERM_NONE)
-		/* allow dropping unveil permissions afterward */
-		*sels++ = SYSFIL_UNVEIL | sysfil_sel_flags_on[on];
+	/* allow dropping unveil permissions afterward */
+	*sels++ = SYSFIL_UNVEIL | sysfil_sel_flags_on[on];
 	for (pa = sysfils_table; pa != &sysfils_table[nitems(sysfils_table)]; pa++)
 		if (need_promises[pa->type])
 			*sels++ = pa->sysfil | sysfil_sel_flags_on[on];
@@ -555,6 +554,8 @@ reserve_pledge_unveils(enum apply_on on)
 		want_promises[i] = true;
 	do_promise_unveils(want_promises, on);
 	has_reserved_pledge_unveils[on] = true;
+	unveil_op(UNVEILCTL_ENABLE, on,
+	    unveil_slots_for[on][FOR_PLEDGE], UPERM_NONE);
 }
 
 static int
@@ -631,12 +632,12 @@ unveil_parse_perms(unveil_perms *uperms, const char *s)
 }
 
 static int
-do_unveil(const char *path, const bool on[ON_COUNT], unveil_perms uperms)
+do_unveil(const char *path, const bool on_set[ON_COUNT], unveil_perms uperms)
 {
-	for (int i = 0; i < ON_COUNT; i++) {
-		if (!on[i] || has_custom_unveils[i])
+	for (enum apply_on on = 0; on < ON_COUNT; on++) {
+		if (!on_set[on] || has_custom_unveils[on])
 			continue;
-		if (has_pledge_unveils[i]) {
+		if (has_pledge_unveils[on]) {
 			/*
 			 * After the first call to unveil(), filesystem access
 			 * must be restricted to what has been explicitly
@@ -646,43 +647,41 @@ do_unveil(const char *path, const bool on[ON_COUNT], unveil_perms uperms)
 			 * The pledge() wrapper may have unveiled "/" for
 			 * certain promises.  This must be undone.
 			 */
-			unveil_path(0, unveil_slots_for[i][FOR_PLEDGE],
+			unveil_path(0, unveil_slots_for[on][FOR_PLEDGE],
 			    root_path, UPERM_NONE);
 		}
-		has_custom_unveils[i] = true;
-		if (i == ON_EXEC && on[ON_SELF] && !has_pledge_unveils[i])
+		has_custom_unveils[on] = true;
+		if (on == ON_EXEC && on_set[ON_SELF] && !has_pledge_unveils[on])
 			continue;
-		unveil_op(UNVEILCTL_ENABLE, i,
-		    unveil_slots_for[i][FOR_CUSTOM],
+		unveil_op(UNVEILCTL_ENABLE, on,
+		    unveil_slots_for[on][FOR_CUSTOM],
 		    UPERM_NONE);
 	}
 
 	if (path) {
 		unveil_slots slots = 0;
-		for (int i = 0; i < ON_COUNT; i++)
-			if (on[i])
-				slots |= unveil_slots_for[i][FOR_CUSTOM];
+		for (int on = 0; on < ON_COUNT; on++)
+			if (on_set[on])
+				slots |= unveil_slots_for[on][FOR_CUSTOM];
 		return (unveil_path(UNVEILCTL_NOINHERIT, slots, path, uperms));
 	}
 
 	/* Forbid ever raising current unveil permissions. */
-	for (int i = 0; i < ON_COUNT; i++) {
-		bool reserve;
-		if (!on[i])
+	for (enum apply_on on = 0; on < ON_COUNT; on++) {
+		if (!on_set[on])
 			continue;
-		if (i == ON_EXEC && on[ON_SELF] && !has_pledge_unveils[i])
+		if (on == ON_EXEC && on_set[ON_SELF] && !has_pledge_unveils[on])
 			continue;
-		if ((reserve = !has_pledge_unveils[i] && !has_reserved_pledge_unveils[i]))
+		if (!has_pledge_unveils[on] && !has_reserved_pledge_unveils[on])
 			/* Make calling pledge() after unveil(NULL, NULL) work. */
-			reserve_pledge_unveils(i);
-		unveil_op(UNVEILCTL_FREEZE, i,
-		    reserve ? unveil_slots_for[i][FOR_PLEDGE] : 0, UPERM_NONE);
+			reserve_pledge_unveils(on);
+		unveil_op(UNVEILCTL_FREEZE, on, 0, UPERM_NONE);
 	}
 	return (0);
 }
 
 int
-unveil_1(const char *path, const bool on[ON_COUNT], const char *perms_str)
+unveil_1(const char *path, const bool on_set[ON_COUNT], const char *perms_str)
 {
 	unveil_perms uperms;
 	int r;
@@ -697,32 +696,32 @@ unveil_1(const char *path, const bool on[ON_COUNT], const char *perms_str)
 			return (-1);
 		}
 	}
-	return (do_unveil(path, on, uperms));
+	return (do_unveil(path, on_set, uperms));
 }
 
 int
 unveil(const char *path, const char *permissions)
 {
-	bool on[ON_COUNT] = { [ON_SELF] = true, [ON_EXEC] = true };
+	bool on_set[ON_COUNT] = { [ON_SELF] = true, [ON_EXEC] = true };
 	/*
 	 * XXX: unveil() is inherited on-exec on OpenBSD if the process has
 	 * execpledges, but re-unveiling isn't allowed (yet).  If the process
 	 * does not have execpledges, unveils are not inherited and the
 	 * executed process can do its own unveiling.
 	 */
-	return (unveil_1(path, on, permissions));
+	return (unveil_1(path, on_set, permissions));
 }
 
 int
 unveilself(const char *path, const char *permissions)
 {
-	bool on[ON_COUNT] = { [ON_SELF] = true };
-	return (unveil_1(path, on, permissions));
+	bool on_set[ON_COUNT] = { [ON_SELF] = true };
+	return (unveil_1(path, on_set, permissions));
 }
 
 int
 unveilexec(const char *path, const char *permissions)
 {
-	bool on[ON_COUNT] = { [ON_EXEC] = true };
-	return (unveil_1(path, on, permissions));
+	bool on_set[ON_COUNT] = { [ON_EXEC] = true };
+	return (unveil_1(path, on_set, permissions));
 }

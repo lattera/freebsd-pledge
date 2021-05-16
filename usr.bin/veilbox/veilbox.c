@@ -331,6 +331,7 @@ exec_shell(bool wrap, bool login_shell)
 			return (pid);
 		}
 		err_set_exit(_exit);
+		/* XXX This makes /dev/tty not work. */
 		pid = setsid();
 		if (pid < 0)
 			err(EX_OSERR, "setsid");
