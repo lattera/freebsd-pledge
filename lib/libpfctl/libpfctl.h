@@ -53,7 +53,7 @@ struct pfctl_rule {
 	struct pf_rule_addr	 src;
 	struct pf_rule_addr	 dst;
 	union pf_rule_ptr	 skip[PF_SKIP_COUNT];
-	char			 label[PF_RULE_LABEL_SIZE];
+	char			 label[PF_RULE_MAX_LABEL_COUNT][PF_RULE_LABEL_SIZE];
 	char			 ifname[IFNAMSIZ];
 	char			 qname[PF_QNAME_SIZE];
 	char			 pqname[PF_QNAME_SIZE];
@@ -179,6 +179,24 @@ RB_PROTOTYPE(pfctl_anchor_global, pfctl_anchor, entry_global,
 RB_PROTOTYPE(pfctl_anchor_node, pfctl_anchor, entry_node,
     pf_anchor_compare);
 
+struct pfctl_state_cmp {
+	uint64_t	id;
+	uint32_t	creatorid;
+	uint8_t		direction;
+};
+
+struct pfctl_kill {
+	struct pfctl_state_cmp	cmp;
+	sa_family_t		af;
+	int			proto;
+	struct pf_rule_addr	src;
+	struct pf_rule_addr	dst;
+	struct pf_rule_addr	rt_addr;
+	char			ifname[IFNAMSIZ];
+	char			label[PF_RULE_LABEL_SIZE];
+	bool			kill_match;
+};
+
 int	pfctl_get_rule(int dev, u_int32_t nr, u_int32_t ticket,
 	    const char *anchor, u_int32_t ruleset, struct pfctl_rule *rule,
 	    char *anchor_call);
@@ -189,5 +207,9 @@ int	pfctl_add_rule(int dev, const struct pfctl_rule *r,
 	    const char *anchor, const char *anchor_call, u_int32_t ticket,
 	    u_int32_t pool_ticket);
 int	pfctl_set_keepcounters(int dev, bool keep);
+int	pfctl_clear_states(int dev, const struct pfctl_kill *kill,
+	    unsigned int *killed);
+int	pfctl_kill_states(int dev, const struct pfctl_kill *kill,
+	    unsigned int *killed);
 
 #endif

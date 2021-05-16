@@ -977,6 +977,7 @@ update_rtm_from_rc(struct rt_addrinfo *info, struct rt_msghdr **prtm,
 	if ((error = update_rtm_from_info(info, prtm, alloc_len)) != 0)
 		return (error);
 
+	rtm = *prtm;
 	rtm->rtm_flags = rc->rc_rt->rte_flags | nhop_get_rtflags(nh);
 	if (rtm->rtm_flags & RTF_GWFLAG_COMPAT)
 		rtm->rtm_flags = RTF_GATEWAY | 
@@ -1010,7 +1011,7 @@ save_add_notification(struct rib_cmd_info *rc, void *_cbdata)
 static struct sockaddr *
 alloc_sockaddr_aligned(struct linear_buffer *lb, int len)
 {
-	len |= (sizeof(uint64_t) - 1);
+	len = roundup2(len, sizeof(uint64_t));
 	if (lb->offset + len > lb->size)
 		return (NULL);
 	struct sockaddr *sa = (struct sockaddr *)(lb->base + lb->offset);
@@ -1504,6 +1505,7 @@ cleanup_xaddrs_inet(struct rt_addrinfo *info, struct linear_buffer *lb)
 			return (ENOBUFS);
 		fill_sockaddr_inet(mask_sa, mask);
 		info->rti_info[RTAX_NETMASK] = (struct sockaddr *)mask_sa;
+		info->rti_flags &= ~RTF_HOST;
 	} else
 		remove_netmask(info);
 
@@ -1564,6 +1566,7 @@ cleanup_xaddrs_inet6(struct rt_addrinfo *info, struct linear_buffer *lb)
 			return (ENOBUFS);
 		fill_sockaddr_inet6((struct sockaddr_in6 *)sa, &mask, 0);
 		info->rti_info[RTAX_NETMASK] = sa;
+		info->rti_flags &= ~RTF_HOST;
 	} else
 		remove_netmask(info);
 
