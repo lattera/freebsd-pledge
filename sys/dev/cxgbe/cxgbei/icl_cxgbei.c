@@ -104,13 +104,12 @@ static MALLOC_DEFINE(M_CXGBEI, "cxgbei", "cxgbei(4)");
 
 SYSCTL_NODE(_kern_icl, OID_AUTO, cxgbei, CTLFLAG_RD | CTLFLAG_MPSAFE, 0,
     "Chelsio iSCSI offload");
-static int coalesce = 1;
-SYSCTL_INT(_kern_icl_cxgbei, OID_AUTO, coalesce, CTLFLAG_RWTUN,
-	&coalesce, 0, "Try to coalesce PDUs before sending");
-static int partial_receive_len = 128 * 1024;
-SYSCTL_INT(_kern_icl_cxgbei, OID_AUTO, partial_receive_len, CTLFLAG_RWTUN,
-    &partial_receive_len, 0, "Minimum read size for partially received "
-    "data segment");
+static int first_burst_length = 8192;
+SYSCTL_INT(_kern_icl_cxgbei, OID_AUTO, first_burst_length, CTLFLAG_RWTUN,
+    &first_burst_length, 0, "First burst length");
+static int max_burst_length = 2 * 1024 * 1024;
+SYSCTL_INT(_kern_icl_cxgbei, OID_AUTO, max_burst_length, CTLFLAG_RWTUN,
+    &max_burst_length, 0, "Maximum burst length");
 static int sendspace = 1048576;
 SYSCTL_INT(_kern_icl_cxgbei, OID_AUTO, sendspace, CTLFLAG_RWTUN,
     &sendspace, 0, "Default send socket buffer size");
@@ -470,7 +469,7 @@ icl_cxgbei_conn_pdu_append_data(struct icl_conn *ic, struct icl_pdu *ip,
 		}
 		MPASS(len == 0);
 	}
-	MPASS(ip->ip_data_len <= ic->ic_max_data_segment_length);
+	MPASS(ip->ip_data_len <= ic->ic_max_send_data_segment_length);
 
 	return (0);
 }
@@ -566,8 +565,6 @@ icl_cxgbei_new_conn(const char *name, struct mtx *lock)
 #ifdef DIAGNOSTIC
 	refcount_init(&ic->ic_outstanding_pdus, 0);
 #endif
-	/* This is a stop-gap value that will be corrected during handoff. */
-	ic->ic_max_data_segment_length = 16384;
 	ic->ic_name = name;
 	ic->ic_offload = "cxgbei";
 	ic->ic_unmapped = false;
@@ -807,26 +804,11 @@ icl_cxgbei_conn_handoff(struct icl_conn *ic, int fd)
 		icc->toep = toep;
 		icc->cwt = cxgbei_select_worker_thread(icc);
 
-		/*
-		 * We maintain the _send_ DSL in this field just to have a
-		 * convenient way to assert that the kernel never sends
-		 * oversized PDUs.  This field is otherwise unused in the driver
-		 * or the kernel.
-		 */
-		ic->ic_max_data_segment_length = ci->max_tx_pdu_len -
-		    ISCSI_BHS_SIZE;
-
 		icc->ulp_submode = 0;
-		if (ic->ic_header_crc32c) {
+		if (ic->ic_header_crc32c)
 			icc->ulp_submode |= ULP_CRC_HEADER;
-			ic->ic_max_data_segment_length -=
-			    ISCSI_HEADER_DIGEST_SIZE;
-		}
-		if (ic->ic_data_crc32c) {
+		if (ic->ic_data_crc32c)
 			icc->ulp_submode |= ULP_CRC_DATA;
-			ic->ic_max_data_segment_length -=
-			    ISCSI_DATA_DIGEST_SIZE;
-		}
 		so->so_options |= SO_NO_DDP;
 		toep->params.ulp_mode = ULP_MODE_ISCSI;
 		toep->ulpcb = icc;
@@ -1213,8 +1195,8 @@ icl_cxgbei_limits(struct icl_drv_limits *idl)
 	idl->idl_max_send_data_segment_length = (1 << 24) - 1;
 
 	/* These are somewhat arbitrary. */
-	idl->idl_max_burst_length = 2 * 1024 * 1024;
-	idl->idl_first_burst_length = 8192;
+	idl->idl_max_burst_length = max_burst_length;
+	idl->idl_first_burst_length = first_burst_length;
 
 	t4_iterate(cxgbei_limits, idl);
 

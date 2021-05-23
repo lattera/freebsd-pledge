@@ -9857,8 +9857,8 @@ rack_process_ack(struct mbuf *m, struct tcphdr *th, struct socket *so,
 	if (acked_amount && sbavail(&so->so_snd))
 		rack_adjust_sendmap(rack, &so->so_snd, tp->snd_una);
 	rack_log_wakeup(tp,rack, &so->so_snd, acked, 2);
-	SOCKBUF_UNLOCK(&so->so_snd);
-	tp->t_flags |= TF_WAKESOW;
+	/* NB: sowwakeup_locked() does an implicit unlock. */
+	sowwakeup_locked(so);
 	m_freem(mfree);
 	if (SEQ_GT(tp->snd_una, tp->snd_recover))
 		tp->snd_recover = tp->snd_una;
@@ -10208,7 +10208,6 @@ rack_process_data(struct mbuf *m, struct tcphdr *th, struct socket *so,
 					sbappendstream_locked(&so->so_rcv, m, 0);
 
 			rack_log_wakeup(tp,rack, &so->so_rcv, tlen, 1);
-			SOCKBUF_UNLOCK(&so->so_rcv);
 			tp->t_flags |= TF_WAKESOR;
 #ifdef NETFLIX_SB_LIMITS
 			if (so->so_rcv.sb_shlim && appended != mcnt)
@@ -10265,6 +10264,7 @@ rack_process_data(struct mbuf *m, struct tcphdr *th, struct socket *so,
 				    save_start + tlen);
 			}
 		}
+		tcp_handle_wakeup(tp, so);
 	} else {
 		m_freem(m);
 		thflags &= ~TH_FIN;
@@ -10276,9 +10276,8 @@ rack_process_data(struct mbuf *m, struct tcphdr *th, struct socket *so,
 	 */
 	if (thflags & TH_FIN) {
 		if (TCPS_HAVERCVDFIN(tp->t_state) == 0) {
-			socantrcvmore(so);
 			/* The socket upcall is handled by socantrcvmore. */
-			tp->t_flags &= ~TF_WAKESOR;
+			socantrcvmore(so);
 			/*
 			 * If connection is half-synchronized (ie NEEDSYN
 			 * flag on) then delay ACK, so it may be piggybacked
@@ -10471,7 +10470,6 @@ rack_do_fastnewdata(struct mbuf *m, struct tcphdr *th, struct socket *so,
 		ctf_calc_rwin(so, tp);
 	}
 	rack_log_wakeup(tp,rack, &so->so_rcv, tlen, 1);
-	SOCKBUF_UNLOCK(&so->so_rcv);
 	tp->t_flags |= TF_WAKESOR;
 #ifdef NETFLIX_SB_LIMITS
 	if (so->so_rcv.sb_shlim && mcnt != appended)
@@ -10631,8 +10629,7 @@ rack_fastack(struct mbuf *m, struct tcphdr *th, struct socket *so,
 		rack_adjust_sendmap(rack, &so->so_snd, tp->snd_una);
 		/* Wake up the socket if we have room to write more */
 		rack_log_wakeup(tp,rack, &so->so_snd, acked, 2);
-		SOCKBUF_UNLOCK(&so->so_snd);
-		tp->t_flags |= TF_WAKESOW;
+		sowwakeup_locked(so);
 		m_freem(mfree);
 		tp->t_rxtshift = 0;
 		RACK_TCPT_RANGESET(tp->t_rxtcur, RACK_REXMTVAL(tp),
@@ -11070,9 +11067,11 @@ rack_do_syn_recv(struct mbuf *m, struct tcphdr *th, struct socket *so,
 	 * If segment contains data or ACK, will call tcp_reass() later; if
 	 * not, do so now to pass queued data to user.
 	 */
-	if (tlen == 0 && (thflags & TH_FIN) == 0)
+	if (tlen == 0 && (thflags & TH_FIN) == 0) {
 		(void) tcp_reass(tp, (struct tcphdr *)0, NULL, 0,
 		    (struct mbuf *)0);
+		tcp_handle_wakeup(tp, so);
+	}
 	tp->snd_wl1 = th->th_seq - 1;
 	/* For syn-recv we need to possibly update the rtt */
 	if ((to->to_flags & TOF_TS) != 0 && to->to_tsecr) {
@@ -13155,8 +13154,7 @@ rack_do_compressed_ack_processing(struct tcpcb *tp, struct socket *so, struct mb
 			rack_adjust_sendmap(rack, &so->so_snd, tp->snd_una);
 			/* Wake up the socket if we have room to write more */
 			rack_log_wakeup(tp,rack, &so->so_snd, acked, 2);
-			SOCKBUF_UNLOCK(&so->so_snd);
-			tp->t_flags |= TF_WAKESOW;
+			sowwakeup_locked(so);
 			m_freem(mfree);
 		}
 		/* update progress */
@@ -17658,7 +17656,7 @@ send:
 		if (isipv6) {
 			ip6 = mtod(m, struct ip6_hdr *);
 			if (tp->t_port) {
-				udp = (struct udphdr *)((caddr_t)ip6 + ipoptlen + sizeof(struct ip6_hdr));
+				udp = (struct udphdr *)((caddr_t)ip6 + sizeof(struct ip6_hdr));
 				udp->uh_sport = htons(V_tcp_udp_tunneling_port);
 				udp->uh_dport = tp->t_port;
 				ulen = hdrlen + len - sizeof(struct ip6_hdr);
@@ -17675,7 +17673,7 @@ send:
 			ipov = (struct ipovly *)ip;
 #endif
 			if (tp->t_port) {
-				udp = (struct udphdr *)((caddr_t)ip + ipoptlen + sizeof(struct ip));
+				udp = (struct udphdr *)((caddr_t)ip + sizeof(struct ip));
 				udp->uh_sport = htons(V_tcp_udp_tunneling_port);
 				udp->uh_dport = tp->t_port;
 				ulen = hdrlen + len - sizeof(struct ip);
@@ -19409,6 +19407,34 @@ rack_apply_deferred_options(struct tcp_rack *rack)
 	}
 }
 
+static int
+rack_pru_options(struct tcpcb *tp, int flags)
+{
+	if (flags & PRUS_OOB)
+		return (EOPNOTSUPP);
+	return (0);
+}
+
+static struct tcp_function_block __tcp_rack = {
+	.tfb_tcp_block_name = __XSTRING(STACKNAME),
+	.tfb_tcp_output = rack_output,
+	.tfb_do_queued_segments = ctf_do_queued_segments,
+	.tfb_do_segment_nounlock = rack_do_segment_nounlock,
+	.tfb_tcp_do_segment = rack_do_segment,
+	.tfb_tcp_ctloutput = rack_ctloutput,
+	.tfb_tcp_fb_init = rack_init,
+	.tfb_tcp_fb_fini = rack_fini,
+	.tfb_tcp_timer_stop_all = rack_stopall,
+	.tfb_tcp_timer_activate = rack_timer_activate,
+	.tfb_tcp_timer_active = rack_timer_active,
+	.tfb_tcp_timer_stop = rack_timer_stop,
+	.tfb_tcp_rexmit_tmr = rack_remxt_tmr,
+	.tfb_tcp_handoff_ok = rack_handoff_ok,
+	.tfb_tcp_mtu_chg = rack_mtu_change,
+	.tfb_pru_options = rack_pru_options,
+
+};
+
 /*
  * rack_ctloutput() must drop the inpcb lock before performing copyin on
  * socket option arguments.  When it re-acquires the lock after the copy, it
@@ -19497,6 +19523,10 @@ rack_set_sockopt(struct socket *so, struct sockopt *sopt,
 	if (inp->inp_flags & (INP_TIMEWAIT | INP_DROPPED)) {
 		INP_WUNLOCK(inp);
 		return (ECONNRESET);
+	}
+	if (tp->t_fb != &__tcp_rack) {
+		INP_WUNLOCK(inp);
+		return (ENOPROTOOPT);
 	}
 	if (rack->defer_options && (rack->gp_ready == 0) &&
 	    (sopt->sopt_name != TCP_DEFER_OPTIONS) &&
@@ -19833,34 +19863,6 @@ out:
 	INP_WUNLOCK(inp);
 	return (error);
 }
-
-static int
-rack_pru_options(struct tcpcb *tp, int flags)
-{
-	if (flags & PRUS_OOB)
-		return (EOPNOTSUPP);
-	return (0);
-}
-
-static struct tcp_function_block __tcp_rack = {
-	.tfb_tcp_block_name = __XSTRING(STACKNAME),
-	.tfb_tcp_output = rack_output,
-	.tfb_do_queued_segments = ctf_do_queued_segments,
-	.tfb_do_segment_nounlock = rack_do_segment_nounlock,
-	.tfb_tcp_do_segment = rack_do_segment,
-	.tfb_tcp_ctloutput = rack_ctloutput,
-	.tfb_tcp_fb_init = rack_init,
-	.tfb_tcp_fb_fini = rack_fini,
-	.tfb_tcp_timer_stop_all = rack_stopall,
-	.tfb_tcp_timer_activate = rack_timer_activate,
-	.tfb_tcp_timer_active = rack_timer_active,
-	.tfb_tcp_timer_stop = rack_timer_stop,
-	.tfb_tcp_rexmit_tmr = rack_remxt_tmr,
-	.tfb_tcp_handoff_ok = rack_handoff_ok,
-	.tfb_tcp_mtu_chg = rack_mtu_change,
-	.tfb_pru_options = rack_pru_options,
-
-};
 
 static const char *rack_stack_names[] = {
 	__XSTRING(STACKNAME),
