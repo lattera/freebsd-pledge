@@ -176,6 +176,13 @@ ATF_TC_BODY(chdir1, tc)
 	ATF_REQUIRE(chdir("..") >= 0);
 }
 
+ATF_TC_WITHOUT_HEAD(cwd_deny);
+ATF_TC_BODY(cwd_deny, tc)
+{
+	ATF_REQUIRE(unveil(NULL, NULL) >= 0);
+	check_access(".", "d");
+}
+
 ATF_TC_WITHOUT_HEAD(openat1);
 ATF_TC_BODY(openat1, tc)
 {
@@ -316,6 +323,7 @@ ATF_TP_ADD_TCS(tp)
 	ATF_TP_ADD_TC(tp, descend_dotdots);
 	ATF_TP_ADD_TC(tp, chdir0);
 	ATF_TP_ADD_TC(tp, chdir1);
+	ATF_TP_ADD_TC(tp, cwd_deny);
 	ATF_TP_ADD_TC(tp, openat1);
 	ATF_TP_ADD_TC(tp, openat2);
 	ATF_TP_ADD_TC(tp, dev_stdin);

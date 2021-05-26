@@ -292,19 +292,16 @@ curtain_unveil(struct curtain_slot *slot,
 			mode = get_unveil_mode(slot, node);
 			if (!mode)
 				return (-1);
-			/*
-			 * XXX The UPERM_INSPECT added to followed symlinks
-			 * gets wiped by a curtain_unveils_limit() without
-			 * UPERM_RPATH or UPERM_INSPECT but it probably
-			 * shouldn't.
-			 *
-			 * TODO: There should be a different unveil permission
-			 * for followed symlinks?  It would be more restrictive
-			 * for unveils done without CURTAIN_UNVEIL_INSPECT and
-			 * might solve the curtain_unveils_limit() problem.
-			 */
-			if (flags & CURTAIN_UNVEIL_INSPECT || follow)
+			if (flags & CURTAIN_UNVEIL_INSPECT)
 				mode->uperms |= UPERM_INSPECT;
+			if (follow)
+				/*
+				 * XXX This is added even for unveils that only
+				 * request write permissions, but it gets wiped
+				 * by a curtain_unveils_limit() with the same
+				 * permissions.
+				 */
+				mode->uperms |= UPERM_FOLLOW;
 		}
 	}
 	if (mode) {

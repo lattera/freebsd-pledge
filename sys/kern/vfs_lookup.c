@@ -856,23 +856,21 @@ unveil_lookup_check(struct nameidata *ndp)
 	unveil_perms uperms;
 	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
 		return (0);
-
-	if (cnp->cn_flags & ISSYMLINK)
-		needrights = &cap_fstat_rights;
-	else
-		needrights = ndp->ni_rightsneeded;
-
 	uperms = unveil_traverse_effective_uperms(
 	    cnp->cn_thread, &ndp->ni_unveil);
-	unveil_uperms_rights(uperms, &haverights);
-	if (ndp->ni_vp)
-		rights_kludge(ndp->ni_vp, &haverights,
-		    uperms & UPERM_RPATH, uperms & UPERM_WPATH);
-
-	if (cap_rights_contains(&haverights, needrights))
-		return (0);
-
-	return (uperms & ~UPERM_INSPECT ? EACCES : ENOENT);
+	if (cnp->cn_flags & ISSYMLINK) {
+		if (uperms & UPERM_FOLLOW)
+			return (0);
+	} else {
+		needrights = ndp->ni_rightsneeded;
+		unveil_uperms_rights(uperms, &haverights);
+		if (ndp->ni_vp)
+			rights_kludge(ndp->ni_vp, &haverights,
+			    uperms & UPERM_RPATH, uperms & UPERM_WPATH);
+		if (cap_rights_contains(&haverights, needrights))
+			return (0);
+	}
+	return (uperms & ~(UPERM_INSPECT|UPERM_FOLLOW) ? EACCES : ENOENT);
 }
 
 static inline void

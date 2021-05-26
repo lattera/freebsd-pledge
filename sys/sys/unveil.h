@@ -24,6 +24,7 @@ enum {
 	UPERM_APATH = 1 << 5,
 	UPERM_TMPPATH = 1 << 6,
 	UPERM_SUBTMPPATH = 1 << 7,
+	UPERM_FOLLOW = 1 << 8,
 	UPERM_ALL = -1,
 };
 
@@ -35,11 +36,13 @@ uperms_expand(unveil_perms uperms)
 		if (uperms & UPERM_WPATH && uperms & UPERM_CPATH)
 			uperms |= UPERM_TMPPATH | UPERM_SUBTMPPATH;
 	}
+	if (uperms & UPERM_INSPECT)
+		uperms |= UPERM_FOLLOW;
 	return (uperms);
 }
 
 static const unveil_perms uperms_inheritable =
-    ~(UPERM_INSPECT | UPERM_TMPPATH | UPERM_SUBTMPPATH);
+    ~(UPERM_INSPECT | UPERM_FOLLOW | UPERM_TMPPATH | UPERM_SUBTMPPATH);
 
 static inline unveil_perms
 uperms_inherit(unveil_perms uperms)
