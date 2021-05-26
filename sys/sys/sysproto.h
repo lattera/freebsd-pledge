@@ -1856,15 +1856,6 @@ struct aio_writev_args {
 struct aio_readv_args {
 	char aiocbp_l_[PADL_(struct aiocb *)]; struct aiocb * aiocbp; char aiocbp_r_[PADR_(struct aiocb *)];
 };
-struct sysfilctl_args {
-	char flags_l_[PADL_(int)]; int flags; char flags_r_[PADR_(int)];
-	char selc_l_[PADL_(size_t)]; size_t selc; char selc_r_[PADR_(size_t)];
-	char selv_l_[PADL_(const int *)]; const int * selv; char selv_r_[PADR_(const int *)];
-};
-struct unveilctl_args {
-	char flags_l_[PADL_(int)]; int flags; char flags_r_[PADR_(int)];
-	char ctl_l_[PADL_(struct unveilctl *)]; struct unveilctl * ctl; char ctl_r_[PADR_(struct unveilctl *)];
-};
 int	nosys(struct thread *, struct nosys_args *);
 void	sys_sys_exit(struct thread *, struct sys_exit_args *);
 int	sys_fork(struct thread *, struct fork_args *);
@@ -2261,8 +2252,6 @@ int	sys_rpctls_syscall(struct thread *, struct rpctls_syscall_args *);
 int	sys___specialfd(struct thread *, struct __specialfd_args *);
 int	sys_aio_writev(struct thread *, struct aio_writev_args *);
 int	sys_aio_readv(struct thread *, struct aio_readv_args *);
-int	sys_sysfilctl(struct thread *, struct sysfilctl_args *);
-int	sys_unveilctl(struct thread *, struct unveilctl_args *);
 
 #ifdef COMPAT_43
 
@@ -3199,8 +3188,6 @@ int	freebsd12_closefrom(struct thread *, struct freebsd12_closefrom_args *);
 #define	SYS_AUE___specialfd	AUE_SPECIALFD
 #define	SYS_AUE_aio_writev	AUE_AIO_WRITEV
 #define	SYS_AUE_aio_readv	AUE_AIO_READV
-#define	SYS_AUE_sysfilctl	AUE_SYSFILCTL
-#define	SYS_AUE_unveilctl	AUE_UNVEILCTL
 
 #undef PAD_
 #undef PADL_

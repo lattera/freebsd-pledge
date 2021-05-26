@@ -517,6 +517,4 @@
 #define	SYS___specialfd	577
 #define	SYS_aio_writev	578
 #define	SYS_aio_readv	579
-#define	SYS_sysfilctl	580
-#define	SYS_unveilctl	581
-#define	SYS_MAXSYSCALL	582
+#define	SYS_MAXSYSCALL	580

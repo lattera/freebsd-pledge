@@ -3251,19 +3251,6 @@
 		    _Inout_ struct aiocb *aiocbp
 		);
 	}
-580	AUE_SYSFILCTL	STD|SYSFIL_ALWAYS {
-		int sysfilctl(
-		    int flags,
-		    size_t selc,
-		    const int *selv
-		);
-	}
-581	AUE_UNVEILCTL	STD|SYSFIL_UNVEIL {
-		int unveilctl(
-		    int flags,
-		    struct unveilctl *ctl
-		);
-	}
 
 ; Please copy any additions and changes to the following compatability tables:
 ; sys/compat/freebsd32/syscalls.master

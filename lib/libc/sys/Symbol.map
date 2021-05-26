@@ -417,8 +417,6 @@ FBSD_1.6 {
 	shm_rename;
 	curtainctl;
 	unveilreg;
-	sysfilctl;
-	unveilctl;
 };
 
 FBSDprivate_1.0 {

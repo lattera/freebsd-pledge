@@ -161,16 +161,6 @@ curtain_sysfil(struct curtain_slot *slot, int sysfil)
 	return (0);
 }
 
-static const int sysfilctl_flags[CURTAIN_ON_COUNT] = {
-	[CURTAIN_ON_SELF] = SYSFILCTL_ON_SELF,
-	[CURTAIN_ON_EXEC] = SYSFILCTL_ON_EXEC,
-};
-
-static const int sysfilsel_bits[CURTAIN_ON_COUNT] = {
-	[CURTAIN_ON_SELF] = SYSFILSEL_ON_SELF,
-	[CURTAIN_ON_EXEC] = SYSFILSEL_ON_EXEC,
-};
-
 static void
 fill_sysfils(unsigned *ents[CURTAIN_ON_COUNT], enum curtain_state min_state)
 {

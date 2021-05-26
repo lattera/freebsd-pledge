@@ -717,10 +717,6 @@ static const struct syscall_decode decoded_syscalls[] = {
 	{ .name = "cloudabi_sys_thread_exit", .ret_type = 1, .nargs = 2,
 	  .args = { { Ptr, 0 }, { CloudABIMFlags, 1 } } },
 	{ .name = "cloudabi_sys_thread_yield", .ret_type = 1, .nargs = 0 },
-	{ .name = "sysfilctl", .ret_type = 1, .nargs = 3,
-	  .args = { { Sysfilctl, 0 }, { Sizet, 1 }, { Ptr, 2 } } },
-	{ .name = "unveilctl", .ret_type = 1, .nargs = 2,
-	  .args = { { Unveilctl, 0 }, { Ptr, 1 } } },
 	{ .name = "curtainctl", .ret_type = 1, .nargs = 3,
 	  .args = { { CurtainctlFlags, 0 }, { Sizet, 1 }, { Ptr, 2 } } },
 	{ .name = "unveilreg", .ret_type = 1, .nargs = 2,
@@ -2944,12 +2940,6 @@ print_arg(struct syscall_arg *sc, unsigned long *args, register_t *retval,
 		break;
 	case CloudABIWhence:
 		fputs(xlookup(cloudabi_whence, args[sc->offset]), fp);
-		break;
-	case Sysfilctl:
-		print_mask_arg(sysdecode_sysfilctlflags, fp, args[sc->offset]);
-		break;
-	case Unveilctl:
-		print_mask_arg(sysdecode_unveilctlflags, fp, args[sc->offset]);
 		break;
 	case CurtainctlFlags:
 		print_mask_arg(sysdecode_curtainctlflags, fp, args[sc->offset]);

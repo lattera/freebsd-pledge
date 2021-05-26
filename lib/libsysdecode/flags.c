@@ -1301,19 +1301,6 @@ sysdecode_shmflags(FILE *fp, int flags, int *rem)
 	return (print_mask_0(fp, shmflags, flags, rem));
 }
 
-
-bool
-sysdecode_sysfilctlflags(FILE *fp, int flags, int *rem)
-{
-	return (print_mask_0(fp, sysfilctlflags, flags, rem));
-}
-
-bool
-sysdecode_unveilctlflags(FILE *fp, int flags, int *rem)
-{
-	return (print_mask_0(fp, unveilctlflags, flags, rem));
-}
-
 bool
 sysdecode_curtainctlflags(FILE *fp, int flags, int *rem)
 {

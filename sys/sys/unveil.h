@@ -46,40 +46,6 @@ uperms_inherit(unveil_perms uperms)
 }
 
 
-#define	UNVEILCTL_UNVEIL	(1 << 0)
-#define	UNVEILCTL_FREEZE	(1 << 2)
-#define	UNVEILCTL_LIMIT		(1 << 3)
-#define	UNVEILCTL_SWEEP		(1 << 4)
-#define	UNVEILCTL_ENABLE	(1 << 5)
-#define	UNVEILCTL_DISABLE	(1 << 6)
-#define	UNVEILCTL_NOINHERIT	(1 << 8)
-#define	UNVEILCTL_INTERMEDIATE	(1 << 9)
-#define	UNVEILCTL_INSPECTABLE	(1 << 10)
-#define	UNVEILCTL_NONDIRBYNAME	(1 << 11)
-#define	UNVEILCTL_BYINDEX	(1 << 13)
-#define	UNVEILCTL_ON_SELF	(1 << 16)
-#define	UNVEILCTL_ON_EXEC	(1 << 17)
-#define	UNVEILCTL_ON_BOTH	(UNVEILCTL_ON_SELF | UNVEILCTL_ON_EXEC)
-
-#define	UNVEIL_SUPPORTED_SLOTS	8
-#define	UNVEILCTL_MAX_TE	1024
-
-struct unveilctl {
-	int reserved;
-	int atfd;
-	union {
-		const char *path;
-		unsigned index;
-	};
-	int atflags;
-	unsigned slots;
-	unsigned uperms;
-	size_t tec;
-	unveil_index (*tev)[2];
-};
-
-int unveilctl(int flags, struct unveilctl *);
-
 #define	UNVEILREG_REGISTER	(1 << 0)
 #define	UNVEILREG_INTERMEDIATE	(1 << 8)
 #define	UNVEILREG_NONDIRBYNAME	(1 << 9)
@@ -96,7 +62,6 @@ struct unveilreg {
 };
 
 int unveilreg(int flags, struct unveilreg *);
-
 
 struct curtainent_unveil {
 	unveil_index index;

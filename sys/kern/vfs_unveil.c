@@ -58,6 +58,8 @@ STATNODE_COUNTER(ascents, unveil_stats_ascents, "");
 STATNODE_COUNTER(ascent_total_depth, unveil_stats_ascent_total_depth, "");
 
 
+#define	UNVEIL_SUPPORTED_SLOTS	2
+
 struct unveil_node {
 	struct unveil_node *cover;
 	RB_ENTRY(unveil_node) entry;
@@ -384,24 +386,19 @@ unveil_proc_exec_switch(struct thread *td)
 	unveil_base_check(base);
 }
 
-#define	FOREACH_FLAGS_ON(flags, i) \
-	for (i = 0; i < UNVEIL_ON_COUNT; i++) \
-		if ((flags) & UNVEILCTL_ON_BOTH & (UNVEILCTL_ON_SELF << i))
-
 static struct unveil_node *
 unveil_remember(struct unveil_base *base, struct unveil_traversal *trav,
     struct vnode *dvp, const char *name, size_t name_len, struct vnode *vp, bool final)
 {
 	struct unveil_node *node, *iter;
 	bool inserted;
-	int i, j;
 
 	if (trav->tree->node_count >= unveil_max_nodes_per_process)
 		return (NULL);
 
 	if (!name)
 		node = unveil_tree_insert(trav->tree, dvp, NULL, 0, &inserted);
-	else if ((trav->save_flags & UNVEILCTL_NONDIRBYNAME) && (!vp || vp->v_type != VDIR))
+	else if ((trav->save_flags & UNVEILREG_NONDIRBYNAME) && (!vp || vp->v_type != VDIR))
 		node = unveil_tree_insert(trav->tree, dvp, name, name_len, &inserted);
 	else if (vp)
 		node = unveil_tree_insert(trav->tree, vp, NULL, 0, &inserted);
@@ -433,7 +430,7 @@ unveil_remember(struct unveil_base *base, struct unveil_traversal *trav,
 	 */
 	if (inserted) {
 		node->slots_inherit = -1;
-		for (i = 0; i < UNVEIL_ON_COUNT; i++)
+		for (int i = 0; i < UNVEIL_ON_COUNT; i++)
 			node->frozen_uperms[i] =
 			    trav->cover ? uperms_inherit(trav->cover->frozen_uperms[i]) :
 			    base->on[i].frozen ? UPERM_NONE : UPERM_ALL;
@@ -446,20 +443,9 @@ unveil_remember(struct unveil_base *base, struct unveil_traversal *trav,
 	} else
 		trav->te_overflow = true;
 
-	if (trav->save_flags & UNVEILCTL_INTERMEDIATE)
+	if (trav->save_flags & UNVEILREG_INTERMEDIATE)
 		node->fully_covered = true; /* cannot be turned off */
 
-	if (name && final) {
-		FOREACH_SLOTS(trav->save_slots, j)
-			node->slots_uperms[j] = uperms_expand(trav->save_uperms);
-		if (trav->save_flags & UNVEILCTL_NOINHERIT)
-			node->slots_inherit &= ~trav->save_slots;
-		else
-			node->slots_inherit |= trav->save_slots;
-	} else if (trav->save_flags & UNVEILCTL_INSPECTABLE) {
-		FOREACH_SLOTS(trav->save_slots, j)
-			node->slots_uperms[j] |= UPERM_INSPECT;
-	}
 	base->modified = true;
 	return (node);
 }
@@ -604,7 +590,7 @@ unveil_traverse(struct thread *td, struct unveil_traversal *trav,
 	struct unveil_base *base = &td->td_proc->p_unveils;
 	struct unveil_node *node;
 
-	if (trav->save_flags != 0 && (final || (trav->save_flags & UNVEILCTL_INTERMEDIATE))) {
+	if (trav->save_flags != 0 && (final || (trav->save_flags & UNVEILREG_INTERMEDIATE))) {
 		if (name_len > NAME_MAX)
 			return (ENAMETOOLONG);
 		UNVEIL_WRITE_ASSERT(base);
@@ -765,27 +751,25 @@ unveil_index_set(struct unveil_base *base,
 
 
 static int
-do_unveil_add(struct thread *td, struct unveil_base *base, int flags, struct unveilctl ctl)
+do_unveil_add(struct thread *td, struct unveil_base *base, int flags, struct unveilreg reg)
 {
 	struct nameidata nd;
 	struct unveil_traversal *trav;
 	uint64_t ndflags;
 	int error;
-	if ((ctl.atflags & ~(AT_SYMLINK_NOFOLLOW | AT_RESOLVE_BENEATH)) != 0)
+	if ((reg.atflags & ~(AT_SYMLINK_NOFOLLOW | AT_RESOLVE_BENEATH)) != 0)
 		return (EINVAL);
-	ndflags = (ctl.atflags & AT_SYMLINK_NOFOLLOW ? NOFOLLOW : FOLLOW) |
-	    (ctl.atflags & AT_RESOLVE_BENEATH ? RBENEATH : 0);
+	ndflags = (reg.atflags & AT_SYMLINK_NOFOLLOW ? NOFOLLOW : FOLLOW) |
+	    (reg.atflags & AT_RESOLVE_BENEATH ? RBENEATH : 0);
 	trav = &nd.ni_unveil;
 	NDINIT_ATRIGHTS(&nd, LOOKUP, ndflags,
-	    UIO_USERSPACE, ctl.path, ctl.atfd, &cap_fstat_rights, td);
+	    UIO_USERSPACE, reg.path, reg.atfd, &cap_fstat_rights, td);
 	trav->save_flags = flags;
-	trav->save_uperms = ctl.uperms;
-	trav->save_slots = ctl.slots;
 	trav->first = true;
 	trav->te_overflow = false;
-	if (ctl.tev) {
-		if ((trav->ter = ctl.tec) > UNVEILCTL_MAX_TE)
-			trav->ter = UNVEILCTL_MAX_TE;
+	if (reg.tev) {
+		if ((trav->ter = reg.tec) > UNVEILREG_MAX_TE)
+			trav->ter = UNVEILREG_MAX_TE;
 		trav->tev = trav->tep = mallocarray(trav->ter,
 		    sizeof *trav->tev, M_TEMP, M_WAITOK);
 		if (!trav->tev)
@@ -798,160 +782,44 @@ do_unveil_add(struct thread *td, struct unveil_base *base, int flags, struct unv
 	if (error)
 		goto out;
 	NDFREE(&nd, 0);
-	if (ctl.tev) {
+	if (reg.tev) {
 		if (trav->te_overflow) {
 			error = ENAMETOOLONG;
 			goto out;
 		}
-		error = copyout(trav->tev, ctl.tev,
+		error = copyout(trav->tev, reg.tev,
 		    (char *)trav->tep - (char *)trav->tev);
 		if (error)
 			goto out;
 		td->td_retval[0] = trav->tep - trav->tev;
 	} else
 		td->td_retval[0] = trav->cover ? trav->cover->index : -1;
-out:	if (ctl.tev)
+out:	if (reg.tev)
 		free(trav->tev, M_TEMP);
 	return (error);
 }
 
-static int
-do_unveil_byindex(struct unveil_base *base, int flags, struct unveilctl ctl)
-{
-	struct unveil_node *node;
-	int j;
-	UNVEIL_WRITE_ASSERT(base);
-	UNVEIL_FOREACH(node, base) {
-		if (node->index == ctl.index) /* XXX */ {
-			base->modified = true;
-			FOREACH_SLOTS(ctl.slots, j)
-				node->slots_uperms[j] = uperms_expand(ctl.uperms);
-			if (flags & UNVEILCTL_NOINHERIT)
-				node->slots_inherit &= ~ctl.slots;
-			else
-				node->slots_inherit |= ctl.slots;
-			return (0);
-		}
-	}
-	return (EINVAL);
-}
-
-static void
-do_unveil_misc(struct unveil_base *base, int flags, struct unveilctl ctl)
-{
-	struct unveil_node *node;
-	int i, j;
-	UNVEIL_WRITE_ASSERT(base);
-	if (flags & UNVEILCTL_DISABLE) {
-		base->modified = true;
-		FOREACH_FLAGS_ON(flags, i)
-			base->on[i].slots &= ~ctl.slots;
-	}
-	if (flags & UNVEILCTL_ENABLE) {
-		base->modified = true;
-		FOREACH_FLAGS_ON(flags, i) {
-			base->on[i].active = base->on[i].wanted = true;
-			base->on[i].slots |= ctl.slots;
-		}
-	}
-	if (flags & UNVEILCTL_LIMIT) {
-		base->modified = true;
-		UNVEIL_FOREACH(node, base)
-			FOREACH_SLOTS(ctl.slots, j)
-				node->slots_uperms[j] &= uperms_expand(ctl.uperms);
-	}
-	if (flags & UNVEILCTL_FREEZE) {
-		base->modified = true;
-		FOREACH_FLAGS_ON(flags, i)
-			base->on[i].frozen = base->on[i].active = base->on[i].wanted = true;
-		UNVEIL_FOREACH(node, base)
-			FOREACH_FLAGS_ON(flags, i) {
-				unveil_perms wanted_uperms;
-				wanted_uperms = unveil_node_wanted_uperms(
-				    node, base->on[i].slots | ctl.slots);
-				node->frozen_uperms[i] &=
-				    uperms_expand(ctl.uperms | wanted_uperms);
-			}
-	}
-	if (flags & UNVEILCTL_SWEEP) {
-		base->modified = true;
-		UNVEIL_FOREACH(node, base) {
-			FOREACH_SLOTS(ctl.slots, j)
-				node->slots_uperms[j] = UPERM_NONE;
-			node->slots_inherit |= ctl.slots;
-		}
-	}
-}
-
 #endif /* UNVEIL */
-
-int
-sys_unveilctl(struct thread *td, struct unveilctl_args *uap)
-{
-#ifdef UNVEIL
-	struct unveil_base *base = &td->td_proc->p_unveils;
-	int flags, error;
-	struct unveilctl ctl;
-
-	if (!unveil_enabled)
-		return (EPERM);
-
-	flags = uap->flags;
-	error = copyin(uap->ctl, &ctl, sizeof ctl);
-	if (error)
-		return (error);
-
-	UNVEIL_WRITE_BEGIN(base);
-	if (flags & UNVEILCTL_UNVEIL) {
-		if (flags & UNVEILCTL_BYINDEX)
-			error = do_unveil_byindex(base, flags, ctl);
-		else
-			error = do_unveil_add(td, base, flags, ctl);
-		if (error)
-			goto out;
-	}
-	do_unveil_misc(base, flags, ctl);
-out:	unveil_base_check(base);
-	UNVEIL_WRITE_END(base);
-	return (error);
-#else
-	return (ENOSYS);
-#endif /* UNVEIL */
-}
 
 int
 sys_unveilreg(struct thread *td, struct unveilreg_args *uap)
 {
 #ifdef UNVEIL
 	struct unveil_base *base = &td->td_proc->p_unveils;
-	int flags, ctlflags, error;
+	int flags, error;
 	struct unveilreg reg;
-	struct unveilctl ctl;
 
 	if (!unveil_enabled)
 		return (ENOSYS);
 
 	flags = uap->flags;
-
 	error = copyin(uap->reg, &reg, sizeof reg);
 	if (error)
 		return (error);
 
-	ctlflags = 0;
-	ctlflags |= flags & UNVEILREG_REGISTER     ? UNVEILCTL_UNVEIL       : 0;
-	ctlflags |= flags & UNVEILREG_INTERMEDIATE ? UNVEILCTL_INTERMEDIATE : 0;
-	ctlflags |= flags & UNVEILREG_NONDIRBYNAME ? UNVEILCTL_NONDIRBYNAME : 0;
-	ctl = (struct unveilctl){
-		.atfd = reg.atfd,
-		.path = reg.path,
-		.atflags = reg.atflags,
-		.tec = reg.tec,
-		.tev = reg.tev,
-	};
-
 	UNVEIL_WRITE_BEGIN(base);
 	if (flags & UNVEILREG_REGISTER) {
-		error = do_unveil_add(td, base, ctlflags, ctl);
+		error = do_unveil_add(td, base, flags, reg);
 		if (error)
 			goto out;
 	}

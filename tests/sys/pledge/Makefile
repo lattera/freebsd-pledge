@@ -32,6 +32,6 @@ ATF_TESTS_C+=	atf_unveil_pledge
 ATF_TESTS_C+=	atf_unveil_exec
 ATF_TESTS_C+=	atf_unveil_fattr
 
-WARNS?=		3
+WARNS?=		6
 
 .include <bsd.test.mk>

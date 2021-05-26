@@ -3416,23 +3416,6 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		*n_args = 1;
 		break;
 	}
-	/* sysfilctl */
-	case 580: {
-		struct sysfilctl_args *p = params;
-		iarg[0] = p->flags; /* int */
-		uarg[1] = p->selc; /* size_t */
-		uarg[2] = (intptr_t)p->selv; /* const int * */
-		*n_args = 3;
-		break;
-	}
-	/* unveilctl */
-	case 581: {
-		struct unveilctl_args *p = params;
-		iarg[0] = p->flags; /* int */
-		uarg[1] = (intptr_t)p->ctl; /* struct unveilctl * */
-		*n_args = 2;
-		break;
-	}
 	default:
 		*n_args = 0;
 		break;
@@ -9151,35 +9134,6 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
-	/* sysfilctl */
-	case 580:
-		switch (ndx) {
-		case 0:
-			p = "int";
-			break;
-		case 1:
-			p = "size_t";
-			break;
-		case 2:
-			p = "userland const int *";
-			break;
-		default:
-			break;
-		};
-		break;
-	/* unveilctl */
-	case 581:
-		switch (ndx) {
-		case 0:
-			p = "int";
-			break;
-		case 1:
-			p = "userland struct unveilctl *";
-			break;
-		default:
-			break;
-		};
-		break;
 	default:
 		break;
 	};
@@ -11133,16 +11087,6 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		break;
 	/* aio_readv */
 	case 579:
-		if (ndx == 0 || ndx == 1)
-			p = "int";
-		break;
-	/* sysfilctl */
-	case 580:
-		if (ndx == 0 || ndx == 1)
-			p = "int";
-		break;
-	/* unveilctl */
-	case 581:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;

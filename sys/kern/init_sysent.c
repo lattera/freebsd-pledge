@@ -636,6 +636,4 @@ struct sysent sysent[] = {
 	{ .sy_narg = AS(__specialfd_args), .sy_call = (sy_call_t *)sys___specialfd, .sy_auevent = AUE_SPECIALFD, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 577 = __specialfd */
 	{ .sy_narg = AS(aio_writev_args), .sy_call = (sy_call_t *)sys_aio_writev, .sy_auevent = AUE_AIO_WRITEV, .sy_flags = SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 578 = aio_writev */
 	{ .sy_narg = AS(aio_readv_args), .sy_call = (sy_call_t *)sys_aio_readv, .sy_auevent = AUE_AIO_READV, .sy_flags = SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 579 = aio_readv */
-	{ .sy_narg = AS(sysfilctl_args), .sy_call = (sy_call_t *)sys_sysfilctl, .sy_auevent = AUE_SYSFILCTL, .sy_flags = (SYSFIL_ALWAYS << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 580 = sysfilctl */
-	{ .sy_narg = AS(unveilctl_args), .sy_call = (sy_call_t *)sys_unveilctl, .sy_auevent = AUE_UNVEILCTL, .sy_flags = (SYSFIL_UNVEIL << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 581 = unveilctl */
 };
