@@ -253,22 +253,6 @@ nameicap_check_dotdot(struct nameidata *ndp, struct vnode *dp)
 	return (ENOTCAPABLE);
 }
 
-#ifdef SYSFIL
-
-static int
-sysfil_namei_check(struct nameidata *ndp, struct thread *td)
-{
-	cap_rights_t haverights;
-	if (!IN_RESTRICTED_MODE(td))
-		return (0);
-	sysfil_cred_rights(td->td_ucred, &haverights);
-	if (cap_rights_contains(&haverights, ndp->ni_rightsneeded))
-		return (0);
-	return (ENOTCAPABLE);
-}
-
-#endif
-
 static void
 namei_cleanup_cnp(struct componentname *cnp)
 {
@@ -634,12 +618,6 @@ namei(struct nameidata *ndp)
 	}
 #endif
 
-#ifdef SYSFIL
-	error = sysfil_namei_check(ndp, td);
-	if (error)
-		return (error);
-#endif
-
 	/*
 	 * First try looking up the target without locking any vnodes.
 	 *
@@ -778,6 +756,46 @@ out:
 	return (error);
 }
 
+#if defined(SYSFIL) || defined(UNVEIL)
+static void
+rights_kludge(struct vnode *vp, cap_rights_t *rights,
+    bool can_read, bool can_write)
+{
+	/* Kludge for directory O_SEARCH opens. */
+	if (vp->v_type == VDIR && can_read)
+		cap_rights_set(rights, CAP_FEXECVE, CAP_EXECAT);
+	/* Kludge for O_CREAT opens. */
+	if (can_write)
+		cap_rights_set(rights, CAP_CREATE);
+}
+#endif
+
+#ifdef SYSFIL
+
+static int
+sysfil_lookup_check(struct nameidata *ndp)
+{
+	struct componentname *cnp = &ndp->ni_cnd;
+	struct thread *td = cnp->cn_thread;
+	cap_rights_t haverights, *needrights;
+	if (!IN_RESTRICTED_MODE(td))
+		return (0);
+	if (cnp->cn_flags & ISSYMLINK)
+		needrights = &cap_fstat_rights;
+	else
+		needrights = ndp->ni_rightsneeded;
+	sysfil_cred_rights(td->td_ucred, &haverights);
+	if (ndp->ni_vp)
+		rights_kludge(ndp->ni_vp, &haverights,
+		    sysfil_check(td, SYSFIL_RPATH) == 0,
+		    sysfil_check(td, SYSFIL_WPATH) == 0);
+	if (cap_rights_contains(&haverights, needrights))
+		return (0);
+	return (EPERM);
+}
+
+#endif
+
 #ifdef UNVEIL
 
 static inline bool
@@ -835,7 +853,7 @@ unveil_lookup_check(struct nameidata *ndp)
 {
 	struct componentname *cnp = &ndp->ni_cnd;
 	cap_rights_t haverights, *needrights;
-	int error;
+	unveil_perms uperms;
 	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
 		return (0);
 
@@ -844,13 +862,17 @@ unveil_lookup_check(struct nameidata *ndp)
 	else
 		needrights = ndp->ni_rightsneeded;
 
-	unveil_traverse_effective_rights(
-	    cnp->cn_thread, &ndp->ni_unveil, &haverights, &error);
+	uperms = unveil_traverse_effective_uperms(
+	    cnp->cn_thread, &ndp->ni_unveil);
+	unveil_uperms_rights(uperms, &haverights);
+	if (ndp->ni_vp)
+		rights_kludge(ndp->ni_vp, &haverights,
+		    uperms & UPERM_RPATH, uperms & UPERM_WPATH);
 
 	if (cap_rights_contains(&haverights, needrights))
 		return (0);
 
-	return (error);
+	return (uperms & ~UPERM_INSPECT ? EACCES : ENOENT);
 }
 
 static inline void
@@ -1491,15 +1513,21 @@ nextname:
 		dpunlocked = 1;
 	}
 success:
-#ifdef UNVEIL
 	/*
 	 * NOTE: "success:" is sometimes not so successful (especially with
 	 * unveil checking).  dp, dpunlocked, ni_dvp and ni_dvp_unlocked must
 	 * be properly set before jumping to success so that cleanup is done
 	 * correctly on failure.
 	 */
+#ifdef UNVEIL
+	/* Check unveils first because it can yield better errnos. */
 	error = unveil_lookup_check(ndp);
-	if (error != 0)
+	if (error)
+		goto bad2;
+#endif
+#ifdef SYSFIL
+	error = sysfil_lookup_check(ndp);
+	if (error)
 		goto bad2;
 #endif
 	/*

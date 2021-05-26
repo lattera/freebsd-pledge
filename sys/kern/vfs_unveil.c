@@ -665,25 +665,6 @@ unveil_traverse_effective_uperms(struct thread *td, struct unveil_traversal *tra
 }
 
 void
-unveil_traverse_effective_rights(struct thread *td, struct unveil_traversal *trav,
-    cap_rights_t *rights, int *suggested_error)
-{
-	unveil_perms uperms = unveil_traverse_effective_uperms(td, trav);
-
-	unveil_uperms_rights(uperms, rights);
-
-	/* Kludge for directory O_EXEC/O_SEARCH opens. */
-	if (trav->type == VDIR && (uperms & UPERM_RPATH))
-		cap_rights_set(rights, CAP_FEXECVE, CAP_EXECAT);
-	/* Kludge for O_CREAT opens. */
-	if (trav->type != VNON && (uperms & UPERM_WPATH))
-		cap_rights_set(rights, CAP_CREATE);
-
-	if (suggested_error)
-		*suggested_error = uperms & ~UPERM_INSPECT ? EACCES : ENOENT;
-}
-
-void
 unveil_traverse_end(struct thread *td, struct unveil_traversal *trav)
 {
 	struct unveil_base *base = &td->td_proc->p_unveils;

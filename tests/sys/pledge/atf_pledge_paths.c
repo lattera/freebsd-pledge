@@ -121,11 +121,11 @@ ATF_TC_BODY(cpath_deny, tc)
 	ATF_REQUIRE(try_mkdir("d") >= 0);
 	ATF_REQUIRE(try_creat("d/1") >= 0);
 	ATF_REQUIRE(pledge("stdio error rpath wpath", "") >= 0);
+	ATF_CHECK_ERRNO(EACCES, try_creat("x") < 0);
+	ATF_CHECK_ERRNO(EACCES, try_creat("d/x") < 0);
 	/* XXX stop exposing Capsicum errnos? */
-	ATF_REQUIRE_ERRNO(ENOTCAPABLE, try_creat("x") < 0);
-	ATF_REQUIRE_ERRNO(ENOTCAPABLE, try_creat("d/x") < 0);
-	ATF_REQUIRE_ERRNO(ECAPMODE, try_mkdir("x") < 0);
-	ATF_REQUIRE_ERRNO(ECAPMODE, try_mkdir("d/x") < 0);
+	ATF_CHECK_ERRNO(ECAPMODE, try_mkdir("x") < 0);
+	ATF_CHECK_ERRNO(ECAPMODE, try_mkdir("d/x") < 0);
 }
 
 ATF_TC_WITHOUT_HEAD(fattr_allow);

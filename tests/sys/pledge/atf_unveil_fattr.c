@@ -5,7 +5,6 @@
 #include <atf-c.h>
 #include <pledge.h>
 
-#define CHECK_HARDER
 #include "path-utils.h"
 
 ATF_TC_WITHOUT_HEAD(chmod_deny);

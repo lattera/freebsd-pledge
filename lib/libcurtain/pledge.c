@@ -369,13 +369,16 @@ uperms_for_promises(const enum curtain_state *promises)
 static void
 sysfils_for_uperms(struct curtain_slot *slot, unveil_perms uperms)
 {
+	/*
+	 * TODO: Could probably reduce these when the only unveils for certain
+	 * permissions are on non-directories.
+	 */
 	if (uperms & UPERM_RPATH) curtain_sysfil(slot, SYSFIL_RPATH);
 	if (uperms & UPERM_WPATH) curtain_sysfil(slot, SYSFIL_WPATH);
 	if (uperms & UPERM_CPATH) curtain_sysfil(slot, SYSFIL_CPATH);
 	if (uperms & UPERM_XPATH) curtain_sysfil(slot, SYSFIL_EXEC);
 	/* Note that UPERM_APATH does not imply SYSFIL_FATTR. */
 	if (uperms & UPERM_TMPPATH) {
-		/* TODO: could probably reduce this  */
 		curtain_sysfil(slot, SYSFIL_RPATH);
 		curtain_sysfil(slot, SYSFIL_WPATH);
 		curtain_sysfil(slot, SYSFIL_CPATH);

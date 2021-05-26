@@ -131,8 +131,6 @@ int unveil_traverse(struct thread *, struct unveil_traversal *,
 void unveil_traverse_dotdot(struct thread *, struct unveil_traversal *,
     struct vnode *);
 unveil_perms unveil_traverse_effective_uperms(struct thread *, struct unveil_traversal *);
-void unveil_traverse_effective_rights(struct thread *, struct unveil_traversal *,
-    cap_rights_t *, int *suggested_error);
 void unveil_traverse_end(struct thread *, struct unveil_traversal *);
 
 void unveil_uperms_rights(unveil_perms, cap_rights_t *);

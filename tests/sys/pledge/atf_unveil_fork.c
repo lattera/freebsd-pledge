@@ -6,7 +6,6 @@
 #include <pledge.h>
 
 #include "misc-utils.h"
-#define CHECK_HARDER
 #include "path-utils.h"
 
 ATF_TC_WITHOUT_HEAD(fork_hide_all);

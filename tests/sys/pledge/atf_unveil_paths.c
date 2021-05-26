@@ -2,7 +2,6 @@
 #include <atf-c.h>
 #include <pledge.h>
 
-#define CHECK_HARDER
 #include "path-utils.h"
 
 /*

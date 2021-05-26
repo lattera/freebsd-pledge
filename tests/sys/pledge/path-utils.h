@@ -110,14 +110,6 @@ check_accessat(int atfd, const char *path, const char *flags)
 
 	warnx("%s: %s %s", __FUNCTION__, path, flags);
 
-	/*
-	 * XXX O_SEARCH/X_OK are poorly handled by the sysfil checks.  The
-	 * unveil checks are doing it better.
-	 *
-	 * XXX O_CREAT isn't allowed without the "cpath" promise even if the
-	 * file already exists (unlike the "c" unveil permission).
-	 */
-
 	int expected_errno = e ? EACCES : ENOENT;
 
 	if (i)
@@ -132,21 +124,17 @@ check_accessat(int atfd, const char *path, const char *flags)
 	if (r) {
 		ATF_CHECK(try_accessat(atfd, path, R_OK) >= 0);
 		ATF_CHECK(try_openat(atfd, path, O_RDONLY) >= 0);
-#ifdef CHECK_HARDER
 		if (d) {
 			ATF_CHECK(try_accessat(atfd, path, X_OK) >= 0);
 			ATF_CHECK(try_openat(atfd, path, O_SEARCH) >= 0);
 		}
-#endif
 	} else if (!p) {
 		ATF_CHECK_ERRNO(expected_errno, try_accessat(atfd, path, R_OK) < 0);
 		ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_RDONLY) < 0);
-#ifdef CHECK_HARDER
 		if (d) {
 			ATF_CHECK_ERRNO(expected_errno, try_accessat(atfd, path, X_OK) < 0);
 			ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_SEARCH) < 0);
 		}
-#endif
 	}
 
 	if (w) {
@@ -157,11 +145,9 @@ check_accessat(int atfd, const char *path, const char *flags)
 			ATF_CHECK(try_openat(atfd, path, O_WRONLY) >= 0);
 			if (r)
 				ATF_CHECK(try_openat(atfd, path, O_RDWR) >= 0);
-#ifdef CHECK_HARDER
 			ATF_CHECK(try_openat(atfd, path, O_WRONLY|O_CREAT) >= 0);
 			if (r)
 				ATF_CHECK(try_openat(atfd, path, O_RDWR|O_CREAT) >= 0);
-#endif
 		}
 	} else if (!p) {
 		ATF_CHECK_ERRNO(expected_errno, try_accessat(atfd, path, W_OK) < 0);
@@ -176,9 +162,7 @@ check_accessat(int atfd, const char *path, const char *flags)
 		if (x) {
 			ATF_CHECK(try_accessat(atfd, path, X_OK) >= 0);
 		} else if (!p) {
-#ifdef CHECK_HARDER
 			ATF_CHECK_ERRNO(expected_errno, try_accessat(atfd, path, X_OK) < 0);
-#endif
 		}
 	}
 }
