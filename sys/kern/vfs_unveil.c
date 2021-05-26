@@ -794,15 +794,15 @@ sys_unveilreg(struct thread *td, struct unveilreg_args *uap)
 	struct unveil_base *base = &td->td_proc->p_unveils;
 	int flags, error;
 	struct unveilreg reg;
-
 	if (!unveil_enabled)
 		return (ENOSYS);
-
 	flags = uap->flags;
+	if ((flags & UNVEILREG_VERSION_MASK) != UNVEILREG_VERSION)
+		return (EINVAL);
+	flags &= ~UNVEILREG_VERSION_MASK;
 	error = copyin(uap->reg, &reg, sizeof reg);
 	if (error)
 		return (error);
-
 	UNVEIL_WRITE_BEGIN(base);
 	if (flags & UNVEILREG_REGISTER) {
 		error = do_unveil_add(td, base, flags, reg);

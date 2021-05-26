@@ -148,14 +148,18 @@ struct curtainreq {
 	void *data;
 };
 
-int curtainctl(int flags, size_t reqc, struct curtainreq *reqv);
-
 #define	CURTAINCTL_MAX_REQS	1024
 #define	CURTAINCTL_MAX_SIZE	(16 << 10)
 
-#define	CURTAINCTL_ENGAGE	(1 <<  0)
-#define	CURTAINCTL_REQUIRE	(1 <<  1)
-#define	CURTAINCTL_ENFORCE	(1 <<  2)
+int curtainctl(int flags, size_t reqc, struct curtainreq *reqv);
+
+#define	CURTAINCTL_VERSION_MASK	(0xff << 24)
+#define	CURTAINCTL_VERSION	(1 << 24)
+
+#define	CURTAINCTL_ENGAGE	(1 <<  0 | CURTAINCTL_VERSION)
+#define	CURTAINCTL_REQUIRE	(1 <<  1 | CURTAINCTL_VERSION)
+#define	CURTAINCTL_ENFORCE	(1 <<  2 | CURTAINCTL_VERSION)
+
 #define	CURTAINCTL_ON_SELF	(1 << 16)
 #define	CURTAINCTL_ON_EXEC	(1 << 17)
 

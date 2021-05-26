@@ -46,12 +46,6 @@ uperms_inherit(unveil_perms uperms)
 }
 
 
-#define	UNVEILREG_REGISTER	(1 << 0)
-#define	UNVEILREG_INTERMEDIATE	(1 << 8)
-#define	UNVEILREG_NONDIRBYNAME	(1 << 9)
-
-#define	UNVEILREG_MAX_TE	1024
-
 struct unveilreg {
 	int atfd;
 	int atflags;
@@ -61,11 +55,21 @@ struct unveilreg {
 	unveil_index (*tev)[2];
 };
 
+#define	UNVEILREG_MAX_TE	1024
+
 int unveilreg(int flags, struct unveilreg *);
 
+#define	UNVEILREG_VERSION_MASK	(0xff << 24)
+#define	UNVEILREG_VERSION	(1 << 24)
+
+#define	UNVEILREG_REGISTER	(1 <<  0 | UNVEILREG_VERSION)
+#define	UNVEILREG_INTERMEDIATE	(1 <<  8 | UNVEILREG_VERSION)
+#define	UNVEILREG_NONDIRBYNAME	(1 <<  9 | UNVEILREG_VERSION)
+
 struct curtainent_unveil {
+	uint16_t _reserved;
 	unveil_index index;
-	unsigned uperms;
+	unveil_perms uperms;
 };
 
 
