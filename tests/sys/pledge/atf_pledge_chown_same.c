@@ -20,11 +20,10 @@ ATF_TC_BODY(chown_same, tc)
 	ATF_REQUIRE( chown(p,  st.st_uid, st.st_gid) >= 0);
 	ATF_REQUIRE(fchown(fd, st.st_uid, st.st_gid) >= 0);
 	if (geteuid() == 0) {
-		/* XXX Capsicum errnos */
-		ATF_REQUIRE_ERRNO(ECAPMODE,  chown(p,  OTHER_UID, st.st_gid) < 0);
-		ATF_REQUIRE_ERRNO(ECAPMODE, fchown(fd, OTHER_UID, st.st_gid) < 0);
-		ATF_REQUIRE_ERRNO(ECAPMODE,  chown(p,  st.st_uid, OTHER_GID) < 0);
-		ATF_REQUIRE_ERRNO(ECAPMODE, fchown(fd, st.st_uid, OTHER_GID) < 0);
+		ATF_REQUIRE_ERRNO(EPERM,  chown(p,  OTHER_UID, st.st_gid) < 0);
+		ATF_REQUIRE_ERRNO(EPERM, fchown(fd, OTHER_UID, st.st_gid) < 0);
+		ATF_REQUIRE_ERRNO(EPERM,  chown(p,  st.st_uid, OTHER_GID) < 0);
+		ATF_REQUIRE_ERRNO(EPERM, fchown(fd, st.st_uid, OTHER_GID) < 0);
 	}
 	ATF_CHECK(close(fd) >= 0);
 }

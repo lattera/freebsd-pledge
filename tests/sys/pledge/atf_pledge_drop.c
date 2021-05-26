@@ -27,9 +27,9 @@ ATF_TC_BODY(drop_flock, tc)
 	ATF_CHECK(flock(fd, LOCK_SH) >= 0);
 	ATF_CHECK(flock(fd, LOCK_UN) >= 0);
 	ATF_REQUIRE(pledge("stdio error", "stdio") >= 0);
-	ATF_CHECK_ERRNO(ECAPMODE, flock(fd, LOCK_SH) < 0);
+	ATF_CHECK_ERRNO(EPERM, flock(fd, LOCK_SH) < 0);
 	ATF_REQUIRE(pledge("stdio error flock", "stdio") >= 0);
-	ATF_CHECK_ERRNO(ECAPMODE, flock(fd, LOCK_SH) < 0);
+	ATF_CHECK_ERRNO(EPERM, flock(fd, LOCK_SH) < 0);
 	ATF_CHECK(close(fd) >= 0);
 }
 

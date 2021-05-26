@@ -172,7 +172,7 @@ int curtainctl(int flags, size_t reqc, struct curtainreq *reqv);
 
 #ifdef _KERNEL
 
-#define	SYSFIL_FAILED_ERRNO	ECAPMODE
+#define	SYSFIL_FAILED_ERRNO	EPERM
 
 static inline int
 sysfil_match_cred(const struct ucred *cr, int sf) {

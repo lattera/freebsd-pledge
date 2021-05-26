@@ -11,7 +11,7 @@ ATF_TC_WITHOUT_HEAD(error_no_signal);
 ATF_TC_BODY(error_no_signal, tc)
 {
 	ATF_REQUIRE(pledge("stdio error", "") >= 0);
-	ATF_CHECK_ERRNO(ECAPMODE, kill(getppid(), SIGTERM) < 0);
+	ATF_CHECK_ERRNO(EPERM, kill(getppid(), SIGTERM) < 0);
 }
 
 ATF_TC_WITHOUT_HEAD(violation_signal);
@@ -42,8 +42,7 @@ ATF_TC_BODY(fcntl_setown_deny, tc)
 	ATF_REQUIRE(pipe(fds) >= 0);
 	ATF_CHECK(close(fds[0]) >= 0);
 	fd = fds[1];
-	/* XXX Capsicum errno */
-	ATF_CHECK_ERRNO(ECAPMODE, fcntl(fd, F_SETOWN, getpid()) < 0);
+	ATF_CHECK_ERRNO(EPERM, fcntl(fd, F_SETOWN, getpid()) < 0);
 	ATF_CHECK(close(fd) >= 0);
 }
 
@@ -79,8 +78,7 @@ ATF_TC_BODY(cannot_signal_parent, tc)
 	ATF_REQUIRE((pid = fork()) >= 0);
 	if (pid == 0) {
 		ATF_REQUIRE(pledge("stdio error proc_child", "") >= 0);
-		/* XXX Capsicum errnos */
-		ATF_REQUIRE_ERRNO(ECAPMODE, kill(getppid(), SIGHUP) < 0);
+		ATF_REQUIRE_ERRNO(EPERM, kill(getppid(), SIGHUP) < 0);
 		ATF_REQUIRE(close(fds[0]) >= 0);
 		ATF_REQUIRE(close(fds[1]) >= 0);
 		_exit(0);

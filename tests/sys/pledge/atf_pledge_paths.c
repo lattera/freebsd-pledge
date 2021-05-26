@@ -123,9 +123,8 @@ ATF_TC_BODY(cpath_deny, tc)
 	ATF_REQUIRE(pledge("stdio error rpath wpath", "") >= 0);
 	ATF_CHECK_ERRNO(EACCES, try_creat("x") < 0);
 	ATF_CHECK_ERRNO(EACCES, try_creat("d/x") < 0);
-	/* XXX stop exposing Capsicum errnos? */
-	ATF_CHECK_ERRNO(ECAPMODE, try_mkdir("x") < 0);
-	ATF_CHECK_ERRNO(ECAPMODE, try_mkdir("d/x") < 0);
+	ATF_CHECK_ERRNO(EPERM, try_mkdir("x") < 0);
+	ATF_CHECK_ERRNO(EPERM, try_mkdir("d/x") < 0);
 }
 
 ATF_TC_WITHOUT_HEAD(fattr_allow);
@@ -162,12 +161,11 @@ ATF_TC_BODY(fattr_deny, tc)
 	check_access("0", "rw");
 	check_access("d", "rwd");
 	check_access("d/1", "rw");
-	/* XXX stop exposing Capsicum errnos? */
-	ATF_CHECK_ERRNO(ECAPMODE, fchmod(fd, 0000) < 0);
-	ATF_CHECK_ERRNO(ECAPMODE, fchmod(fd, 0600) < 0);
-	ATF_CHECK_ERRNO(ECAPMODE, chmod("0", 0000) < 0);
-	ATF_CHECK_ERRNO(ECAPMODE, chmod("d", 0000) < 0);
-	ATF_CHECK_ERRNO(ECAPMODE, chmod("d/1", 0000) < 0);
+	ATF_CHECK_ERRNO(EPERM, fchmod(fd, 0000) < 0);
+	ATF_CHECK_ERRNO(EPERM, fchmod(fd, 0600) < 0);
+	ATF_CHECK_ERRNO(EPERM, chmod("0", 0000) < 0);
+	ATF_CHECK_ERRNO(EPERM, chmod("d", 0000) < 0);
+	ATF_CHECK_ERRNO(EPERM, chmod("d/1", 0000) < 0);
 }
 
 ATF_TC_WITHOUT_HEAD(tmppath_allow);

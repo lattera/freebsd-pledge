@@ -16,13 +16,13 @@ ATF_TC_BODY(capsicum_after_pledge, tc)
 	ATF_REQUIRE(cap_enter() >= 0);
 	ATF_CHECK_ERRNO(ECAPMODE, open("/dev/null", O_RDONLY) < 0);
 	/* allowed by Capsicum but not pledge */
-	ATF_CHECK_ERRNO(ECAPMODE, flock(fd, LOCK_SH) < 0);
+	ATF_CHECK_ERRNO(EPERM, flock(fd, LOCK_SH) < 0);
 }
 
 ATF_TC_WITHOUT_HEAD(pledge_after_capsicum);
 ATF_TC_BODY(pledge_after_capsicum, tc)
 {
-	atf_tc_expect_exit(EX_OSERR, "pledge() after cap_enter() fails");
+	atf_tc_expect_exit(EX_OSERR, "pledge() after cap_enter() aborts");
 	ATF_REQUIRE(cap_enter() >= 0);
 	/*
 	 * This could be supported, but I doubt it would have much use.
