@@ -28,6 +28,7 @@ SUBDIR=	alias \
 	cpuset \
 	csplit \
 	ctlstat \
+	curtain \
 	cut \
 	diff \
 	dirname \
@@ -170,7 +171,6 @@ SUBDIR=	alias \
 	unvis \
 	uudecode \
 	uuencode \
-	veilbox \
 	vis \
 	vmstat \
 	w \

@@ -2209,6 +2209,23 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		*n_args = 2;
 		break;
 	}
+	/* curtainctl */
+	case 434: {
+		struct curtainctl_args *p = params;
+		iarg[0] = p->flags; /* int */
+		uarg[1] = p->reqc; /* size_t */
+		uarg[2] = (intptr_t)p->reqv; /* struct curtainreq * */
+		*n_args = 3;
+		break;
+	}
+	/* unveilreg */
+	case 435: {
+		struct unveilreg_args *p = params;
+		iarg[0] = p->flags; /* int */
+		uarg[1] = (intptr_t)p->reg; /* struct unveilreg * */
+		*n_args = 2;
+		break;
+	}
 	/* jail_attach */
 	case 436: {
 		struct jail_attach_args *p = params;
@@ -3404,7 +3421,7 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		struct sysfilctl_args *p = params;
 		iarg[0] = p->flags; /* int */
 		uarg[1] = p->selc; /* size_t */
-		uarg[2] = (intptr_t) p->selv; /* const int * */
+		uarg[2] = (intptr_t)p->selv; /* const int * */
 		*n_args = 3;
 		break;
 	}
@@ -3412,7 +3429,7 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 	case 581: {
 		struct unveilctl_args *p = params;
 		iarg[0] = p->flags; /* int */
-		uarg[1] = (intptr_t) p->ctl; /* struct unveilctl * */
+		uarg[1] = (intptr_t)p->ctl; /* struct unveilctl * */
 		*n_args = 2;
 		break;
 	}
@@ -6977,6 +6994,35 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
+	/* curtainctl */
+	case 434:
+		switch (ndx) {
+		case 0:
+			p = "int";
+			break;
+		case 1:
+			p = "size_t";
+			break;
+		case 2:
+			p = "userland struct curtainreq *";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* unveilreg */
+	case 435:
+		switch (ndx) {
+		case 0:
+			p = "int";
+			break;
+		case 1:
+			p = "userland struct unveilreg *";
+			break;
+		default:
+			break;
+		};
+		break;
 	/* jail_attach */
 	case 436:
 		switch (ndx) {
@@ -9107,7 +9153,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		break;
 	/* sysfilctl */
 	case 580:
-		switch(ndx) {
+		switch (ndx) {
 		case 0:
 			p = "int";
 			break;
@@ -9123,7 +9169,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		break;
 	/* unveilctl */
 	case 581:
-		switch(ndx) {
+		switch (ndx) {
 		case 0:
 			p = "int";
 			break;
@@ -10425,6 +10471,16 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		break;
 	/* thr_kill */
 	case 433:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* curtainctl */
+	case 434:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* unveilreg */
+	case 435:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;

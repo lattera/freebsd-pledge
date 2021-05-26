@@ -19,6 +19,7 @@ tryread(const char *path)
 int
 main()
 {
+	EXPECT(unveil("/", "i"));
 	EXPECT(unveil("/etc", "r"));
 	EXPECT(unveil("/var", "i"));
 	EXPECT(unveil(NULL, NULL));

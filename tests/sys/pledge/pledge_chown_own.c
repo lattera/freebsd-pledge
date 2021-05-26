@@ -42,10 +42,10 @@ main()
 	EXPECT(chown(p, st.st_uid, st.st_gid));
 	EXPECT(fchown(fd, st.st_uid, st.st_gid));
 
-	REJECT(chown(p, st.st_uid ? 0 : 1, st.st_gid));
-	REJECT(fchown(fd, st.st_uid ? 0 : 1, st.st_gid));
-	REJECT(chown(p, st.st_uid, st.st_gid ? 0 : 1));
-	REJECT(fchown(fd, st.st_uid, st.st_gid ? 0 : 1));
+	REJECT( chown(p,  7, st.st_gid));
+	REJECT(fchown(fd, 7, st.st_gid));
+	REJECT( chown(p,  st.st_uid, 13));
+	REJECT(fchown(fd, st.st_uid, 13));
 
 	/* TODO: try different IDs, should always be forbidden */
 

@@ -78,6 +78,8 @@ __FBSDID("$FreeBSD$");
 #include <vis.h>
 
 #include <contrib/cloudabi/cloudabi_types_common.h>
+#include <sys/sysfil.h>
+#include <sys/unveil.h>
 
 #include "truss.h"
 #include "extern.h"
@@ -719,6 +721,10 @@ static const struct syscall_decode decoded_syscalls[] = {
 	  .args = { { Sysfilctl, 0 }, { Sizet, 1 }, { Ptr, 2 } } },
 	{ .name = "unveilctl", .ret_type = 1, .nargs = 2,
 	  .args = { { Unveilctl, 0 }, { Ptr, 1 } } },
+	{ .name = "curtainctl", .ret_type = 1, .nargs = 3,
+	  .args = { { CurtainctlFlags, 0 }, { Sizet, 1 }, { Ptr, 2 } } },
+	{ .name = "unveilreg", .ret_type = 1, .nargs = 2,
+	  .args = { { UnveilregFlags, 0 }, { Unveilreg, 1 } } },
 };
 static STAILQ_HEAD(, syscall) seen_syscalls;
 
@@ -2945,6 +2951,31 @@ print_arg(struct syscall_arg *sc, unsigned long *args, register_t *retval,
 	case Unveilctl:
 		print_mask_arg(sysdecode_unveilctlflags, fp, args[sc->offset]);
 		break;
+	case CurtainctlFlags:
+		print_mask_arg(sysdecode_curtainctlflags, fp, args[sc->offset]);
+		break;
+	case UnveilregFlags:
+		print_mask_arg(sysdecode_unveilregflags, fp, args[sc->offset]);
+		break;
+	case Unveilreg: {
+		struct unveilreg reg;
+		if (get_struct(pid, args[sc->offset], &reg, sizeof(reg)) != -1) {
+			char *tmp2;
+			fprintf(fp, "{ atfd=");
+			print_integer_arg(sysdecode_atfd, fp, reg.atfd);
+			fprintf(fp, ",atflags=");
+			print_mask_arg(sysdecode_atflags, fp, reg.atflags);
+			tmp2 = get_string(pid, (uintptr_t)reg.path, 0);
+			fprintf(fp, ",path=\"%s\"", tmp2);
+			free(tmp2);
+			fprintf(fp, ",tec=%zu", reg.tec);
+			fprintf(fp, ",tev=");
+			print_pointer(fp, (uintptr_t)reg.tev);
+			fprintf(fp, " }");
+		} else
+			print_pointer(fp, args[sc->offset]);
+		break;
+	}
 
 	default:
 		errx(1, "Invalid argument type %d\n", sc->type & ARG_MASK);

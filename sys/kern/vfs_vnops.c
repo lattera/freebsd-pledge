@@ -80,6 +80,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/unistd.h>
 #include <sys/user.h>
 #include <sys/sysfil.h>
+#include <sys/unveil.h>
 #include <sys/ktrace.h>
 
 #include <security/audit/audit.h>
@@ -335,6 +336,10 @@ restart:
 			return (error);
 		vp = ndp->ni_vp;
 	}
+#ifdef UNVEIL
+	if (unveil_is_active(td) && ndp->ni_unveil.nosetattr)
+		fmode |= FNOSETATTR;
+#endif
 	error = vn_open_vnode(vp, fmode, cred, td, fp);
 	if (first_open) {
 		VI_LOCK(vp);

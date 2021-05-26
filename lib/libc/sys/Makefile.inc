@@ -49,7 +49,6 @@ SRCS+= closefrom.c
 SRCS+= pipe.c
 SRCS+= shm_open.c
 SRCS+= vadvise.c
-SRCS+= pledge.c
 
 SRCS+=	compat-stub.c
 

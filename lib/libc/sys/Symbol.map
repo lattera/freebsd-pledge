@@ -415,12 +415,10 @@ FBSD_1.6 {
 	memfd_create;
 	shm_create_largepage;
 	shm_rename;
+	curtainctl;
+	unveilreg;
 	sysfilctl;
 	unveilctl;
-	pledge;
-	unveil;
-	unveilself;
-	unveilexec;
 };
 
 FBSDprivate_1.0 {

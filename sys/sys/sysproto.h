@@ -1179,6 +1179,15 @@ struct thr_kill_args {
 	char id_l_[PADL_(long)]; long id; char id_r_[PADR_(long)];
 	char sig_l_[PADL_(int)]; int sig; char sig_r_[PADR_(int)];
 };
+struct curtainctl_args {
+	char flags_l_[PADL_(int)]; int flags; char flags_r_[PADR_(int)];
+	char reqc_l_[PADL_(size_t)]; size_t reqc; char reqc_r_[PADR_(size_t)];
+	char reqv_l_[PADL_(struct curtainreq *)]; struct curtainreq * reqv; char reqv_r_[PADR_(struct curtainreq *)];
+};
+struct unveilreg_args {
+	char flags_l_[PADL_(int)]; int flags; char flags_r_[PADR_(int)];
+	char reg_l_[PADL_(struct unveilreg *)]; struct unveilreg * reg; char reg_r_[PADR_(struct unveilreg *)];
+};
 struct jail_attach_args {
 	char jid_l_[PADL_(int)]; int jid; char jid_r_[PADR_(int)];
 };
@@ -2119,6 +2128,8 @@ int	sys_thr_create(struct thread *, struct thr_create_args *);
 int	sys_thr_exit(struct thread *, struct thr_exit_args *);
 int	sys_thr_self(struct thread *, struct thr_self_args *);
 int	sys_thr_kill(struct thread *, struct thr_kill_args *);
+int	sys_curtainctl(struct thread *, struct curtainctl_args *);
+int	sys_unveilreg(struct thread *, struct unveilreg_args *);
 int	sys_jail_attach(struct thread *, struct jail_attach_args *);
 int	sys_extattr_list_fd(struct thread *, struct extattr_list_fd_args *);
 int	sys_extattr_list_file(struct thread *, struct extattr_list_file_args *);
@@ -3051,6 +3062,8 @@ int	freebsd12_closefrom(struct thread *, struct freebsd12_closefrom_args *);
 #define	SYS_AUE_thr_exit	AUE_THR_EXIT
 #define	SYS_AUE_thr_self	AUE_NULL
 #define	SYS_AUE_thr_kill	AUE_THR_KILL
+#define	SYS_AUE_curtainctl	AUE_CURTAINCTL
+#define	SYS_AUE_unveilreg	AUE_UNVEILREG
 #define	SYS_AUE_jail_attach	AUE_JAIL_ATTACH
 #define	SYS_AUE_extattr_list_fd	AUE_EXTATTR_LIST_FD
 #define	SYS_AUE_extattr_list_file	AUE_EXTATTR_LIST_FILE

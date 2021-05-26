@@ -140,6 +140,7 @@ CTASSERT(SYSFIL_LAST < SYSFIL_SIZE);
 #define	SYSFIL_VALID(i)		((i) >= 0 && (i) <= SYSFIL_LAST)
 #define	SYSFIL_USER_VALID(i)	(SYSFIL_VALID(i) && (i) >= SYSFIL_STDIO)
 
+
 /* sysfilctl() flags and other constants */
 
 #define	SYSFILCTL_RESTRICT	(1 << 0)
@@ -157,6 +158,31 @@ CTASSERT(SYSFIL_LAST < SYSFIL_SIZE);
 #define	SYSFILSEL_SYSFIL(s)	(s & ((1 << 16) - 1))
 
 int sysfilctl(int flags, size_t selc, const int *selv);
+
+
+struct curtainreq {
+	unsigned type;
+	int flags;
+	size_t size;
+	void *data;
+};
+
+int curtainctl(int flags, size_t reqc, struct curtainreq *reqv);
+
+#define	CURTAINCTL_MAX_REQS	1024
+#define	CURTAINCTL_MAX_SIZE	(16 << 10)
+
+#define	CURTAINCTL_ENGAGE	(1 <<  0)
+#define	CURTAINCTL_REQUIRE	(1 <<  1)
+#define	CURTAINCTL_ENFORCE	(1 <<  2)
+#define	CURTAINCTL_ON_SELF	(1 << 16)
+#define	CURTAINCTL_ON_EXEC	(1 << 17)
+
+#define	CURTAINREQ_ON_SELF	(1 << 16)
+#define	CURTAINREQ_ON_EXEC	(1 << 17)
+
+#define	CURTAIN_SYSFIL		1
+#define	CURTAIN_UNVEIL		2
 
 
 #ifdef _KERNEL

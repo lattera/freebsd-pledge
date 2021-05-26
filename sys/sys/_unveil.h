@@ -10,6 +10,7 @@
 
 typedef uint8_t unveil_perms;
 typedef uint8_t unveil_slots;
+typedef uint16_t unveil_index;
 
 #ifdef _KERNEL
 
@@ -21,8 +22,14 @@ struct unveil_traversal {
 	int save_flags;
 	unveil_slots save_slots;
 	unveil_perms save_uperms;
+	bool first;
 	int8_t type; /* type of last file encountered */
 	uint8_t depth; /* depth under cover of last file */
+	bool nosetattr;
+	/* trail entries */
+	size_t ter; /* remaining array slots */
+	unveil_index (*tev)[2] /* array base */, (*tep)[2] /* fill pointer */;
+	bool te_overflow /* array overflowed? */;
 };
 
 enum { UNVEIL_ON_COUNT = 2 };

@@ -18,6 +18,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/signalvar.h>
 #include <sys/mman.h>
 #include <sys/sysfil.h>
+#include <sys/unveil.h>
 
 #include <sys/filio.h>
 #include <sys/tty.h>
@@ -426,6 +427,204 @@ out:	free(selv, M_TEMP);
 	return (ENOSYS);
 #endif /* SYSFIL */
 }
+
+#ifdef SYSFIL
+
+static int
+do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq *reqv)
+{
+	struct proc *p = td->td_proc;
+	struct ucred *cr, *old_cr;
+	const struct curtainreq *req;
+	int error;
+	sysfilset_t sysfilset_self = SYSFILSET_INITIALIZER, sysfilset_exec;
+#ifdef UNVEIL
+	struct unveil_base *base = &td->td_proc->p_unveils;
+#endif
+
+	SYSFILSET_FILL(&sysfilset_self, SYSFIL_ALWAYS);
+	SYSFILSET_FILL(&sysfilset_self, SYSFIL_UNCAPSICUM);
+	memcpy(&sysfilset_exec, &sysfilset_self, sizeof sysfilset_exec);
+
+#if UNVEIL
+	unveil_base_write_begin(base);
+#endif
+
+	cr = crget();
+	PROC_LOCK(p);
+	old_cr = crcopysafe(p, cr);
+	error = 0;
+
+	for (req = reqv; req < &reqv[reqc]; req++) {
+		bool on_self = flags & CURTAINCTL_ON_SELF &&
+		               req->flags & CURTAINREQ_ON_SELF,
+		     on_exec = flags & CURTAINCTL_ON_EXEC &&
+		               req->flags & CURTAINREQ_ON_EXEC;
+		switch (req->type) {
+		case CURTAIN_SYSFIL: {
+			int *sfp = req->data;
+			size_t sfc = req->size / sizeof *sfp;
+			while (sfc--) {
+				int sf = *sfp++;
+				if (!SYSFIL_USER_VALID(sf)) {
+					error = EINVAL;
+					goto out1;
+				}
+				if (flags & CURTAINCTL_REQUIRE &&
+				     ((on_self && !SYSFILSET_MATCH(&cr->cr_sysfilset, sf)) ||
+				      (on_exec && !SYSFILSET_MATCH(&cr->cr_sysfilset_exec, sf)))) {
+					error = EPERM;
+					goto out1;
+				}
+				if (on_self)
+					sysfilset_fill(&sysfilset_self, sf);
+				if (on_exec)
+					sysfilset_fill(&sysfilset_exec, sf);
+			}
+			break;
+		}
+#ifdef UNVEIL
+		case CURTAIN_UNVEIL: {
+			struct curtainent_unveil *entp = req->data;
+			size_t entc = req->size / sizeof *entp;
+			while (entc--) { /* just check the indexes first */
+				error = unveil_index_check(base, (entp++)->index);
+				if (error)
+					goto out1;
+			}
+			break;
+		}
+#endif
+		default:
+			error = EINVAL;
+			goto out1;
+		}
+	};
+
+	if (flags & CURTAINCTL_ON_SELF) {
+		SYSFILSET_MASK(&cr->cr_sysfilset, &sysfilset_self);
+		MPASS(SYSFILSET_IS_RESTRICTED(&cr->cr_sysfilset));
+		MPASS(CRED_IN_RESTRICTED_MODE(cr));
+	}
+	if (flags & CURTAINCTL_ON_EXEC) {
+		if (SYSFILSET_MATCH(&cr->cr_sysfilset, SYSFIL_EXEC) ||
+		    SYSFILSET_MATCH(&sysfilset_exec, SYSFIL_EXEC))
+			/*
+			 * On OpenBSD, executing dynamically linked binaries
+			 * works with just the "exec" pledge (the "prot_exec"
+			 * pledge is only enforced after the dynamic linker has
+			 * done its job).  Not so for us, so implicitly allow
+			 * PROT_EXEC for now. XXX
+			 */
+			SYSFILSET_FILL(&sysfilset_exec, SYSFIL_PROT_EXEC_LOOSE);
+		SYSFILSET_MASK(&cr->cr_sysfilset_exec, &sysfilset_exec);
+		MPASS(SYSFILSET_IS_RESTRICTED(&cr->cr_sysfilset_exec));
+		MPASS(CRED_IN_RESTRICTED_EXEC_MODE(cr));
+	}
+
+	if (flags & (CURTAINCTL_ENFORCE|CURTAINCTL_ENGAGE)) {
+		proc_set_cred(p, cr);
+		crfree(old_cr);
+		if (flags & CURTAINCTL_ON_SELF && !PROC_IN_RESTRICTED_MODE(p))
+			panic("PROC_IN_RESTRICTED_MODE() bogus after curtainctl(2)");
+		if (flags & CURTAINCTL_ON_EXEC && !PROC_IN_RESTRICTED_EXEC_MODE(p))
+			panic("PROC_IN_RESTRICTED_EXEC_MODE() bogus after curtainctl(2)");
+	} else {
+		crfree(cr);
+		cr = old_cr;
+	}
+	PROC_UNLOCK(p);
+
+#ifdef UNVEIL
+	for (req = reqv; req < &reqv[reqc]; req++) {
+		bool on_self = flags & CURTAINCTL_ON_SELF &&
+		               req->flags & CURTAINREQ_ON_SELF,
+		     on_exec = flags & CURTAINCTL_ON_EXEC &&
+		               req->flags & CURTAINREQ_ON_EXEC;
+		if (req->type == CURTAIN_UNVEIL) {
+			struct curtainent_unveil *entp = req->data;
+			size_t entc = req->size / sizeof *entp;
+			while (entc--) {
+				if (on_self)
+					unveil_index_set(base, entp->index,
+					    1 << UNVEIL_ON_SELF, entp->uperms);
+				if (on_exec)
+					unveil_index_set(base, entp->index,
+					    1 << UNVEIL_ON_EXEC, entp->uperms);
+				entp++;
+			}
+		}
+	}
+
+	if (flags & (CURTAINCTL_ENFORCE|CURTAINCTL_ENGAGE)) {
+		if (flags & CURTAINCTL_ON_SELF)
+			unveil_base_activate(base, UNVEIL_ON_SELF, 1 << UNVEIL_ON_SELF);
+		if (flags & CURTAINCTL_ON_EXEC)
+			unveil_base_activate(base, UNVEIL_ON_EXEC, 1 << UNVEIL_ON_EXEC);
+		if (flags & CURTAINCTL_ENFORCE) {
+			if (flags & CURTAINCTL_ON_SELF)
+				unveil_base_enforce(base, UNVEIL_ON_SELF);
+			if (flags & CURTAINCTL_ON_EXEC)
+				unveil_base_enforce(base, UNVEIL_ON_EXEC);
+		}
+	}
+
+#endif
+	goto out2;
+
+out1:
+	PROC_UNLOCK(p);
+	crfree(cr);
+out2:
+#ifdef UNVEIL
+	unveil_base_write_end(base);
+#endif
+	return (error);
+}
+
+#endif /* SYSFIL */
+
+int
+sys_curtainctl(struct thread *td, struct curtainctl_args *uap)
+{
+#ifdef SYSFIL
+	size_t reqc, reqi, rem;
+	struct curtainreq *reqv;
+	int flags, error;
+	flags = uap->flags;
+	reqc = uap->reqc;
+	if (reqc > CURTAINCTL_MAX_REQS)
+		return (EINVAL);
+	reqi = 0;
+	reqv = mallocarray(reqc, sizeof *reqv, M_TEMP, M_WAITOK);
+	error = copyin(uap->reqv, reqv, reqc * sizeof *reqv);
+	if (error)
+		goto out;
+	rem = CURTAINCTL_MAX_SIZE;
+	while (reqi < reqc) {
+		struct curtainreq *req = &reqv[reqi];
+		void *udata = req->data;
+		if (rem < req->size) {
+			error = EINVAL;
+			goto out;
+		}
+		reqi++;
+		rem -= req->size;
+		req->data = malloc(req->size, M_TEMP, M_WAITOK);
+		error = copyin(udata, req->data, req->size);
+		if (error)
+			goto out;
+	}
+	error = do_curtainctl(td, flags, reqc, reqv);
+out:	while (reqi--)
+		free(reqv[reqi].data, M_TEMP);
+	free(reqv, M_TEMP);
+	return (error);
+#else
+	return (ENOSYS);
+#endif /* SYSFIL */
+}
+
 
 #if defined(SYSFIL)
 

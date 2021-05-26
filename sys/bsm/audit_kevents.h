@@ -662,8 +662,10 @@
 #define	AUE_SPECIALFD		43266	/* FreeBSD-specific. */
 #define	AUE_AIO_WRITEV		43267	/* FreeBSD-specific. */
 #define	AUE_AIO_READV		43268	/* FreeBSD-specific. */
-#define	AUE_SYSFILCTL		43269	/* FreeBSD-specific. */
-#define	AUE_UNVEILCTL		43270	/* FreeBSD-specific. */
+#define	AUE_CURTAINCTL		43269	/* FreeBSD-specific. */
+#define	AUE_UNVEILREG		43270	/* FreeBSD-specific. */
+#define	AUE_SYSFILCTL		43271	/* FreeBSD-specific. */
+#define	AUE_UNVEILCTL		43272	/* FreeBSD-specific. */
 
 /*
  * Darwin BSM uses a number of AUE_O_* definitions, which are aliased to the

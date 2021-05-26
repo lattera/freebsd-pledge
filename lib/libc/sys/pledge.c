@@ -345,7 +345,7 @@ static bool has_reserved_pledge_unveils[ON_COUNT];
 static bool has_pledge_unveils[ON_COUNT], has_custom_unveils[ON_COUNT];
 
 
-static int __noinline
+static int
 parse_promises(bool *promises, const char *promises_str)
 {
 	const char *p = promises_str;

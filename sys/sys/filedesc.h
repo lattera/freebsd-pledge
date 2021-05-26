@@ -268,6 +268,8 @@ int	getvnode(struct thread *td, int fd, cap_rights_t *rightsp,
 	    struct file **fpp);
 int	getvnode_path(struct thread *td, int fd, cap_rights_t *rightsp,
 	    struct file **fpp);
+int	getvnode_nosetattr(struct thread *td, int fd, cap_rights_t *rightsp,
+	    struct file **fpp);
 void	mountcheckdirs(struct vnode *olddp, struct vnode *newdp);
 
 int	fget_cap_locked(struct filedesc *fdp, int fd, cap_rights_t *needrightsp,

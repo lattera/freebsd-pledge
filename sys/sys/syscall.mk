@@ -286,6 +286,8 @@ MIASM =  \
 	thr_exit.o \
 	thr_self.o \
 	thr_kill.o \
+	curtainctl.o \
+	unveilreg.o \
 	jail_attach.o \
 	extattr_list_fd.o \
 	extattr_list_file.o \

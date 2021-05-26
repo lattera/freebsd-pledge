@@ -101,6 +101,7 @@ _LIBRARIES=	\
 		crypto \
 		ctf \
 		cuse \
+		curtain \
 		cxxrt \
 		devctl \
 		devdctl \

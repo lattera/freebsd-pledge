@@ -2950,10 +2950,13 @@ sys_fchmod(struct thread *td, struct fchmod_args *uap)
 
 	AUDIT_ARG_FD(uap->fd);
 	AUDIT_ARG_MODE(uap->mode);
-
 	error = fget(td, uap->fd, &cap_fchmod_rights, &fp);
 	if (error != 0)
 		return (error);
+	if (fp->f_flag & FNOSETATTR) {
+		fdrop(fp, td);
+		return (EBADF);
+	}
 	error = fo_chmod(fp, uap->mode, td->td_ucred, td);
 	fdrop(fp, td);
 	return (error);
@@ -3085,6 +3088,10 @@ sys_fchown(struct thread *td, struct fchown_args *uap)
 	error = fget(td, uap->fd, &cap_fchown_rights, &fp);
 	if (error != 0)
 		return (error);
+	if (fp->f_flag & FNOSETATTR) {
+		fdrop(fp, td);
+		return (EBADF);
+	}
 	error = fo_chown(fp, uap->uid, uap->gid, td->td_ucred, td);
 	fdrop(fp, td);
 	return (error);
@@ -4163,7 +4170,7 @@ kern_getdirentries(struct thread *td, int fd, char *buf, size_t count,
 	if (count > IOSIZE_MAX)
 		return (EINVAL);
 	auio.uio_resid = count;
-	error = getvnode(td, fd, &cap_read_rights, &fp);
+	error = getvnode_nosetattr(td, fd, &cap_read_rights, &fp);
 	if (error != 0)
 		return (error);
 	if ((fp->f_flag & FREAD) == 0) {
@@ -4334,7 +4341,7 @@ getvnode_path(struct thread *td, int fd, cap_rights_t *rightsp,
  * A reference on the file entry is held upon returning.
  */
 int
-getvnode(struct thread *td, int fd, cap_rights_t *rightsp, struct file **fpp)
+getvnode_nosetattr(struct thread *td, int fd, cap_rights_t *rightsp, struct file **fpp)
 {
 	int error;
 
@@ -4349,6 +4356,18 @@ getvnode(struct thread *td, int fd, cap_rights_t *rightsp, struct file **fpp)
 		error = EBADF;
 	}
 
+	return (error);
+}
+
+int
+getvnode(struct thread *td, int fd, cap_rights_t *rightsp, struct file **fpp)
+{
+	int error;
+	error = getvnode_nosetattr(td, fd, rightsp, fpp);
+	if (error == 0 && ((*fpp)->f_flag & FNOSETATTR)) {
+		fdrop(*fpp, td);
+		error = EBADF;
+	}
 	return (error);
 }
 

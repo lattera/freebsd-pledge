@@ -26,6 +26,17 @@ cmd_execpledge_cat_body() {
 	atf_check -s exit:0 -e empty -o file:"$f" execpledge -p 'stdio rpath exec' execpledge -p 'stdio rpath' cat "$f"
 }
 
+atf_test_case cmd_mktemp
+cmd_mktemp_body() {
+	local p="stdio rpath tmppath"
+	atf_check -o save:"stdout" execpledge -p "$p" mktemp -t "test"
+	local f="$(cat stdout)"
+	atf_check test -f "$f"
+	atf_check execpledge -p "$p" sh -c 'echo >"$1" "test-content"' . "$f"
+	atf_check -o inline:"test-content\n" execpledge -p "$p" cat "$f"
+	atf_check unlink "$f"
+}
+
 
 atf_init_test_cases() {
 	atf_add_test_case cmd_true
@@ -33,4 +44,5 @@ atf_init_test_cases() {
 	atf_add_test_case cmd_echo
 	atf_add_test_case cmd_cat
 	atf_add_test_case cmd_execpledge_cat
+	atf_add_test_case cmd_mktemp
 }

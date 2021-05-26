@@ -26,6 +26,26 @@ enum {
 	UPERM_ALL = -1,
 };
 
+static inline unveil_perms
+uperms_expand(unveil_perms uperms)
+{
+	if (uperms & UPERM_RPATH) {
+		uperms |= UPERM_INSPECT;
+		if (uperms & UPERM_WPATH && uperms & UPERM_CPATH)
+			uperms |= UPERM_TMPPATH;
+	}
+	return (uperms);
+}
+
+static const unveil_perms uperms_inheritable = ~(UPERM_INSPECT | UPERM_TMPPATH);
+
+static inline unveil_perms
+uperms_inherit(unveil_perms uperms)
+{
+	return (uperms_expand(uperms & uperms_inheritable));
+}
+
+
 #define	UNVEILCTL_UNVEIL	(1 << 0)
 #define	UNVEILCTL_FREEZE	(1 << 2)
 #define	UNVEILCTL_LIMIT		(1 << 3)
@@ -36,22 +56,53 @@ enum {
 #define	UNVEILCTL_INTERMEDIATE	(1 << 9)
 #define	UNVEILCTL_INSPECTABLE	(1 << 10)
 #define	UNVEILCTL_NONDIRBYNAME	(1 << 11)
+#define	UNVEILCTL_BYINDEX	(1 << 13)
 #define	UNVEILCTL_ON_SELF	(1 << 16)
 #define	UNVEILCTL_ON_EXEC	(1 << 17)
 #define	UNVEILCTL_ON_BOTH	(UNVEILCTL_ON_SELF | UNVEILCTL_ON_EXEC)
 
 #define	UNVEIL_SUPPORTED_SLOTS	8
+#define	UNVEILCTL_MAX_TE	1024
 
 struct unveilctl {
 	int reserved;
 	int atfd;
-	const char *path;
+	union {
+		const char *path;
+		unsigned index;
+	};
 	int atflags;
 	unsigned slots;
 	unsigned uperms;
+	size_t tec;
+	unveil_index (*tev)[2];
 };
 
 int unveilctl(int flags, struct unveilctl *);
+
+#define	UNVEILREG_REGISTER	(1 << 0)
+#define	UNVEILREG_INTERMEDIATE	(1 << 8)
+#define	UNVEILREG_NONDIRBYNAME	(1 << 9)
+
+#define	UNVEILREG_MAX_TE	1024
+
+struct unveilreg {
+	int atfd;
+	int atflags;
+	const char *path;
+	/* return trail entries array for unveiled path */
+	size_t tec;
+	unveil_index (*tev)[2];
+};
+
+int unveilreg(int flags, struct unveilreg *);
+
+
+struct curtainent_unveil {
+	unveil_index index;
+	unsigned uperms;
+};
+
 
 #ifdef _KERNEL
 
@@ -92,6 +143,14 @@ void unveil_base_copy(struct unveil_base *dst, struct unveil_base *src);
 void unveil_base_clear(struct unveil_base *);
 void unveil_base_reset(struct unveil_base *);
 void unveil_base_free(struct unveil_base *);
+
+void unveil_base_write_begin(struct unveil_base *);
+void unveil_base_write_end(struct unveil_base *);
+
+void unveil_base_activate(struct unveil_base *, enum unveil_on, unveil_slots);
+void unveil_base_enforce(struct unveil_base *, enum unveil_on);
+int unveil_index_set(struct unveil_base *, unsigned index, unveil_slots, unveil_perms);
+int unveil_index_check(struct unveil_base *, unsigned index);
 
 int unveil_traverse_begin(struct thread *, struct unveil_traversal *,
     struct vnode *);

@@ -2271,7 +2271,19 @@
 		    int sig
 		);
 	}
-434-435	AUE_NULL	RESERVED
+434	AUE_CURTAINCTL	STD|SYSFIL_ALWAYS {
+		int curtainctl(
+		    int flags,
+		    size_t reqc,
+		    struct curtainreq *reqv
+		);
+	}
+435	AUE_UNVEILREG	STD|SYSFIL_UNVEIL {
+		int unveilreg(
+		    int flags,
+		    struct unveilreg *reg
+		);
+	}
 436	AUE_JAIL_ATTACH	STD|SYSFIL_JAIL {
 		int jail_attach(
 		    int jid

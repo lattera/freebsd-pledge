@@ -91,6 +91,7 @@ enum Argtype {
 	Atfd,
 	Atflags,
 	CapFcntlRights,
+	CurtainctlFlags,
 	Extattrnamespace,
 	Fadvice,
 	Fcntl,
@@ -140,6 +141,8 @@ enum Argtype {
 	Sysfilctl,
 	Umtxop,
 	Unveilctl,
+	Unveilreg,
+	UnveilregFlags,
 	Waitoptions,
 	Whence,
 
