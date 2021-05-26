@@ -212,9 +212,9 @@ ATF_TC_BODY(tmppath_deny, tc)
 	ATF_REQUIRE(pledge("stdio error tmppath", "") >= 0);
 	check_access(tmpdir, "ie");
 
-	ATF_CHECK_ERRNO(EACCES, try_open(subdir, O_RDONLY) < 0);
-	ATF_CHECK_ERRNO(EACCES, try_open(subfile1, O_RDONLY) < 0);
-	ATF_CHECK_ERRNO(EACCES, try_creat(subfile2) < 0);
+	ATF_CHECK_ERRNO(ENOENT, try_open(subdir, O_RDONLY) < 0);
+	ATF_CHECK_ERRNO(ENOENT, try_open(subfile1, O_RDONLY) < 0);
+	ATF_CHECK_ERRNO(ENOENT, try_creat(subfile2) < 0);
 
 	char *path;
 	ATF_REQUIRE(asprintf(&path, "%s/%s.XXXXXXXXXX", tmpdir, getprogname()) > 0);

@@ -630,6 +630,19 @@ unveil_traverse_dotdot(struct thread *td, struct unveil_traversal *trav,
 	trav->type = VDIR;
 }
 
+static unveil_perms
+uperms_adjust(unveil_perms orig_uperms, enum vtype type, uint8_t depth)
+{
+	if (depth > 0) {
+		unveil_perms uperms = uperms_inherit(orig_uperms);
+		if (orig_uperms & UPERM_TMPPATH &&
+		    depth == 1 && (type == VNON || type == VREG))
+			uperms |= UPERM_SUBTMPPATH;
+		return (uperms);
+	}
+	return (orig_uperms);
+}
+
 unveil_perms
 unveil_traverse_effective_uperms(struct thread *td, struct unveil_traversal *trav)
 {
@@ -646,20 +659,16 @@ unveil_traverse_effective_uperms(struct thread *td, struct unveil_traversal *tra
 		else
 			uperms = base->on[UNVEIL_ON_SELF].frozen ? UPERM_NONE : UPERM_ALL;
 	}
-	/* NOTE: This function does not take the depth into consideration. */
-	return (uperms);
+	return (uperms_adjust(uperms, trav->type, trav->depth));
 }
-
-static void unveil_uperms_rights_1(unveil_perms, enum vtype type, uint8_t depth,
-    cap_rights_t *);
 
 void
 unveil_traverse_effective_rights(struct thread *td, struct unveil_traversal *trav,
     cap_rights_t *rights, int *suggested_error)
 {
-	unveil_perms uperms;
-	uperms = unveil_traverse_effective_uperms(td, trav);
-	unveil_uperms_rights_1(uperms, trav->type, trav->depth, rights);
+	unveil_perms uperms = unveil_traverse_effective_uperms(td, trav);
+
+	unveil_uperms_rights(uperms, rights);
 
 	/* Kludge for directory O_EXEC/O_SEARCH opens. */
 	if (trav->type == VDIR && (uperms & UPERM_RPATH))
@@ -875,16 +884,15 @@ static cap_rights_t __read_mostly wpath_rights;
 static cap_rights_t __read_mostly cpath_rights;
 static cap_rights_t __read_mostly xpath_rights;
 static cap_rights_t __read_mostly apath_rights;
-static cap_rights_t __read_mostly tmppath_rights;
+static cap_rights_t __read_mostly subtmppath_rights;
 static cap_rights_t __read_mostly rcpath_rights;
 static cap_rights_t __read_mostly rwcapath_rights;
 
-static void
-unveil_uperms_rights_1(unveil_perms uperms, enum vtype type, uint8_t depth,
-    cap_rights_t *rights)
+void
+unveil_uperms_rights(unveil_perms uperms, cap_rights_t *rights)
 {
 	CAP_NONE(rights);
-	if (uperms & UPERM_INSPECT && depth == 0)
+	if (uperms & UPERM_INSPECT)
 		cap_rights_merge(rights, &inspect_rights);
 	if (uperms & UPERM_RPATH)
 		cap_rights_merge(rights, &rpath_rights);
@@ -902,18 +910,10 @@ unveil_uperms_rights_1(unveil_perms uperms, enum vtype type, uint8_t depth,
 		if (uperms & UPERM_CPATH && uperms & UPERM_WPATH && uperms & UPERM_RPATH)
 			cap_rights_merge(rights, &rwcapath_rights);
 	}
-	if (uperms & UPERM_TMPPATH) {
-		if (depth == 0)
-			cap_rights_merge(rights, &inspect_rights);
-		else if (depth == 1 && (type == VNON || type == VREG))
-			cap_rights_merge(rights, &tmppath_rights);
-	}
-}
-
-void
-unveil_uperms_rights(unveil_perms uperms, cap_rights_t *rights)
-{
-	return (unveil_uperms_rights_1(uperms, VBAD, 0, rights));
+	if (uperms & UPERM_TMPPATH)
+		cap_rights_merge(rights, &inspect_rights);
+	if (uperms & UPERM_SUBTMPPATH)
+		cap_rights_merge(rights, &subtmppath_rights);
 }
 
 static void
@@ -980,7 +980,7 @@ unveil_sysinit(void *arg __unused)
 	    CAP_REVOKEAT,
 	    CAP_EXTATTR_SET,
 	    CAP_EXTATTR_DELETE);
-	cap_rights_init(&tmppath_rights,
+	cap_rights_init(&subtmppath_rights,
 	    CAP_LOOKUP,
 	    CAP_FSTAT,
 	    CAP_FSTATAT,
