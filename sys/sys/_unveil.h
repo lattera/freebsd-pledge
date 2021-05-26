@@ -9,7 +9,6 @@
 #endif
 
 typedef uint8_t unveil_perms;
-typedef uint8_t unveil_slots;
 typedef uint16_t unveil_index;
 
 #ifdef _KERNEL
@@ -20,8 +19,6 @@ struct unveil_traversal {
 	struct unveil_tree *tree;
 	struct unveil_node *cover; /* last unveil encountered */
 	int save_flags;
-	unveil_slots save_slots;
-	unveil_perms save_uperms;
 	bool first;
 	int8_t type; /* type of last file encountered */
 	uint8_t depth; /* depth under cover of last file */
@@ -39,10 +36,9 @@ struct unveil_base {
 	struct unveil_tree *tree;
 	bool modified;
 	struct unveil_base_flags {
-		bool active : 1;
-		bool frozen : 1;
-		bool wanted : 1;
-		unveil_slots slots;
+		bool active;
+		bool frozen;
+		bool wanted;
 	} on[UNVEIL_ON_COUNT];
 };
 

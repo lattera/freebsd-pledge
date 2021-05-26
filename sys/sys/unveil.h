@@ -112,9 +112,9 @@ void unveil_base_free(struct unveil_base *);
 void unveil_base_write_begin(struct unveil_base *);
 void unveil_base_write_end(struct unveil_base *);
 
-void unveil_base_activate(struct unveil_base *, enum unveil_on, unveil_slots);
+void unveil_base_activate(struct unveil_base *, enum unveil_on);
 void unveil_base_enforce(struct unveil_base *, enum unveil_on);
-int unveil_index_set(struct unveil_base *, unsigned index, unveil_slots, unveil_perms);
+int unveil_index_set(struct unveil_base *, enum unveil_on, unsigned index, unveil_perms);
 int unveil_index_check(struct unveil_base *, unsigned index);
 
 int unveil_traverse_begin(struct thread *, struct unveil_traversal *,

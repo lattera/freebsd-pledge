@@ -438,10 +438,10 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 			while (entc--) {
 				if (on_self)
 					unveil_index_set(base, entp->index,
-					    1 << UNVEIL_ON_SELF, entp->uperms);
+					    UNVEIL_ON_SELF, entp->uperms);
 				if (on_exec)
 					unveil_index_set(base, entp->index,
-					    1 << UNVEIL_ON_EXEC, entp->uperms);
+					    UNVEIL_ON_EXEC, entp->uperms);
 				entp++;
 			}
 		}
@@ -449,9 +449,9 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 
 	if (flags & (CURTAINCTL_ENFORCE|CURTAINCTL_ENGAGE)) {
 		if (flags & CURTAINCTL_ON_SELF)
-			unveil_base_activate(base, UNVEIL_ON_SELF, 1 << UNVEIL_ON_SELF);
+			unveil_base_activate(base, UNVEIL_ON_SELF);
 		if (flags & CURTAINCTL_ON_EXEC)
-			unveil_base_activate(base, UNVEIL_ON_EXEC, 1 << UNVEIL_ON_EXEC);
+			unveil_base_activate(base, UNVEIL_ON_EXEC);
 		if (flags & CURTAINCTL_ENFORCE) {
 			if (flags & CURTAINCTL_ON_SELF)
 				unveil_base_enforce(base, UNVEIL_ON_SELF);

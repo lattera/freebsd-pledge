@@ -58,8 +58,6 @@ STATNODE_COUNTER(ascents, unveil_stats_ascents, "");
 STATNODE_COUNTER(ascent_total_depth, unveil_stats_ascent_total_depth, "");
 
 
-#define	UNVEIL_SUPPORTED_SLOTS	2
-
 struct unveil_node {
 	struct unveil_node *cover;
 	RB_ENTRY(unveil_node) entry;
@@ -73,8 +71,8 @@ struct unveil_node {
 	u_char name_len;
 	bool fully_covered;
 	unveil_perms frozen_uperms[UNVEIL_ON_COUNT];
-	unveil_perms slots_uperms[UNVEIL_SUPPORTED_SLOTS];
-	unveil_slots slots_inherit;
+	unveil_perms wanted_uperms[UNVEIL_ON_COUNT];
+	bool inherit[UNVEIL_ON_COUNT];
 	unsigned index;
 };
 
@@ -198,11 +196,11 @@ unveil_tree_dup(struct unveil_tree *old_tree)
 		    old_node->name, old_node->name_len, &inserted);
 		MPASS(inserted);
 		new_node->fully_covered = old_node->fully_covered;
-		for (int i = 0; i < UNVEIL_ON_COUNT; i++)
+		for (int i = 0; i < UNVEIL_ON_COUNT; i++) {
 			new_node->frozen_uperms[i] = old_node->frozen_uperms[i];
-		for (int j = 0; j < UNVEIL_SUPPORTED_SLOTS; j++)
-			new_node->slots_uperms[j] = old_node->slots_uperms[j];
-		new_node->slots_inherit = old_node->slots_inherit;
+			new_node->wanted_uperms[i] = old_node->wanted_uperms[i];
+			new_node->inherit[i] = old_node->inherit[i];
+		}
 		new_node->index = old_node->index;
 	}
 	/* second pass, fixup the cover links */
@@ -308,29 +306,20 @@ unveil_base_free(struct unveil_base *base)
 }
 
 
-#define	FOREACH_SLOTS(slots, j) \
-	for (j = 0; j < UNVEIL_SUPPORTED_SLOTS; j++) \
-		if ((slots) & (1U << j))
-
 static unveil_perms
-unveil_node_wanted_uperms(struct unveil_node *node, unveil_slots slots)
+unveil_node_wanted_uperms(struct unveil_node *node, enum unveil_on on)
 {
 	/*
 	 * Go up the cover chain until all wanted permissions have been merged
 	 * without any more inheritance required.
 	 */
-	int j;
-	unveil_perms merged_uperms = UPERM_NONE, mask = UPERM_ALL;
-	while (slots && node) {
-		unveil_perms uperms = UPERM_NONE;
-		FOREACH_SLOTS(slots, j)
-			uperms |= node->slots_uperms[j];
-		merged_uperms |= uperms & mask;
-		slots &= node->slots_inherit;
-		mask = uperms_inheritable;
-		node = node->cover;
-	}
-	return (merged_uperms);
+	unveil_perms uperms = UPERM_NONE, mask = UPERM_ALL;
+	if (node)
+		do {
+			uperms |= node->wanted_uperms[on] & mask;
+			mask = uperms_inheritable;
+		} while (node->inherit[on] && (node = node->cover));
+	return (uperms);
 }
 
 
@@ -368,19 +357,18 @@ unveil_proc_exec_switch(struct thread *td)
 	if (base->on[s].wanted) {
 		UNVEIL_FOREACH(node, base)
 			node->frozen_uperms[s] &=
-			    uperms_expand(unveil_node_wanted_uperms(
-				node, base->on[s].slots));
+			    uperms_expand(unveil_node_wanted_uperms(node, s));
 	}
 	base->on[s].frozen = true;
 	base->on[s].wanted = false;
-	base->on[s].slots = 0;
 
 	base->on[d] = base->on[s];
 	UNVEIL_FOREACH(node, base) {
 		node->frozen_uperms[d] = node->frozen_uperms[s];
-		for (int j = 0; j < UNVEIL_SUPPORTED_SLOTS; j++)
-			node->slots_uperms[j] = UPERM_NONE;
-		node->slots_inherit = -1;
+		for (int i = 0; i < UNVEIL_ON_COUNT; i++) {
+			node->wanted_uperms[i] = UPERM_NONE;
+			node->inherit[i] = true;
+		}
 	}
 	base->modified = false;
 	unveil_base_check(base);
@@ -428,13 +416,14 @@ unveil_remember(struct unveil_base *base, struct unveil_traversal *trav,
 	 * covering node that was discovered while traversing the path, it does
 	 * not come from a node's cover link.
 	 */
-	if (inserted) {
-		node->slots_inherit = -1;
-		for (int i = 0; i < UNVEIL_ON_COUNT; i++)
+	if (inserted)
+		for (int i = 0; i < UNVEIL_ON_COUNT; i++) {
+			node->wanted_uperms[i] = UPERM_NONE;
 			node->frozen_uperms[i] =
 			    trav->cover ? uperms_inherit(trav->cover->frozen_uperms[i]) :
 			    base->on[i].frozen ? UPERM_NONE : UPERM_ALL;
-	}
+			node->inherit[i] = true;
+		}
 
 	if (trav->ter) {
 		(*trav->tep)[0] = node->cover ? node->cover->index : node->index;
@@ -640,8 +629,8 @@ unveil_traverse_effective_uperms(struct thread *td, struct unveil_traversal *tra
 	if (trav->cover) {
 		uperms = trav->cover->frozen_uperms[UNVEIL_ON_SELF];
 		if (trav->save_flags == 0 && base->on[UNVEIL_ON_SELF].wanted)
-			uperms &= uperms_expand(unveil_node_wanted_uperms(trav->cover,
-			    base->on[UNVEIL_ON_SELF].slots));
+			uperms &= uperms_expand(unveil_node_wanted_uperms(
+			    trav->cover, UNVEIL_ON_SELF));
 	} else {
 		if (trav->save_flags == 0)
 			uperms = base->on[UNVEIL_ON_SELF].active ? UPERM_NONE : UPERM_ALL;
@@ -701,11 +690,10 @@ unveil_base_write_end(struct unveil_base *base)
 }
 
 void
-unveil_base_activate(struct unveil_base *base, enum unveil_on on, unveil_slots slots)
+unveil_base_activate(struct unveil_base *base, enum unveil_on on)
 {
 	base->modified = true;
 	base->on[on].active = base->on[on].wanted = true;
-	base->on[on].slots |= slots;
 }
 
 void
@@ -716,7 +704,7 @@ unveil_base_enforce(struct unveil_base *base, enum unveil_on on)
 	base->on[on].frozen = base->on[on].active = base->on[on].wanted = true;
 	UNVEIL_FOREACH(node, base)
 		node->frozen_uperms[on] &= uperms_expand(
-		    unveil_node_wanted_uperms(node, base->on[on].slots));
+		    unveil_node_wanted_uperms(node, on));
 }
 
 
@@ -732,17 +720,15 @@ unveil_index_check(struct unveil_base *base, unsigned index)
 
 int
 unveil_index_set(struct unveil_base *base,
-    unsigned index, unveil_slots slots, unveil_perms uperms)
+    unsigned index, enum unveil_on on, unveil_perms uperms)
 {
 	struct unveil_node *node;
-	int j;
 	UNVEIL_WRITE_ASSERT(base);
 	UNVEIL_FOREACH(node, base) {
 		if (node->index == index) /* XXX */ {
 			base->modified = true;
-			FOREACH_SLOTS(slots, j)
-				node->slots_uperms[j] = uperms_expand(uperms);
-			node->slots_inherit &= ~slots;
+			node->wanted_uperms[on] = uperms_expand(uperms);
+			node->inherit[on] = false;
 			return (0);
 		}
 	}
