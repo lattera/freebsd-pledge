@@ -616,6 +616,7 @@ unveil_parse_perms(unveil_perms *uperms, const char *s)
 	*uperms = UPERM_NONE;
 	while (*s)
 		switch (*s++) {
+		case 'l': *uperms |= UPERM_LPATH; break;
 		case 'r': *uperms |= UPERM_RPATH; break;
 		case 'm': *uperms |= UPERM_WPATH; break;
 		case 'w': *uperms |= UPERM_WPATH; /* FALLTHROUGH */

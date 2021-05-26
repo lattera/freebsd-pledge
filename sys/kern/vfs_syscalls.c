@@ -2130,13 +2130,18 @@ kern_accessat(struct thread *td, int fd, const char *path,
 		usecred = cred;
 	AUDIT_ARG_VALUE(amode);
 #ifdef UNVEIL
-	unveil_uperms_rights(
-	    amode == F_OK ? UPERM_EXPOSE :
-	    (amode & R_OK ? UPERM_RPATH : UPERM_NONE) |
-	    (amode & W_OK ? UPERM_WPATH : UPERM_NONE) |
-	    (amode & X_OK ? UPERM_XPATH : UPERM_NONE),
-	    &rights);
-	rightsp = &rights;
+	if (amode == F_OK) {
+		rightsp = &cap_fstat_rights;
+	} else {
+		cap_rights_init(&rights);
+		if (amode & R_OK)
+			cap_rights_set(&rights, CAP_READ);
+		if (amode & W_OK)
+			cap_rights_set(&rights, CAP_WRITE);
+		if (amode & X_OK)
+			cap_rights_set(&rights, CAP_EXECAT);
+		rightsp = &rights;
+	}
 #else
 	rightsp = &cap_fstat_rights;
 #endif

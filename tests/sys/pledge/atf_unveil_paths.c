@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <dirent.h>
 #include <atf-c.h>
 #include <pledge.h>
 
@@ -54,6 +55,15 @@ ATF_TC_BODY(unveil_one_x, tc)
 	ATF_REQUIRE(unveil("test", "x") >= 0);
 	ATF_REQUIRE(unveil(NULL, NULL) >= 0);
 	check_access("test", "x");
+}
+
+ATF_TC_WITHOUT_HEAD(unveil_one_l);
+ATF_TC_BODY(unveil_one_l, tc)
+{
+	atf_utils_create_file("test", "");
+	ATF_REQUIRE(unveil("test", "l") >= 0);
+	ATF_REQUIRE(unveil(NULL, NULL) >= 0);
+	check_access("test", "i");
 }
 
 ATF_TC_WITHOUT_HEAD(hide_all);
@@ -230,6 +240,36 @@ ATF_TC_BODY(openat2, tc)
 	ATF_CHECK(close(fd2) >= 0);
 }
 
+ATF_TC_WITHOUT_HEAD(listing_allow);
+ATF_TC_BODY(listing_allow, tc)
+{
+	DIR *d;
+	struct dirent *e;
+	bool found;
+	ATF_REQUIRE(try_mkdir("d") >= 0);
+	ATF_REQUIRE(try_creat("d/f") >= 0);
+	ATF_REQUIRE(unveil("d", "l") >= 0);
+	check_access("d", "rd");
+	check_access("d/f", "i");
+	ATF_REQUIRE((d = opendir("d")));
+	found = false;
+	while ((e = readdir(d)))
+		if (strcmp(e->d_name, "f") == 0)
+			found = true;
+	ATF_CHECK(found);
+}
+
+ATF_TC_WITHOUT_HEAD(listing_deny);
+ATF_TC_BODY(listing_deny, tc)
+{
+	ATF_REQUIRE(try_mkdir("d") >= 0);
+	ATF_REQUIRE(try_creat("d/f") >= 0);
+	ATF_REQUIRE(unveil("d", "w") >= 0);
+	check_access("d", "wd");
+	check_access("d/f", "w");
+	ATF_CHECK_ERRNO(EACCES, !opendir("d"));
+}
+
 ATF_TC_WITHOUT_HEAD(dev_stdin);
 ATF_TC_BODY(dev_stdin, tc)
 {
@@ -316,6 +356,7 @@ ATF_TP_ADD_TCS(tp)
 	ATF_TP_ADD_TC(tp, unveil_one_w);
 	ATF_TP_ADD_TC(tp, unveil_one_c);
 	ATF_TP_ADD_TC(tp, unveil_one_x);
+	ATF_TP_ADD_TC(tp, unveil_one_l);
 	ATF_TP_ADD_TC(tp, hide_all);
 	ATF_TP_ADD_TC(tp, unveil_all_r);
 	ATF_TP_ADD_TC(tp, descend_trivial);
@@ -326,6 +367,8 @@ ATF_TP_ADD_TCS(tp)
 	ATF_TP_ADD_TC(tp, cwd_deny);
 	ATF_TP_ADD_TC(tp, openat1);
 	ATF_TP_ADD_TC(tp, openat2);
+	ATF_TP_ADD_TC(tp, listing_allow);
+	ATF_TP_ADD_TC(tp, listing_deny);
 	ATF_TP_ADD_TC(tp, dev_stdin);
 	ATF_TP_ADD_TC(tp, dev_stdout);
 	ATF_TP_ADD_TC(tp, keep_stdio_hidden);

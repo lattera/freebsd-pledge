@@ -16,6 +16,7 @@
 
 enum {
 	UPERM_NONE = 0,
+	UPERM_LPATH = 1 << 0,
 	UPERM_RPATH = 1 << 1,
 	UPERM_WPATH = 1 << 2,
 	UPERM_CPATH = 1 << 3,
@@ -27,23 +28,22 @@ enum {
 	UPERM_EXPOSE = 1 << 9,
 	UPERM_SEARCH = 1 << 10,
 	UPERM_STATUS = 1 << 11,
-	UPERM_ALL = -1,
 	UPERM_INSPECT = UPERM_EXPOSE | UPERM_SEARCH | UPERM_STATUS,
+	UPERM_ALL = -1,
 };
 
 static inline unveil_perms
 uperms_expand(unveil_perms uperms)
 {
-	if (uperms & UPERM_RPATH) {
-		uperms |= UPERM_STATUS;
-		if (uperms & UPERM_WPATH && uperms & UPERM_CPATH)
-			uperms |= UPERM_TMPPATH | UPERM_SUBTMPPATH;
-	}
-	if (uperms & (UPERM_RPATH | UPERM_WPATH | UPERM_CPATH |
+	if (uperms & (UPERM_LPATH | UPERM_RPATH | UPERM_WPATH | UPERM_CPATH |
 	              UPERM_XPATH | UPERM_APATH | UPERM_TMPPATH | UPERM_SUBTMPPATH))
 		uperms |= UPERM_EXPOSE | UPERM_SEARCH;
+	if (uperms & (UPERM_LPATH | UPERM_RPATH))
+		uperms |= UPERM_STATUS | UPERM_LPATH;
 	if (uperms & UPERM_STATUS)
 		uperms |= UPERM_FOLLOW;
+	if (uperms & UPERM_RPATH && uperms & UPERM_WPATH && uperms & UPERM_CPATH)
+		uperms |= UPERM_TMPPATH | UPERM_SUBTMPPATH;
 	return (uperms);
 }
 

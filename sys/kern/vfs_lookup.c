@@ -759,11 +759,13 @@ out:
 #if defined(SYSFIL) || defined(UNVEIL)
 static void
 rights_kludge(struct vnode *vp, cap_rights_t *rights,
-    bool can_read, bool can_write)
+    bool can_read_dir, bool can_write)
 {
 	/* Kludge for directory O_SEARCH opens. */
-	if (vp->v_type == VDIR && can_read)
+	if (vp->v_type == VDIR && can_read_dir) {
 		cap_rights_set(rights, CAP_FEXECVE, CAP_EXECAT);
+		cap_rights_set(rights, CAP_READ, CAP_SEEK);
+	}
 	/* Kludge for O_CREAT opens. */
 	if (can_write)
 		cap_rights_set(rights, CAP_CREATE);
@@ -866,7 +868,7 @@ unveil_lookup_check(struct nameidata *ndp)
 		unveil_uperms_rights(uperms, &haverights);
 		if (ndp->ni_vp)
 			rights_kludge(ndp->ni_vp, &haverights,
-			    uperms & UPERM_RPATH, uperms & UPERM_WPATH);
+			    uperms & UPERM_LPATH, uperms & UPERM_WPATH);
 		if (cap_rights_contains(&haverights, needrights))
 			return (0);
 	}
