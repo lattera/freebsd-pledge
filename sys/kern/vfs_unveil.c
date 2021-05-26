@@ -84,6 +84,14 @@ struct unveil_tree {
 
 CTASSERT(NAME_MAX <= UCHAR_MAX);
 
+struct unveil_save {
+	int flags;
+	/* trail entries */
+	bool te_overflow /* array overflowed? */;
+	size_t ter; /* remaining array slots */
+	unveil_index (*tev)[2] /* array base */, (*tep)[2] /* fill pointer */;
+};
+
 
 static inline int
 memcmplen(const char *p0, size_t l0, const char *p1, size_t l1)
@@ -386,7 +394,7 @@ unveil_remember(struct unveil_base *base, struct unveil_traversal *trav,
 
 	if (!name)
 		node = unveil_tree_insert(trav->tree, dvp, NULL, 0, &inserted);
-	else if ((trav->save_flags & UNVEILREG_NONDIRBYNAME) && (!vp || vp->v_type != VDIR))
+	else if ((trav->save->flags & UNVEILREG_NONDIRBYNAME) && (!vp || vp->v_type != VDIR))
 		node = unveil_tree_insert(trav->tree, dvp, name, name_len, &inserted);
 	else if (vp)
 		node = unveil_tree_insert(trav->tree, vp, NULL, 0, &inserted);
@@ -425,14 +433,14 @@ unveil_remember(struct unveil_base *base, struct unveil_traversal *trav,
 			node->inherit[i] = true;
 		}
 
-	if (trav->ter) {
-		(*trav->tep)[0] = node->cover ? node->cover->index : node->index;
-		(*trav->tep)[1] = node->index;
-		trav->tep++, trav->ter--;
+	if (trav->save->ter) {
+		(*trav->save->tep)[0] = node->cover ? node->cover->index : node->index;
+		(*trav->save->tep)[1] = node->index;
+		trav->save->tep++, trav->save->ter--;
 	} else
-		trav->te_overflow = true;
+		trav->save->te_overflow = true;
 
-	if (trav->save_flags & UNVEILREG_INTERMEDIATE)
+	if (trav->save->flags & UNVEILREG_INTERMEDIATE)
 		node->fully_covered = true; /* cannot be turned off */
 
 	base->modified = true;
@@ -516,7 +524,7 @@ unveil_traverse_begin(struct thread *td, struct unveil_traversal *trav,
 	struct unveil_base *base = &td->td_proc->p_unveils;
 	int error;
 	counter_u64_add(unveil_stats_traversals, 1);
-	if (trav->save_flags != 0) {
+	if (trav->save) {
 		UNVEIL_WRITE_ASSERT(base);
 		trav->tree = base->tree;
 	} else {
@@ -535,22 +543,23 @@ unveil_traverse_begin(struct thread *td, struct unveil_traversal *trav,
 		counter_u64_add(unveil_stats_ascents, 1);
 		counter_u64_add(unveil_stats_ascent_total_depth, trav->depth);
 	}
-	if (trav->save_flags && trav->first) {
+	if (trav->save && trav->first) {
+		struct unveil_save *save = trav->save;
 		size_t cnt;
 		struct unveil_node *node;
 		unveil_index (*tep)[2];
 		for (cnt = 0, node = trav->cover; node; node = node->cover, cnt++);
-		if (trav->ter < cnt) {
-			tep = trav->tep += trav->ter;
-			trav->ter = 0;
-			trav->te_overflow = true;
+		if (save->ter < cnt) {
+			tep = save->tep += save->ter;
+			save->ter = 0;
+			save->te_overflow = true;
 		} else {
-			tep = trav->tep += cnt;
-			trav->ter -= cnt;
+			tep = save->tep += cnt;
+			save->ter -= cnt;
 		}
-		for (node = trav->cover; node && tep != trav->tev; node = node->cover) {
+		for (node = trav->cover; node && tep != save->tev; node = node->cover) {
 			tep--;
-			(*tep)[0] = (node->cover && tep != trav->tev
+			(*tep)[0] = (node->cover && tep != save->tev
 			    ? node->cover : node)->index;
 			(*tep)[1] = node->index;
 		}
@@ -579,7 +588,7 @@ unveil_traverse(struct thread *td, struct unveil_traversal *trav,
 	struct unveil_base *base = &td->td_proc->p_unveils;
 	struct unveil_node *node;
 
-	if (trav->save_flags != 0 && (final || (trav->save_flags & UNVEILREG_INTERMEDIATE))) {
+	if (trav->save && (final || (trav->save->flags & UNVEILREG_INTERMEDIATE))) {
 		if (name_len > NAME_MAX)
 			return (ENAMETOOLONG);
 		UNVEIL_WRITE_ASSERT(base);
@@ -628,11 +637,11 @@ unveil_traverse_effective_uperms(struct thread *td, struct unveil_traversal *tra
 	unveil_perms uperms;
 	if (trav->cover) {
 		uperms = trav->cover->frozen_uperms[UNVEIL_ON_SELF];
-		if (trav->save_flags == 0 && base->on[UNVEIL_ON_SELF].wanted)
+		if (!trav->save && base->on[UNVEIL_ON_SELF].wanted)
 			uperms &= uperms_expand(unveil_node_wanted_uperms(
 			    trav->cover, UNVEIL_ON_SELF));
 	} else {
-		if (trav->save_flags == 0)
+		if (!trav->save)
 			uperms = base->on[UNVEIL_ON_SELF].active ? UPERM_NONE : UPERM_ALL;
 		else
 			uperms = base->on[UNVEIL_ON_SELF].frozen ? UPERM_NONE : UPERM_ALL;
@@ -669,7 +678,7 @@ void
 unveil_traverse_end(struct thread *td, struct unveil_traversal *trav)
 {
 	struct unveil_base *base = &td->td_proc->p_unveils;
-	if (trav->save_flags != 0) {
+	if (trav->save) {
 		MPASS(base->tree == trav->tree);
 		UNVEIL_WRITE_ASSERT(base);
 	} else if (trav->tree)
@@ -741,47 +750,45 @@ do_unveil_add(struct thread *td, struct unveil_base *base, int flags, struct unv
 {
 	struct nameidata nd;
 	struct unveil_traversal *trav;
+	struct unveil_save save;
 	uint64_t ndflags;
 	int error;
 	if ((reg.atflags & ~(AT_SYMLINK_NOFOLLOW | AT_RESOLVE_BENEATH)) != 0)
 		return (EINVAL);
 	ndflags = (reg.atflags & AT_SYMLINK_NOFOLLOW ? NOFOLLOW : FOLLOW) |
 	    (reg.atflags & AT_RESOLVE_BENEATH ? RBENEATH : 0);
-	trav = &nd.ni_unveil;
 	NDINIT_ATRIGHTS(&nd, LOOKUP, ndflags,
 	    UIO_USERSPACE, reg.path, reg.atfd, &cap_fstat_rights, td);
-	trav->save_flags = flags;
+	trav = &nd.ni_unveil;
 	trav->first = true;
-	trav->te_overflow = false;
+	trav->save = &save;
+	save = (struct unveil_save){ .flags = flags };
 	if (reg.tev) {
-		if ((trav->ter = reg.tec) > UNVEILREG_MAX_TE)
-			trav->ter = UNVEILREG_MAX_TE;
-		trav->tev = trav->tep = mallocarray(trav->ter,
-		    sizeof *trav->tev, M_TEMP, M_WAITOK);
-		if (!trav->tev)
+		if ((save.ter = reg.tec) > UNVEILREG_MAX_TE)
+			save.ter = UNVEILREG_MAX_TE;
+		save.tev = save.tep = mallocarray(save.ter,
+		    sizeof *save.tev, M_TEMP, M_WAITOK);
+		if (!save.tev)
 			return (EINVAL);
-	} else {
-		trav->ter = 0;
-		trav->tev = trav->tep = NULL;
 	}
 	error = namei(&nd);
 	if (error)
 		goto out;
 	NDFREE(&nd, 0);
 	if (reg.tev) {
-		if (trav->te_overflow) {
+		if (save.te_overflow) {
 			error = ENAMETOOLONG;
 			goto out;
 		}
-		error = copyout(trav->tev, reg.tev,
-		    (char *)trav->tep - (char *)trav->tev);
+		error = copyout(save.tev, reg.tev,
+		    (char *)save.tep - (char *)save.tev);
 		if (error)
 			goto out;
-		td->td_retval[0] = trav->tep - trav->tev;
+		td->td_retval[0] = save.tep - save.tev;
 	} else
 		td->td_retval[0] = trav->cover ? trav->cover->index : -1;
 out:	if (reg.tev)
-		free(trav->tev, M_TEMP);
+		free(save.tev, M_TEMP);
 	return (error);
 }
 

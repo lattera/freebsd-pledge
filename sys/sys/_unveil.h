@@ -18,15 +18,11 @@ struct unveil_node;
 struct unveil_traversal {
 	struct unveil_tree *tree;
 	struct unveil_node *cover; /* last unveil encountered */
-	int save_flags;
+	struct unveil_save *save;
 	bool first;
 	int8_t type; /* type of last file encountered */
 	uint8_t depth; /* depth under cover of last file */
 	bool nosetattr;
-	/* trail entries */
-	size_t ter; /* remaining array slots */
-	unveil_index (*tev)[2] /* array base */, (*tep)[2] /* fill pointer */;
-	bool te_overflow /* array overflowed? */;
 };
 
 enum { UNVEIL_ON_COUNT = 2 };
