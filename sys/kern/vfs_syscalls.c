@@ -2131,7 +2131,7 @@ kern_accessat(struct thread *td, int fd, const char *path,
 	AUDIT_ARG_VALUE(amode);
 #ifdef UNVEIL
 	unveil_uperms_rights(
-	    amode == F_OK ? UPERM_INSPECT :
+	    amode == F_OK ? UPERM_EXPOSE :
 	    (amode & R_OK ? UPERM_RPATH : UPERM_NONE) |
 	    (amode & W_OK ? UPERM_WPATH : UPERM_NONE) |
 	    (amode & X_OK ? UPERM_XPATH : UPERM_NONE),

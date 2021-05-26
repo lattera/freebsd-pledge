@@ -450,14 +450,18 @@ do_promises_slots(enum curtain_on on,
 		 */
 		curtain_sysfil(always_slot, SYSFIL_UNVEIL);
 		/*
-		 * Always keep the root directory inspectable.  This is so that
-		 * child processes can do their own unveil inheritance on it.
-		 * This is currently the only way to propagate permissions to
-		 * all reachable unveils.
+		 * Always keep the root directory chdir()-able (but not
+		 * necessarily stat()-able or readable).  This is sufficient to
+		 * let child processes do their own unveils on it (which is
+		 * necessary to set new permissions that will inherit to all
+		 * reachable paths).
 		 *
-		 * XXX This leaks some stat() information on the root directory.
+		 * In addition, it lets all programs do a chdir("/").  Which is
+		 * something that a lot of daemon programs do and they might
+		 * not expect the call to fail (which could lead to security
+		 * issues if the program isn't in the directory that it expects).
 		 */
-		curtain_unveil(always_slot, root_path, 0, UPERM_INSPECT);
+		curtain_unveil(always_slot, root_path, 0, UPERM_SEARCH);
 	}
 	curtain_enable(always_slot, on);
 }

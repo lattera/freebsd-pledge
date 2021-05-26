@@ -637,7 +637,7 @@ uperms_adjust(unveil_perms orig_uperms, enum vtype type, uint8_t depth)
 		unveil_perms uperms = uperms_inherit(orig_uperms);
 		if (orig_uperms & UPERM_TMPPATH &&
 		    depth == 1 && (type == VNON || type == VREG))
-			uperms |= UPERM_SUBTMPPATH;
+			uperms |= uperms_expand(UPERM_SUBTMPPATH);
 		return (uperms);
 	}
 	return (orig_uperms);
@@ -748,7 +748,7 @@ do_unveil_add(struct thread *td, struct unveil_base *base, int flags, struct unv
 	ndflags = (reg.atflags & AT_SYMLINK_NOFOLLOW ? NOFOLLOW : FOLLOW) |
 	    (reg.atflags & AT_RESOLVE_BENEATH ? RBENEATH : 0);
 	NDINIT_ATRIGHTS(&nd, LOOKUP, ndflags,
-	    UIO_USERSPACE, reg.path, reg.atfd, &cap_fstat_rights, td);
+	    UIO_USERSPACE, reg.path, reg.atfd, &cap_fchdir_rights, td);
 	trav = &nd.ni_unveil;
 	trav->first = true;
 	trav->save = &save;
@@ -859,7 +859,8 @@ unveil_proc_fork(void *arg __unused, struct proc *parent, struct proc *child, in
 }
 
 
-static cap_rights_t __read_mostly inspect_rights;
+static cap_rights_t __read_mostly search_rights;
+static cap_rights_t __read_mostly status_rights;
 static cap_rights_t __read_mostly rpath_rights;
 static cap_rights_t __read_mostly wpath_rights;
 static cap_rights_t __read_mostly cpath_rights;
@@ -873,8 +874,11 @@ void
 unveil_uperms_rights(unveil_perms uperms, cap_rights_t *rights)
 {
 	CAP_NONE(rights);
-	if (uperms & UPERM_INSPECT)
-		cap_rights_merge(rights, &inspect_rights);
+	/* NOTE: UPERM_EXPOSE/UPERM_FOLLOW handled specially in vfs_lookup.c. */
+	if (uperms & UPERM_SEARCH)
+		cap_rights_merge(rights, &search_rights);
+	if (uperms & UPERM_STATUS)
+		cap_rights_merge(rights, &status_rights);
 	if (uperms & UPERM_RPATH)
 		cap_rights_merge(rights, &rpath_rights);
 	if (uperms & UPERM_WPATH)
@@ -891,8 +895,6 @@ unveil_uperms_rights(unveil_perms uperms, cap_rights_t *rights)
 		if (uperms & UPERM_CPATH && uperms & UPERM_WPATH && uperms & UPERM_RPATH)
 			cap_rights_merge(rights, &rwcapath_rights);
 	}
-	if (uperms & UPERM_TMPPATH)
-		cap_rights_merge(rights, &inspect_rights);
 	if (uperms & UPERM_SUBTMPPATH)
 		cap_rights_merge(rights, &subtmppath_rights);
 }
@@ -900,12 +902,14 @@ unveil_uperms_rights(unveil_perms uperms, cap_rights_t *rights)
 static void
 unveil_sysinit(void *arg __unused)
 {
-	cap_rights_init(&inspect_rights,
+	cap_rights_init(&search_rights,
+	    CAP_LOOKUP,
+	    CAP_FCHDIR);
+	cap_rights_init(&status_rights,
 	    CAP_LOOKUP,
 	    CAP_FPATHCONF,
 	    CAP_FSTAT,
-	    CAP_FSTATAT,
-	    CAP_FCHDIR);
+	    CAP_FSTATAT);
 	cap_rights_init(&rpath_rights,
 	    CAP_LOOKUP,
 	    CAP_FLOCK,
@@ -980,9 +984,10 @@ unveil_sysinit(void *arg __unused)
 	 * unveiled with more permissions than its source directory, require
 	 * the source to have all permissions except UPERM_XPATH for now.
 	 *
-	 * UPERM_CPATH might arguably not be required (since directories cannot
-	 * be hard linked), but it is probably safer to require it (even if
-	 * only because it might be less surprising).
+	 * UPERM_CPATH might arguably not be required since directories cannot
+	 * be hard linked, but it could allow multiple programs with different
+	 * unveils collaborating (perhaps unintentionally) to gain more access
+	 * to files with hard links than they could separately.
 	 */
 	cap_rights_init(&rwcapath_rights,
 	    CAP_LINKAT_SOURCE);

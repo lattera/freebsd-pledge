@@ -88,12 +88,13 @@ try_accessat(int atfd, const char *path, int mode)
 static void __unused
 check_accessat(int atfd, const char *path, const char *flags)
 {
+	bool is_root;
 	bool e, i, r, w, x, d, p;
 	e = i = r = w = x = d = p = false;
 	for (const char *ptr = flags; *ptr; ptr++)
 		switch (*ptr) {
 		case 'e':         e = true; break; /* not hiding existence */
-		case 'i':     i =     true; break; /* stat()-able/chdir()-able */
+		case 'i':     i = e = true; break; /* stat()-able/chdir()-able */
 		case 'r': r = i = e = true; break; /* readable/searchable */
 		case 'w': w =     e = true; break; /* writable */
 		case 'x': x =     e = true; break; /* executable */
@@ -101,12 +102,7 @@ check_accessat(int atfd, const char *path, const char *flags)
 		case '+': p =         true; break; /* may have extra permissions */
 		default: assert(0); break;
 		}
-	if (atfd == AT_FDCWD && strcmp(path, "/") == 0)
-		/*
-		 * XXX The pledge(3)/unveil(3) library currently always
-		 * maintain UPERM_INSPECT on the root directory.
-		 */
-		i = true;
+	is_root = atfd == AT_FDCWD && strcmp(path, "/") == 0;
 
 	warnx("%s: %s %s", __FUNCTION__, path, flags);
 
@@ -121,17 +117,21 @@ check_accessat(int atfd, const char *path, const char *flags)
 	else if (!p)
 		ATF_CHECK_ERRNO(expected_errno, try_statat(atfd, path) < 0);
 
+	/*
+	 * NOTE: The pledge(3)/unveil(3) library currently always maintain
+	 * UPERM_SEARCH on the root directory.
+	 */
 	if (r) {
 		ATF_CHECK(try_accessat(atfd, path, R_OK) >= 0);
 		ATF_CHECK(try_openat(atfd, path, O_RDONLY) >= 0);
-		if (d) {
+		if (d || is_root) {
 			ATF_CHECK(try_accessat(atfd, path, X_OK) >= 0);
 			ATF_CHECK(try_openat(atfd, path, O_SEARCH) >= 0);
 		}
 	} else if (!p) {
 		ATF_CHECK_ERRNO(expected_errno, try_accessat(atfd, path, R_OK) < 0);
 		ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_RDONLY) < 0);
-		if (d) {
+		if (d && !is_root) {
 			ATF_CHECK_ERRNO(expected_errno, try_accessat(atfd, path, X_OK) < 0);
 			ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_SEARCH) < 0);
 		}

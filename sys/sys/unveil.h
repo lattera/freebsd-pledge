@@ -16,7 +16,6 @@
 
 enum {
 	UPERM_NONE = 0,
-	UPERM_INSPECT = 1 << 0,
 	UPERM_RPATH = 1 << 1,
 	UPERM_WPATH = 1 << 2,
 	UPERM_CPATH = 1 << 3,
@@ -25,24 +24,32 @@ enum {
 	UPERM_TMPPATH = 1 << 6,
 	UPERM_SUBTMPPATH = 1 << 7,
 	UPERM_FOLLOW = 1 << 8,
+	UPERM_EXPOSE = 1 << 9,
+	UPERM_SEARCH = 1 << 10,
+	UPERM_STATUS = 1 << 11,
 	UPERM_ALL = -1,
+	UPERM_INSPECT = UPERM_EXPOSE | UPERM_SEARCH | UPERM_STATUS,
 };
 
 static inline unveil_perms
 uperms_expand(unveil_perms uperms)
 {
 	if (uperms & UPERM_RPATH) {
-		uperms |= UPERM_INSPECT;
+		uperms |= UPERM_STATUS;
 		if (uperms & UPERM_WPATH && uperms & UPERM_CPATH)
 			uperms |= UPERM_TMPPATH | UPERM_SUBTMPPATH;
 	}
-	if (uperms & UPERM_INSPECT)
+	if (uperms & (UPERM_RPATH | UPERM_WPATH | UPERM_CPATH |
+	              UPERM_XPATH | UPERM_APATH | UPERM_TMPPATH | UPERM_SUBTMPPATH))
+		uperms |= UPERM_EXPOSE | UPERM_SEARCH;
+	if (uperms & UPERM_STATUS)
 		uperms |= UPERM_FOLLOW;
 	return (uperms);
 }
 
 static const unveil_perms uperms_inheritable =
-    ~(UPERM_INSPECT | UPERM_FOLLOW | UPERM_TMPPATH | UPERM_SUBTMPPATH);
+    ~(UPERM_FOLLOW | UPERM_EXPOSE | UPERM_SEARCH | UPERM_STATUS |
+      UPERM_TMPPATH | UPERM_SUBTMPPATH);
 
 static inline unveil_perms
 uperms_inherit(unveil_perms uperms)

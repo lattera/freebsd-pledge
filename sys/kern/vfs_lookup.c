@@ -870,7 +870,7 @@ unveil_lookup_check(struct nameidata *ndp)
 		if (cap_rights_contains(&haverights, needrights))
 			return (0);
 	}
-	return (uperms & ~(UPERM_INSPECT|UPERM_FOLLOW) ? EACCES : ENOENT);
+	return (uperms & UPERM_EXPOSE ? EACCES : ENOENT);
 }
 
 static inline void
