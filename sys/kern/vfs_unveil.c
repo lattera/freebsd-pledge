@@ -659,7 +659,9 @@ unveil_traverse_effective_uperms(struct thread *td, struct unveil_traversal *tra
 		else
 			uperms = base->on[UNVEIL_ON_SELF].frozen ? UPERM_NONE : UPERM_ALL;
 	}
-	return (uperms_adjust(uperms, trav->type, trav->depth));
+	uperms = uperms_adjust(uperms, trav->type, trav->depth);
+	trav->effective_uperms = uperms;
+	return (uperms);
 }
 
 void
@@ -676,8 +678,6 @@ unveil_traverse_effective_rights(struct thread *td, struct unveil_traversal *tra
 	/* Kludge for O_CREAT opens. */
 	if (trav->type != VNON && (uperms & UPERM_WPATH))
 		cap_rights_set(rights, CAP_CREATE);
-
-	trav->nosetattr = !(uperms & UPERM_APATH); /* TODO: clean up interface */
 
 	if (suggested_error)
 		*suggested_error = uperms & ~UPERM_INSPECT ? EACCES : ENOENT;

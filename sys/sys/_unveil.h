@@ -19,10 +19,10 @@ struct unveil_traversal {
 	struct unveil_tree *tree;
 	struct unveil_node *cover; /* last unveil encountered */
 	struct unveil_save *save;
+	unveil_perms effective_uperms;
 	bool first;
-	int8_t type; /* type of last file encountered */
+	int8_t type; /* vnode type of last file encountered */
 	uint8_t depth; /* depth under cover of last file */
-	bool nosetattr;
 };
 
 enum { UNVEIL_ON_COUNT = 2 };
