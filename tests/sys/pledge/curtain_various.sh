@@ -62,13 +62,24 @@ cmd_curtain_execpledge_cat_body() {
 	atf_check -s exit:0 -e empty -o file:"$f" curtain -u "$f" curtain -u "$f" execpledge -p 'stdio rpath' cat "$f"
 }
 
-atf_test_case cmd_date
-cmd_date_body() {
+atf_test_case date_localtime # check if localtime(3) works
+date_localtime_body() {
 	local t="$(date +%s)"
 	date -r "$t" > expected
 	atf_check -s exit:0 -e empty -o file:expected curtain date -r "$t"
 }
 
+atf_test_case sh_bg_wait # check if basic job control is allowed
+sh_bg_wait_body() {
+	echo 'true & true & true & wait' | curtain -s
+}
+
+atf_test_case ps_visibility
+ps_visibility_body() {
+	atf_check -s exit:0 -o not-empty curtain sh -c 'exec ps -p $$'
+	atf_check -s exit:0 -o not-empty curtain sh -c 'ps -p $$'
+	atf_check -s not-exit:0 -o empty -e not-empty curtain ps -p $$
+}
 
 atf_init_test_cases() {
 	atf_add_test_case cmd_true
@@ -81,5 +92,7 @@ atf_init_test_cases() {
 	atf_add_test_case cmd_execpledge_echo
 	atf_add_test_case cmd_execpledge_cat
 	atf_add_test_case cmd_curtain_execpledge_cat
-	atf_add_test_case cmd_date
+	atf_add_test_case date_localtime
+	atf_add_test_case sh_bg_wait
+	atf_add_test_case ps_visibility
 }

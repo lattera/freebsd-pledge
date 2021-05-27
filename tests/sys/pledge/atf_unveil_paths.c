@@ -270,6 +270,42 @@ ATF_TC_BODY(listing_deny, tc)
 	ATF_CHECK_ERRNO(EACCES, !opendir("d"));
 }
 
+ATF_TC_WITHOUT_HEAD(symlink0);
+ATF_TC_BODY(symlink0, tc)
+{
+	ATF_REQUIRE(try_creat("f") >= 0);
+	ATF_REQUIRE(symlink("f", "l") >= 0);
+	ATF_REQUIRE(unveil("l", "r") >= 0);
+	check_access(".", "");
+	check_access("f", "r");
+	check_access("l", "r");
+}
+
+ATF_TC_WITHOUT_HEAD(symlink1);
+ATF_TC_BODY(symlink1, tc)
+{
+	ATF_REQUIRE(try_mkdir("a") >= 0);
+	ATF_REQUIRE(try_mkdir("a/b") >= 0);
+	ATF_REQUIRE(try_mkdir("a/b/c") >= 0);
+	ATF_REQUIRE(try_creat("a/b/c/f") >= 0);
+	ATF_REQUIRE(symlink("../a/b", "a/l1") >= 0);
+	ATF_REQUIRE(symlink("c/l3", "a/b/l2") >= 0);
+	ATF_REQUIRE(symlink("..", "a/b/c/l3") >= 0);
+	ATF_REQUIRE(symlink("f", "a/b/c/l4") >= 0);
+	ATF_REQUIRE(unveil("a/l1/l2/c/f", "r") >= 0);
+	check_access(".", "");
+	check_access("a", "");
+	check_access("a/1", "");
+	check_access("a/b", "");
+	check_access("a/b/l2", "");
+	check_access("a/b/c", "");
+	check_access("a/b/c/l3", "");
+	check_access("a/b/c/l4", "");
+	check_access("a/b/c/f", "r");
+	check_access("a/l1/l2/c/l3/c/f", "r");
+	check_access("a/l1/l2/c/l3/c/l4", "");
+}
+
 ATF_TC_WITHOUT_HEAD(dev_stdin);
 ATF_TC_BODY(dev_stdin, tc)
 {
@@ -369,6 +405,8 @@ ATF_TP_ADD_TCS(tp)
 	ATF_TP_ADD_TC(tp, openat2);
 	ATF_TP_ADD_TC(tp, listing_allow);
 	ATF_TP_ADD_TC(tp, listing_deny);
+	ATF_TP_ADD_TC(tp, symlink0);
+	ATF_TP_ADD_TC(tp, symlink1);
 	ATF_TP_ADD_TC(tp, dev_stdin);
 	ATF_TP_ADD_TC(tp, dev_stdout);
 	ATF_TP_ADD_TC(tp, keep_stdio_hidden);

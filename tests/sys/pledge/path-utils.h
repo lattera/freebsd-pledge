@@ -127,6 +127,9 @@ check_accessat(int atfd, const char *path, const char *flags)
 		if (d || is_root) {
 			ATF_CHECK(try_accessat(atfd, path, X_OK) >= 0);
 			ATF_CHECK(try_openat(atfd, path, O_SEARCH) >= 0);
+			ATF_CHECK(try_openat(atfd, path, O_PATH) >= 0);
+			ATF_CHECK(try_openat(atfd, path, O_SEARCH|O_DIRECTORY) >= 0);
+			ATF_CHECK(try_openat(atfd, path, O_PATH|O_DIRECTORY) >= 0);
 		}
 	} else if (!p) {
 		ATF_CHECK_ERRNO(expected_errno, try_accessat(atfd, path, R_OK) < 0);
@@ -134,6 +137,9 @@ check_accessat(int atfd, const char *path, const char *flags)
 		if (d && !is_root) {
 			ATF_CHECK_ERRNO(expected_errno, try_accessat(atfd, path, X_OK) < 0);
 			ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_SEARCH) < 0);
+			ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_PATH) < 0);
+			ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_SEARCH|O_DIRECTORY) < 0);
+			ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_PATH|O_DIRECTORY) < 0);
 		}
 	}
 
@@ -161,8 +167,10 @@ check_accessat(int atfd, const char *path, const char *flags)
 	if (!d) {
 		if (x) {
 			ATF_CHECK(try_accessat(atfd, path, X_OK) >= 0);
+			ATF_CHECK(try_openat(atfd, path, O_EXEC) >= 0);
 		} else if (!p) {
 			ATF_CHECK_ERRNO(expected_errno, try_accessat(atfd, path, X_OK) < 0);
+			ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_EXEC) < 0);
 		}
 	}
 }
