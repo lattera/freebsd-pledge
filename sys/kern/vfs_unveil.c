@@ -451,11 +451,18 @@ static int
 unveil_find_cover(struct thread *td, struct unveil_tree *tree,
     struct vnode *dp, struct unveil_node **cover, uint8_t *depth)
 {
-	int error = 0;
+	int error, lkflags;
+	struct mount *mp;
 	struct vnode *vp;
 	struct componentname cn;
 
-	error = vget(dp, LK_RETRY | LK_SHARED);
+	if ((mp = dp->v_mount) && (mp->mnt_kern_flag & MNTK_LOOKUP_SHARED) &&
+	    !(mp->mnt_kern_flag & MNTK_LOOKUP_EXCL_DOTDOT))
+		lkflags = LK_SHARED;
+	else
+		lkflags = LK_EXCLUSIVE;
+
+	error = vget(dp, LK_RETRY | lkflags);
 	if (error)
 		return (error);
 
@@ -471,12 +478,12 @@ unveil_find_cover(struct thread *td, struct unveil_tree *tree,
 			 * This is a mountpoint.  Before doing a ".." lookup,
 			 * find the underlying directory it is mounted onto.
 			 */
-			if (!dp->v_mount || !(vp = dp->v_mount->mnt_vnodecovered))
+			if (!(mp = dp->v_mount) || !(vp = mp->mnt_vnodecovered))
 				break;
 			/* Must not lock parent while child lock is held. */
 			vref(vp);
 			vput(dp);
-			error = vn_lock(vp, LK_RETRY | LK_SHARED);
+			error = vn_lock(vp, LK_RETRY | lkflags);
 			if (error) {
 				vrele(vp);
 				return (error); /* must not try to unlock */
@@ -492,7 +499,7 @@ unveil_find_cover(struct thread *td, struct unveil_tree *tree,
 		cn = (struct componentname){
 			.cn_nameiop = LOOKUP,
 			.cn_flags = ISLASTCN | ISDOTDOT,
-			.cn_lkflags = LK_SHARED,
+			.cn_lkflags = lkflags,
 			.cn_thread = td,
 			.cn_cred = td->td_ucred,
 			.cn_nameptr = "..",
