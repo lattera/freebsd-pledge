@@ -254,6 +254,7 @@ get_unveil_mode(struct curtain_slot *slot, struct unveil_node *node)
 			.node = node,
 			.slot_next = slot->unveil_modes,
 			.node_next = *link,
+			.inherit = true,
 		};
 		slot->unveil_modes = *link = mode;
 	}

@@ -1415,7 +1415,7 @@ good:
 #ifdef UNVEIL
 		error = unveil_lookup_name(ndp, ndp->ni_dvp, dp);
 		if (error)
-			goto bad;
+			goto bad2;
 #endif
 		/*
 		 * Symlink code always expects an unlocked dvp.
@@ -1486,7 +1486,7 @@ nextname:
 #ifdef UNVEIL
 	error = unveil_lookup_name(ndp, ndp->ni_dvp, dp);
 	if (error)
-		goto bad;
+		goto bad2;
 #endif
 	if (cnp->cn_flags & SAVESTART) {
 		ndp->ni_startdir = ndp->ni_dvp;
