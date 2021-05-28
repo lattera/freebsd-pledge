@@ -88,21 +88,33 @@ try_accessat(int atfd, const char *path, int mode)
 static void __unused
 check_accessat(int atfd, const char *path, const char *flags)
 {
-	bool is_root;
-	bool e, i, r, w, x, d, p;
-	e = i = r = w = x = d = p = false;
+	bool e, /* not hiding existence */
+	     s, /* searchable (for directories) */
+	     i, /* stat()-able */
+	     r, /* readable */
+	     w, /* writable */
+	     x, /* executable (for regular files) */
+	     d, /* is a directory */
+	     p; /* may have extra permissions */
+	e = s = i = r = w = x = d = p = false;
 	for (const char *ptr = flags; *ptr; ptr++)
 		switch (*ptr) {
-		case 'e':         e = true; break; /* not hiding existence */
-		case 'i':     i = e = true; break; /* stat()-able/chdir()-able */
-		case 'r': r = i = e = true; break; /* readable/searchable */
-		case 'w': w =     e = true; break; /* writable */
-		case 'x': x =     e = true; break; /* executable */
-		case 'd': d =         true; break; /* is a directory */
-		case '+': p =         true; break; /* may have extra permissions */
+		case 'e':         s = e = true; break;
+		case 'i':     i = s = e = true; break;
+		case 'r': r = i = s = e = true; break;
+		case 'w': w =     s = e = true; break;
+		case 'x': x =     s = e = true; break;
+		case 'd': d =             true; break;
+		case '+': p =             true; break;
 		default: assert(0); break;
 		}
-	is_root = atfd == AT_FDCWD && strcmp(path, "/") == 0;
+	if (atfd == AT_FDCWD && strcmp(path, "/") == 0)
+		/*
+		 * This implementation always give some limited access to the
+		 * root directory (see comments in libcurtain), but the deny
+		 * errno is still ENOENT as if the path was not unveiled.
+		 */
+		s = true;
 
 	warnx("%s: %s %s", __FUNCTION__, path, flags);
 
@@ -121,26 +133,26 @@ check_accessat(int atfd, const char *path, const char *flags)
 	 * NOTE: The pledge(3)/unveil(3) library currently always maintain
 	 * UPERM_SEARCH on the root directory.
 	 */
+	if (d && s) {
+		ATF_CHECK(try_accessat(atfd, path, X_OK) >= 0);
+		ATF_CHECK(try_openat(atfd, path, O_SEARCH) >= 0);
+		ATF_CHECK(try_openat(atfd, path, O_PATH|O_EXEC) >= 0);
+		ATF_CHECK(try_openat(atfd, path, O_SEARCH|O_DIRECTORY) >= 0);
+		ATF_CHECK(try_openat(atfd, path, O_PATH|O_EXEC|O_DIRECTORY) >= 0);
+	} else if (d && !s && !p) {
+		ATF_CHECK_ERRNO(expected_errno, try_accessat(atfd, path, X_OK) < 0);
+		ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_SEARCH) < 0);
+		ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_PATH|O_EXEC) < 0);
+		ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_SEARCH|O_DIRECTORY) < 0);
+		ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_PATH|O_EXEC|O_DIRECTORY) < 0);
+	}
+
 	if (r) {
 		ATF_CHECK(try_accessat(atfd, path, R_OK) >= 0);
 		ATF_CHECK(try_openat(atfd, path, O_RDONLY) >= 0);
-		if (d || is_root) {
-			ATF_CHECK(try_accessat(atfd, path, X_OK) >= 0);
-			ATF_CHECK(try_openat(atfd, path, O_SEARCH) >= 0);
-			ATF_CHECK(try_openat(atfd, path, O_PATH) >= 0);
-			ATF_CHECK(try_openat(atfd, path, O_SEARCH|O_DIRECTORY) >= 0);
-			ATF_CHECK(try_openat(atfd, path, O_PATH|O_DIRECTORY) >= 0);
-		}
 	} else if (!p) {
 		ATF_CHECK_ERRNO(expected_errno, try_accessat(atfd, path, R_OK) < 0);
 		ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_RDONLY) < 0);
-		if (d && !is_root) {
-			ATF_CHECK_ERRNO(expected_errno, try_accessat(atfd, path, X_OK) < 0);
-			ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_SEARCH) < 0);
-			ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_PATH) < 0);
-			ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_SEARCH|O_DIRECTORY) < 0);
-			ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_PATH|O_DIRECTORY) < 0);
-		}
 	}
 
 	if (w) {

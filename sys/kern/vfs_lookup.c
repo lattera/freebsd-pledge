@@ -756,22 +756,6 @@ out:
 	return (error);
 }
 
-#if defined(SYSFIL) || defined(UNVEIL)
-static void
-rights_kludge(struct vnode *vp, cap_rights_t *rights,
-    bool can_read_dir, bool can_write)
-{
-	/* Kludge for directory O_SEARCH opens. */
-	if (vp->v_type == VDIR && can_read_dir) {
-		cap_rights_set(rights, CAP_FEXECVE, CAP_EXECAT);
-		cap_rights_set(rights, CAP_READ, CAP_SEEK);
-	}
-	/* Kludge for O_CREAT opens. */
-	if (can_write)
-		cap_rights_set(rights, CAP_CREATE);
-}
-#endif
-
 #ifdef SYSFIL
 
 static int
@@ -787,10 +771,15 @@ sysfil_lookup_check(struct nameidata *ndp)
 	else
 		needrights = ndp->ni_rightsneeded;
 	sysfil_cred_rights(td->td_ucred, &haverights);
-	if (ndp->ni_vp)
-		rights_kludge(ndp->ni_vp, &haverights,
-		    sysfil_check(td, SYSFIL_RPATH) == 0,
-		    sysfil_check(td, SYSFIL_WPATH) == 0);
+	if (ndp->ni_vp) {
+		/* Kludge for directory O_SEARCH opens. */
+		if (ndp->ni_vp->v_type == VDIR &&
+		    sysfil_check(td, SYSFIL_RPATH) == 0)
+			cap_rights_set(&haverights, CAP_FEXECVE, CAP_EXECAT);
+		/* Kludge for O_CREAT opens. */
+		if (sysfil_check(td, SYSFIL_WPATH) == 0)
+			cap_rights_set(&haverights, CAP_CREATE);
+	}
 	if (cap_rights_contains(&haverights, needrights))
 		return (0);
 	return (EPERM);
@@ -866,9 +855,20 @@ unveil_lookup_check(struct nameidata *ndp)
 	} else {
 		needrights = ndp->ni_rightsneeded;
 		unveil_uperms_rights(uperms, &haverights);
-		if (ndp->ni_vp)
-			rights_kludge(ndp->ni_vp, &haverights,
-			    uperms & UPERM_LPATH, uperms & UPERM_WPATH);
+		if (ndp->ni_vp) {
+			if (ndp->ni_vp->v_type == VDIR) {
+				if (uperms & UPERM_LPATH)
+					cap_rights_set(&haverights,
+					    CAP_READ, CAP_SEEK);
+				/* Kludge for directory O_SEARCH opens. */
+				if (uperms & UPERM_SEARCH)
+					cap_rights_set(&haverights,
+					    CAP_FEXECVE, CAP_EXECAT);
+			}
+			/* Kludge for O_CREAT opens. */
+			if (uperms & UPERM_WPATH)
+				cap_rights_set(&haverights, CAP_CREATE);
+		}
 		if (cap_rights_contains(&haverights, needrights))
 			return (0);
 	}
