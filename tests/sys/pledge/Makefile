@@ -32,6 +32,7 @@ ATF_TESTS_C+=	atf_unveil_pledge
 ATF_TESTS_C+=	atf_unveil_exec
 ATF_TESTS_C+=	atf_unveil_fattr
 
-WARNS?=		6
+PLAIN_TESTS_C+=	openbsd-unveil-syscalls
+WARNS.openbsd-unveil-syscalls=3
 
 .include <bsd.test.mk>
