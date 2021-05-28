@@ -306,6 +306,23 @@ ATF_TC_BODY(symlink1, tc)
 	check_access("a/l1/l2/c/l3/c/l4", "");
 }
 
+ATF_TC_WITHOUT_HEAD(symlink2);
+ATF_TC_BODY(symlink2, tc)
+{
+	ATF_REQUIRE(try_mkdir("d") >= 0);
+	ATF_REQUIRE(try_creat("d/f") >= 0);
+	ATF_REQUIRE(symlink(".", "d/l") >= 0);
+	ATF_REQUIRE(unveil("d", "r") >= 0);
+	ATF_REQUIRE(unveil("d/l/f", "rw") >= 0);
+	check_access(".", "");
+	check_access("d", "dr");
+	check_access("d/f", "rw");
+	check_access("d/l", "dr");
+	check_access("d/l/f", "rw");
+	char buf[64];
+	ATF_CHECK(readlink("d/l", buf, sizeof buf) >= 0);
+}
+
 ATF_TC_WITHOUT_HEAD(dev_stdin);
 ATF_TC_BODY(dev_stdin, tc)
 {
@@ -407,6 +424,7 @@ ATF_TP_ADD_TCS(tp)
 	ATF_TP_ADD_TC(tp, listing_deny);
 	ATF_TP_ADD_TC(tp, symlink0);
 	ATF_TP_ADD_TC(tp, symlink1);
+	ATF_TP_ADD_TC(tp, symlink2);
 	ATF_TP_ADD_TC(tp, dev_stdin);
 	ATF_TP_ADD_TC(tp, dev_stdout);
 	ATF_TP_ADD_TC(tp, keep_stdio_hidden);
