@@ -589,7 +589,7 @@ exec_cmd(bool wrap, char *cmd_name, char **argv)
 static void
 usage(void)
 {
-	fprintf(stderr, "usage: %s [-kgenwaXY] "
+	fprintf(stderr, "usage: %s [-fkgenaXY] "
 	    "[-t tag] [-p promises] [-u unveil ...] "
 	    "[-sS] cmd [arg ...]\n",
 	    getprogname());
@@ -602,7 +602,7 @@ main(int argc, char *argv[])
 	int ch, r;
 	char *promises = NULL;
 	bool autotag = false;
-	bool wrap = false;
+	bool nofork = false;
 	bool signaling = false,
 	     run_shell = false,
 	     login_shell = false,
@@ -624,7 +624,7 @@ main(int argc, char *argv[])
 	curtain_enable((main_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 	curtain_enable((unveils_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 
-	while ((ch = getopt(argc, argv, "kgenat:p:u:0:sSwXY")) != -1)
+	while ((ch = getopt(argc, argv, "fkgenat:p:u:0:sSXY")) != -1)
 		switch (ch) {
 		case 'k':
 			signaling = true;
@@ -692,16 +692,14 @@ main(int argc, char *argv[])
 		case 's':
 			  run_shell = true;
 			  break;
-		case 'w':
-			  wrap = true;
+		case 'f':
+			  nofork = true;
 			  break;
 		case 'X':
 			  x11_mode = X11_UNTRUSTED;
-			  wrap = true;
 			  break;
 		case 'Y':
 			  x11_mode = X11_TRUSTED;
-			  wrap = true;
 			  break;
 		default:
 			usage();
@@ -732,22 +730,24 @@ main(int argc, char *argv[])
 		}
 	}
 	if (x11_mode != X11_NONE) {
+		if (nofork)
+			errx(EX_USAGE, "X11 mode incompatible with -f");
 		*tags.fill++ = "@x11";
 		prepare_x11(main_slot, x11_mode == X11_TRUSTED);
 	};
 	if (!no_protexec)
 		curtain_sysfil(main_slot, SYSFIL_PROT_EXEC);
-	if (wrap) {
+	if (!nofork) {
 		prepare_tmpdir(main_slot);
 	} else {
 		/*
-		 * XXX This can be very unsafe.  The "tmppath" promise
-		 * disallows many operations on the temporary directory like
-		 * listing the files, accessing subdirectories, or creating or
-		 * connecting to local domain sockets, etc.  Files securely
-		 * created with randomized filenames should be safe from other
-		 * sandboxed processes using the same temporary directory.  But
-		 * files with known or predictable filenames are not.  KRB5's
+		 * XXX This can be very unsafe.  UPERM_TMPPATH disallows many
+		 * operations on the temporary directory like listing the
+		 * files, accessing subdirectories, or creating/connecting to
+		 * local domain sockets, etc.  Files securely created with
+		 * randomized filenames should be safe from other sandboxed
+		 * processes using the same temporary directory.  But files
+		 * with known or predictable filenames are not.  KRB5's
 		 * krb5cc_<uid> is a pretty bad example of this.
 		 */
 		const char *tmppath;
@@ -776,7 +776,7 @@ main(int argc, char *argv[])
 			err(EX_NOPERM, "curtain_enforce");
 	}
 
-	if (wrap) {
+	if (!nofork) {
 		child_pid = 0;
 		signal(SIGHUP, signal_handler);
 		signal(SIGINT, signal_handler);
@@ -785,16 +785,16 @@ main(int argc, char *argv[])
 	}
 
 	if (run_shell) {
-		child_pid = exec_shell(wrap, login_shell);
+		child_pid = exec_shell(!nofork, login_shell);
 	} else {
 		char *cmd_name;
 		cmd_name = argv[0];
 		if (cmd_arg0)
 			argv[0] = cmd_arg0;
-		child_pid = exec_cmd(wrap, cmd_name, argv);
+		child_pid = exec_cmd(!nofork, cmd_name, argv);
 	}
 
-	assert(wrap);
+	assert(!nofork);
 	r = waitpid(child_pid, &status, 0);
 	if (r < 0)
 		err(EX_OSERR, "waitpid");
