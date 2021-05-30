@@ -26,8 +26,18 @@ __FBSDID("$FreeBSD$");
 #include <sys/un.h>
 #include <netinet/in.h>
 
+static bool __read_mostly sysfil_enabled = true;
 static unsigned __read_mostly sysfil_violation_log_level = 1;
-SYSCTL_UINT(_kern, OID_AUTO, log_sysfil_violation,
+
+SYSCTL_NODE(_security, OID_AUTO, curtain,
+    CTLFLAG_RW | CTLFLAG_MPSAFE, 0,
+    "Curtain");
+
+SYSCTL_BOOL(_security_curtain, OID_AUTO, enabled,
+    CTLFLAG_RW, &sysfil_enabled, 0,
+    "Allow curtainctl(2) usage");
+
+SYSCTL_UINT(_security_curtain, OID_AUTO, log_sysfil_violation,
     CTLFLAG_RW, &sysfil_violation_log_level, 0,
     "Log violations of sysfil restrictions");
 
@@ -332,6 +342,9 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 #ifdef UNVEIL
 	struct unveil_base *base = &td->td_proc->p_unveils;
 #endif
+
+	if (!sysfil_enabled)
+		return (ENOSYS);
 
 	SYSFILSET_FILL(&sysfilset_self, SYSFIL_ALWAYS);
 	SYSFILSET_FILL(&sysfilset_self, SYSFIL_UNCAPSICUM);

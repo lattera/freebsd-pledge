@@ -35,13 +35,13 @@ static bool __read_mostly unveil_enabled = true;
 static unsigned int __read_mostly unveil_max_nodes_per_process = 128;
 
 static SYSCTL_NODE(_vfs, OID_AUTO, unveil, CTLFLAG_RW | CTLFLAG_MPSAFE, 0,
-    "");
+    "Unveil");
 
 SYSCTL_BOOL(_vfs_unveil, OID_AUTO, enabled, CTLFLAG_RW,
-	&unveil_enabled, 0, "Allow unveil usage");
+    &unveil_enabled, 0, "Allow unveilreg(2) usage");
 
 SYSCTL_UINT(_vfs_unveil, OID_AUTO, maxperproc, CTLFLAG_RW,
-	&unveil_max_nodes_per_process, 0, "Maximum unveils allowed per process");
+    &unveil_max_nodes_per_process, 0, "Maximum unveils allowed per process");
 
 static SYSCTL_NODE(_vfs_unveil, OID_AUTO, stats, CTLFLAG_RW | CTLFLAG_MPSAFE, 0,
     "");
