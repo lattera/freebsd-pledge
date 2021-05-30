@@ -22,39 +22,17 @@
 #include <sysexits.h>
 #include <unistd.h>
 
+#include "sysfiltab.h"
 #include "pathexp.h"
 
-static const int default_sysfils[] = {
-	SYSFIL_STDIO,
-	SYSFIL_THREAD,
-	SYSFIL_RLIMIT,
-	SYSFIL_SCHED,
-	SYSFIL_RPATH, SYSFIL_WPATH, SYSFIL_CPATH, SYSFIL_DPATH,
-	SYSFIL_FATTR, SYSFIL_CHOWN, SYSFIL_FLOCK,
-	SYSFIL_CHROOT,
-	SYSFIL_UNIX, SYSFIL_SENDFD, SYSFIL_RECVFD,
-	SYSFIL_EXEC,
-	SYSFIL_PROC, SYSFIL_PS,
-	SYSFIL_CHILD_PROCESS,
-	SYSFIL_TTY,
-	SYSFIL_POSIXRT,
-	SYSFIL_ID,
-	SYSFIL_UNVEIL,
-};
-
-static const int network_sysfils[] = {
-	SYSFIL_INET,
-	SYSFIL_ROUTE, /* XXX */
-	SYSFIL_CRYPTODEV,
-};
-
-
-struct tags_stack {
-	const char **base, **peek, **last, **fill, **end;
-};
-
 struct config {
-	struct tags_stack *tags;
+	const char **tags_base, **tags_last, **tags_fill, **tags_end;
+	bool skip_default_tag;
+	bool allow_unsafe;
+};
+
+struct parser {
+	struct config *cfg;
 	FILE *file;
 	const char *file_name;
 	off_t line_no;
@@ -89,9 +67,9 @@ strmemdup(const char *b, size_t n)
 }
 
 static int
-parse_error(struct config *cfg, const char *error)
+parse_error(struct parser *par, const char *error)
 {
-	warnx("%s:%zu: %s", cfg->file_name, (uintmax_t)cfg->line_no, error);
+	warnx("%s:%zu: %s", par->file_name, (uintmax_t)par->line_no, error);
 	return (-1);
 }
 
@@ -106,46 +84,52 @@ skip_spaces(char *p)
 	return (p);
 }
 
-static int
-do_unveil_callback(void *ctx, char *path)
+static char *
+skip_word(char *p, const char *brk)
 {
-	struct config *cfg = ctx;
-#if 0
-	fprintf(stderr, "%s %u\n", path, cfg->uperms);
-#endif
-	curtain_unveil(cfg->slot, path, CURTAIN_UNVEIL_INSPECT, cfg->uperms);
-	return (0);
-}
-
-static int
-do_unveil(struct config *cfg, const char *pattern)
-{
-	char buf[PATH_MAX];
-	int r;
-	const char *error;
-	r = pathexp(pattern, buf, sizeof buf, &error, do_unveil_callback, cfg);
-	if (r < 0)
-		return (parse_error(cfg, error));
-	return (0);
-}
-
-static int
-parse_unveil(struct config *cfg, char *p)
-{
-	char *pattern, *pattern_end, *perms, *perms_end;
-	int r;
-
-	pattern = p;
 	while (*p) {
 		if (*p == '\\') {
 			p++;
 			if (!*p)
 				break;
-		} else if (isspace(*p) || *p == ':')
+		} else if (isspace(*p) || strchr(brk, *p))
 			break;
 		p++;
 	}
-	pattern_end = p;
+	return (p);
+}
+
+static int
+do_unveil_callback(void *ctx, char *path)
+{
+	struct parser *par = ctx;
+#if 0
+	fprintf(stderr, "%s %u\n", path, par->uperms);
+#endif
+	curtain_unveil(par->slot, path, CURTAIN_UNVEIL_INSPECT, par->uperms);
+	return (0);
+}
+
+static int
+do_unveil(struct parser *par, const char *pattern)
+{
+	char buf[PATH_MAX];
+	int r;
+	const char *error;
+	r = pathexp(pattern, buf, sizeof buf, &error, do_unveil_callback, par);
+	if (r < 0)
+		return (parse_error(par, error));
+	return (0);
+}
+
+static int
+parse_unveil(struct parser *par, char *p)
+{
+	char *pattern, *pattern_end, *perms, *perms_end;
+	int r;
+
+	pattern = p;
+	pattern_end = p = skip_word(p, ":");
 
 	if (*(p = skip_spaces(p)) == ':') {
 		p = skip_spaces(++p);
@@ -154,40 +138,80 @@ parse_unveil(struct config *cfg, char *p)
 			p++;
 		perms_end = p;
 		if (*(p = skip_spaces(p)))
-			return (parse_error(cfg, "unexpected characters at end of line"));
+			return (parse_error(par, "unexpected characters at end of line"));
 
 		*pattern_end = '\0';
 		if (!*pattern)
-			return (parse_error(cfg, "empty pattern"));
+			return (parse_error(par, "empty pattern"));
 
 		*perms_end = '\0';
-		r = unveil_parse_perms(&cfg->uperms, perms);
+		r = unveil_parse_perms(&par->uperms, perms);
 		if (r < 0)
-			return (parse_error(cfg, "invalid unveil permissions"));
+			return (parse_error(par, "invalid unveil permissions"));
 	} else
-		cfg->uperms = UPERM_RPATH;
+		par->uperms = UPERM_RPATH;
 
-	if (!cfg->apply)
+	if (!par->apply)
 		return (0);
-	return (do_unveil(cfg, pattern));
+	return (do_unveil(par, pattern));
 }
 
 static int
-parse_section(struct config *cfg, char *p)
+parse_directive(struct parser *par, char *p)
+{
+	char *dir, *dir_end;
+	bool unsafe;
+	assert(*p == '.');
+	p++;
+	dir = p = skip_spaces(p);
+	dir_end = p = skip_word(p, "!");
+	if (*p == '!')
+		p++, unsafe = true;
+	else
+		unsafe = false;
+
+
+	if (strmemcmp("sysfil", dir, dir_end - dir) == 0) {
+		while (*(p = skip_spaces(p))) {
+			char *w;
+			const struct sysfilent *e;
+			p = skip_word((w = p), "");
+			if (w == p)
+				break;
+			for (e = sysfiltab; e->name; e++)
+				if (strmemcmp(e->name, w, p - w) == 0)
+					break;
+			if (par->apply && (!unsafe || par->cfg->allow_unsafe)) {
+				if (e->name)
+					curtain_sysfil(par->slot, e->sysfil);
+				else
+					return (parse_error(par, "unknown sysfil"));
+			}
+		}
+		return (0);
+
+	} else
+		return (parse_error(par, "unknown directive"));
+
+	if (*(p = skip_spaces(p)))
+		return (parse_error(par, "unexpected characters at end of line"));
+}
+
+static int
+parse_section(struct parser *par, char *p)
 {
 	char *tag, *tag_end;
+	assert(*p == '[');
 	p++;
 	tag = p = skip_spaces(p);
-	while (*p && !isblank(*p) && *p != ':' && *p != ']')
-		p++;
-	tag_end = p;
+	tag_end = p = skip_word(p, ":]");
 	if (tag == tag_end) {
-		cfg->apply = true;
+		par->apply = true;
 	} else {
-		cfg->apply = false;
-		for (const char **tagp = cfg->tags->base; tagp < cfg->tags->last; tagp++)
+		par->apply = false;
+		for (const char **tagp = par->cfg->tags_base; tagp < par->cfg->tags_last; tagp++)
 			if (strmemcmp(*tagp, tag, tag_end - tag) == 0) {
-				cfg->apply = true;
+				par->apply = true;
 				break;
 			}
 	}
@@ -198,57 +222,57 @@ parse_section(struct config *cfg, char *p)
 		do {
 			bool found;
 			tag = p = skip_spaces(p);
-			while (*p && !isblank(*p) && *p != ':' && *p != ']')
-				p++;
-			tag_end = p;
+			tag_end = p = skip_word(p, ":]");
 			if (tag == tag_end)
 				break;
-			if (cfg->apply) {
+			if (par->apply) {
 				found = false;
-				for (const char **tagp = cfg->tags->base; tagp < cfg->tags->last; tagp++)
+				for (const char **tagp = par->cfg->tags_base; tagp < par->cfg->tags_last; tagp++)
 					if (strmemcmp(*tagp, tag, tag_end - tag) == 0) {
 						found = true;
 						break;
 					}
 				if (!found) {
-					if (cfg->tags->fill == cfg->tags->end)
-						return (parse_error(cfg, "too many tags in stack"));
+					if (par->cfg->tags_fill == par->cfg->tags_end)
+						return (parse_error(par, "too many tags in stack"));
 					tag = strmemdup(tag, tag_end - tag);
 					if (!tag)
 						err(EX_TEMPFAIL, NULL);
-					*cfg->tags->fill++ = tag;
+					*par->cfg->tags_fill++ = tag;
 				}
 			}
 		} while (true);
 	}
 
 	if (*p++ != ']')
-		return (parse_error(cfg, "expected closing bracket"));
+		return (parse_error(par, "expected closing bracket"));
 	if (*(p = skip_spaces(p)))
-		return (parse_error(cfg, "unexpected characters at end of line"));
+		return (parse_error(par, "unexpected characters at end of line"));
 	return (0);
 }
 
 static int
-parse_line(struct config *cfg)
+parse_line(struct parser *par)
 {
 	char *p;
-	p = skip_spaces(cfg->line);
+	p = skip_spaces(par->line);
 	if (!*p)
 		return (0);
 	if (*p == '[')
-		return (parse_section(cfg, p));
-	return (parse_unveil(cfg, p));
+		return (parse_section(par, p));
+	if (p[0] == '.' && p[1] != '/')
+		return (parse_directive(par, p));
+	return (parse_unveil(par, p));
 }
 
 static int
-parse_config(struct config *cfg)
+parse_config(struct parser *par)
 {
 	bool errors = false;
-	while (getline(&cfg->line, &cfg->line_size, cfg->file) >= 0) {
+	while (getline(&par->line, &par->line_size, par->file) >= 0) {
 		int r;
-		cfg->line_no++;
-		r = parse_line(cfg);
+		par->line_no++;
+		r = parse_line(par);
 		if (r < 0)
 			errors = true;
 
@@ -257,37 +281,37 @@ parse_config(struct config *cfg)
 }
 
 static int
-load_config(const char *path, struct tags_stack *tags)
+load_config(const char *path, struct config *cfg)
 {
-	struct config cfg = {
+	struct parser par = {
 		.file_name = path,
-		.apply = true,
-		.tags = tags,
+		.apply = !cfg->skip_default_tag,
+		.cfg = cfg,
 	};
 	int r, saved_errno;
 #if 0
 	warnx("%s: %s", __FUNCTION__, path);
 #endif
-	curtain_enable((cfg.slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
-	cfg.file = fopen(path, "r");
-	if (!cfg.file) {
+	curtain_enable((par.slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
+	par.file = fopen(path, "r");
+	if (!par.file) {
 		if (errno != ENOENT)
-			warn("%s", cfg.file_name);
+			warn("%s", par.file_name);
 		return (-1);
 	}
-	r = parse_config(&cfg);
+	r = parse_config(&par);
 	saved_errno = errno;
-	fclose(cfg.file);
+	fclose(par.file);
 	errno = saved_errno;
 	return (r);
 }
 
 
 static void
-load_tags_d(const char *base, struct tags_stack *tags)
+load_tags_d(const char *base, struct config *cfg)
 {
 	char path[PATH_MAX];
-	for (const char **tagp = tags->base; tagp < tags->last; tagp++) {
+	for (const char **tagp = cfg->tags_base; tagp < cfg->tags_last; tagp++) {
 		const char *tag = *tagp;
 		DIR *dir;
 		struct dirent *ent;
@@ -313,7 +337,7 @@ load_tags_d(const char *base, struct tags_stack *tags)
 				warn("snprintf");
 				continue;
 			}
-			load_config(path, tags);
+			load_config(path, cfg);
 		}
 		r = closedir(dir);
 		if (r < 0)
@@ -322,32 +346,35 @@ load_tags_d(const char *base, struct tags_stack *tags)
 }
 
 static void
-load_tags(struct tags_stack *tags)
+load_tags(struct config *cfg)
 {
 	char path[PATH_MAX];
 	const char *home;
 	home = getenv("HOME");
 
 	do {
-		tags->peek = tags->last;
-		tags->last = tags->fill;
+		cfg->tags_last = cfg->tags_fill;
 
-		load_config(_PATH_ETC "/curtain.conf", tags);
-		load_config(_PATH_LOCALBASE "/etc/curtain.conf", tags);
+		load_config(_PATH_ETC "/curtain.conf", cfg);
+		load_config(_PATH_LOCALBASE "/etc/curtain.conf", cfg);
 		if (home) {
 			strlcpy(path, home, sizeof path);
 			strlcat(path, "/.curtain.conf", sizeof path);
-			load_config(path, tags);
+			load_config(path, cfg);
 		}
 
-		load_tags_d(_PATH_ETC "/curtain.d", tags);
-		load_tags_d(_PATH_LOCALBASE "/etc/curtain.d", tags);
+		cfg->skip_default_tag = false;
+
+		load_tags_d(_PATH_ETC "/curtain.d", cfg);
+		load_tags_d(_PATH_LOCALBASE "/etc/curtain.d", cfg);
 		if (home) {
 			strlcpy(path, home, sizeof path);
 			strlcat(path, "/.curtain.d", sizeof path);
-			load_tags_d(path, tags);
+			load_tags_d(path, cfg);
 		}
-	} while (tags->last != tags->fill);
+
+		cfg->skip_default_tag = true;
+	} while (cfg->tags_last != cfg->tags_fill);
 }
 
 
@@ -589,7 +616,7 @@ exec_cmd(bool wrap, char *cmd_name, char **argv)
 static void
 usage(void)
 {
-	fprintf(stderr, "usage: %s [-fkgenaXY] "
+	fprintf(stderr, "usage: %s [-fkgenaAXY] "
 	    "[-t tag] [-p promises] [-u unveil ...] "
 	    "[-sS] cmd [arg ...]\n",
 	    getprogname());
@@ -601,7 +628,7 @@ main(int argc, char *argv[])
 {
 	int ch, r;
 	char *promises = NULL;
-	bool autotag = false;
+	bool autotag = false, autotag_unsafe = false;
 	bool nofork = false;
 	bool signaling = false,
 	     run_shell = false,
@@ -614,17 +641,21 @@ main(int argc, char *argv[])
 	char abspath[PATH_MAX];
 	size_t abspath_len = 0;
 	const char *tags_buf[64];
-	struct tags_stack tags;
+	struct config cfg;
 	struct curtain_slot *unveils_slot, *main_slot;
 	int status;
 
-	tags.base = tags.last = tags.fill = tags_buf;
-	tags.end = &tags_buf[nitems(tags_buf)];
+	cfg = (struct config){
+		.tags_base = tags_buf,
+		.tags_last = tags_buf,
+		.tags_fill = tags_buf,
+		.tags_end = &tags_buf[nitems(tags_buf)],
+	};
 
 	curtain_enable((main_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 	curtain_enable((unveils_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 
-	while ((ch = getopt(argc, argv, "fkgenat:p:u:0:sSXY")) != -1)
+	while ((ch = getopt(argc, argv, "fkgenaAt:p:u:0:sSXY")) != -1)
 		switch (ch) {
 		case 'k':
 			signaling = true;
@@ -641,10 +672,13 @@ main(int argc, char *argv[])
 		case 'a':
 			autotag = true;
 			break;
+		case 'A':
+			autotag = autotag_unsafe = true;
+			break;
 		case 't':
-			if (tags.fill == &tags_buf[nitems(tags_buf) / 2])
+			if (cfg.tags_fill == &tags_buf[nitems(tags_buf) / 2])
 				errx(EX_USAGE, "too many tags");
-			*tags.fill++ = optarg;
+			*cfg.tags_fill++ = optarg;
 			break;
 		case 'p':
 			for (char *p = optarg; *p; p++)
@@ -687,6 +721,7 @@ main(int argc, char *argv[])
 			  cmd_arg0 = optarg;
 			  break;
 		case 'S':
+			  /* TODO: reset env? */
 			  login_shell = true;
 			  /* FALLTHROUGH */
 		case 's':
@@ -710,13 +745,8 @@ main(int argc, char *argv[])
 	if (run_shell == (argc != 0))
 		usage();
 
-	for (size_t i = 0; i < nitems(default_sysfils); i++)
-		curtain_sysfil(main_slot, default_sysfils[i]);
-	if (!no_network) {
-		*tags.fill++ = "@network";
-		for (size_t i = 0; i < nitems(network_sysfils); i++)
-			curtain_sysfil(main_slot, network_sysfils[i]);
-	}
+	if (!no_network)
+		*cfg.tags_fill++ = "@network";
 	if (!signaling)
 		curtain_sysfil(main_slot, SYSFIL_ERROR);
 	if (run_shell)
@@ -732,7 +762,7 @@ main(int argc, char *argv[])
 	if (x11_mode != X11_NONE) {
 		if (nofork)
 			errx(EX_USAGE, "X11 mode incompatible with -f");
-		*tags.fill++ = "@x11";
+		*cfg.tags_fill++ = "@x11";
 		prepare_x11(main_slot, x11_mode == X11_TRUSTED);
 	};
 	if (!no_protexec)
@@ -760,8 +790,9 @@ main(int argc, char *argv[])
 	}
 
 	if (autotag && !run_shell)
-		*tags.fill++ = argv[0];
-	load_tags(&tags);
+		*cfg.tags_fill++ = argv[0];
+	cfg.allow_unsafe = autotag_unsafe;
+	load_tags(&cfg);
 
 	if (promises) {
 		r = pledge(NULL, promises);
