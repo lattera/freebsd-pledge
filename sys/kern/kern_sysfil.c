@@ -305,30 +305,30 @@ sysfilset_fill(sysfilset_t *sysfilset, int sf)
 	case SYSFIL_WPATH:
 	case SYSFIL_CPATH:
 	case SYSFIL_DPATH:
-		SYSFILSET_FILL(sysfilset, SYSFIL_PATH);
+		BIT_SET(SYSFILSET_BITS, SYSFIL_PATH, sysfilset);
 		break;
 	case SYSFIL_PROT_EXEC:
-		SYSFILSET_FILL(sysfilset, SYSFIL_PROT_EXEC_LOOSE);
+		BIT_SET(SYSFILSET_BITS, SYSFIL_PROT_EXEC_LOOSE, sysfilset);
 		break;
 	case SYSFIL_INET:
 	case SYSFIL_INET_RAW:
 	case SYSFIL_UNIX:
-		SYSFILSET_FILL(sysfilset, SYSFIL_NET);
+		BIT_SET(SYSFILSET_BITS, SYSFIL_NET, sysfilset);
 		break;
 	case SYSFIL_CPUSET:
-		SYSFILSET_FILL(sysfilset, SYSFIL_SCHED);
+		BIT_SET(SYSFILSET_BITS, SYSFIL_SCHED, sysfilset);
 		break;
 	case SYSFIL_ANY_PROCESS:
-		SYSFILSET_FILL(sysfilset, SYSFIL_SAME_SESSION);
+		BIT_SET(SYSFILSET_BITS, SYSFIL_SAME_SESSION, sysfilset);
 		/* FALLTHROUGH */
 	case SYSFIL_SAME_SESSION:
-		SYSFILSET_FILL(sysfilset, SYSFIL_SAME_PGRP);
+		BIT_SET(SYSFILSET_BITS, SYSFIL_SAME_PGRP, sysfilset);
 		/* FALLTHROUGH */
 	case SYSFIL_SAME_PGRP:
-		SYSFILSET_FILL(sysfilset, SYSFIL_CHILD_PROCESS);
+		BIT_SET(SYSFILSET_BITS, SYSFIL_CHILD_PROCESS, sysfilset);
 		break;
 	}
-	SYSFILSET_FILL(sysfilset, sf);
+	BIT_SET(SYSFILSET_BITS, sf, sysfilset);
 }
 
 static int
@@ -338,7 +338,7 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 	struct ucred *cr, *old_cr;
 	const struct curtainreq *req;
 	int error;
-	sysfilset_t sysfilset_self = SYSFILSET_INITIALIZER, sysfilset_exec;
+	sysfilset_t sysfilset_self, sysfilset_exec;
 #ifdef UNVEIL
 	struct unveil_base *base = &td->td_proc->p_unveils;
 #endif
@@ -346,9 +346,10 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 	if (!sysfil_enabled)
 		return (ENOSYS);
 
-	SYSFILSET_FILL(&sysfilset_self, SYSFIL_ALWAYS);
-	SYSFILSET_FILL(&sysfilset_self, SYSFIL_UNCAPSICUM);
-	memcpy(&sysfilset_exec, &sysfilset_self, sizeof sysfilset_exec);
+	BIT_ZERO(SYSFILSET_BITS, &sysfilset_self);
+	BIT_SET(SYSFILSET_BITS, SYSFIL_ALWAYS, &sysfilset_self);
+	BIT_SET(SYSFILSET_BITS, SYSFIL_UNCAPSICUM, &sysfilset_self);
+	BIT_COPY(SYSFILSET_BITS, &sysfilset_self, &sysfilset_exec);
 
 #if UNVEIL
 	unveil_base_write_begin(base);
@@ -375,8 +376,10 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 					goto out1;
 				}
 				if (flags & CURTAINCTL_REQUIRE &&
-				     ((on_self && !SYSFILSET_MATCH(&cr->cr_sysfilset, sf)) ||
-				      (on_exec && !SYSFILSET_MATCH(&cr->cr_sysfilset_exec, sf)))) {
+				     ((on_self && !BIT_ISSET(SYSFILSET_BITS,
+				           sf, &cr->cr_sysfilset)) ||
+				      (on_exec && !BIT_ISSET(SYSFILSET_BITS,
+				           sf, &cr->cr_sysfilset_exec)))) {
 					error = EPERM;
 					goto out1;
 				}
@@ -406,13 +409,13 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 	};
 
 	if (flags & CURTAINCTL_ON_SELF) {
-		SYSFILSET_MASK(&cr->cr_sysfilset, &sysfilset_self);
+		BIT_AND(SYSFILSET_BITS, &cr->cr_sysfilset, &sysfilset_self);
 		MPASS(SYSFILSET_IS_RESTRICTED(&cr->cr_sysfilset));
 		MPASS(CRED_IN_RESTRICTED_MODE(cr));
 	}
 	if (flags & CURTAINCTL_ON_EXEC) {
-		if (SYSFILSET_MATCH(&cr->cr_sysfilset, SYSFIL_EXEC) ||
-		    SYSFILSET_MATCH(&sysfilset_exec, SYSFIL_EXEC))
+		if (BIT_ISSET(SYSFILSET_BITS, SYSFIL_EXEC, &cr->cr_sysfilset) ||
+		    BIT_ISSET(SYSFILSET_BITS, SYSFIL_EXEC, &sysfilset_exec))
 			/*
 			 * On OpenBSD, executing dynamically linked binaries
 			 * works with just the "exec" pledge (the "prot_exec"
@@ -420,8 +423,8 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 			 * done its job).  Not so for us, so implicitly allow
 			 * PROT_EXEC for now. XXX
 			 */
-			SYSFILSET_FILL(&sysfilset_exec, SYSFIL_PROT_EXEC_LOOSE);
-		SYSFILSET_MASK(&cr->cr_sysfilset_exec, &sysfilset_exec);
+			BIT_SET(SYSFILSET_BITS, SYSFIL_PROT_EXEC_LOOSE, &sysfilset_exec);
+		BIT_AND(SYSFILSET_BITS, &cr->cr_sysfilset_exec, &sysfilset_exec);
 		MPASS(SYSFILSET_IS_RESTRICTED(&cr->cr_sysfilset_exec));
 		MPASS(CRED_IN_RESTRICTED_EXEC_MODE(cr));
 	}

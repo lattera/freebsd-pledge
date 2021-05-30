@@ -177,7 +177,7 @@ int curtainctl(int flags, size_t reqc, struct curtainreq *reqv);
 static inline int
 sysfil_match_cred(const struct ucred *cr, int sf) {
 #ifdef SYSFIL
-	return (SYSFILSET_MATCH(&cr->cr_sysfilset, sf));
+	return (BIT_ISSET(SYSFILSET_BITS, sf, &cr->cr_sysfilset));
 #else
 	return (1);
 #endif
@@ -236,8 +236,8 @@ static inline void
 sysfil_cred_init(struct ucred *cr)
 {
 #ifdef SYSFIL
-	SYSFILSET_FILL_ALL(&cr->cr_sysfilset);
-	SYSFILSET_FILL_ALL(&cr->cr_sysfilset_exec);
+	BIT_FILL(SYSFILSET_BITS, &cr->cr_sysfilset);
+	BIT_FILL(SYSFILSET_BITS, &cr->cr_sysfilset_exec);
 #endif
 }
 
@@ -245,7 +245,7 @@ static inline bool
 sysfil_cred_need_exec_switch(const struct ucred *cr)
 {
 #ifdef SYSFIL
-	return (!SYSFILSET_EQUAL(&cr->cr_sysfilset, &cr->cr_sysfilset_exec));
+	return (BIT_CMP(SYSFILSET_BITS, &cr->cr_sysfilset, &cr->cr_sysfilset_exec) != 0);
 #endif
 	return (false);
 }
