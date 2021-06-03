@@ -8,11 +8,11 @@
 #include <pledge.h>
 
 #include <netinet/in.h>
+#include <sys/un.h>
 #include <sys/socket.h>
 
 /* TODO: test socket ioctl() */
 /* TODO: test getsockopt()/setsockopt() */
-/* TODO: test local domain FS binding */
 
 ATF_TC_WITHOUT_HEAD(socket_af_unix_allow);
 ATF_TC_BODY(socket_af_unix_allow, tc)
@@ -188,6 +188,60 @@ ATF_TC_BODY(pass_fd_recv_deny, tc)
 }
 
 
+/*
+ * XXX We require more *path promises than on OpenBSD.  This is because this
+ * pledge() implementation always uses unveils and higher unveil permissions
+ * are required for bind()/connect() than on OpenBSD.
+ */
+
+ATF_TC_WITHOUT_HEAD(unix_bind_allow);
+ATF_TC_BODY(unix_bind_allow, tc)
+{
+	struct sockaddr_un un = { .sun_family = AF_UNIX, .sun_path = "test.sock" };
+	int fd;
+	ATF_REQUIRE((fd = socket(AF_UNIX, SOCK_STREAM, 0)) >= 0);
+	ATF_REQUIRE(pledge("stdio wpath cpath unix", "") >= 0);
+	ATF_CHECK(bind(fd, (void *)&un, sizeof un) >= 0);
+	ATF_CHECK(listen(fd, 0) >= 0);
+}
+
+ATF_TC_WITHOUT_HEAD(unix_bind_deny);
+ATF_TC_BODY(unix_bind_deny, tc)
+{
+	struct sockaddr_un un = { .sun_family = AF_UNIX, .sun_path = "test.sock" };
+	int fd;
+	ATF_REQUIRE((fd = socket(AF_UNIX, SOCK_STREAM, 0)) >= 0);
+	ATF_REQUIRE(pledge("stdio error wpath cpath", "") >= 0);
+	ATF_CHECK_ERRNO(EPERM, bind(fd, (void *)&un, sizeof un) < 0);
+}
+
+ATF_TC_WITHOUT_HEAD(unix_connect_allow);
+ATF_TC_BODY(unix_connect_allow, tc)
+{
+	struct sockaddr_un un = { .sun_family = AF_UNIX, .sun_path = "test.sock" };
+	int fd0, fd1;
+	ATF_REQUIRE((fd0 = socket(AF_UNIX, SOCK_STREAM, 0)) >= 0);
+	ATF_REQUIRE((fd1 = socket(AF_UNIX, SOCK_STREAM, 0)) >= 0);
+	ATF_CHECK(bind(fd0, (void *)&un, sizeof un) >= 0);
+	ATF_CHECK(listen(fd0, 0) >= 0);
+	ATF_REQUIRE(pledge("stdio cpath rpath wpath unix", "") >= 0);
+	ATF_CHECK(connect(fd1, (void *)&un, sizeof un) >= 0);
+}
+
+ATF_TC_WITHOUT_HEAD(unix_connect_deny);
+ATF_TC_BODY(unix_connect_deny, tc)
+{
+	struct sockaddr_un un = { .sun_family = AF_UNIX, .sun_path = "test.sock" };
+	int fd0, fd1;
+	ATF_REQUIRE((fd0 = socket(AF_UNIX, SOCK_STREAM, 0)) >= 0);
+	ATF_REQUIRE((fd1 = socket(AF_UNIX, SOCK_STREAM, 0)) >= 0);
+	ATF_CHECK(bind(fd0, (void *)&un, sizeof un) >= 0);
+	ATF_CHECK(listen(fd0, 0) >= 0);
+	ATF_REQUIRE(pledge("stdio error cpath rpath wpath", "") >= 0);
+	ATF_CHECK_ERRNO(EPERM, connect(fd1, (void *)&un, sizeof un) < 0);
+}
+
+
 ATF_TP_ADD_TCS(tp)
 {
 	(void)tp;
@@ -200,5 +254,9 @@ ATF_TP_ADD_TCS(tp)
 	ATF_TP_ADD_TC(tp, pass_fd_both_allow);
 	ATF_TP_ADD_TC(tp, pass_fd_send_deny);
 	ATF_TP_ADD_TC(tp, pass_fd_recv_deny);
+	ATF_TP_ADD_TC(tp, unix_bind_allow);
+	ATF_TP_ADD_TC(tp, unix_bind_deny);
+	ATF_TP_ADD_TC(tp, unix_connect_allow);
+	ATF_TP_ADD_TC(tp, unix_connect_deny);
 	return (atf_no_error());
 }

@@ -543,6 +543,7 @@ static cap_rights_t __read_mostly cap_sysfil_wpath_rights;
 static cap_rights_t __read_mostly cap_sysfil_cpath_rights;
 static cap_rights_t __read_mostly cap_sysfil_exec_rights;
 static cap_rights_t __read_mostly cap_sysfil_fattr_rights;
+static cap_rights_t __read_mostly cap_sysfil_unix_rights;
 
 void
 sysfil_cred_rights(struct ucred *cr, cap_rights_t *rights)
@@ -562,6 +563,8 @@ sysfil_cred_rights(struct ucred *cr, cap_rights_t *rights)
 		cap_rights_merge(rights, &cap_sysfil_exec_rights);
 	if (sysfil_match_cred(cr, SYSFIL_FATTR))
 		cap_rights_merge(rights, &cap_sysfil_fattr_rights);
+	if (sysfil_match_cred(cr, SYSFIL_UNIX))
+		cap_rights_merge(rights, &cap_sysfil_unix_rights);
 }
 
 static void
@@ -590,8 +593,7 @@ sysfil_sysinit(void *arg)
 	    CAP_FPATHCONF,
 	    CAP_MMAP,
 	    CAP_FSYNC,
-	    CAP_FTRUNCATE,
-	    CAP_CONNECTAT);
+	    CAP_FTRUNCATE);
 	cap_rights_init(&cap_sysfil_cpath_rights,
 	    CAP_LOOKUP,
 	    CAP_CREATE,
@@ -603,7 +605,6 @@ sysfil_sysinit(void *arg)
 	    CAP_MKNODAT,
 	    CAP_SYMLINKAT,
 	    CAP_UNLINKAT,
-	    CAP_BINDAT,
 	    CAP_RENAMEAT_SOURCE,
 	    CAP_RENAMEAT_TARGET,
 	    CAP_UNDELETEAT);
@@ -625,6 +626,10 @@ sysfil_sysinit(void *arg)
 	    CAP_REVOKEAT,
 	    CAP_EXTATTR_SET,
 	    CAP_EXTATTR_DELETE);
+	cap_rights_init(&cap_sysfil_unix_rights,
+	    CAP_LOOKUP,
+	    CAP_BINDAT,
+	    CAP_CONNECTAT);
 }
 
 SYSINIT(sysfil_sysinit, SI_SUB_COPYRIGHT, SI_ORDER_ANY, sysfil_sysinit, NULL);
