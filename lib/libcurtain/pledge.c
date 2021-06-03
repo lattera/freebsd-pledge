@@ -363,6 +363,7 @@ uperms_for_promises(const enum curtain_state *promises)
 	if (promises[PROMISE_CPATH] >= CURTAIN_ENABLED) uperms |= UPERM_CPATH;
 	if (promises[PROMISE_EXEC]  >= CURTAIN_ENABLED) uperms |= UPERM_XPATH;
 	if (promises[PROMISE_FATTR] >= CURTAIN_ENABLED) uperms |= UPERM_APATH;
+	if (promises[PROMISE_UNIX]  >= CURTAIN_ENABLED) uperms |= UPERM_UNIX;
 	return (uperms);
 }
 
@@ -374,10 +375,12 @@ sysfils_for_uperms(struct curtain_slot *slot, unveil_perms uperms)
 	 * permissions are on non-directories.
 	 */
 	if (uperms & UPERM_RPATH) curtain_sysfil(slot, SYSFIL_RPATH);
+	/* Note that UPERM_WPATH does not imply SYSFIL_FATTR. */
 	if (uperms & UPERM_WPATH) curtain_sysfil(slot, SYSFIL_WPATH);
 	if (uperms & UPERM_CPATH) curtain_sysfil(slot, SYSFIL_CPATH);
 	if (uperms & UPERM_XPATH) curtain_sysfil(slot, SYSFIL_EXEC);
-	/* Note that UPERM_APATH does not imply SYSFIL_FATTR. */
+	if (uperms & UPERM_APATH) curtain_sysfil(slot, SYSFIL_FATTR);
+	if (uperms & UPERM_UNIX)  curtain_sysfil(slot, SYSFIL_UNIX);
 	if (uperms & UPERM_TMPPATH) {
 		curtain_sysfil(slot, SYSFIL_RPATH);
 		curtain_sysfil(slot, SYSFIL_WPATH);
@@ -619,12 +622,13 @@ unveil_parse_perms(unveil_perms *uperms, const char *s)
 		case 'l': *uperms |= UPERM_LPATH; break;
 		case 'r': *uperms |= UPERM_RPATH; break;
 		case 'm': *uperms |= UPERM_WPATH; break;
-		case 'w': *uperms |= UPERM_WPATH; /* FALLTHROUGH */
+		case 'w': *uperms |= UPERM_WPATH | UPERM_APATH | UPERM_UNIX; break;
 		case 'a': *uperms |= UPERM_APATH; break;
 		case 'c': *uperms |= UPERM_CPATH; break;
 		case 'x': *uperms |= UPERM_XPATH; break;
 		case 'i': *uperms |= UPERM_INSPECT; break;
 		case 't': *uperms |= UPERM_TMPPATH; break;
+		case 'u': *uperms |= UPERM_UNIX; break;
 		default:
 			return (-1);
 		}

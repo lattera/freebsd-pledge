@@ -29,6 +29,9 @@ enum {
 	UPERM_SEARCH = 1 << 10,
 	UPERM_STATUS = 1 << 11,
 	UPERM_INSPECT = UPERM_EXPOSE | UPERM_SEARCH | UPERM_STATUS,
+	UPERM_BIND = 1 << 12,
+	UPERM_CONNECT = 1 << 13,
+	UPERM_UNIX = UPERM_BIND | UPERM_CONNECT,
 	UPERM_ALL = -1,
 };
 
@@ -38,6 +41,8 @@ uperms_expand(unveil_perms uperms)
 	if (uperms & (UPERM_LPATH | UPERM_RPATH | UPERM_WPATH | UPERM_CPATH |
 	              UPERM_XPATH | UPERM_APATH | UPERM_TMPPATH | UPERM_SUBTMPPATH))
 		uperms |= UPERM_EXPOSE | UPERM_SEARCH;
+	if (uperms & (UPERM_BIND | UPERM_CONNECT))
+		uperms |= UPERM_SEARCH;
 	if (uperms & (UPERM_LPATH | UPERM_RPATH))
 		uperms |= UPERM_STATUS | UPERM_LPATH;
 	if (uperms & UPERM_STATUS)

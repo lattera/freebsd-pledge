@@ -876,6 +876,8 @@ static cap_rights_t __read_mostly apath_rights;
 static cap_rights_t __read_mostly subtmppath_rights;
 static cap_rights_t __read_mostly rcpath_rights;
 static cap_rights_t __read_mostly rwcapath_rights;
+static cap_rights_t __read_mostly bind_rights;
+static cap_rights_t __read_mostly connect_rights;
 
 void
 unveil_uperms_rights(unveil_perms uperms, cap_rights_t *rights)
@@ -904,6 +906,10 @@ unveil_uperms_rights(unveil_perms uperms, cap_rights_t *rights)
 	}
 	if (uperms & UPERM_SUBTMPPATH)
 		cap_rights_merge(rights, &subtmppath_rights);
+	if (uperms & UPERM_BIND)
+		cap_rights_merge(rights, &bind_rights);
+	if (uperms & UPERM_CONNECT)
+		cap_rights_merge(rights, &connect_rights);
 }
 
 static void
@@ -939,8 +945,7 @@ unveil_sysinit(void *arg __unused)
 	    CAP_FPATHCONF,
 	    CAP_MMAP,
 	    CAP_FSYNC,
-	    CAP_FTRUNCATE,
-	    CAP_CONNECTAT);
+	    CAP_FTRUNCATE);
 	cap_rights_init(&cpath_rights,
 	    CAP_LOOKUP,
 	    CAP_CREATE,
@@ -951,7 +956,6 @@ unveil_sysinit(void *arg __unused)
 	    CAP_MKNODAT,
 	    CAP_SYMLINKAT,
 	    CAP_UNLINKAT,
-	    CAP_BINDAT,
 	    CAP_RENAMEAT_TARGET,
 	    CAP_UNDELETEAT);
 	cap_rights_init(&xpath_rights,
@@ -998,6 +1002,12 @@ unveil_sysinit(void *arg __unused)
 	 */
 	cap_rights_init(&rwcapath_rights,
 	    CAP_LINKAT_SOURCE);
+	cap_rights_init(&bind_rights,
+	    CAP_LOOKUP,
+	    CAP_BINDAT);
+	cap_rights_init(&connect_rights,
+	    CAP_LOOKUP,
+	    CAP_CONNECTAT);
 
 	EVENTHANDLER_REGISTER(process_init, unveil_proc_init, NULL, EVENTHANDLER_PRI_ANY);
 	EVENTHANDLER_REGISTER(process_ctor, unveil_proc_ctor, NULL, EVENTHANDLER_PRI_ANY);

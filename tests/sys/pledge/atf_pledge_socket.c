@@ -11,6 +11,8 @@
 #include <sys/un.h>
 #include <sys/socket.h>
 
+#include "path-utils.h"
+
 /* TODO: test socket ioctl() */
 /* TODO: test getsockopt()/setsockopt() */
 
@@ -188,19 +190,13 @@ ATF_TC_BODY(pass_fd_recv_deny, tc)
 }
 
 
-/*
- * XXX We require more *path promises than on OpenBSD.  This is because this
- * pledge() implementation always uses unveils and higher unveil permissions
- * are required for bind()/connect() than on OpenBSD.
- */
-
 ATF_TC_WITHOUT_HEAD(unix_bind_allow);
 ATF_TC_BODY(unix_bind_allow, tc)
 {
 	struct sockaddr_un un = { .sun_family = AF_UNIX, .sun_path = "test.sock" };
 	int fd;
 	ATF_REQUIRE((fd = socket(AF_UNIX, SOCK_STREAM, 0)) >= 0);
-	ATF_REQUIRE(pledge("stdio wpath cpath unix", "") >= 0);
+	ATF_REQUIRE(pledge("stdio unix", "") >= 0);
 	ATF_CHECK(bind(fd, (void *)&un, sizeof un) >= 0);
 	ATF_CHECK(listen(fd, 0) >= 0);
 }
@@ -211,7 +207,7 @@ ATF_TC_BODY(unix_bind_deny, tc)
 	struct sockaddr_un un = { .sun_family = AF_UNIX, .sun_path = "test.sock" };
 	int fd;
 	ATF_REQUIRE((fd = socket(AF_UNIX, SOCK_STREAM, 0)) >= 0);
-	ATF_REQUIRE(pledge("stdio error wpath cpath", "") >= 0);
+	ATF_REQUIRE(pledge("stdio error", "") >= 0);
 	ATF_CHECK_ERRNO(EPERM, bind(fd, (void *)&un, sizeof un) < 0);
 }
 
@@ -224,7 +220,7 @@ ATF_TC_BODY(unix_connect_allow, tc)
 	ATF_REQUIRE((fd1 = socket(AF_UNIX, SOCK_STREAM, 0)) >= 0);
 	ATF_CHECK(bind(fd0, (void *)&un, sizeof un) >= 0);
 	ATF_CHECK(listen(fd0, 0) >= 0);
-	ATF_REQUIRE(pledge("stdio cpath rpath wpath unix", "") >= 0);
+	ATF_REQUIRE(pledge("stdio unix", "") >= 0);
 	ATF_CHECK(connect(fd1, (void *)&un, sizeof un) >= 0);
 }
 
@@ -237,8 +233,16 @@ ATF_TC_BODY(unix_connect_deny, tc)
 	ATF_REQUIRE((fd1 = socket(AF_UNIX, SOCK_STREAM, 0)) >= 0);
 	ATF_CHECK(bind(fd0, (void *)&un, sizeof un) >= 0);
 	ATF_CHECK(listen(fd0, 0) >= 0);
-	ATF_REQUIRE(pledge("stdio error cpath rpath wpath", "") >= 0);
+	ATF_REQUIRE(pledge("stdio error", "") >= 0);
 	ATF_CHECK_ERRNO(EPERM, connect(fd1, (void *)&un, sizeof un) < 0);
+}
+
+ATF_TC_WITHOUT_HEAD(pledge_unix_still_somewhat_hides_fs);
+ATF_TC_BODY(pledge_unix_still_somewhat_hides_fs, tc)
+{
+	ATF_REQUIRE(pledge("stdio unix", "") >= 0);
+	check_access("/", "ds");
+	check_access(".", "ds");
 }
 
 
@@ -258,5 +262,6 @@ ATF_TP_ADD_TCS(tp)
 	ATF_TP_ADD_TC(tp, unix_bind_deny);
 	ATF_TP_ADD_TC(tp, unix_connect_allow);
 	ATF_TP_ADD_TC(tp, unix_connect_deny);
+	ATF_TP_ADD_TC(tp, pledge_unix_still_somewhat_hides_fs);
 	return (atf_no_error());
 }

@@ -99,6 +99,7 @@ check_accessat(int atfd, const char *path, const char *flags)
 	e = s = i = r = w = x = d = p = false;
 	for (const char *ptr = flags; *ptr; ptr++)
 		switch (*ptr) {
+		case 's':         s     = true; break;
 		case 'e':         s = e = true; break;
 		case 'i':     i = s = e = true; break;
 		case 'r': r = i = s = e = true; break;

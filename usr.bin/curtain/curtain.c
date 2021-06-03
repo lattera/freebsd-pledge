@@ -407,8 +407,8 @@ prepare_tmpdir(struct curtain_slot *slot)
 	r = setenv("TMPDIR", new_tmpdir, 1);
 	if (r < 0)
 		err(EX_OSERR, "setenv");
-	r = curtain_unveil(slot, new_tmpdir,
-	    CURTAIN_UNVEIL_INSPECT, UPERM_RPATH|UPERM_WPATH|UPERM_APATH|UPERM_CPATH);
+	r = curtain_unveil(slot, new_tmpdir, CURTAIN_UNVEIL_INSPECT,
+	    UPERM_RPATH|UPERM_WPATH|UPERM_APATH|UPERM_CPATH|UPERM_UNIX);
 	if (r < 0)
 		err(EX_OSERR, "%s", new_tmpdir);
 }
@@ -506,7 +506,7 @@ prepare_x11(struct curtain_slot *slot, bool trusted)
 
 	if (display_unix_socket) {
 		r = curtain_unveil(slot, display_unix_socket,
-		    CURTAIN_UNVEIL_INSPECT, UPERM_RPATH|UPERM_WPATH);
+		    CURTAIN_UNVEIL_INSPECT, UPERM_CONNECT|UPERM_INSPECT);
 		if (r < 0)
 			err(EX_OSERR, "%s", display_unix_socket);
 	}
