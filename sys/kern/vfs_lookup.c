@@ -857,7 +857,7 @@ unveil_lookup_check(struct nameidata *ndp)
 		unveil_uperms_rights(uperms, &haverights);
 		if (ndp->ni_vp) {
 			if (ndp->ni_vp->v_type == VDIR) {
-				if (uperms & UPERM_LPATH)
+				if (uperms & UPERM_BROWSE)
 					cap_rights_set(&haverights,
 					    CAP_READ, CAP_SEEK);
 				/* Kludge for directory O_SEARCH opens. */
@@ -866,7 +866,7 @@ unveil_lookup_check(struct nameidata *ndp)
 					    CAP_FEXECVE, CAP_EXECAT);
 			}
 			/* Kludge for O_CREAT opens. */
-			if (uperms & UPERM_WPATH)
+			if (uperms & UPERM_WRITE)
 				cap_rights_set(&haverights, CAP_CREATE);
 		}
 		if (cap_rights_contains(&haverights, needrights))

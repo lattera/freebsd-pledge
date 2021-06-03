@@ -149,7 +149,7 @@ parse_unveil(struct parser *par, char *p)
 		if (r < 0)
 			return (parse_error(par, "invalid unveil permissions"));
 	} else
-		par->uperms = UPERM_RPATH;
+		par->uperms = UPERM_READ;
 
 	if (!par->apply)
 		return (0);
@@ -408,7 +408,7 @@ prepare_tmpdir(struct curtain_slot *slot)
 	if (r < 0)
 		err(EX_OSERR, "setenv");
 	r = curtain_unveil(slot, new_tmpdir, CURTAIN_UNVEIL_INSPECT,
-	    UPERM_RPATH|UPERM_WPATH|UPERM_APATH|UPERM_CPATH|UPERM_UNIX);
+	    UPERM_READ|UPERM_WRITE|UPERM_SETATTR|UPERM_CREATE|UPERM_DELETE|UPERM_UNIX);
 	if (r < 0)
 		err(EX_OSERR, "%s", new_tmpdir);
 }
@@ -512,7 +512,7 @@ prepare_x11(struct curtain_slot *slot, bool trusted)
 	}
 	if (tmp_xauth_file) {
 		r = curtain_unveil(slot, tmp_xauth_file,
-		    CURTAIN_UNVEIL_INSPECT, UPERM_RPATH);
+		    CURTAIN_UNVEIL_INSPECT, UPERM_READ);
 		if (r < 0)
 			err(EX_OSERR, "%s", tmp_xauth_file);
 	}
@@ -771,7 +771,7 @@ main(int argc, char *argv[])
 		prepare_tmpdir(main_slot);
 	} else {
 		/*
-		 * XXX This can be very unsafe.  UPERM_TMPPATH disallows many
+		 * XXX This can be very unsafe.  UPERM_TMPDIR disallows many
 		 * operations on the temporary directory like listing the
 		 * files, accessing subdirectories, or creating/connecting to
 		 * local domain sockets, etc.  Files securely created with
@@ -780,13 +780,13 @@ main(int argc, char *argv[])
 		 * with known or predictable filenames are not.  KRB5's
 		 * krb5cc_<uid> is a pretty bad example of this.
 		 */
-		const char *tmppath;
-		if (!(tmppath = getenv("TMPDIR")))
-			tmppath = _PATH_TMP;
-		r = curtain_unveil(main_slot, tmppath,
-		    CURTAIN_UNVEIL_INSPECT, UPERM_TMPPATH);
+		const char *tmpdir;
+		if (!(tmpdir = getenv("TMPDIR")))
+			tmpdir = _PATH_TMP;
+		r = curtain_unveil(main_slot, tmpdir,
+		    CURTAIN_UNVEIL_INSPECT, UPERM_TMPDIR);
 		if (r < 0)
-			warn("%s", tmppath);
+			warn("%s", tmpdir);
 	}
 
 	if (autotag && !run_shell)

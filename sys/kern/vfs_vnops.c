@@ -338,7 +338,7 @@ restart:
 	}
 #ifdef UNVEIL
 	if (unveil_is_active(td) &&
-	    !(ndp->ni_unveil.effective_uperms & UPERM_APATH))
+	    !(ndp->ni_unveil.effective_uperms & UPERM_SETATTR))
 		fmode |= FNOSETATTR;
 #endif
 	error = vn_open_vnode(vp, fmode, cred, td, fp);

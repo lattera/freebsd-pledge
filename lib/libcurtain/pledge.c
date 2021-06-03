@@ -161,8 +161,8 @@ static const struct promise_name {
 };
 
 static const struct promise_sysfil {
-	enum promise_type type : 8;
-	int sysfil : 8;
+	enum promise_type type;
+	int sysfil;
 } sysfils_table[] = {
 	{ PROMISE_ERROR,		SYSFIL_ERROR },
 	{ PROMISE_BASIC,		SYSFIL_STDIO },
@@ -250,20 +250,18 @@ static const char *const tmp_path = _PATH_TMP;
 
 static const struct promise_unveil {
 	const char *path;
-	unveil_perms uperms : 8;
-	enum promise_type type : 8;
+	unveil_perms uperms;
+	enum promise_type type;
 } unveils_table[] = {
 #define	N UPERM_NONE
-#define	I UPERM_INSPECT
-#define	R UPERM_RPATH
-#define	W UPERM_WPATH /* NOTE: UPERM_APATH not implied here */
-#define	C UPERM_CPATH
-#define	X UPERM_XPATH
-#define	A UPERM_APATH
-#define	T UPERM_TMPPATH
+#define	R UPERM_READ
+#define	W UPERM_WRITE /* NOTE: UPERM_SETATTR not implied here */
+#define	X UPERM_EXECUTE
+#define	A UPERM_SETATTR
+#define	T UPERM_TMPDIR
 	/*
 	 * NOTE: On this implementation, open(2) with O_CREAT does not need
-	 * the UPERM_CPATH unveil permission if the file already exists.
+	 * the UPERM_CREATE unveil permission if the file already exists.
 	 */
 	{ _PATH_ETC "/malloc.conf", R,			PROMISE_STDIO },
 	{ _PATH_LIBMAP_CONF, R,				PROMISE_STDIO },
@@ -303,10 +301,8 @@ static const struct promise_unveil {
 #undef	T
 #undef	A
 #undef	X
-#undef	C
 #undef	W
 #undef	R
-#undef	I
 #undef	N
 };
 
@@ -358,11 +354,11 @@ static unveil_perms
 uperms_for_promises(const enum curtain_state *promises)
 {
 	unveil_perms uperms = UPERM_NONE;
-	if (promises[PROMISE_RPATH] >= CURTAIN_ENABLED) uperms |= UPERM_RPATH;
-	if (promises[PROMISE_WPATH] >= CURTAIN_ENABLED) uperms |= UPERM_WPATH;
-	if (promises[PROMISE_CPATH] >= CURTAIN_ENABLED) uperms |= UPERM_CPATH;
-	if (promises[PROMISE_EXEC]  >= CURTAIN_ENABLED) uperms |= UPERM_XPATH;
-	if (promises[PROMISE_FATTR] >= CURTAIN_ENABLED) uperms |= UPERM_APATH;
+	if (promises[PROMISE_RPATH] >= CURTAIN_ENABLED) uperms |= UPERM_READ;
+	if (promises[PROMISE_WPATH] >= CURTAIN_ENABLED) uperms |= UPERM_WRITE;
+	if (promises[PROMISE_CPATH] >= CURTAIN_ENABLED) uperms |= UPERM_CREATE | UPERM_DELETE;
+	if (promises[PROMISE_EXEC]  >= CURTAIN_ENABLED) uperms |= UPERM_EXECUTE;
+	if (promises[PROMISE_FATTR] >= CURTAIN_ENABLED) uperms |= UPERM_SETATTR;
 	if (promises[PROMISE_UNIX]  >= CURTAIN_ENABLED) uperms |= UPERM_UNIX;
 	return (uperms);
 }
@@ -374,14 +370,14 @@ sysfils_for_uperms(struct curtain_slot *slot, unveil_perms uperms)
 	 * TODO: Could probably reduce these when the only unveils for certain
 	 * permissions are on non-directories.
 	 */
-	if (uperms & UPERM_RPATH) curtain_sysfil(slot, SYSFIL_RPATH);
-	/* Note that UPERM_WPATH does not imply SYSFIL_FATTR. */
-	if (uperms & UPERM_WPATH) curtain_sysfil(slot, SYSFIL_WPATH);
-	if (uperms & UPERM_CPATH) curtain_sysfil(slot, SYSFIL_CPATH);
-	if (uperms & UPERM_XPATH) curtain_sysfil(slot, SYSFIL_EXEC);
-	if (uperms & UPERM_APATH) curtain_sysfil(slot, SYSFIL_FATTR);
-	if (uperms & UPERM_UNIX)  curtain_sysfil(slot, SYSFIL_UNIX);
-	if (uperms & UPERM_TMPPATH) {
+	if (uperms & UPERM_READ) curtain_sysfil(slot, SYSFIL_RPATH);
+	/* Note that UPERM_WRITE does not imply SYSFIL_FATTR. */
+	if (uperms & UPERM_WRITE) curtain_sysfil(slot, SYSFIL_WPATH);
+	if (uperms & (UPERM_CREATE | UPERM_DELETE)) curtain_sysfil(slot, SYSFIL_CPATH);
+	if (uperms & UPERM_EXECUTE) curtain_sysfil(slot, SYSFIL_EXEC);
+	if (uperms & UPERM_SETATTR) curtain_sysfil(slot, SYSFIL_FATTR);
+	if (uperms & UPERM_UNIX) curtain_sysfil(slot, SYSFIL_UNIX);
+	if (uperms & UPERM_TMPDIR) {
 		curtain_sysfil(slot, SYSFIL_RPATH);
 		curtain_sysfil(slot, SYSFIL_WPATH);
 		curtain_sysfil(slot, SYSFIL_CPATH);
@@ -619,15 +615,15 @@ unveil_parse_perms(unveil_perms *uperms, const char *s)
 	*uperms = UPERM_NONE;
 	while (*s)
 		switch (*s++) {
-		case 'l': *uperms |= UPERM_LPATH; break;
-		case 'r': *uperms |= UPERM_RPATH; break;
-		case 'm': *uperms |= UPERM_WPATH; break;
-		case 'w': *uperms |= UPERM_WPATH | UPERM_APATH | UPERM_UNIX; break;
-		case 'a': *uperms |= UPERM_APATH; break;
-		case 'c': *uperms |= UPERM_CPATH; break;
-		case 'x': *uperms |= UPERM_XPATH; break;
+		case 'b': *uperms |= UPERM_BROWSE; break;
+		case 'r': *uperms |= UPERM_READ; break;
+		case 'm': *uperms |= UPERM_WRITE; break;
+		case 'w': *uperms |= UPERM_WRITE | UPERM_SETATTR | UPERM_UNIX; break;
+		case 'a': *uperms |= UPERM_SETATTR; break;
+		case 'c': *uperms |= UPERM_CREATE | UPERM_DELETE; break;
+		case 'x': *uperms |= UPERM_EXECUTE; break;
 		case 'i': *uperms |= UPERM_INSPECT; break;
-		case 't': *uperms |= UPERM_TMPPATH; break;
+		case 't': *uperms |= UPERM_TMPDIR; break;
 		case 'u': *uperms |= UPERM_UNIX; break;
 		default:
 			return (-1);

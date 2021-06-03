@@ -640,14 +640,16 @@ unveil_traverse_dotdot(struct thread *td, struct unveil_traversal *trav,
 static unveil_perms
 uperms_adjust(unveil_perms orig_uperms, enum vtype type, uint8_t depth)
 {
-	if (depth > 0) {
-		unveil_perms uperms = uperms_inherit(orig_uperms);
-		if (orig_uperms & UPERM_TMPPATH &&
-		    depth == 1 && (type == VNON || type == VREG))
-			uperms |= uperms_expand(UPERM_SUBTMPPATH);
-		return (uperms);
-	}
-	return (orig_uperms);
+	unveil_perms uperms = orig_uperms &
+	    (depth > 0 ? uperms_inheritable : ~UPERM_TMPDIR);
+	/*
+	 * NOTE: UPERM_TMPDIR is meant to apply only to the files within the
+	 * directory, not the directory itself nor files within subdirectories.
+	 */
+	if (orig_uperms & UPERM_TMPDIR &&
+	    depth == 1 && (type == VNON || type == VREG))
+		uperms |= UPERM_TMPDIR;
+	return (uperms_expand(uperms));
 }
 
 unveil_perms
@@ -868,14 +870,16 @@ unveil_proc_fork(void *arg __unused, struct proc *parent, struct proc *child, in
 
 static cap_rights_t __read_mostly search_rights;
 static cap_rights_t __read_mostly status_rights;
-static cap_rights_t __read_mostly rpath_rights;
-static cap_rights_t __read_mostly wpath_rights;
-static cap_rights_t __read_mostly cpath_rights;
-static cap_rights_t __read_mostly xpath_rights;
-static cap_rights_t __read_mostly apath_rights;
-static cap_rights_t __read_mostly subtmppath_rights;
-static cap_rights_t __read_mostly rcpath_rights;
-static cap_rights_t __read_mostly rwcapath_rights;
+static cap_rights_t __read_mostly read_rights;
+static cap_rights_t __read_mostly write_rights;
+static cap_rights_t __read_mostly create_rights;
+static cap_rights_t __read_mostly delete_rights;
+static cap_rights_t __read_mostly execute_rights;
+static cap_rights_t __read_mostly setattr_rights;
+static cap_rights_t __read_mostly tmpdir_rights;
+static cap_rights_t __read_mostly create_delete_rights;
+static cap_rights_t __read_mostly delete_read_rights;
+static cap_rights_t __read_mostly lotsa_rights;
 static cap_rights_t __read_mostly bind_rights;
 static cap_rights_t __read_mostly connect_rights;
 
@@ -883,29 +887,35 @@ void
 unveil_uperms_rights(unveil_perms uperms, cap_rights_t *rights)
 {
 	CAP_NONE(rights);
-	/* NOTE: UPERM_EXPOSE/UPERM_FOLLOW handled specially in vfs_lookup.c. */
+	/* NOTE: Some other uperms are handled specially in vfs_lookup.c. */
 	if (uperms & UPERM_SEARCH)
 		cap_rights_merge(rights, &search_rights);
 	if (uperms & UPERM_STATUS)
 		cap_rights_merge(rights, &status_rights);
-	if (uperms & UPERM_RPATH)
-		cap_rights_merge(rights, &rpath_rights);
-	if (uperms & UPERM_WPATH)
-		cap_rights_merge(rights, &wpath_rights);
-	if (uperms & UPERM_CPATH) {
-		cap_rights_merge(rights, &cpath_rights);
-		if (uperms & UPERM_RPATH)
-			cap_rights_merge(rights, &rcpath_rights);
+	if (uperms & UPERM_READ)
+		cap_rights_merge(rights, &read_rights);
+	if (uperms & UPERM_WRITE)
+		cap_rights_merge(rights, &write_rights);
+	if (uperms & UPERM_CREATE) {
+		cap_rights_merge(rights, &create_rights);
+		if (uperms & UPERM_DELETE)
+			cap_rights_merge(rights, &create_delete_rights);
 	}
-	if (uperms & UPERM_XPATH)
-		cap_rights_merge(rights, &xpath_rights);
-	if (uperms & UPERM_APATH) {
-		cap_rights_merge(rights, &apath_rights);
-		if (uperms & UPERM_CPATH && uperms & UPERM_WPATH && uperms & UPERM_RPATH)
-			cap_rights_merge(rights, &rwcapath_rights);
+	if (uperms & UPERM_DELETE) {
+		cap_rights_merge(rights, &delete_rights);
+		if (uperms & UPERM_READ)
+			cap_rights_merge(rights, &delete_read_rights);
 	}
-	if (uperms & UPERM_SUBTMPPATH)
-		cap_rights_merge(rights, &subtmppath_rights);
+	if (uperms & UPERM_EXECUTE)
+		cap_rights_merge(rights, &execute_rights);
+	if (uperms & UPERM_SETATTR) {
+		cap_rights_merge(rights, &setattr_rights);
+		if (uperms & UPERM_WRITE && uperms & UPERM_READ &&
+		    uperms & UPERM_CREATE && uperms & UPERM_DELETE)
+			cap_rights_merge(rights, &lotsa_rights);
+	}
+	if (uperms & UPERM_TMPDIR)
+		cap_rights_merge(rights, &tmpdir_rights);
 	if (uperms & UPERM_BIND)
 		cap_rights_merge(rights, &bind_rights);
 	if (uperms & UPERM_CONNECT)
@@ -923,7 +933,7 @@ unveil_sysinit(void *arg __unused)
 	    CAP_FPATHCONF,
 	    CAP_FSTAT,
 	    CAP_FSTATAT);
-	cap_rights_init(&rpath_rights,
+	cap_rights_init(&read_rights,
 	    CAP_LOOKUP,
 	    CAP_FLOCK,
 	    CAP_READ,
@@ -937,7 +947,7 @@ unveil_sysinit(void *arg __unused)
 	    CAP_MAC_GET,
 	    CAP_EXTATTR_GET,
 	    CAP_EXTATTR_LIST);
-	cap_rights_init(&wpath_rights,
+	cap_rights_init(&write_rights,
 	    CAP_LOOKUP,
 	    CAP_FLOCK,
 	    CAP_WRITE,
@@ -946,7 +956,7 @@ unveil_sysinit(void *arg __unused)
 	    CAP_MMAP,
 	    CAP_FSYNC,
 	    CAP_FTRUNCATE);
-	cap_rights_init(&cpath_rights,
+	cap_rights_init(&create_rights,
 	    CAP_LOOKUP,
 	    CAP_CREATE,
 	    CAP_FPATHCONF,
@@ -955,14 +965,16 @@ unveil_sysinit(void *arg __unused)
 	    CAP_MKFIFOAT,
 	    CAP_MKNODAT,
 	    CAP_SYMLINKAT,
-	    CAP_UNLINKAT,
-	    CAP_RENAMEAT_TARGET,
 	    CAP_UNDELETEAT);
-	cap_rights_init(&xpath_rights,
+	cap_rights_init(&delete_rights,
+	    CAP_LOOKUP,
+	    CAP_FPATHCONF,
+	    CAP_UNLINKAT);
+	cap_rights_init(&execute_rights,
 	    CAP_LOOKUP,
 	    CAP_FEXECVE,
 	    CAP_EXECAT);
-	cap_rights_init(&apath_rights,
+	cap_rights_init(&setattr_rights,
 	    CAP_LOOKUP,
 	    CAP_FCHFLAGS,
 	    CAP_CHFLAGSAT,
@@ -976,7 +988,7 @@ unveil_sysinit(void *arg __unused)
 	    CAP_REVOKEAT,
 	    CAP_EXTATTR_SET,
 	    CAP_EXTATTR_DELETE);
-	cap_rights_init(&subtmppath_rights,
+	cap_rights_init(&tmpdir_rights,
 	    CAP_LOOKUP,
 	    CAP_FSTAT,
 	    CAP_FSTATAT,
@@ -988,26 +1000,49 @@ unveil_sysinit(void *arg __unused)
 	    CAP_WRITE,
 	    CAP_UNLINKAT,
 	    CAP_FTRUNCATE);
-	cap_rights_init(&rcpath_rights,
-	    CAP_RENAMEAT_SOURCE);
-	/*
-	 * To prevent a file being linked in a target directory that was
-	 * unveiled with more permissions than its source directory, require
-	 * the source to have all permissions except UPERM_XPATH for now.
-	 *
-	 * UPERM_CPATH might arguably not be required since directories cannot
-	 * be hard linked, but it could allow multiple programs with different
-	 * unveils collaborating (perhaps unintentionally) to gain more access
-	 * to files with hard links than they could separately.
-	 */
-	cap_rights_init(&rwcapath_rights,
-	    CAP_LINKAT_SOURCE);
 	cap_rights_init(&bind_rights,
 	    CAP_LOOKUP,
 	    CAP_BINDAT);
 	cap_rights_init(&connect_rights,
 	    CAP_LOOKUP,
 	    CAP_CONNECTAT);
+
+	/*
+	 * Operations that involve multiple paths may need extra restrictions.
+	 * The restrictions could be reduced by comparing the permissions of
+	 * each path involved in a given operation, but this would require
+	 * bigger changes to the namei() callers.
+	 */
+
+	/*
+	 * To prevent a file with write-only permissions from being moved to a
+	 * directory that allows reading, only allow renaming files that
+	 * already have read permissions.
+	 */
+	cap_rights_init(&delete_read_rights,
+	    CAP_RENAMEAT_SOURCE);
+	/*
+	 * The rename target may be deleted if it already exists, thus also
+	 * require permissions to delete files.
+	 */
+	cap_rights_init(&create_delete_rights,
+	    CAP_RENAMEAT_TARGET);
+	/*
+	 * Hard-linking a file in a new directory will then allow to access and
+	 * alter the file with the permissions of the target directory.  This
+	 * could allow both to read files that shouldn't be readable but also
+	 * to alter files that are still reachable from the source directory,
+	 * which would be effectively equivalent to having higher permissions
+	 * on the source directory.
+	 *
+	 * Thus, require all permissions on the source that might allow to
+	 * access or alter linked files if they were available on the target.
+	 * Also require permissions to create/delete files even though it might
+	 * not be strictly required (since directories cannot be hard-linked)
+	 * just because hard-links could be dangerous if they are not expected.
+	 */
+	cap_rights_init(&lotsa_rights,
+	    CAP_LINKAT_SOURCE);
 
 	EVENTHANDLER_REGISTER(process_init, unveil_proc_init, NULL, EVENTHANDLER_PRI_ANY);
 	EVENTHANDLER_REGISTER(process_ctor, unveil_proc_ctor, NULL, EVENTHANDLER_PRI_ANY);

@@ -14,47 +14,43 @@
 #include <sys/proc.h>
 #endif
 
-enum {
-	UPERM_NONE = 0,
-	UPERM_LPATH = 1 << 0,
-	UPERM_RPATH = 1 << 1,
-	UPERM_WPATH = 1 << 2,
-	UPERM_CPATH = 1 << 3,
-	UPERM_XPATH = 1 << 4,
-	UPERM_APATH = 1 << 5,
-	UPERM_TMPPATH = 1 << 6,
-	UPERM_SUBTMPPATH = 1 << 7,
-	UPERM_FOLLOW = 1 << 8,
-	UPERM_EXPOSE = 1 << 9,
-	UPERM_SEARCH = 1 << 10,
-	UPERM_STATUS = 1 << 11,
-	UPERM_INSPECT = UPERM_EXPOSE | UPERM_SEARCH | UPERM_STATUS,
-	UPERM_BIND = 1 << 12,
-	UPERM_CONNECT = 1 << 13,
-	UPERM_UNIX = UPERM_BIND | UPERM_CONNECT,
-	UPERM_ALL = -1,
-};
+#define	UPERM_NONE		(0)
+#define	UPERM_EXPOSE		(1 <<  0)
+#define	UPERM_FOLLOW		(1 <<  1)
+#define	UPERM_SEARCH		(1 <<  2)
+#define	UPERM_STATUS		(1 <<  3)
+#define	UPERM_INSPECT		(UPERM_EXPOSE | UPERM_SEARCH | UPERM_STATUS)
+#define	UPERM_BROWSE		(1 <<  8)
+#define	UPERM_READ		(1 <<  9)
+#define	UPERM_WRITE		(1 << 10)
+#define	UPERM_CREATE		(1 << 11)
+#define	UPERM_DELETE		(1 << 12)
+#define	UPERM_EXECUTE		(1 << 13)
+#define	UPERM_SETATTR		(1 << 14)
+#define	UPERM_BIND		(1 << 16)
+#define	UPERM_CONNECT		(1 << 17)
+#define	UPERM_UNIX		(UPERM_BIND | UPERM_CONNECT)
+#define	UPERM_TMPDIR		(1 << 23)
+#define	UPERM_ALL		(-1)
+
+static const unveil_perms uperms_inheritable =
+    UPERM_BROWSE | UPERM_READ | UPERM_WRITE | UPERM_CREATE | UPERM_DELETE |
+    UPERM_EXECUTE | UPERM_SETATTR | UPERM_BIND | UPERM_CONNECT;
 
 static inline unveil_perms
 uperms_expand(unveil_perms uperms)
 {
-	if (uperms & (UPERM_LPATH | UPERM_RPATH | UPERM_WPATH | UPERM_CPATH |
-	              UPERM_XPATH | UPERM_APATH |
-	              UPERM_BIND | UPERM_CONNECT |
-	              UPERM_TMPPATH | UPERM_SUBTMPPATH))
+	if (uperms & (uperms_inheritable | UPERM_TMPDIR))
 		uperms |= UPERM_EXPOSE | UPERM_SEARCH;
-	if (uperms & (UPERM_LPATH | UPERM_RPATH))
-		uperms |= UPERM_STATUS | UPERM_LPATH;
+	if (uperms & (UPERM_BROWSE | UPERM_READ))
+		uperms |= UPERM_STATUS | UPERM_BROWSE;
 	if (uperms & UPERM_STATUS)
 		uperms |= UPERM_FOLLOW;
-	if (uperms & UPERM_RPATH && uperms & UPERM_WPATH && uperms & UPERM_CPATH)
-		uperms |= UPERM_TMPPATH | UPERM_SUBTMPPATH;
+	if (uperms & UPERM_READ && uperms & UPERM_WRITE &&
+	    uperms & UPERM_CREATE && uperms & UPERM_DELETE)
+		uperms |= UPERM_TMPDIR;
 	return (uperms);
 }
-
-static const unveil_perms uperms_inheritable =
-    ~(UPERM_FOLLOW | UPERM_EXPOSE | UPERM_SEARCH | UPERM_STATUS |
-      UPERM_TMPPATH | UPERM_SUBTMPPATH);
 
 static inline unveil_perms
 uperms_inherit(unveil_perms uperms)
@@ -77,7 +73,7 @@ struct unveilreg {
 int unveilreg(int flags, struct unveilreg *);
 
 #define	UNVEILREG_VERSION_MASK	(0xff << 24)
-#define	UNVEILREG_VERSION	(1 << 24)
+#define	UNVEILREG_VERSION	(2 << 24)
 
 #define	UNVEILREG_REGISTER	(1 <<  0 | UNVEILREG_VERSION)
 #define	UNVEILREG_INTERMEDIATE	(1 <<  8 | UNVEILREG_VERSION)

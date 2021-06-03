@@ -57,11 +57,11 @@ ATF_TC_BODY(unveil_one_x, tc)
 	check_access("test", "x");
 }
 
-ATF_TC_WITHOUT_HEAD(unveil_one_l);
-ATF_TC_BODY(unveil_one_l, tc)
+ATF_TC_WITHOUT_HEAD(unveil_one_b);
+ATF_TC_BODY(unveil_one_b, tc)
 {
 	atf_utils_create_file("test", "");
-	ATF_REQUIRE(unveil("test", "l") >= 0);
+	ATF_REQUIRE(unveil("test", "b") >= 0);
 	ATF_REQUIRE(unveil(NULL, NULL) >= 0);
 	check_access("test", "i");
 }
@@ -248,7 +248,7 @@ ATF_TC_BODY(listing_allow, tc)
 	bool found;
 	ATF_REQUIRE(try_mkdir("d") >= 0);
 	ATF_REQUIRE(try_creat("d/f") >= 0);
-	ATF_REQUIRE(unveil("d", "l") >= 0);
+	ATF_REQUIRE(unveil("d", "b") >= 0);
 	check_access("d", "rd");
 	check_access("d/f", "i");
 	ATF_REQUIRE((d = opendir("d")));
@@ -409,7 +409,7 @@ ATF_TP_ADD_TCS(tp)
 	ATF_TP_ADD_TC(tp, unveil_one_w);
 	ATF_TP_ADD_TC(tp, unveil_one_c);
 	ATF_TP_ADD_TC(tp, unveil_one_x);
-	ATF_TP_ADD_TC(tp, unveil_one_l);
+	ATF_TP_ADD_TC(tp, unveil_one_b);
 	ATF_TP_ADD_TC(tp, hide_all);
 	ATF_TP_ADD_TC(tp, unveil_all_r);
 	ATF_TP_ADD_TC(tp, descend_trivial);
