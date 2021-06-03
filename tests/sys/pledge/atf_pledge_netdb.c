@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <atf-c.h>
-#include <stdio.h>
 #include <pledge.h>
 
 #include <netdb.h>

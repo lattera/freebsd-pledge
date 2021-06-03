@@ -24,6 +24,7 @@ ATF_TESTS_C+=	atf_pledge_exec
 ATF_TESTS_C+=	atf_pledge_chown_same
 ATF_TESTS_C+=	atf_pledge_prot_exec
 ATF_TESTS_C+=	atf_pledge_netdb
+ATF_TESTS_C+=	atf_pledge_socket
 
 ATF_TESTS_C+=	atf_unveil_paths
 ATF_TESTS_C+=	atf_unveil_fork
