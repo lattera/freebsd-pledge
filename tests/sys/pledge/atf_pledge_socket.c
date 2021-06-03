@@ -241,8 +241,8 @@ ATF_TC_WITHOUT_HEAD(pledge_unix_still_somewhat_hides_fs);
 ATF_TC_BODY(pledge_unix_still_somewhat_hides_fs, tc)
 {
 	ATF_REQUIRE(pledge("stdio unix", "") >= 0);
-	check_access("/", "ds");
-	check_access(".", "ds");
+	check_access("/", "de");
+	check_access(".", "de");
 }
 
 

@@ -39,10 +39,10 @@ static inline unveil_perms
 uperms_expand(unveil_perms uperms)
 {
 	if (uperms & (UPERM_LPATH | UPERM_RPATH | UPERM_WPATH | UPERM_CPATH |
-	              UPERM_XPATH | UPERM_APATH | UPERM_TMPPATH | UPERM_SUBTMPPATH))
+	              UPERM_XPATH | UPERM_APATH |
+	              UPERM_BIND | UPERM_CONNECT |
+	              UPERM_TMPPATH | UPERM_SUBTMPPATH))
 		uperms |= UPERM_EXPOSE | UPERM_SEARCH;
-	if (uperms & (UPERM_BIND | UPERM_CONNECT))
-		uperms |= UPERM_SEARCH;
 	if (uperms & (UPERM_LPATH | UPERM_RPATH))
 		uperms |= UPERM_STATUS | UPERM_LPATH;
 	if (uperms & UPERM_STATUS)
