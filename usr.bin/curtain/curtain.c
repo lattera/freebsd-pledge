@@ -535,90 +535,12 @@ preexec_cleanup(void)
 	closefrom(3); /* Prevent potentially unintended FD passing. */
 }
 
-static pid_t
-exec_shell(bool wrap, bool login_shell)
-{
-	const char *run, *name;
-
-	run = getenv("SHELL");
-	if (!run || !*run) {
-		struct passwd *pw;
-		run = _PATH_BSHELL;
-		errno = 0;
-		pw = getpwuid(getuid());
-		if (pw) {
-			if (pw->pw_shell && *pw->pw_shell) {
-				run = strdup(pw->pw_shell);
-				if (!run)
-					err(EX_TEMPFAIL, "strdup");
-			}
-		} else if (errno)
-			err(EX_OSERR, "getpwuid");
-		endpwent();
-	}
-
-	if (login_shell) {
-		char *p;
-		const char *q;
-		q = (p = strrchr(run, '/')) ? p + 1 : run;
-		p = malloc(1 + strlen(q) + 1);
-		if (!p)
-			err(EX_TEMPFAIL, "malloc");
-		p[0] = '-';
-		strcpy(p + 1, q);
-		name = p;
-	} else
-		name = run;
-
-	if (wrap) {
-		pid_t pid;
-		pid = vfork();
-		if (pid < 0)
-			err(EX_TEMPFAIL, "fork");
-		if (pid != 0) {
-			err_set_exit(NULL);
-			return (pid);
-		}
-		err_set_exit(_exit);
-#if 0
-		/* XXX This makes /dev/tty not work. */
-		pid = setsid();
-		if (pid < 0)
-			err(EX_OSERR, "setsid");
-#endif
-	}
-
-	preexec_cleanup();
-	execlp(run, name, (char *)NULL);
-	err(EX_OSERR, "%s", run);
-}
-
-static pid_t
-exec_cmd(bool wrap, char *cmd_name, char **argv)
-{
-	if (wrap) {
-		pid_t pid;
-		pid = vfork();
-		if (pid < 0)
-			err(EX_TEMPFAIL, "fork");
-		if (pid != 0) {
-			err_set_exit(NULL);
-			return (pid);
-		}
-		err_set_exit(_exit);
-	}
-	preexec_cleanup();
-	execvp(cmd_name, argv);
-	err(EX_OSERR, "%s", cmd_name);
-}
-
-
 static void
 usage(void)
 {
 	fprintf(stderr, "usage: %s [-fkgenaAXY] "
 	    "[-t tag] [-p promises] [-u unveil ...] "
-	    "[-sS] cmd [arg ...]\n",
+	    "[-sl] cmd [arg ...]\n",
 	    getprogname());
 	exit(EX_USAGE);
 }
@@ -626,6 +548,7 @@ usage(void)
 int
 main(int argc, char *argv[])
 {
+	char *sh_argv[2];
 	int ch, r;
 	char *promises = NULL;
 	bool autotag = false, autotag_unsafe = false;
@@ -643,6 +566,7 @@ main(int argc, char *argv[])
 	const char *tags_buf[64];
 	struct config cfg;
 	struct curtain_slot *unveils_slot, *main_slot;
+	bool do_exec;
 	int status;
 
 	cfg = (struct config){
@@ -655,7 +579,7 @@ main(int argc, char *argv[])
 	curtain_enable((main_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 	curtain_enable((unveils_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 
-	while ((ch = getopt(argc, argv, "fkgenaAt:p:u:0:sSXY")) != -1)
+	while ((ch = getopt(argc, argv, "fkgenaAt:p:u:0:slXY")) != -1)
 		switch (ch) {
 		case 'k':
 			signaling = true;
@@ -720,7 +644,7 @@ main(int argc, char *argv[])
 		case '0':
 			  cmd_arg0 = optarg;
 			  break;
-		case 'S':
+		case 'l':
 			  /* TODO: reset env? */
 			  login_shell = true;
 			  /* FALLTHROUGH */
@@ -742,15 +666,14 @@ main(int argc, char *argv[])
 	argv += optind;
 	argc -= optind;
 
-	if (run_shell == (argc != 0))
-		usage();
-
-	if (!no_network)
-		*cfg.tags_fill++ = "@network";
 	if (!signaling)
 		curtain_sysfil(main_slot, SYSFIL_ERROR);
-	if (run_shell)
+	if (!no_network)
+		*cfg.tags_fill++ = "@network";
+	if (run_shell) {
+		*cfg.tags_fill++ = "@session";
 		curtain_sysfil(main_slot, SYSFIL_SAME_SESSION);
+	}
 	if (new_pgrp) {
 		curtain_sysfil(main_slot, SYSFIL_SAME_PGRP);
 		if (getpgid(0) != getpid()) {
@@ -789,8 +712,8 @@ main(int argc, char *argv[])
 			warn("%s", tmpdir);
 	}
 
-	if (autotag && !run_shell)
-		*cfg.tags_fill++ = argv[0];
+	if (autotag)
+		*cfg.tags_fill++ = argc ? argv[0] : "@shell";
 	cfg.allow_unsafe = autotag_unsafe;
 	load_tags(&cfg);
 
@@ -807,25 +730,75 @@ main(int argc, char *argv[])
 			err(EX_NOPERM, "curtain_enforce");
 	}
 
-	if (!nofork) {
+
+	if (argc == 0) {
+		char *shell;
+		if (!run_shell)
+			usage();
+		shell = getenv("SHELL");
+		if (!shell) {
+			struct passwd *pw;
+			errno = 0;
+			pw = getpwuid(getuid());
+			if (pw) {
+				if (pw->pw_shell && *pw->pw_shell)
+					shell = pw->pw_shell;
+			} else if (errno)
+				err(EX_OSERR, "getpwuid");
+			shell = strdup(shell ? shell : _PATH_BSHELL);
+			if (!shell)
+				err(EX_TEMPFAIL, "strdup");
+			endpwent();
+		}
+		sh_argv[0] = shell;
+		sh_argv[1] = NULL;
+		argv = sh_argv;
+		argc = 1;
+	}
+
+	if (login_shell) { /* prefix arg0 with "-" */
+		char *p, *q;
+		q = (p = strrchr(argv[0], '/')) ? p + 1 : argv[0];
+		p = malloc(1 + strlen(q) + 1);
+		if (!p)
+			err(EX_TEMPFAIL, "malloc");
+		p[0] = '-';
+		strcpy(p + 1, q);
+		cmd_arg0 = p;
+	}
+
+	if (!(do_exec = nofork)) {
 		child_pid = 0;
 		signal(SIGHUP, signal_handler);
 		signal(SIGINT, signal_handler);
 		signal(SIGQUIT, signal_handler);
 		signal(SIGTERM, signal_handler);
-	}
 
-	if (run_shell) {
-		child_pid = exec_shell(!nofork, login_shell);
-	} else {
-		char *cmd_name;
-		cmd_name = argv[0];
+		child_pid = vfork();
+		if (child_pid < 0)
+			err(EX_TEMPFAIL, "fork");
+		if ((do_exec = child_pid == 0)) {
+			err_set_exit(_exit);
+#if 0
+			/* XXX This makes /dev/tty not work. */
+			pid = setsid();
+			if (pid < 0)
+				err(EX_OSERR, "setsid");
+#endif
+		} else
+			err_set_exit(NULL);
+	}
+	if (do_exec) {
+		char *file;
+		file = argv[0];
 		if (cmd_arg0)
 			argv[0] = cmd_arg0;
-		child_pid = exec_cmd(!nofork, cmd_name, argv);
+		preexec_cleanup();
+		execvp(file, argv);
+		err(EX_OSERR, "%s", file);
 	}
+	assert(!nofork && child_pid > 0);
 
-	assert(!nofork);
 	r = waitpid(child_pid, &status, 0);
 	if (r < 0)
 		err(EX_OSERR, "waitpid");
