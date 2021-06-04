@@ -343,6 +343,9 @@ namei_setup(struct nameidata *ndp, struct vnode **dpp, struct pwd **pwdp)
 	ndp->ni_rootdir = pwd->pwd_rdir;
 	ndp->ni_topdir = pwd->pwd_jdir;
 
+#ifdef UNVEIL
+	ndp->ni_dirfd_fflag = 0;
+#endif
 	if (cnp->cn_pnbuf[0] == '/') {
 		ndp->ni_resflags |= NIRES_ABS;
 		error = namei_handle_root(ndp, dpp);
@@ -381,6 +384,9 @@ namei_setup(struct nameidata *ndp, struct vnode **dpp, struct pwd **pwdp)
 				} else if (dfp->f_vnode == NULL) {
 					error = ENOTDIR;
 				} else {
+#ifdef UNVEIL
+					ndp->ni_dirfd_fflag = dfp->f_flag;
+#endif
 					*dpp = dfp->f_vnode;
 					vref(*dpp);
 
@@ -496,6 +502,20 @@ namei_emptypath(struct nameidata *ndp)
 		namei_cleanup_cnp(cnp);
 		goto errout;
 	}
+
+#ifdef UNVEIL
+	if (unveil_is_active(cnp->cn_thread)) {
+		cap_rights_t haverights, *needrights;
+		needrights = ndp->ni_rightsneeded;
+		unveil_fflag_rights(ndp->ni_dirfd_fflag, dp ? dp->v_type : VNON,
+		    &haverights);
+		if (!cap_rights_contains(&haverights, needrights)) {
+			error = EBADF;
+			namei_cleanup_cnp(cnp);
+			goto errout;
+		}
+	}
+#endif
 
 	/*
 	 * Usecount on dp already provided by namei_setup.

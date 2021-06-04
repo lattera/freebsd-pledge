@@ -46,7 +46,6 @@ ATF_TC_BODY(fchmod_allow, tc)
 ATF_TC_WITHOUT_HEAD(fchmod_emptypath_deny);
 ATF_TC_BODY(fchmod_emptypath_deny, tc)
 {
-	atf_tc_expect_fail("unsufficient checking in kernel");
 	int fd;
 	ATF_REQUIRE(try_creat("test") >= 0);
 	ATF_REQUIRE(unveil("test", "rm") >= 0);

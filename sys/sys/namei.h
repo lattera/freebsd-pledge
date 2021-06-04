@@ -82,9 +82,6 @@ struct nameidata {
 	struct	vnode *ni_topdir;	/* logical top directory */
 	int	ni_dirfd;		/* starting directory for *at functions */
 	int	ni_lcf;			/* local call flags */
-#if defined(UNVEIL)
-	struct unveil_traversal ni_unveil;
-#endif
 	/*
 	 * Results: returned from namei
 	 */
@@ -115,6 +112,10 @@ struct nameidata {
 	 */
 	struct componentname ni_cnd;
 	struct nameicap_tracker_head ni_cap_tracker;
+#if defined(UNVEIL)
+	struct unveil_traversal ni_unveil;
+	int ni_dirfd_fflag;
+#endif
 };
 
 #ifdef _KERNEL
