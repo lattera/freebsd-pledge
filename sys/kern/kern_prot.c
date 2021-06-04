@@ -1461,29 +1461,26 @@ p_sysfil_check(struct thread *td, struct proc *p)
 		error = sysfil_check(td, SYSFIL_PROC);
 		if (error)
 			return (error);
+		if (td->td_proc == p->p_pptr) {
+			/*
+			 * Allow visibility on child processes no matter what
+			 * session or process group they might be in.
+			 *
+			 * XXX Tracing interferes with this check since it
+			 * reparents processes.
+			 */
+			if (sysfil_check(td, SYSFIL_CHILD_PROCESS) == 0)
+				return (0);
+		}
 		if (td->td_proc->p_session != p->p_session) {
 			error = sysfil_check(td, SYSFIL_ANY_PROCESS);
-			if (error)
-				return (error);
 		} else if (td->td_proc->p_pgrp != p->p_pgrp) {
 			error = sysfil_check(td, SYSFIL_SAME_SESSION);
-			if (error)
-				return (error);
-		} else if (td->td_proc != p->p_pptr) {
-			/*
-			 * XXX Tracing interferes with this check since it
-			 * reparents processes.  Restricted processes cannot
-			 * use tracing, but they can still be traced by a
-			 * process that is not restricted.
-			 */
-			error = sysfil_check(td, SYSFIL_SAME_PGRP);
-			if (error)
-				return (error);
 		} else {
-			error = sysfil_check(td, SYSFIL_CHILD_PROCESS);
-			if (error)
-				return (error);
+			error = sysfil_check(td, SYSFIL_SAME_PGRP);
 		}
+		if (error)
+			return (error);
 	}
 	return (0);
 }
