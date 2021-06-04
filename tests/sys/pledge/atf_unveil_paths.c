@@ -323,6 +323,34 @@ ATF_TC_BODY(symlink2, tc)
 	ATF_CHECK(readlink("d/l", buf, sizeof buf) >= 0);
 }
 
+ATF_TC_WITHOUT_HEAD(protect_file);
+ATF_TC_BODY(protect_file, tc)
+{
+	ATF_REQUIRE(try_creat("p") >= 0); /* protected file */
+	ATF_REQUIRE(try_creat("u") >= 0); /* unprotected file */
+	ATF_REQUIRE(unveil("p", "r") >= 0);
+	ATF_REQUIRE(unveil("u", "rwca") >= 0);
+	ATF_REQUIRE(unveil(".", "rwca") >= 0);
+	check_access(".", "drw");
+	check_access("p", "r");
+	check_access("u", "rw");
+	/*
+	 * Try various shenanigans that must not be allowed on a file even with
+	 * full permissions on its containing directory.
+	 */
+	ATF_CHECK_ERRNO(EACCES, open("p", O_WRONLY|O_TRUNC) < 0);
+	ATF_CHECK_ERRNO(EACCES, truncate("p", 0) < 0);
+	ATF_CHECK_ERRNO(EACCES, undelete("p") < 0);
+	ATF_CHECK_ERRNO(EACCES, unlink("p") < 0);
+	ATF_CHECK_ERRNO(EACCES, rename("p", "o") < 0);
+	ATF_CHECK_ERRNO(EACCES, rename("p", "u") < 0);
+	ATF_CHECK_ERRNO(EACCES, rename("u", "p") < 0);
+	ATF_CHECK_ERRNO(EACCES, link("p", "o") < 0);
+	ATF_CHECK_ERRNO(EACCES, link("p", "u") < 0); /* EEXIST otherwise */
+	ATF_CHECK_ERRNO(EACCES, link("u", "p") < 0); /* EEXIST otherwise */
+	ATF_CHECK_ERRNO(EACCES, symlink("x", "p") < 0); /* EEXIST otherwise */
+}
+
 ATF_TC_WITHOUT_HEAD(dev_stdin);
 ATF_TC_BODY(dev_stdin, tc)
 {
@@ -425,6 +453,7 @@ ATF_TP_ADD_TCS(tp)
 	ATF_TP_ADD_TC(tp, symlink0);
 	ATF_TP_ADD_TC(tp, symlink1);
 	ATF_TP_ADD_TC(tp, symlink2);
+	ATF_TP_ADD_TC(tp, protect_file);
 	ATF_TP_ADD_TC(tp, dev_stdin);
 	ATF_TP_ADD_TC(tp, dev_stdout);
 	ATF_TP_ADD_TC(tp, keep_stdio_hidden);
