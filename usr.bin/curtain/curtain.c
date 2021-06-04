@@ -485,7 +485,8 @@ prepare_x11(struct curtain_slot *slot, bool trusted)
 			    "extract", tmp_xauth_file, display, NULL);
 		else
 			execlp("xauth", "xauth", "-f", tmp_xauth_file,
-			    "generate", display, ".", "untrusted", NULL);
+			    "generate", display, ".", "untrusted",
+			    "timeout", "0", NULL);
 		err(EX_OSERR, "xauth");
 	}
 	err_set_exit(NULL);
