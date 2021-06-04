@@ -43,6 +43,27 @@ ATF_TC_BODY(fchmod_allow, tc)
 	ATF_CHECK(fchmod(fd, 0755) >= 0);
 }
 
+ATF_TC_WITHOUT_HEAD(fchmod_emptypath_deny);
+ATF_TC_BODY(fchmod_emptypath_deny, tc)
+{
+	atf_tc_expect_fail("unsufficient checking in kernel");
+	int fd;
+	ATF_REQUIRE(try_creat("test") >= 0);
+	ATF_REQUIRE(unveil("test", "rm") >= 0);
+	ATF_REQUIRE((fd = open("test", O_RDWR)) >= 0);
+	ATF_CHECK_ERRNO(EBADF, fchmodat(fd, "", 0755, AT_EMPTY_PATH) < 0);
+}
+
+ATF_TC_WITHOUT_HEAD(fchmod_emptypath_allow);
+ATF_TC_BODY(fchmod_emptypath_allow, tc)
+{
+	int fd;
+	ATF_REQUIRE(try_creat("test") >= 0);
+	ATF_REQUIRE(unveil("test", "rw") >= 0);
+	ATF_REQUIRE((fd = open("test", O_RDWR)) >= 0);
+	ATF_CHECK(fchmodat(fd, "", 0755, AT_EMPTY_PATH) >= 0);
+}
+
 ATF_TC_WITHOUT_HEAD(fchmod_devfd_deny);
 ATF_TC_BODY(fchmod_devfd_deny, tc)
 {
@@ -83,6 +104,8 @@ ATF_TP_ADD_TCS(tp)
 	ATF_TP_ADD_TC(tp, chmod_allow);
 	ATF_TP_ADD_TC(tp, fchmod_deny);
 	ATF_TP_ADD_TC(tp, fchmod_allow);
+	ATF_TP_ADD_TC(tp, fchmod_emptypath_deny);
+	ATF_TP_ADD_TC(tp, fchmod_emptypath_allow);
 	ATF_TP_ADD_TC(tp, fchmod_devfd_deny);
 	ATF_TP_ADD_TC(tp, fchmod_devfd_allow);
 	return (atf_no_error());

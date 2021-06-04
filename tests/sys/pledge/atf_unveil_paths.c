@@ -351,6 +351,18 @@ ATF_TC_BODY(protect_file, tc)
 	ATF_CHECK_ERRNO(EACCES, symlink("x", "p") < 0); /* EEXIST otherwise */
 }
 
+ATF_TC_WITHOUT_HEAD(open_empty_path_bypass);
+ATF_TC_BODY(open_empty_path_bypass, tc)
+{
+	atf_tc_expect_fail("unsufficient checking in kernel");
+	int fd;
+	ATF_REQUIRE(try_creat("f") >= 0);
+	ATF_REQUIRE(unveil("f", "r") >= 0);
+	check_access("f", "r");
+	ATF_CHECK((fd = open("f", O_RDONLY)) >= 0);
+	ATF_CHECK_ERRNO(EBADF, openat(fd, "", O_RDWR | O_EMPTY_PATH) < 0);
+}
+
 ATF_TC_WITHOUT_HEAD(dev_stdin);
 ATF_TC_BODY(dev_stdin, tc)
 {
@@ -454,6 +466,7 @@ ATF_TP_ADD_TCS(tp)
 	ATF_TP_ADD_TC(tp, symlink1);
 	ATF_TP_ADD_TC(tp, symlink2);
 	ATF_TP_ADD_TC(tp, protect_file);
+	ATF_TP_ADD_TC(tp, open_empty_path_bypass);
 	ATF_TP_ADD_TC(tp, dev_stdin);
 	ATF_TP_ADD_TC(tp, dev_stdout);
 	ATF_TP_ADD_TC(tp, keep_stdio_hidden);
