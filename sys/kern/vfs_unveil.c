@@ -922,25 +922,6 @@ unveil_uperms_rights(unveil_perms uperms, cap_rights_t *rights)
 		cap_rights_merge(rights, &connect_rights);
 }
 
-void
-unveil_fflag_rights(int fflag, enum vtype type, cap_rights_t *rights) {
-	CAP_NONE(rights);
-	if (fflag & FREAD)
-		cap_rights_merge(rights, &read_rights);
-	if (fflag & FWRITE)
-		cap_rights_merge(rights, &write_rights);
-	if (!(fflag & FNOSETATTR))
-		cap_rights_merge(rights, &setattr_rights);
-	if (type == VDIR) {
-		if (fflag & (FSEARCH | O_PATH))
-			cap_rights_merge(rights, &search_rights);
-		cap_rights_merge(rights, &execute_rights); /* kludge */
-	} else {
-		if (fflag & FEXEC)
-			cap_rights_merge(rights, &execute_rights);
-	}
-}
-
 static void
 unveil_sysinit(void *arg __unused)
 {

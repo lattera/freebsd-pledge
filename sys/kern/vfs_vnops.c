@@ -337,9 +337,9 @@ restart:
 		vp = ndp->ni_vp;
 	}
 #ifdef UNVEIL
-	if (unveil_is_active(td) &&
-	    !(ndp->ni_unveil.effective_uperms & UPERM_SETATTR))
-		fmode |= FNOSETATTR;
+	if (fp)
+		fp->f_uperms = unveil_is_active(td) ?
+		    ndp->ni_unveil.effective_uperms : UPERM_ALL;
 #endif
 	error = vn_open_vnode(vp, fmode, cred, td, fp);
 	if (first_open) {
@@ -2420,6 +2420,10 @@ vn_chmod(struct file *fp, mode_t mode, struct ucred *active_cred,
 	AUDIT_ARG_VNODE1(vp);
 	VOP_UNLOCK(vp);
 #endif
+#ifdef UNVEIL
+	if (!(fp->f_uperms & UPERM_SETATTR))
+		return (EACCES);
+#endif
 	return (setfmode(td, active_cred, vp, mode));
 }
 
@@ -2434,6 +2438,10 @@ vn_chown(struct file *fp, uid_t uid, gid_t gid, struct ucred *active_cred,
 	vn_lock(vp, LK_SHARED | LK_RETRY);
 	AUDIT_ARG_VNODE1(vp);
 	VOP_UNLOCK(vp);
+#endif
+#ifdef UNVEIL
+	if (!(fp->f_uperms & UPERM_SETATTR))
+		return (EACCES);
 #endif
 	return (setfown(td, active_cred, vp, uid, gid));
 }

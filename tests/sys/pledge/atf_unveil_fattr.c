@@ -30,7 +30,7 @@ ATF_TC_BODY(fchmod_deny, tc)
 	ATF_REQUIRE(try_creat("test") >= 0);
 	ATF_REQUIRE(unveil("test", "rm") >= 0);
 	ATF_REQUIRE((fd = open("test", O_RDWR)) >= 0);
-	ATF_CHECK_ERRNO(EBADF, fchmod(fd, 0755) < 0);
+	ATF_CHECK_ERRNO(EACCES, fchmod(fd, 0755) < 0);
 }
 
 ATF_TC_WITHOUT_HEAD(fchmod_allow);
@@ -50,7 +50,7 @@ ATF_TC_BODY(fchmod_emptypath_deny, tc)
 	ATF_REQUIRE(try_creat("test") >= 0);
 	ATF_REQUIRE(unveil("test", "rm") >= 0);
 	ATF_REQUIRE((fd = open("test", O_RDWR)) >= 0);
-	ATF_CHECK_ERRNO(EBADF, fchmodat(fd, "", 0755, AT_EMPTY_PATH) < 0);
+	ATF_CHECK_ERRNO(EACCES, fchmodat(fd, "", 0755, AT_EMPTY_PATH) < 0);
 }
 
 ATF_TC_WITHOUT_HEAD(fchmod_emptypath_allow);
@@ -76,7 +76,7 @@ ATF_TC_BODY(fchmod_devfd_deny, tc)
 	ATF_REQUIRE(dup2(fd, STDOUT_FILENO) == STDOUT_FILENO);
 	ATF_REQUIRE(asprintf(&p, "/dev/fd/%d", STDOUT_FILENO) > 0);
 	ATF_REQUIRE((fd = open(p, O_RDWR)) >= 0);
-	ATF_CHECK_ERRNO(EBADF, fchmod(fd, 0755) < 0);
+	ATF_CHECK_ERRNO(EACCES, fchmod(fd, 0755) < 0);
 	ATF_CHECK(dup2(saved_fd, STDOUT_FILENO) == STDOUT_FILENO);
 }
 

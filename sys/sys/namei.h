@@ -114,7 +114,6 @@ struct nameidata {
 	struct nameicap_tracker_head ni_cap_tracker;
 #if defined(UNVEIL)
 	struct unveil_traversal ni_unveil;
-	int ni_dirfd_fflag;
 #endif
 };
 

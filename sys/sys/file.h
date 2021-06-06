@@ -55,6 +55,7 @@ struct vnode;
 struct nameidata;
 
 #endif /* _KERNEL */
+#include <sys/_unveil.h>
 
 #define	DTYPE_NONE	0	/* not yet initialized */
 #define	DTYPE_VNODE	1	/* file */
@@ -191,6 +192,9 @@ struct file {
 	/*
 	 *  DTYPE_VNODE specific fields.
 	 */
+#ifdef UNVEIL
+	unveil_perms	f_uperms;	/* unveil permissions when opened */
+#endif
 	union {
 		int16_t	f_seqcount[2];	/* (a) Count of seq. reads and writes. */
 		int	f_pipegen;

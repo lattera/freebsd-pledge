@@ -430,103 +430,6 @@ ATF_TC_BODY(unveil_perm_raise, tc)
 }
 
 
-ATF_TC_WITHOUT_HEAD(open_empty_path_rdonly_allow);
-ATF_TC_BODY(open_empty_path_rdonly_allow, tc)
-{
-	int fd;
-	ATF_REQUIRE(try_creat("f") >= 0);
-	ATF_REQUIRE(unveil("f", "r") >= 0);
-	check_access("f", "r");
-	ATF_CHECK((fd = open("f", O_RDONLY)) >= 0);
-	ATF_CHECK(openat(fd, "", O_RDONLY | O_EMPTY_PATH) >= 0);
-}
-
-ATF_TC_WITHOUT_HEAD(open_empty_path_rdonly_deny);
-ATF_TC_BODY(open_empty_path_rdonly_deny, tc)
-{
-	int fd;
-	ATF_REQUIRE(try_creat("f") >= 0);
-	ATF_REQUIRE(unveil("f", "r") >= 0);
-	check_access("f", "r");
-	ATF_CHECK((fd = open("f", O_RDONLY)) >= 0);
-	ATF_CHECK_ERRNO(EBADF, openat(fd, "", O_WRONLY | O_EMPTY_PATH) < 0);
-	ATF_CHECK_ERRNO(EBADF, openat(fd, "", O_RDWR | O_EMPTY_PATH) < 0);
-	ATF_CHECK_ERRNO(EBADF, openat(fd, "", O_EXEC | O_EMPTY_PATH) < 0);
-}
-
-ATF_TC_WITHOUT_HEAD(open_empty_path_wronly_allow);
-ATF_TC_BODY(open_empty_path_wronly_allow, tc)
-{
-	int fd;
-	ATF_REQUIRE(try_creat("f") >= 0);
-	ATF_REQUIRE(unveil("f", "w") >= 0);
-	check_access("f", "w");
-	ATF_CHECK((fd = open("f", O_WRONLY)) >= 0);
-	ATF_CHECK(openat(fd, "", O_WRONLY | O_EMPTY_PATH) >= 0);
-}
-
-ATF_TC_WITHOUT_HEAD(open_empty_path_wronly_deny);
-ATF_TC_BODY(open_empty_path_wronly_deny, tc)
-{
-	int fd;
-	ATF_REQUIRE(try_creat("f") >= 0);
-	ATF_REQUIRE(unveil("f", "w") >= 0);
-	check_access("f", "w");
-	ATF_CHECK((fd = open("f", O_WRONLY)) >= 0);
-	ATF_CHECK_ERRNO(EBADF, openat(fd, "", O_RDONLY | O_EMPTY_PATH) < 0);
-	ATF_CHECK_ERRNO(EBADF, openat(fd, "", O_RDWR | O_EMPTY_PATH) < 0);
-	ATF_CHECK_ERRNO(EBADF, openat(fd, "", O_EXEC | O_EMPTY_PATH) < 0);
-}
-
-ATF_TC_WITHOUT_HEAD(open_empty_path_exec_allow);
-ATF_TC_BODY(open_empty_path_exec_allow, tc)
-{
-	int fd;
-	ATF_REQUIRE(try_creat("f") >= 0);
-	ATF_REQUIRE(chmod("f", 0755) >= 0);
-	ATF_REQUIRE(unveil("f", "x") >= 0);
-	check_access("f", "x");
-	ATF_CHECK((fd = open("f", O_EXEC)) >= 0);
-	ATF_CHECK(openat(fd, "", O_EXEC | O_EMPTY_PATH) >= 0);
-}
-
-ATF_TC_WITHOUT_HEAD(open_empty_path_exec_deny);
-ATF_TC_BODY(open_empty_path_exec_deny, tc)
-{
-	int fd;
-	ATF_REQUIRE(try_creat("f") >= 0);
-	ATF_REQUIRE(chmod("f", 0755) >= 0);
-	ATF_REQUIRE(unveil("f", "x") >= 0);
-	check_access("f", "x");
-	ATF_CHECK((fd = open("f", O_EXEC)) >= 0);
-	ATF_CHECK_ERRNO(EBADF, openat(fd, "", O_RDONLY | O_EMPTY_PATH) < 0);
-	ATF_CHECK_ERRNO(EBADF, openat(fd, "", O_WRONLY | O_EMPTY_PATH) < 0);
-	ATF_CHECK_ERRNO(EBADF, openat(fd, "", O_RDWR | O_EMPTY_PATH) < 0);
-}
-
-ATF_TC_WITHOUT_HEAD(open_empty_path_search_allow);
-ATF_TC_BODY(open_empty_path_search_allow, tc)
-{
-	int fd;
-	ATF_REQUIRE(try_mkdir("d") >= 0);
-	ATF_REQUIRE(unveil("d", "c") >= 0);
-	check_access("d", "de");
-	ATF_CHECK((fd = open("d", O_SEARCH)) >= 0);
-	ATF_CHECK(openat(fd, "", O_SEARCH | O_EMPTY_PATH) >= 0);
-}
-
-ATF_TC_WITHOUT_HEAD(open_empty_path_search_deny);
-ATF_TC_BODY(open_empty_path_search_deny, tc)
-{
-	int fd;
-	ATF_REQUIRE(try_mkdir("d") >= 0);
-	ATF_REQUIRE(unveil("d", "c") >= 0);
-	check_access("d", "de");
-	ATF_CHECK((fd = open("d", O_SEARCH)) >= 0);
-	ATF_CHECK_ERRNO(EBADF, openat(fd, "", O_RDONLY | O_EMPTY_PATH) < 0);
-}
-
-
 ATF_TP_ADD_TCS(tp)
 {
 	ATF_TP_ADD_TC(tp, unveil_one_i);
@@ -557,13 +460,5 @@ ATF_TP_ADD_TCS(tp)
 	ATF_TP_ADD_TC(tp, keep_stdio_unwritable);
 	ATF_TP_ADD_TC(tp, unveil_perm_drop);
 	ATF_TP_ADD_TC(tp, unveil_perm_raise);
-	ATF_TP_ADD_TC(tp, open_empty_path_rdonly_allow);
-	ATF_TP_ADD_TC(tp, open_empty_path_rdonly_deny);
-	ATF_TP_ADD_TC(tp, open_empty_path_wronly_allow);
-	ATF_TP_ADD_TC(tp, open_empty_path_wronly_deny);
-	ATF_TP_ADD_TC(tp, open_empty_path_exec_allow);
-	ATF_TP_ADD_TC(tp, open_empty_path_exec_deny);
-	ATF_TP_ADD_TC(tp, open_empty_path_search_allow);
-	ATF_TP_ADD_TC(tp, open_empty_path_search_deny);
 	return (atf_no_error());
 }

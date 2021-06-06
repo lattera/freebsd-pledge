@@ -1029,7 +1029,7 @@ flags_to_rights(int flags, cap_rights_t *rightsp)
 		cap_rights_set_one(rightsp, CAP_FEXECVE);
 		if (flags & O_PATH)
 			return;
-	} else {
+	} else if (!(flags & O_PATH)) {
 		switch ((flags & O_ACCMODE)) {
 		case O_RDONLY:
 			cap_rights_set_one(rightsp, CAP_READ);
@@ -2957,10 +2957,6 @@ sys_fchmod(struct thread *td, struct fchmod_args *uap)
 	error = fget(td, uap->fd, &cap_fchmod_rights, &fp);
 	if (error != 0)
 		return (error);
-	if (fp->f_flag & FNOSETATTR) {
-		fdrop(fp, td);
-		return (EBADF);
-	}
 	error = fo_chmod(fp, uap->mode, td->td_ucred, td);
 	fdrop(fp, td);
 	return (error);
@@ -3092,10 +3088,6 @@ sys_fchown(struct thread *td, struct fchown_args *uap)
 	error = fget(td, uap->fd, &cap_fchown_rights, &fp);
 	if (error != 0)
 		return (error);
-	if (fp->f_flag & FNOSETATTR) {
-		fdrop(fp, td);
-		return (EBADF);
-	}
 	error = fo_chown(fp, uap->uid, uap->gid, td->td_ucred, td);
 	fdrop(fp, td);
 	return (error);
@@ -4368,10 +4360,12 @@ getvnode(struct thread *td, int fd, cap_rights_t *rightsp, struct file **fpp)
 {
 	int error;
 	error = getvnode_nosetattr(td, fd, rightsp, fpp);
-	if (error == 0 && ((*fpp)->f_flag & FNOSETATTR)) {
+#ifdef UNVEIL
+	if (error == 0 && !((*fpp)->f_uperms & UPERM_SETATTR)) {
 		fdrop(*fpp, td);
-		error = EBADF;
+		error = EACCES;
 	}
+#endif
 	return (error);
 }
 

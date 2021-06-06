@@ -145,7 +145,6 @@ unveil_perms unveil_traverse_effective_uperms(struct thread *, struct unveil_tra
 void unveil_traverse_end(struct thread *, struct unveil_traversal *);
 
 void unveil_uperms_rights(unveil_perms, cap_rights_t *);
-void unveil_fflag_rights(int fflag, enum vtype, cap_rights_t *);
 
 #endif /* _KERNEL */
 

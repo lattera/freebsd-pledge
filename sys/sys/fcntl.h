@@ -144,9 +144,6 @@ typedef	__pid_t		pid_t;
 #if __BSD_VISIBLE
 #define	O_EMPTY_PATH	0x02000000
 #endif
-#ifdef	_KERNEL
-#define	FNOSETATTR	0x04000000	/* can't modify file's attributes */
-#endif
 
 /*
  * XXX missing O_RSYNC.
@@ -169,7 +166,7 @@ typedef	__pid_t		pid_t;
 
 /* bits to save after open */
 #define	FMASK	(FREAD|FWRITE|FAPPEND|FASYNC|FFSYNC|FDSYNC|FNONBLOCK| \
-		 O_DIRECT|FEXEC|O_PATH|FNOSETATTR)
+		 O_DIRECT|FEXEC|O_PATH)
 /* bits settable by fcntl(F_SETFL, ...) */
 #define	FCNTLFLAGS	(FAPPEND|FASYNC|FFSYNC|FDSYNC|FNONBLOCK|FRDAHEAD|O_DIRECT)
 

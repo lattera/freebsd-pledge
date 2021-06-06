@@ -344,7 +344,7 @@ namei_setup(struct nameidata *ndp, struct vnode **dpp, struct pwd **pwdp)
 	ndp->ni_topdir = pwd->pwd_jdir;
 
 #ifdef UNVEIL
-	ndp->ni_dirfd_fflag = 0;
+	ndp->ni_unveil.effective_uperms = UPERM_NONE;
 #endif
 	if (cnp->cn_pnbuf[0] == '/') {
 		ndp->ni_resflags |= NIRES_ABS;
@@ -385,7 +385,8 @@ namei_setup(struct nameidata *ndp, struct vnode **dpp, struct pwd **pwdp)
 					error = ENOTDIR;
 				} else {
 #ifdef UNVEIL
-					ndp->ni_dirfd_fflag = dfp->f_flag;
+					ndp->ni_unveil.effective_uperms =
+					    dfp->f_uperms;
 #endif
 					*dpp = dfp->f_vnode;
 					vref(*dpp);
@@ -505,12 +506,21 @@ namei_emptypath(struct nameidata *ndp)
 
 #ifdef UNVEIL
 	if (unveil_is_active(cnp->cn_thread)) {
-		cap_rights_t haverights, *needrights;
-		needrights = ndp->ni_rightsneeded;
-		unveil_fflag_rights(ndp->ni_dirfd_fflag, dp ? dp->v_type : VNON,
-		    &haverights);
-		if (!cap_rights_contains(&haverights, needrights)) {
-			error = EBADF;
+		unveil_perms uperms;
+		cap_rights_t haverights;
+		uperms = ndp->ni_unveil.effective_uperms;
+		unveil_uperms_rights(uperms, &haverights);
+		if (dp && dp->v_type == VDIR) {
+			if (uperms & UPERM_BROWSE)
+				cap_rights_set(&haverights,
+				    CAP_READ, CAP_SEEK);
+			/* Kludge for directory O_SEARCH opens. */
+			if (uperms & UPERM_SEARCH)
+				cap_rights_set(&haverights,
+				    CAP_FEXECVE, CAP_EXECAT);
+		}
+		if (!cap_rights_contains(&haverights, ndp->ni_rightsneeded)) {
+			error = EACCES;
 			namei_cleanup_cnp(cnp);
 			goto errout;
 		}
