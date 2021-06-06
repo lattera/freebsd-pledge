@@ -45,6 +45,9 @@
 #include <sys/sx.h>
 #include <sys/_smr.h>
 #include <sys/smr_types.h>
+#ifndef _KERNEL
+#include <stdbool.h>
+#endif
 
 #include <machine/_limits.h>
 

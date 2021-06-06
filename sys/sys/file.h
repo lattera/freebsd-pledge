@@ -45,6 +45,7 @@
 #include <sys/_lock.h>
 #include <sys/_mutex.h>
 #include <vm/vm.h>
+#include <sys/_unveil.h>
 
 struct filedesc;
 struct stat;
@@ -55,7 +56,6 @@ struct vnode;
 struct nameidata;
 
 #endif /* _KERNEL */
-#include <sys/_unveil.h>
 
 #define	DTYPE_NONE	0	/* not yet initialized */
 #define	DTYPE_VNODE	1	/* file */
