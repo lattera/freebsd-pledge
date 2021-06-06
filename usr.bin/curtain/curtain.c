@@ -520,6 +520,38 @@ prepare_x11(struct curtain_slot *slot, bool trusted)
 }
 
 
+static void
+prepare_wayland(struct curtain_slot *slot)
+{
+	const char *display;
+	char *socket;
+	int r;
+	display = getenv("WAYLAND_DISPLAY");
+	if (!display)
+		display = "wayland-0";
+	if (display[0] == '/') {
+		socket = strdup(display);
+		if (!socket)
+			err(EX_TEMPFAIL, "strdup");
+	} else {
+		char *rundir;
+		rundir = getenv("XDG_RUNTIME_DIR");
+		if (!rundir) {
+			warnx("XDG_RUNTIME_DIR environment variable not set");
+			return;
+		}
+		r = asprintf(&socket, "%s/%s", rundir, display);
+		if (r < 0)
+			err(EX_TEMPFAIL, "asprintf");
+	}
+	r = curtain_unveil(slot, socket,
+	    CURTAIN_UNVEIL_INSPECT, UPERM_CONNECT|UPERM_INSPECT);
+	if (r < 0)
+		err(EX_OSERR, "%s", socket);
+	free(socket);
+}
+
+
 static pid_t child_pid;
 
 static void
@@ -539,7 +571,7 @@ preexec_cleanup(void)
 static void
 usage(void)
 {
-	fprintf(stderr, "usage: %s [-fkgenaAXY] "
+	fprintf(stderr, "usage: %s [-fkgenaAXYW] "
 	    "[-t tag] [-p promises] [-u unveil ...] "
 	    "[-sl] cmd [arg ...]\n",
 	    getprogname());
@@ -561,6 +593,7 @@ main(int argc, char *argv[])
 	     no_network = false,
 	     no_protexec = false;
 	enum { X11_NONE, X11_UNTRUSTED, X11_TRUSTED } x11_mode = X11_NONE;
+	bool wayland = false;
 	char *cmd_arg0 = NULL;
 	char abspath[PATH_MAX];
 	size_t abspath_len = 0;
@@ -580,7 +613,7 @@ main(int argc, char *argv[])
 	curtain_enable((main_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 	curtain_enable((unveils_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 
-	while ((ch = getopt(argc, argv, "fkgenaAt:p:u:0:slXY")) != -1)
+	while ((ch = getopt(argc, argv, "fkgenaAt:p:u:0:slXYW")) != -1)
 		switch (ch) {
 		case 'k':
 			signaling = true;
@@ -661,6 +694,9 @@ main(int argc, char *argv[])
 		case 'Y':
 			  x11_mode = X11_TRUSTED;
 			  break;
+		case 'W':
+			  wayland = true;
+			  break;
 		default:
 			usage();
 		}
@@ -669,6 +705,8 @@ main(int argc, char *argv[])
 
 	if (!signaling)
 		curtain_sysfil(main_slot, SYSFIL_ERROR);
+	if (!no_protexec)
+		curtain_sysfil(main_slot, SYSFIL_PROT_EXEC);
 	if (!no_network)
 		*cfg.tags_fill++ = "@network";
 	if (run_shell) {
@@ -687,10 +725,14 @@ main(int argc, char *argv[])
 		if (nofork)
 			errx(EX_USAGE, "X11 mode incompatible with -f");
 		*cfg.tags_fill++ = "@x11";
+		*cfg.tags_fill++ = "@gui";
 		prepare_x11(main_slot, x11_mode == X11_TRUSTED);
 	};
-	if (!no_protexec)
-		curtain_sysfil(main_slot, SYSFIL_PROT_EXEC);
+	if (wayland) {
+		*cfg.tags_fill++ = "@wayland";
+		*cfg.tags_fill++ = "@gui";
+		prepare_wayland(main_slot);
+	}
 	if (!nofork) {
 		prepare_tmpdir(main_slot);
 	} else {

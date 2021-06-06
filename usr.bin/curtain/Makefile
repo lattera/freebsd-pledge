@@ -9,13 +9,13 @@ LIBADD=		curtain
 MAN=
 CFLAGS+=	-I${.CURDIR}
 
-CONFGROUPS=	BASECONF X11CONF
+CONFGROUPS=	BASECONF GUICONF
 
 BASECONFDIR=	/etc
 BASECONF=	curtain.conf
 
-X11CONFDIR=	/etc/curtain.d/@x11
-X11CONF=	fontconfig.conf
+GUICONFDIR=	/etc/curtain.d/@gui
+GUICONF=	fontconfig.conf
 
 CLEANFILES+=	sysfiltab.c
 SRCS+=sysfiltab.c
