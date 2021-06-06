@@ -385,8 +385,12 @@ namei_setup(struct nameidata *ndp, struct vnode **dpp, struct pwd **pwdp)
 					error = ENOTDIR;
 				} else {
 #ifdef UNVEIL
-					ndp->ni_unveil.effective_uperms =
-					    dfp->f_uperms;
+					unveil_perms uperms = dfp->f_uperms;
+					if (ndp->ni_filecaps.fc_noreopen)
+						uperms &= unveil_fflags_uperms(
+						    dfp->f_vnode->v_type,
+						    dfp->f_flag);
+					ndp->ni_unveil.effective_uperms = uperms;
 #endif
 					*dpp = dfp->f_vnode;
 					vref(*dpp);

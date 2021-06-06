@@ -134,6 +134,8 @@ void unveil_base_enforce(struct unveil_base *, enum unveil_on);
 int unveil_index_set(struct unveil_base *, enum unveil_on, unsigned index, unveil_perms);
 int unveil_index_check(struct unveil_base *, unsigned index);
 
+void unveil_lockdown_fd(struct thread *);
+
 int unveil_traverse_begin(struct thread *, struct unveil_traversal *,
     struct vnode *);
 int unveil_traverse(struct thread *, struct unveil_traversal *,
@@ -145,6 +147,7 @@ unveil_perms unveil_traverse_effective_uperms(struct thread *, struct unveil_tra
 void unveil_traverse_end(struct thread *, struct unveil_traversal *);
 
 void unveil_uperms_rights(unveil_perms, cap_rights_t *);
+unveil_perms unveil_fflags_uperms(enum vtype, int);
 
 #endif /* _KERNEL */
 

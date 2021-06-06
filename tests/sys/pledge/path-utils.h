@@ -11,7 +11,7 @@ static int __unused
 try_creat(const char *path)
 {
 	int r;
-	r = creat(path, 0666);
+	r = creat(path, S_IRWXU | S_IRWXG | S_IRWXO);
 	if (r >= 0)
 		close(r);
 	return (r);
@@ -20,7 +20,7 @@ try_creat(const char *path)
 static int __unused
 try_mkdir(const char *path)
 {
-	return (mkdir(path, 0777));
+	return (mkdir(path, S_IRWXU | S_IRWXG | S_IRWXO));
 }
 
 static int __unused

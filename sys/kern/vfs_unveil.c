@@ -25,6 +25,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/sx.h>
 #include <sys/refcount.h>
 #include <sys/eventhandler.h>
+#include <sys/filedesc.h>
 #include <sys/unveil.h>
 
 #ifdef UNVEIL
@@ -743,6 +744,17 @@ unveil_index_set(struct unveil_base *base,
 	return (EINVAL);
 }
 
+void
+unveil_lockdown_fd(struct thread *td)
+{
+	struct filedesc *fdp = td->td_proc->p_fd;
+	FILEDESC_XLOCK(fdp);
+	for (int i = 0, last = fdlastfile(fdp); i <= last; i++)
+		if (fdp->fd_ofiles[i].fde_file)
+			fdp->fd_ofiles[i].fde_caps.fc_noreopen = true;
+	FILEDESC_XUNLOCK(fdp);
+}
+
 
 static int
 do_unveil_add(struct thread *td, struct unveil_base *base, int flags, struct unveilreg reg)
@@ -867,6 +879,24 @@ unveil_proc_fork(void *arg __unused, struct proc *parent, struct proc *child, in
 	UNVEIL_READ_END(src);
 }
 
+
+unveil_perms
+unveil_fflags_uperms(enum vtype type, int fflags)
+{
+	unveil_perms uperms = UPERM_NONE;
+	if (fflags & FREAD)
+		uperms |= UPERM_READ;
+	if (fflags & FWRITE)
+		uperms |= UPERM_WRITE | UPERM_SETATTR;
+	if (type == VDIR) {
+		if (fflags & FSEARCH)
+			uperms |= UPERM_SEARCH;
+	} else {
+		if (fflags & FEXEC)
+			uperms |= UPERM_EXECUTE;
+	}
+	return (uperms_expand(uperms));
+}
 
 static cap_rights_t __read_mostly search_rights;
 static cap_rights_t __read_mostly status_rights;

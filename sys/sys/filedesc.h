@@ -52,6 +52,7 @@ struct filecaps {
 	cap_rights_t	 fc_rights;	/* per-descriptor capability rights */
 	u_long		*fc_ioctls;	/* per-descriptor allowed ioctls */
 	int16_t		 fc_nioctls;	/* fc_ioctls array size */
+	bool		 fc_noreopen:1;
 	uint32_t	 fc_fcntls;	/* per-descriptor allowed fcntls */
 };
 

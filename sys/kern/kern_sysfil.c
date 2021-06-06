@@ -474,6 +474,7 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 			if (flags & CURTAINCTL_ON_EXEC)
 				unveil_base_enforce(base, UNVEIL_ON_EXEC);
 		}
+		unveil_lockdown_fd(td);
 	}
 
 #endif
