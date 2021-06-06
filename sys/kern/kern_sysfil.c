@@ -351,7 +351,7 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 	BIT_SET(SYSFILSET_BITS, SYSFIL_UNCAPSICUM, &sysfilset_self);
 	BIT_COPY(SYSFILSET_BITS, &sysfilset_self, &sysfilset_exec);
 
-#if UNVEIL
+#ifdef UNVEIL
 	unveil_base_write_begin(base);
 #endif
 

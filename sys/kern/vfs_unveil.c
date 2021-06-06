@@ -991,6 +991,7 @@ unveil_sysinit(void *arg __unused)
 	    CAP_UNLINKAT);
 	cap_rights_init(&execute_rights,
 	    CAP_LOOKUP,
+	    CAP_MMAP_X,
 	    CAP_FEXECVE,
 	    CAP_EXECAT);
 	cap_rights_init(&setattr_rights,
