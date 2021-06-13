@@ -416,7 +416,7 @@ kern_mmap(struct thread *td, const struct mmap_req *mrp)
 #ifdef SYSFIL
 		error = sysfil_require_vm_prot(td, prot, fp->f_ops == &vnops);
 		if (error)
-			return (error);
+			goto done;
 #endif
 		if (check_fp_fn != NULL) {
 			error = check_fp_fn(fp, prot, max_prot & cap_maxprot,
