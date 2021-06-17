@@ -28,10 +28,6 @@ try_stuff_0(bool should_work, int fl)
 	ATF_REQUIRE((p = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_MAX(PROT_READ|PROT_EXEC), MAP_ANON | fl, -1, 0)) != MAP_FAILED);
 	ATF_CHECK_EQ(mprotect(p, PAGE_SIZE, PROT_EXEC) >= 0, should_work);
 	ATF_CHECK(munmap(p, PAGE_SIZE) >= 0);
-
-	ATF_REQUIRE((p = aligned_alloc(PAGE_SIZE, PAGE_SIZE)));
-	ATF_CHECK_EQ(mprotect(p, PAGE_SIZE, PROT_EXEC) >= 0, should_work);
-	free(p);
 }
 
 static void
