@@ -84,9 +84,10 @@ struct curtain {
 	volatile int ct_ref;
 	curtain_index ct_nslots;
 	curtain_index ct_nitems;
+	curtain_index ct_fill;
 	bool ct_overflowed;
 	struct curtain_mode ct_sysfils[SYSFIL_COUNT];
-	struct curtain_item *ct_fill, ct_slots[];
+	struct curtain_item ct_slots[];
 };
 
 void	curtain_hold(struct curtain *);

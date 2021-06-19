@@ -17,6 +17,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/jail.h>
 #include <sys/signalvar.h>
 #include <sys/mman.h>
+#include <sys/counter.h>
 #include <sys/sysfil.h>
 #include <sys/unveil.h>
 #include <sys/curtain.h>
@@ -43,6 +44,23 @@ SYSCTL_BOOL(_security_curtain, OID_AUTO, enabled,
 SYSCTL_UINT(_security_curtain, OID_AUTO, log_sysfil_violation,
     CTLFLAG_RW, &sysfil_violation_log_level, 0,
     "Log violations of sysfil restrictions");
+
+#define CURTAIN_STATS
+
+#ifdef CURTAIN_STATS
+
+SYSCTL_NODE(_security_curtain, OID_AUTO, stats,
+    CTLFLAG_RW | CTLFLAG_MPSAFE, 0, "");
+
+#define STATNODE_COUNTER(name, varname, descr)				\
+	static COUNTER_U64_DEFINE_EARLY(varname);			\
+	SYSCTL_COUNTER_U64(_security_curtain_stats, OID_AUTO, name,	\
+	    CTLFLAG_RD, &varname, descr);
+
+STATNODE_COUNTER(lookups, curtain_stats_lookups, "");
+STATNODE_COUNTER(probes, curtain_stats_probes, "");
+
+#endif
 
 CTASSERT(CURTAIN_MAX_ITEMS <= (curtain_index)-1);
 
@@ -315,7 +333,7 @@ curtain_init(struct curtain *ct, size_t nslots)
 		.ct_ref = 1,
 		.ct_nitems = 0,
 		.ct_nslots = nslots,
-		.ct_fill = ct->ct_slots,
+		.ct_fill = 0,
 	};
 	for (curtain_index i = 0; i < nslots; i++)
 		ct->ct_slots[i].type = 0;
@@ -541,13 +559,22 @@ curtain_lookup(const struct curtain *ctc, enum curtain_type type, union curtain_
 {
 	struct curtain *ct = __DECONST(struct curtain *, ctc);
 	struct curtain_item *item;
+	size_t probes = 0;
 	item = curtain_hash_head(ct, curtain_key_hash(type, key));
-	if (!item || item->type == 0)
-		return (NULL);
-	do {
-		if (item->type == type && curtain_key_same(type, key, item->key))
-			break;
-	} while ((item = curtain_hash_next(ct, item)));
+	if (item && item->type != 0) {
+		do {
+			probes++;
+			if (item->type == type && curtain_key_same(type, key, item->key))
+				break;
+		} while ((item = curtain_hash_next(ct, item)));
+	} else {
+		item = NULL;
+		probes = 1;
+	}
+#ifdef CURTAIN_STATS
+	counter_u64_add(curtain_stats_lookups, 1);
+	counter_u64_add(curtain_stats_probes, probes);
+#endif
 	return (item);
 }
 
@@ -564,8 +591,8 @@ curtain_search(struct curtain *ct, enum curtain_type type, union curtain_key key
 		} while ((item = curtain_hash_next(ct, item)));
 		if (!item) {
 			struct curtain_item *fill;
-			while (ct->ct_fill < &ct->ct_slots[ct->ct_nslots])
-				if ((fill = ct->ct_fill++)->type == 0) {
+			while (ct->ct_fill < ct->ct_nslots)
+				if ((fill = &ct->ct_slots[ct->ct_fill++])->type == 0) {
 					item = fill;
 					break;
 				}
