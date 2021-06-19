@@ -14,6 +14,7 @@ __FBSDID("$FreeBSD$");
 #include <netdb.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <resolv.h>
 
 #include <curtain.h>
@@ -277,11 +278,47 @@ static const struct promise_sockaf {
 
 static const struct promise_sockopt {
 	enum promise_type promise;
-	const int (*sockopts)[2];
+	int level, optname;
 } sockopts_table[] = {
-	{ PROMISE_STDIO, curtain_sockopts_basic },
-	{ PROMISE_NET, curtain_sockopts_net },
-	{ PROMISE_INET, curtain_sockopts_inet },
+	{ PROMISE_STDIO, SOL_SOCKET, SO_ERROR },
+	{ PROMISE_STDIO, SOL_SOCKET, SO_NOSIGPIPE },
+	{ PROMISE_NET,  SOL_SOCKET, SO_REUSEADDR },
+	{ PROMISE_NET,  SOL_SOCKET, SO_REUSEPORT },
+	{ PROMISE_NET,  SOL_SOCKET, SO_REUSEPORT_LB },
+	{ PROMISE_NET,  SOL_SOCKET, SO_KEEPALIVE },
+	{ PROMISE_NET,  SOL_SOCKET, SO_LINGER },
+	{ PROMISE_NET,  SOL_SOCKET, SO_SNDBUF },
+	{ PROMISE_NET,  SOL_SOCKET, SO_RCVBUF },
+	{ PROMISE_NET,  SOL_SOCKET, SO_SNDLOWAT },
+	{ PROMISE_NET,  SOL_SOCKET, SO_RCVLOWAT },
+	{ PROMISE_NET,  SOL_SOCKET, SO_SNDTIMEO },
+	{ PROMISE_NET,  SOL_SOCKET, SO_RCVTIMEO },
+	{ PROMISE_NET,  SOL_SOCKET, SO_TIMESTAMP },
+	{ PROMISE_NET,  SOL_SOCKET, SO_BINTIME },
+	{ PROMISE_NET,  SOL_SOCKET, SO_ACCEPTCONN },
+	{ PROMISE_NET,  SOL_SOCKET, SO_DOMAIN },
+	{ PROMISE_NET,  SOL_SOCKET, SO_TYPE },
+	{ PROMISE_NET,  SOL_SOCKET, SO_PROTOCOL },
+	{ PROMISE_NET,  SOL_SOCKET, SO_PROTOTYPE },
+#ifdef AF_INET
+	{ PROMISE_INET, IPPROTO_IP, IP_RECVDSTADDR },
+	{ PROMISE_INET, IPPROTO_IP, IP_TOS },
+#endif
+#ifdef AF_INET6
+	{ PROMISE_INET, IPPROTO_IPV6, IPV6_V6ONLY },
+	{ PROMISE_INET, IPPROTO_IPV6, IPV6_TCLASS },
+#endif
+#if defined(AF_INET) || defined(AF_INET6)
+	{ PROMISE_INET, IPPROTO_TCP, TCP_NODELAY },
+	{ PROMISE_INET, IPPROTO_TCP, TCP_MAXSEG },
+	{ PROMISE_INET, IPPROTO_TCP, TCP_NOPUSH },
+#if 0
+	{ PROMISE_MCAST, SOL_SOCKET, SO_BROADCAST },
+#endif
+#endif
+	{ PROMISE_SETFIB, SOL_SOCKET, SO_SETFIB },
+	{ PROMISE_MAC, SOL_SOCKET, SO_LABEL },
+	{ PROMISE_MAC, SOL_SOCKET, SO_PEERLABEL },
 };
 
 static const char *const root_path = "/";
@@ -500,7 +537,7 @@ do_promises_slots(enum curtain_on on,
 
 	FOREACH_ARRAY(e, sockopts_table)
 		if (fill[e->promise])
-			curtain_sockopts(promise_slots[e->promise], e->sockopts, 0);
+			curtain_sockopt(promise_slots[e->promise], e->level, e->optname, 0);
 
 	if (fill[PROMISE_ERROR])
 		curtain_default(promise_slots[PROMISE_ERROR], CURTAIN_DENY);
