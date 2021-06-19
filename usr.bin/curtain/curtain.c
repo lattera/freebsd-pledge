@@ -727,6 +727,8 @@ main(int argc, char *argv[])
 		curtain_socklvl(main_slot, IPPROTO_IPV6, 0);
 #endif
 #if defined(AF_INET) || defined(AF_INET6)
+		curtain_ioctls(main_slot, curtain_ioctls_net_basic, 0);
+		curtain_ioctls(main_slot, curtain_ioctls_net_route, 0);
 		curtain_socklvl(main_slot, IPPROTO_TCP, 0);
 		curtain_socklvl(main_slot, IPPROTO_UDP, 0);
 #endif

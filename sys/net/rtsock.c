@@ -2568,7 +2568,7 @@ sysctl_rtsock(SYSCTL_HANDLER_ARGS)
 	u_char	af;
 	struct	walkarg w;
 
-	error = sysfil_check(req->td, SYSFIL_ROUTE); /* don't signal */
+	error = sysfil_require(req->td, SYSFIL_ROUTE);
 	if (error)
 		return (error);
 
