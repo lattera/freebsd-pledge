@@ -22,6 +22,10 @@
 #include <sysexits.h>
 #include <unistd.h>
 
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+
 #include "sysfiltab.h"
 #include "pathexp.h"
 
@@ -709,8 +713,25 @@ main(int argc, char *argv[])
 		curtain_default(main_slot, CURTAIN_DENY);
 	if (!no_protexec)
 		curtain_sysfil(main_slot, SYSFIL_PROT_EXEC, 0);
-	if (!no_network)
+	if (!no_network) {
+		/* TODO: this should be specified in config files */
+		curtain_sockaf(main_slot, AF_UNIX, 0);
+		/* XXX SO_SETFIB, SO_LABEL/SO_PEERLABEL */
+		curtain_socklvl(main_slot, SOL_SOCKET, 0);
+#ifdef AF_INET
+		curtain_sockaf(main_slot, AF_INET, 0);
+		curtain_socklvl(main_slot, IPPROTO_IP, 0);
+#endif
+#ifdef AF_INET6
+		curtain_sockaf(main_slot, AF_INET6, 0);
+		curtain_socklvl(main_slot, IPPROTO_IPV6, 0);
+#endif
+#if defined(AF_INET) || defined(AF_INET6)
+		curtain_socklvl(main_slot, IPPROTO_TCP, 0);
+		curtain_socklvl(main_slot, IPPROTO_UDP, 0);
+#endif
 		*cfg.tags_fill++ = "@network";
+	}
 	if (run_shell) {
 		*cfg.tags_fill++ = "@session";
 		curtain_sysfil(main_slot, SYSFIL_SAME_SESSION, 0);

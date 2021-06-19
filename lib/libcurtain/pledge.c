@@ -12,6 +12,7 @@ __FBSDID("$FreeBSD$");
 #include <grp.h>
 #include <nsswitch.h>
 #include <netdb.h>
+#include <sys/socket.h>
 #include <netinet/in.h>
 #include <resolv.h>
 
@@ -80,7 +81,7 @@ enum promise_type {
 	PROMISE_SOCKET_IOCTL,
 	PROMISE_BPF,
 	PROMISE_PFIL,
-	PROMISE_ANY_AF,
+	PROMISE_ANY_SOCKAF,
 	PROMISE_ANY_PRIV,
 	PROMISE_ANY_IOCTL,
 	PROMISE_ANY_SOCKOPT,
@@ -154,7 +155,7 @@ static const struct promise_name {
 	[PROMISE_SOCKET_IOCTL] =	{ "socket_ioctl" },
 	[PROMISE_BPF] =			{ "bpf" },
 	[PROMISE_PFIL] =		{ "pfil" },
-	[PROMISE_ANY_AF] =		{ "any_af" },
+	[PROMISE_ANY_SOCKAF] =		{ "any_sockaf" },
 	[PROMISE_ANY_PRIV] =		{ "any_priv" },
 	[PROMISE_ANY_IOCTL] =		{ "any_ioctl" },
 	[PROMISE_ANY_SOCKOPT] =		{ "any_sockopt" },
@@ -221,14 +222,14 @@ static const struct promise_sysfil {
 	{ PROMISE_CHMOD_SPECIAL,	SYSFIL_CHMOD_SPECIAL },
 	{ PROMISE_SYSFLAGS,		SYSFIL_SYSFLAGS },
 	{ PROMISE_SENDFILE,		SYSFIL_SENDFILE },
-	{ PROMISE_INET,			SYSFIL_INET },
+	{ PROMISE_INET,			SYSFIL_NET },
 	{ PROMISE_INET_RAW,		SYSFIL_INET_RAW },
 	{ PROMISE_UNIX,			SYSFIL_UNIX },
 	{ PROMISE_SETFIB,		SYSFIL_SETFIB },
 	{ PROMISE_ROUTE,		SYSFIL_ROUTE },
 	{ PROMISE_RECVFD,		SYSFIL_RECVFD },
 	{ PROMISE_SENDFD,		SYSFIL_SENDFD },
-	{ PROMISE_DNS,			SYSFIL_INET },
+	{ PROMISE_DNS,			SYSFIL_NET },
 	{ PROMISE_DNS,			SYSFIL_ROUTE }, /* XXX */
 	{ PROMISE_CRYPTODEV,		SYSFIL_CRYPTODEV },
 	{ PROMISE_MOUNT,		SYSFIL_MOUNT },
@@ -239,7 +240,7 @@ static const struct promise_sysfil {
 	{ PROMISE_BPF,			SYSFIL_SOCKET_IOCTL }, /* XXX */
 	{ PROMISE_PFIL,			SYSFIL_PFIL },
 	{ PROMISE_PFIL,			SYSFIL_INET_RAW }, /* XXX for ipfw */
-	{ PROMISE_ANY_AF,		SYSFIL_ANY_AF },
+	{ PROMISE_ANY_SOCKAF,		SYSFIL_ANY_SOCKAF },
 	{ PROMISE_ANY_PRIV,		SYSFIL_ANY_PRIV },
 	{ PROMISE_ANY_IOCTL,		SYSFIL_ANY_IOCTL },
 	{ PROMISE_ANY_SOCKOPT,		SYSFIL_ANY_SOCKOPT },
@@ -252,6 +253,29 @@ static const struct promise_ioctl {
 	const unsigned long *ioctls;
 } ioctls_table[] = {
 	{ PROMISE_TTY, curtain_ioctls_tty_basic },
+};
+
+static const struct promise_sockaf {
+	enum promise_type type;
+	int af;
+} sockafs_table[] = {
+	/* XXX some of these should be allowed for "stdio"? */
+	{ PROMISE_UNIX, AF_UNIX },
+#ifdef AF_INET
+	{ PROMISE_INET, AF_INET },
+#endif
+#ifdef AF_INET6
+	{ PROMISE_INET, AF_INET6 },
+#endif
+};
+
+static const struct promise_sockopt {
+	enum promise_type type;
+	const int (*sockopts)[2];
+} sockopts_table[] = {
+	{ PROMISE_UNIX, curtain_sockopts_basic },
+	{ PROMISE_INET, curtain_sockopts_basic },
+	{ PROMISE_INET, curtain_sockopts_inet },
 };
 
 static const char *const root_path = "/";
@@ -403,6 +427,8 @@ do_promises_slots(enum curtain_on on,
 	const struct promise_unveil *pu;
 	const struct promise_sysfil *ps;
 	const struct promise_ioctl *pi;
+	const struct promise_sockaf *pa;
+	const struct promise_sockopt *po;
 	bool tainted;
 
 	/*
@@ -452,7 +478,15 @@ do_promises_slots(enum curtain_on on,
 
 	for (pi = ioctls_table; pi != &ioctls_table[nitems(ioctls_table)]; pi++)
 		if (fill_sysfils[pi->type])
-			curtain_ioctls(promise_sysfil_slots[ps->type], pi->ioctls, 0);
+			curtain_ioctls(promise_sysfil_slots[pi->type], pi->ioctls, 0);
+
+	for (pa = sockafs_table; pa != &sockafs_table[nitems(sockafs_table)]; pa++)
+		if (fill_sysfils[pa->type])
+			curtain_sockaf(promise_sysfil_slots[pa->type], pa->af, 0);
+
+	for (po = sockopts_table; po != &sockopts_table[nitems(sockopts_table)]; po++)
+		if (fill_sysfils[po->type])
+			curtain_sockopts(promise_sysfil_slots[po->type], po->sockopts, 0);
 
 	if (fill_sysfils[PROMISE_ERROR])
 		curtain_default(promise_sysfil_slots[PROMISE_ERROR], CURTAIN_DENY);

@@ -38,6 +38,9 @@ struct simple_node {
 	union simple_key {
 		int sysfil;
 		unsigned long ioctl;
+		int sockaf;
+		int socklvl;
+		int sockopt[2];
 	} key;
 };
 
@@ -163,10 +166,12 @@ fill_defaults(enum curtain_level level_on[CURTAIN_ON_COUNT], enum curtain_state 
 
 
 struct simple_type {
-	struct simple_node *list;
+	enum curtain_type type;
+	size_t ent_size;
 	size_t count;
+	struct simple_node *list;
 	int (*cmp)(const union simple_key *, const union simple_key *);
-	void (*fill)(void *, struct simple_node *, enum curtain_on, enum curtain_level);
+	void (*fill)(void **, struct simple_node *);
 };
 
 static struct simple_node *
@@ -227,7 +232,9 @@ get_simple(struct simple_type *type, struct curtain_slot *slot,
 }
 
 static void
-fill_simple(struct simple_type *type, void *dest, enum curtain_state min_state)
+fill_simple(struct simple_type *type,
+    void *dest[CURTAIN_ON_COUNT][CURTAIN_LEVEL_COUNT],
+    enum curtain_state min_state)
 {
 	struct simple_node *node;
 	struct simple_mode *mode;
@@ -241,7 +248,7 @@ fill_simple(struct simple_type *type, void *dest, enum curtain_state min_state)
 					any = true;
 				}
 			if (any)
-				type->fill(dest, node, on, lvl);
+				type->fill(&dest[on][lvl], node);
 		}
 }
 
@@ -253,14 +260,16 @@ cmp_sysfil(const union simple_key *key0, const union simple_key *key1)
 }
 
 static void
-fill_sysfil(void *dest, struct simple_node *node,
-    enum curtain_on on, enum curtain_level min_lvl)
+fill_sysfil(void **dest, struct simple_node *node)
 {
-	unsigned *(*ents)[CURTAIN_ON_COUNT][CURTAIN_LEVEL_COUNT] = dest;
-	*(*ents)[on][min_lvl]++ = node->key.sysfil;
+	unsigned *fill = *dest;
+	*fill++ = node->key.sysfil;
+	*dest = fill;
 }
 
 static struct simple_type sysfils_type = {
+	.type = CURTAINTYP_SYSFIL,
+	.ent_size = sizeof (int),
 	.cmp = cmp_sysfil,
 	.fill = fill_sysfil,
 };
@@ -285,14 +294,16 @@ cmp_ioctl(const union simple_key *key0, const union simple_key *key1)
 }
 
 static void
-fill_ioctl(void *dest, struct simple_node *node,
-    enum curtain_on on, enum curtain_level min_lvl)
+fill_ioctl(void **dest, struct simple_node *node)
 {
-	unsigned long *(*ents)[CURTAIN_ON_COUNT][CURTAIN_LEVEL_COUNT] = dest;
-	*(*ents)[on][min_lvl]++ = node->key.ioctl;
+	unsigned long *fill = *dest;
+	*fill++ = node->key.ioctl;
+	*dest = fill;
 }
 
 static struct simple_type ioctls_type = {
+	.type = CURTAINTYP_IOCTL,
+	.ent_size = sizeof (unsigned long),
 	.cmp = cmp_ioctl,
 	.fill = fill_ioctl,
 };
@@ -312,8 +323,121 @@ curtain_ioctl(struct curtain_slot *slot, unsigned long ioctl, int flags)
 int
 curtain_ioctls(struct curtain_slot *slot, const unsigned long *ioctls, int flags)
 {
-	for (const unsigned long *p = ioctls; *p; p++)
+	for (const unsigned long *p = ioctls; *p != (unsigned long)-1; p++)
 		curtain_ioctl(slot, *p, flags);
+	return (0);
+}
+
+
+static int
+cmp_sockaf(const union simple_key *key0, const union simple_key *key1)
+{
+	return (key0->sockaf - key1->sockaf);
+}
+
+static void
+fill_sockaf(void **dest, struct simple_node *node)
+{
+	int *fill = *dest;
+	*fill++ = node->key.sockaf;
+	*dest = fill;
+}
+
+static struct simple_type sockafs_type = {
+	.type = CURTAINTYP_SOCKAF,
+	.ent_size = sizeof (int),
+	.cmp = cmp_sockaf,
+	.fill = fill_sockaf,
+};
+
+int
+curtain_sockaf(struct curtain_slot *slot, int sockaf, int flags)
+{
+	struct simple_mode *mode;
+	mode = get_simple(&sockafs_type, slot,
+	    (union simple_key){ .sockaf = sockaf });
+	if (!mode)
+		return (-1);
+	mode->level = flags2level(flags);
+	return (0);
+}
+
+
+static int
+cmp_socklvl(const union simple_key *key0, const union simple_key *key1)
+{
+	return (key0->socklvl - key1->socklvl);
+}
+
+static void
+fill_socklvl(void **dest, struct simple_node *node)
+{
+	int *fill = *dest;
+	*fill++ = node->key.socklvl;
+	*dest = fill;
+}
+
+static struct simple_type socklvls_type = {
+	.type = CURTAINTYP_SOCKLVL,
+	.ent_size = sizeof (int),
+	.cmp = cmp_socklvl,
+	.fill = fill_socklvl,
+};
+
+int
+curtain_socklvl(struct curtain_slot *slot, int level, int flags)
+{
+	struct simple_mode *mode;
+	mode = get_simple(&socklvls_type, slot,
+	    (union simple_key){ .socklvl = level });
+	if (!mode)
+		return (-1);
+	mode->level = flags2level(flags);
+	return (0);
+}
+
+
+static int
+cmp_sockopt(const union simple_key *key0, const union simple_key *key1)
+{
+	int d;
+	return ((d = key0->sockopt[0] - key1->sockopt[0]) != 0 ? d :
+	             key0->sockopt[1] - key1->sockopt[1]);
+}
+
+static void
+fill_sockopt(void **dest, struct simple_node *node)
+{
+	int (*fill)[2] = *dest;
+	(*fill)[0] = node->key.sockopt[0];
+	(*fill)[1] = node->key.sockopt[1];
+	*dest = ++fill;
+}
+
+static struct simple_type sockopts_type = {
+	.type = CURTAINTYP_SOCKOPT,
+	.ent_size = sizeof (int [2]),
+	.cmp = cmp_sockopt,
+	.fill = fill_sockopt,
+};
+
+int
+curtain_sockopt(struct curtain_slot *slot, int level, int optname, int flags)
+{
+	struct simple_mode *mode;
+	mode = get_simple(&sockopts_type, slot,
+	    (union simple_key){ .sockopt = { level, optname } });
+	if (!mode)
+		return (-1);
+	mode->level = flags2level(flags);
+	return (0);
+}
+
+int
+curtain_sockopts(struct curtain_slot *slot, const int (*sockopts)[2], int flags)
+{
+	for (const int (*p)[2] = sockopts; (*p)[0] != -1 && (*p)[1] != -1; p++)
+		curtain_sockopt(slot, (*p)[0], (*p)[1], flags);
 	return (0);
 }
 
@@ -590,25 +714,42 @@ static const int curtainreq_flags[CURTAIN_ON_COUNT] = {
 static int
 curtain_submit_1(int flags, enum curtain_state min_state)
 {
-	struct curtainreq reqv[4 * CURTAIN_ON_COUNT * CURTAIN_LEVEL_COUNT], *reqp = reqv;
+	struct simple_type *simple_types[] = {
+		&sysfils_type,
+		&ioctls_type,
+		&sockafs_type,
+		&socklvls_type,
+		&sockopts_type,
+	};
+	struct curtainreq reqv[1 + 2 * CURTAIN_ON_COUNT + nitems(simple_types) * CURTAIN_ON_COUNT * CURTAIN_LEVEL_COUNT], *reqp = reqv;
 	enum curtain_level levels_on[CURTAIN_ON_COUNT];
-	unsigned sysfils_v[CURTAIN_ON_COUNT][CURTAIN_LEVEL_COUNT][sysfils_type.count];
-	unsigned *sysfils_p[CURTAIN_ON_COUNT][CURTAIN_LEVEL_COUNT];
-	unsigned long ioctls_v[CURTAIN_ON_COUNT][CURTAIN_LEVEL_COUNT][ioctls_type.count];
-	unsigned long *ioctls_p[CURTAIN_ON_COUNT][CURTAIN_LEVEL_COUNT];
+
 	struct curtainent_unveil unveils_v[CURTAIN_ON_COUNT][unveils_count];
 	struct curtainent_unveil *unveils_p[CURTAIN_ON_COUNT];
 
-	fill_defaults(levels_on, min_state);
-	for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++) {
-		for (enum curtain_level lvl = 0; lvl < CURTAIN_LEVEL_COUNT; lvl++) {
-			sysfils_p[on][lvl] = sysfils_v[on][lvl];
-			ioctls_p[on][lvl] = ioctls_v[on][lvl];
+	void *base_ptrs[nitems(simple_types)][CURTAIN_ON_COUNT][CURTAIN_LEVEL_COUNT];
+	void *fill_ptrs[nitems(simple_types)][CURTAIN_ON_COUNT][CURTAIN_LEVEL_COUNT];
+
+	size_t total_space;
+	total_space = 0;
+	for (size_t i = 0; i < nitems(simple_types); i++)
+		total_space += CURTAIN_ON_COUNT * CURTAIN_LEVEL_COUNT *
+		    simple_types[i]->count * simple_types[i]->ent_size;
+	char buffer[total_space], *cursor = buffer;
+	for (size_t i = 0; i < nitems(simple_types); i++) {
+		for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++) {
+			for (enum curtain_level lvl = 0; lvl < CURTAIN_LEVEL_COUNT; lvl++) {
+				base_ptrs[i][on][lvl] = fill_ptrs[i][on][lvl] = cursor;
+				cursor += simple_types[i]->count * simple_types[i]->ent_size;
+			}
 		}
-		unveils_p[on] = unveils_v[on];
 	}
-	fill_simple(&sysfils_type, sysfils_p, min_state);
-	fill_simple(&ioctls_type, ioctls_p, min_state);
+	for (size_t i = 0; i < nitems(simple_types); i++)
+		fill_simple(simple_types[i], fill_ptrs[i], min_state);
+
+	fill_defaults(levels_on, min_state);
+	for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++)
+		unveils_p[on] = unveils_v[on];
 	fill_unveils(unveils_p, min_state);
 
 	for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++)
@@ -618,24 +759,19 @@ curtain_submit_1(int flags, enum curtain_state min_state)
 				.flags = curtainreq_flags[on],
 				.level = levels_on[on],
 			};
-			for (enum curtain_level lvl = 0; lvl < CURTAIN_LEVEL_COUNT; lvl++) {
-				size_t sysfils_c, ioctls_c;
-				if ((sysfils_c = sysfils_p[on][lvl] - sysfils_v[on][lvl]) != 0)
-					*reqp++ = (struct curtainreq){
-						.type = CURTAINTYP_SYSFIL,
-						.flags = curtainreq_flags[on],
-						.level = lvl,
-						.data = sysfils_v[on][lvl],
-						.size = sysfils_c * sizeof ***sysfils_v,
-					};
-				if ((ioctls_c = ioctls_p[on][lvl] - ioctls_v[on][lvl]) != 0)
-					*reqp++ = (struct curtainreq){
-						.type = CURTAINTYP_IOCTL,
-						.flags = curtainreq_flags[on],
-						.level = lvl,
-						.data = ioctls_v[on][lvl],
-						.size = ioctls_c * sizeof ***ioctls_v,
-					};
+			for (size_t i = 0; i < nitems(simple_types); i++) {
+				for (enum curtain_level lvl = 0; lvl < CURTAIN_LEVEL_COUNT; lvl++) {
+					size_t filled = (char *)fill_ptrs[i][on][lvl] -
+					                (char *)base_ptrs[i][on][lvl];
+					if (filled)
+						*reqp++ = (struct curtainreq){
+							.type = simple_types[i]->type,
+							.flags = curtainreq_flags[on],
+							.level = lvl,
+							.data = base_ptrs[i][on][lvl],
+							.size = filled,
+						};
+				}
 			}
 			size_t unveils_c;
 			if ((unveils_c = unveils_p[on] - unveils_v[on]) != 0)

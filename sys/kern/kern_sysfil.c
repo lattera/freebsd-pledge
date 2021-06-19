@@ -111,57 +111,28 @@ sysfil_require_ioctl(struct thread *td, u_long com)
 }
 
 int
-sysfil_require_af(struct thread *td, int af)
+sysfil_require_sockaf(struct thread *td, int af)
 {
-	int sf = SYSFIL_ANY_AF;
-	if (sysfil_check(td, sf) == 0)
+#ifdef SYSFIL
+	if (curtain_check_key(td, CURTAINTYP_SOCKAF,
+	    (union curtain_key){ .sockaf = af }) == 0)
 		return (0);
-	switch (af) {
-	case AF_UNIX:
-		sf = SYSFIL_UNIX;
-		break;
-	case AF_INET:
-	case AF_INET6:
-		sf = SYSFIL_INET;
-		break;
-	}
-	return (sysfil_require(td, sf));
+#endif
+	return (sysfil_require(td, SYSFIL_ANY_SOCKAF));
 }
 
 int
 sysfil_require_sockopt(struct thread *td, int level, int name)
 {
-	int sf = SYSFIL_ANY_SOCKOPT;
-	if (sysfil_check(td, sf) == 0)
+#ifdef SYSFIL
+	if (curtain_check_key(td, CURTAINTYP_SOCKOPT,
+	    (union curtain_key){ .sockopt = { level, name } }) == 0)
 		return (0);
-	switch (level) {
-	case SOL_SOCKET:
-		switch (name) {
-		case SO_SETFIB:
-			sf = SYSFIL_SETFIB;
-			break;
-		case SO_LABEL:
-		case SO_PEERLABEL:
-			sf = SYSFIL_MAC;
-			break;
-		default:
-			sf = SYSFIL_NET;
-			break;
-		}
-		break;
-#if 0 /* XXX SOL_LOCAL and IPPROTO_IP are both 0! */
-	case SOL_LOCAL:
-		sf = SYSFIL_UNIX;
-		break;
+	if (curtain_check_key(td, CURTAINTYP_SOCKLVL,
+	    (union curtain_key){ .socklvl = level }) == 0)
+		return (0);
 #endif
-	case IPPROTO_IP:
-	case IPPROTO_IPV6:
-	case IPPROTO_TCP:
-	case IPPROTO_UDP:
-		sf = SYSFIL_INET;
-		break;
-	}
-	return (sysfil_require(td, sf));
+	return (sysfil_require(td, SYSFIL_ANY_SOCKOPT));
 }
 
 int
@@ -487,16 +458,25 @@ mode_harden(struct curtain_mode *mode)
 	mode->on_exec = mode->on_exec_max = MAX(mode->on_exec, mode->on_exec_max);
 }
 
+#define CURTAIN_KEY_INVALID_TYPE_CASES	\
+	case CURTAINTYP_DEFAULT:	\
+	case CURTAINTYP_SYSFIL:		\
+	case CURTAINTYP_UNVEIL:
+
 static unsigned
 curtain_key_hash(enum curtain_type type, union curtain_key key)
 {
 	switch (type) {
-	case CURTAINTYP_DEFAULT:
-	case CURTAINTYP_SYSFIL:
-	case CURTAINTYP_UNVEIL:
+	CURTAIN_KEY_INVALID_TYPE_CASES
 		break;
 	case CURTAINTYP_IOCTL:
 		return ((unsigned)key.ioctl);
+	case CURTAINTYP_SOCKAF:
+		return ((unsigned)key.sockaf);
+	case CURTAINTYP_SOCKLVL:
+		return ((unsigned)key.socklvl);
+	case CURTAINTYP_SOCKOPT:
+		return ((unsigned)(key.sockopt.level ^ key.sockopt.optname));
 	}
 	MPASS(0);
 	return (-1);
@@ -507,12 +487,17 @@ curtain_key_same(enum curtain_type type,
     union curtain_key key0, union curtain_key key1)
 {
 	switch (type) {
-	case CURTAINTYP_DEFAULT:
-	case CURTAINTYP_SYSFIL:
-	case CURTAINTYP_UNVEIL:
+	CURTAIN_KEY_INVALID_TYPE_CASES
 		break;
 	case CURTAINTYP_IOCTL:
 		return (key0.ioctl == key1.ioctl);
+	case CURTAINTYP_SOCKAF:
+		return (key0.sockaf == key1.sockaf);
+	case CURTAINTYP_SOCKLVL:
+		return (key0.socklvl == key1.socklvl);
+	case CURTAINTYP_SOCKOPT:
+		return (key0.sockopt.level == key1.sockopt.level &&
+		        key0.sockopt.optname == key1.sockopt.optname);
 	}
 	MPASS(0);
 	return (false);
@@ -651,12 +636,16 @@ static int
 sysfil_for_type(enum curtain_type type)
 {
 	switch (type) {
-	case CURTAINTYP_DEFAULT:
-	case CURTAINTYP_SYSFIL:
-	case CURTAINTYP_UNVEIL:
+	CURTAIN_KEY_INVALID_TYPE_CASES
 		break;
 	case CURTAINTYP_IOCTL:
 		return (SYSFIL_ANY_IOCTL);
+	case CURTAINTYP_SOCKAF:
+		return (SYSFIL_ANY_SOCKAF);
+	case CURTAINTYP_SOCKLVL:
+		return (SYSFIL_ANY_SOCKOPT);
+	case CURTAINTYP_SOCKOPT:
+		return (SYSFIL_ANY_SOCKOPT);
 	}
 	MPASS(0);
 	return (SYSFIL_DEFAULT);
@@ -665,6 +654,7 @@ sysfil_for_type(enum curtain_type type)
 int
 curtain_check_key(struct thread *td, enum curtain_type type, union curtain_key key)
 {
+	/* TODO: handle level */
 	const struct curtain *ct;
 	if ((ct = td->td_ucred->cr_curtain)) {
 		struct curtain_item *item;
@@ -690,27 +680,35 @@ curtain_limit_sysfils(struct curtain *ct, const sysfilset_t *sfs)
 }
 
 static void
+curtain_limit_item(struct curtain_mode *mode,
+    enum curtain_type type, union curtain_key key, const struct curtain *ct)
+{
+	const struct curtain_item *item;
+	item = curtain_lookup(ct, type, key);
+	if (!item && type == CURTAINTYP_SOCKOPT)
+		item = curtain_lookup(ct, CURTAINTYP_SOCKLVL,
+		    (union curtain_key){ .socklvl = key.sockopt.level });
+	mode_limit(mode, item ? &item->mode :
+	    &ct->ct_sysfils[sysfil_for_type(type)]);
+}
+
+static void
 curtain_limit(struct curtain *dst, const struct curtain *src)
 {
 	struct curtain_item *di;
 	const struct curtain_item *si;
 	KASSERT(dst->ct_ref == 1, ("modifying shared curtain"));
+	for (si = src->ct_slots; si < &src->ct_slots[src->ct_nslots]; si++)
+		if (si->type != 0 && !curtain_lookup(dst, si->type, si->key)) {
+			struct curtain_mode mode = si->mode;
+			curtain_limit_item(&mode, si->type, si->key, dst);
+			di = curtain_search(dst, si->type, si->key);
+			if (di)
+				di->mode = mode;
+		}
 	for (di = dst->ct_slots; di < &dst->ct_slots[dst->ct_nslots]; di++)
 		if (di->type != 0)
-			mode_limit(&di->mode,
-			    (si = curtain_lookup(src, di->type, di->key))
-			        ? &si->mode
-			        : &src->ct_sysfils[sysfil_for_type(di->type)]);
-	for (si = src->ct_slots; si < &src->ct_slots[src->ct_nslots]; si++)
-		if (si->type != 0) {
-			if (!curtain_lookup(dst, si->type, si->key) &&
-			    (di = curtain_search(dst, si->type, si->key))) {
-				/* XXX dst curtain may be full */
-				/* NOTE: limiting the dst sysfils must be done AFTER this */
-				di->mode = dst->ct_sysfils[sysfil_for_type(di->type)];
-				mode_limit(&di->mode, &si->mode);
-			}
-		}
+			curtain_limit_item(&di->mode, di->type, di->key, src);
 	for (int sf = 0; sf <= SYSFIL_LAST; sf++)
 		mode_limit(&dst->ct_sysfils[sf], &src->ct_sysfils[sf]);
 }
@@ -724,7 +722,6 @@ static const int sysfils_expand[][2] = {
 	{ SYSFIL_CPATH,		SYSFIL_PATH		},
 	{ SYSFIL_DPATH,		SYSFIL_PATH		},
 	{ SYSFIL_PROT_EXEC,	SYSFIL_PROT_EXEC_LOOSE	},
-	{ SYSFIL_INET,		SYSFIL_NET		},
 	{ SYSFIL_INET_RAW,	SYSFIL_NET		},
 	{ SYSFIL_UNIX,		SYSFIL_NET		},
 	{ SYSFIL_CPUSET,	SYSFIL_SCHED		},
@@ -806,6 +803,55 @@ curtain_build(int flags, size_t reqc, const struct curtainreq *reqv)
 				struct curtain_item *item;
 				item = curtain_search(ct, req->type,
 				    (union curtain_key){ .ioctl = *p++ });
+				if (!item)
+					goto fail;
+				if (req_on_self)
+					item->mode.on_self = req->level;
+				if (req_on_exec)
+					item->mode.on_exec = req->level;
+			}
+			break;
+		}
+		case CURTAINTYP_SOCKAF: {
+			int *p = req->data;
+			size_t c = req->size / sizeof *p;
+			while (c--) {
+				struct curtain_item *item;
+				item = curtain_search(ct, req->type,
+				    (union curtain_key){ .sockaf = *p++ });
+				if (!item)
+					goto fail;
+				if (req_on_self)
+					item->mode.on_self = req->level;
+				if (req_on_exec)
+					item->mode.on_exec = req->level;
+			}
+			break;
+		}
+		case CURTAINTYP_SOCKLVL: {
+			int *p = req->data;
+			size_t c = req->size / sizeof *p;
+			while (c--) {
+				struct curtain_item *item;
+				item = curtain_search(ct, req->type,
+				    (union curtain_key){ .socklvl = *p++ });
+				if (!item)
+					goto fail;
+				if (req_on_self)
+					item->mode.on_self = req->level;
+				if (req_on_exec)
+					item->mode.on_exec = req->level;
+			}
+			break;
+		}
+		case CURTAINTYP_SOCKOPT: {
+			int (*p)[2] = req->data;
+			size_t c = req->size / sizeof *p;
+			while (c--) {
+				struct curtain_item *item;
+				item = curtain_search(ct, req->type,
+				    (union curtain_key){ .sockopt = { (*p)[0], (*p)[1] } });
+				p++;
 				if (!item)
 					goto fail;
 				if (req_on_self)

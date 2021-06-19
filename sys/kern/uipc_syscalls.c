@@ -148,7 +148,7 @@ kern_socket(struct thread *td, int domain, int type, int protocol)
 	}
 
 #ifdef SYSFIL
-	error = sysfil_require_af(td, domain);
+	error = sysfil_require_sockaf(td, domain);
 	if (error)
 		return (error);
 #endif
@@ -691,7 +691,7 @@ sendit(struct thread *td, int s, struct msghdr *mp, int flags)
 			to = NULL;
 			goto bad;
 		}
-		error = sysfil_require_af(td, to->sa_family);
+		error = sysfil_require_sockaf(td, to->sa_family);
 		if (error)
 			goto bad;
 		mp->msg_name = to;

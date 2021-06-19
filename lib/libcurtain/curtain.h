@@ -42,10 +42,16 @@ int curtain_default(struct curtain_slot *slot, unsigned flags);
 int curtain_sysfil(struct curtain_slot *, int sysfil, int flags);
 int curtain_ioctl(struct curtain_slot *, unsigned long ioctl, int flags);
 int curtain_ioctls(struct curtain_slot *, const unsigned long *ioctls, int flags);
+int curtain_sockaf(struct curtain_slot *, int af, int flags);
+int curtain_socklvl(struct curtain_slot *, int level, int flags);
+int curtain_sockopt(struct curtain_slot *, int level, int optname, int flags);
+int curtain_sockopts(struct curtain_slot *, const int (*sockopts)[2], int flags);
 int curtain_unveil(struct curtain_slot *,
     const char *path, unsigned flags, unveil_perms uperms);
 int curtain_unveils_limit(struct curtain_slot *, unveil_perms uperms);
 
 extern const unsigned long curtain_ioctls_tty_basic[];
+extern const int curtain_sockopts_basic[][2];
+extern const int curtain_sockopts_inet[][2];
 
 #endif

@@ -24,5 +24,5 @@ const unsigned long curtain_ioctls_tty_basic[] = {
 	TIOCFLUSH,
 	TIOCGWINSZ,
 	TIOCSWINSZ,
-	0
+	-1
 };

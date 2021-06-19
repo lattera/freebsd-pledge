@@ -2,10 +2,13 @@
 #define	_SYS_CURTAIN_H_
 
 enum curtain_type {
-	CURTAINTYP_DEFAULT = 0,
-	CURTAINTYP_SYSFIL = 1,
-	CURTAINTYP_UNVEIL = 2,
-	CURTAINTYP_IOCTL = 3,
+	CURTAINTYP_DEFAULT = 1,
+	CURTAINTYP_SYSFIL = 2,
+	CURTAINTYP_UNVEIL = 3,
+	CURTAINTYP_IOCTL = 4,
+	CURTAINTYP_SOCKAF = 5,
+	CURTAINTYP_SOCKLVL = 6,
+	CURTAINTYP_SOCKOPT = 7,
 };
 
 enum curtain_level {
@@ -29,7 +32,7 @@ struct curtainreq {
 int curtainctl(int flags, size_t reqc, struct curtainreq *reqv);
 
 #define	CURTAINCTL_VERSION_MASK	(0xff << 24)
-#define	CURTAINCTL_VERSION	(2 << 24)
+#define	CURTAINCTL_VERSION	(3 << 24)
 
 #define	CURTAINCTL_ENGAGE	(1 <<  0 | CURTAINCTL_VERSION)
 #define	CURTAINCTL_REQUIRE	(1 <<  1 | CURTAINCTL_VERSION)
@@ -67,10 +70,12 @@ struct curtain_item {
 		 * padding due to alignment requirements).
 		 */
 		unsigned int ioctl;
-#if 0
+		int sockaf;
+		int socklvl;
 		struct {
 			int level, optname;
 		} sockopt;
+#if 0
 		struct {
 			int parent_mib, child_mib;
 		} sysctl;
@@ -155,7 +160,7 @@ sysfil_failed(struct thread *td, int sf)
 
 int sysfil_require_vm_prot(struct thread *, vm_prot_t prot, bool loose);
 int sysfil_require_ioctl(struct thread *, u_long com);
-int sysfil_require_af(struct thread *, int af);
+int sysfil_require_sockaf(struct thread *, int af);
 int sysfil_require_sockopt(struct thread *, int level, int name);
 
 int sysfil_priv_check(struct ucred *, int priv);

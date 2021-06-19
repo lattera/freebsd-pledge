@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <sys/stat.h>
+#include <sys/param.h>
 #include <atf-c.h>
 #include <err.h>
 #include <pledge.h>
@@ -63,6 +64,38 @@ ATF_TC_BODY(socketpair_allow, tc)
 	ATF_REQUIRE(socketpair(AF_LOCAL, SOCK_STREAM, 0, fds) >= 0);
 	ATF_CHECK(close(fds[0]) >= 0);
 	ATF_CHECK(close(fds[1]) >= 0);
+}
+
+static const int basic_optnames[] = {
+	SO_ERROR,
+	SO_DOMAIN,
+	SO_TYPE,
+	SO_PROTOCOL,
+	SO_PROTOTYPE,
+};
+
+ATF_TC_WITHOUT_HEAD(basic_sockopts_allow);
+ATF_TC_BODY(basic_sockopts_allow, tc)
+{
+	int fd, val;
+	ATF_REQUIRE((fd = socket(AF_LOCAL, SOCK_STREAM, 0)) >= 0);
+	ATF_REQUIRE(pledge("stdio inet", "") >= 0);
+	for (size_t i = 0; i < nitems(basic_optnames); i++) {
+		socklen_t len = sizeof val;
+		ATF_CHECK(getsockopt(fd, SOL_SOCKET, basic_optnames[i], &val, &len) >= 0);
+	}
+}
+
+ATF_TC_WITHOUT_HEAD(basic_sockopts_deny);
+ATF_TC_BODY(basic_sockopts_deny, tc)
+{
+	int fd, val;
+	ATF_REQUIRE((fd = socket(AF_LOCAL, SOCK_STREAM, 0)) >= 0);
+	ATF_REQUIRE(pledge("error stdio", "") >= 0);
+	for (size_t i = 0; i < nitems(basic_optnames); i++) {
+		socklen_t len = sizeof val;
+		ATF_CHECK_ERRNO(EPERM, getsockopt(fd, SOL_SOCKET, basic_optnames[i], &val, &len) < 0);
+	}
 }
 
 
@@ -253,6 +286,8 @@ ATF_TP_ADD_TCS(tp)
 	ATF_TP_ADD_TC(tp, socket_af_inet_allow);
 	ATF_TP_ADD_TC(tp, socket_af_inet_deny);
 	ATF_TP_ADD_TC(tp, socketpair_allow);
+	ATF_TP_ADD_TC(tp, basic_sockopts_allow);
+	ATF_TP_ADD_TC(tp, basic_sockopts_deny);
 	ATF_TP_ADD_TC(tp, pass_fd_same_proc);
 	ATF_TP_ADD_TC(tp, pass_fd_both_allow);
 	ATF_TP_ADD_TC(tp, pass_fd_send_deny);
