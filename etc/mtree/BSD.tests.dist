@@ -732,6 +732,8 @@
                 ..
             ..
         ..
+        curtain
+        ..
         devrandom
         ..
         dtrace
@@ -855,8 +857,6 @@
             ..
             utimensat
             ..
-        ..
-        pledge
         ..
         posixshm
         ..

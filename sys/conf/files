@@ -3804,6 +3804,7 @@ kern/kern_cons.c		standard
 kern/kern_cpu.c			standard
 kern/kern_cpuset.c		standard
 kern/kern_context.c		standard
+kern/kern_curtain.c		standard
 kern/kern_descrip.c		standard
 kern/kern_dtrace.c		optional kdtrace_hooks
 kern/kern_dump.c		standard
@@ -3939,7 +3940,6 @@ kern/subr_smp.c			standard
 kern/subr_smr.c			standard
 kern/subr_stack.c		optional ddb | stack | ktr
 kern/subr_stats.c		optional stats
-kern/kern_sysfil.c		standard
 kern/subr_taskqueue.c		standard
 kern/subr_terminal.c		optional vt
 kern/subr_trap.c		standard
