@@ -55,6 +55,7 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
 #include <sys/capsicum.h>
+#include <sys/curtain.h>
 #include <sys/conf.h>
 #include <sys/fcntl.h>
 #include <sys/file.h>
@@ -88,7 +89,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/vnode.h>
 #include <sys/unistd.h>
 #include <sys/user.h>
-#include <sys/curtain.h>
 
 #include <security/audit/audit.h>
 #include <security/mac/mac_framework.h>
@@ -594,16 +594,29 @@ shm_copyin_path(struct thread *td, const char *userpath_in, char **path_out) {
 	int error;
 	char *path;
 	const char *pr_path;
-	size_t pr_pathlen;
+	size_t prefix, n;
 
 	path = malloc(MAXPATHLEN, M_SHMFD, M_WAITOK);
 	pr_path = td->td_ucred->cr_prison->pr_path;
 
 	/* Construct a full pathname for jailed callers. */
-	pr_pathlen = strcmp(pr_path, "/") ==
-	    0 ? 0 : strlcpy(path, pr_path, MAXPATHLEN);
-	error = copyinstr(userpath_in, path + pr_pathlen,
-	    MAXPATHLEN - pr_pathlen, NULL);
+	prefix = 0;
+	error = ENAMETOOLONG;
+	if (strcmp(pr_path, "/") != 0) {
+		n = strlcpy(path + prefix, pr_path, MAXPATHLEN - prefix);
+		if (n >= MAXPATHLEN - prefix)
+			goto out;
+		prefix += n;
+	}
+	if (sysfil_check(td, SYSFIL_NOTMPIPC) != 0) {
+		n = strlcpy(path + prefix, "/tmp", MAXPATHLEN - prefix);
+		if (n >= MAXPATHLEN - prefix)
+			goto out;
+		prefix += n;
+	}
+
+	error = copyinstr(userpath_in, path + prefix,
+	    MAXPATHLEN - prefix, NULL);
 	if (error != 0)
 		goto out;
 
@@ -613,7 +626,7 @@ shm_copyin_path(struct thread *td, const char *userpath_in, char **path_out) {
 #endif
 
 	/* Require paths to start with a '/' character. */
-	if (path[pr_pathlen] != '/') {
+	if (path[prefix] != '/') {
 		error = EINVAL;
 		goto out;
 	}

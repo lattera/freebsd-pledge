@@ -15,24 +15,16 @@
 #endif
 
 /*
- * SYSFIL_DEFAULT is a generic category for miscellaneous operations that must
- * be restricted.  It will be lost after the first pledge().  It must be zero
- * for certain structures to correctly initialize with its value (such as
- * struct fileops/cdevsw).
+ * The first 3 sysfils cannot be directly controlled by the user.  Following a
+ * (successful) curtainctl() call to restrict the process, SYSFIL_DEFAULT is
+ * always disabled, SYSFIL_UNCAPSICUM is always unaffected and SYSFIL_ALWAYS is
+ * always left enabled.
  */
+/* Fallback for miscellaneous operations that must be restricted. */
 #define	SYSFIL_DEFAULT		0
-/*
- * SYSFIL_UNCAPSICUM represents the state of not being in Capsicum capability
- * mode.  It will be lost after entering capability mode (and like any other
- * sysfil, it cannot be regained).  Its index is also defined in
- * <sys/_sysfil.h> (to avoid having to include all of the sysfil stuff to test
- * for capability mode).
- */
+/* Represents the state of NOT being in Capsicum capability mode. */
 #define	SYSFIL_UNCAPSICUM	1
-/*
- * SYSFIL_ALWAYS is for various operations that should always be allowed.  It
- * should never be lost.
- */
+/* Various operations that should always be allowed. */
 #define	SYSFIL_ALWAYS		2
 
 #define	SYSFIL_STDIO		3
@@ -67,7 +59,7 @@
 #define	SYSFIL_SCHED		32
 #define	SYSFIL__UNUSED0		33
 #define	SYSFIL_PS		34
-#define	SYSFIL__UNUSED1		35
+#define	SYSFIL_NOTMPIPC		35
 #define	SYSFIL_INET_RAW		36
 #define	SYSFIL_UNIX		37
 #define	SYSFIL_MCAST		38
