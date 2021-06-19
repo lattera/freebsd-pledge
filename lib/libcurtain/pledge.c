@@ -164,7 +164,7 @@ static const struct promise_name {
 };
 
 static const struct promise_sysfil {
-	enum promise_type type;
+	enum promise_type promise;
 	int sysfil;
 } sysfils_table[] = {
 	{ PROMISE_BASIC,		SYSFIL_STDIO },
@@ -249,14 +249,14 @@ static const struct promise_sysfil {
 };
 
 static const struct promise_ioctl {
-	enum promise_type type;
+	enum promise_type promise;
 	const unsigned long *ioctls;
 } ioctls_table[] = {
 	{ PROMISE_TTY, curtain_ioctls_tty_basic },
 };
 
 static const struct promise_sockaf {
-	enum promise_type type;
+	enum promise_type promise;
 	int af;
 } sockafs_table[] = {
 	{ PROMISE_UNIX, AF_UNIX },
@@ -269,7 +269,7 @@ static const struct promise_sockaf {
 };
 
 static const struct promise_sockopt {
-	enum promise_type type;
+	enum promise_type promise;
 	const int (*sockopts)[2];
 } sockopts_table[] = {
 	{ PROMISE_STDIO, curtain_sockopts_basic },
@@ -286,7 +286,7 @@ static const char *const tmp_path = _PATH_TMP;
 static const struct promise_unveil {
 	const char *path;
 	unveil_perms uperms;
-	enum promise_type type;
+	enum promise_type promise;
 } unveils_table[] = {
 #define	N UPERM_NONE
 #define	R UPERM_READ
@@ -346,7 +346,7 @@ static bool has_pledges_on[CURTAIN_ON_COUNT];
 static bool has_customs_on[CURTAIN_ON_COUNT];
 static struct curtain_slot *always_slot;
 static struct curtain_slot *root_slot_on[CURTAIN_ON_COUNT];
-static struct curtain_slot *promise_sysfil_slots[PROMISE_COUNT];
+static struct curtain_slot *promise_slots[PROMISE_COUNT];
 static struct curtain_slot *promise_unveil_slots[PROMISE_COUNT];
 static struct curtain_slot *custom_slot_on[CURTAIN_ON_COUNT];
 
@@ -422,15 +422,10 @@ sysfils_for_uperms(struct curtain_slot *slot, unveil_perms uperms)
 
 static void
 do_promises_slots(enum curtain_on on,
-    const enum curtain_state sysfil_promises[],
+    const enum curtain_state promises[],
     const enum curtain_state unveil_promises[])
 {
-	bool fill_sysfils[PROMISE_COUNT], fill_unveils[PROMISE_COUNT];
-	const struct promise_unveil *pu;
-	const struct promise_sysfil *ps;
-	const struct promise_ioctl *pi;
-	const struct promise_sockaf *pa;
-	const struct promise_sockopt *po;
+	bool fill[PROMISE_COUNT], fill_unveils[PROMISE_COUNT];
 	bool tainted;
 
 	/*
@@ -441,13 +436,13 @@ do_promises_slots(enum curtain_on on,
 
 	for (enum promise_type promise = 0; promise < PROMISE_COUNT; promise++) {
 		enum curtain_state state;
-		if ((state = sysfil_promises[promise]) >= CURTAIN_RESERVED) {
-			if ((fill_sysfils[promise] = !promise_sysfil_slots[promise]))
-				promise_sysfil_slots[promise] = curtain_slot_neutral();
+		if ((state = promises[promise]) >= CURTAIN_RESERVED) {
+			if ((fill[promise] = !promise_slots[promise]))
+				promise_slots[promise] = curtain_slot_neutral();
 		} else
-			fill_sysfils[promise] = false;
-		if (promise_sysfil_slots[promise])
-			curtain_state(promise_sysfil_slots[promise], on, state);
+			fill[promise] = false;
+		if (promise_slots[promise])
+			curtain_state(promise_slots[promise], on, state);
 
 		if ((state = unveil_promises[promise]) >= CURTAIN_RESERVED) {
 			if ((fill_unveils[promise] = !promise_unveil_slots[promise]))
@@ -458,40 +453,43 @@ do_promises_slots(enum curtain_on on,
 			curtain_state(promise_unveil_slots[promise], on, state);
 	}
 
+#define	FOREACH_ARRAY(ent, tab) \
+	for (__typeof(&(tab)[0]) (ent) = (tab); (ent) < &(tab)[nitems(tab)]; (ent)++)
+
 	tainted = issetugid() != 0;
-	for (pu = unveils_table; pu != &unveils_table[nitems(unveils_table)]; pu++) {
-		if (fill_unveils[pu->type]) {
-			const char *path = pu->path;
+	FOREACH_ARRAY(e, unveils_table) {
+		if (fill_unveils[e->promise]) {
+			const char *path = e->path;
 			if (!tainted && path == tmp_path) {
 				char *tmpdir;
 				if ((tmpdir = getenv("TMPDIR")))
 					path = tmpdir;
 			}
-			curtain_unveil(promise_unveil_slots[pu->type], path,
-			    CURTAIN_UNVEIL_INHERIT, pu->uperms);
+			curtain_unveil(promise_unveil_slots[e->promise], path,
+			    CURTAIN_UNVEIL_INHERIT, e->uperms);
 		}
-		if (fill_sysfils[pu->type])
-			sysfils_for_uperms(promise_sysfil_slots[pu->type], pu->uperms);
+		if (fill[e->promise])
+			sysfils_for_uperms(promise_slots[e->promise], e->uperms);
 	}
 
-	for (ps = sysfils_table; ps != &sysfils_table[nitems(sysfils_table)]; ps++)
-		if (fill_sysfils[ps->type])
-			curtain_sysfil(promise_sysfil_slots[ps->type], ps->sysfil, 0);
+	FOREACH_ARRAY(e, sysfils_table)
+		if (fill[e->promise])
+			curtain_sysfil(promise_slots[e->promise], e->sysfil, 0);
 
-	for (pi = ioctls_table; pi != &ioctls_table[nitems(ioctls_table)]; pi++)
-		if (fill_sysfils[pi->type])
-			curtain_ioctls(promise_sysfil_slots[pi->type], pi->ioctls, 0);
+	FOREACH_ARRAY(e, ioctls_table)
+		if (fill[e->promise])
+			curtain_ioctls(promise_slots[e->promise], e->ioctls, 0);
 
-	for (pa = sockafs_table; pa != &sockafs_table[nitems(sockafs_table)]; pa++)
-		if (fill_sysfils[pa->type])
-			curtain_sockaf(promise_sysfil_slots[pa->type], pa->af, 0);
+	FOREACH_ARRAY(e, sockafs_table)
+		if (fill[e->promise])
+			curtain_sockaf(promise_slots[e->promise], e->af, 0);
 
-	for (po = sockopts_table; po != &sockopts_table[nitems(sockopts_table)]; po++)
-		if (fill_sysfils[po->type])
-			curtain_sockopts(promise_sysfil_slots[po->type], po->sockopts, 0);
+	FOREACH_ARRAY(e, sockopts_table)
+		if (fill[e->promise])
+			curtain_sockopts(promise_slots[e->promise], e->sockopts, 0);
 
-	if (fill_sysfils[PROMISE_ERROR])
-		curtain_default(promise_sysfil_slots[PROMISE_ERROR], CURTAIN_DENY);
+	if (fill[PROMISE_ERROR])
+		curtain_default(promise_slots[PROMISE_ERROR], CURTAIN_DENY);
 
 	if (!always_slot) {
 		always_slot = curtain_slot_neutral();
@@ -594,17 +592,17 @@ do_unveil_init_on(enum curtain_on on)
 		custom_slot_on[on] = curtain_slot_neutral();
 	curtain_enable(custom_slot_on[on], on);
 	if (!has_pledges_on[on] && !has_customs_on[on]) {
-		enum curtain_state sysfil_promises[PROMISE_COUNT],
+		enum curtain_state promises[PROMISE_COUNT],
 		                   unveil_promises[PROMISE_COUNT];
 		/*
 		 * unveil() was called before pledge().  Enable sysfils for all
 		 * promises and reserve their unveils.
 		 */
 		for (enum promise_type i = 0; i < PROMISE_COUNT; i++) {
-			sysfil_promises[i] = CURTAIN_ENABLED;
+			promises[i] = CURTAIN_ENABLED;
 			unveil_promises[i] = CURTAIN_RESERVED;
 		}
-		do_promises_slots(on, sysfil_promises, unveil_promises);
+		do_promises_slots(on, promises, unveil_promises);
 	}
 	if (root_slot_on[on])
 		curtain_disable(root_slot_on[on], on);
