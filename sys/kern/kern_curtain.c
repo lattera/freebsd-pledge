@@ -382,7 +382,8 @@ curtain_dup_compact(const struct curtain *src)
 	for (si = src->ct_slots; si < &src->ct_slots[src->ct_nslots]; si++)
 		if (si->type != 0) {
 			di = curtain_search(dst, si->type, si->key);
-			di->mode = si->mode;
+			if (di)
+				di->mode = si->mode;
 		}
 #ifdef INVARIANTS
 	for (si = src->ct_slots; si < &src->ct_slots[src->ct_nslots]; si++)
@@ -395,13 +396,13 @@ curtain_dup_compact(const struct curtain *src)
 	return (dst);
 }
 
-static struct curtain *
-curtain_compact(struct curtain *src)
+static void
+curtain_compact(struct curtain **old)
 {
-	struct curtain *dst;
-	dst = curtain_dup_compact(src);
-	curtain_free(src);
-	return (dst);
+	struct curtain *new;
+	new = curtain_dup_compact(*old);
+	curtain_free(*old);
+	*old = new;
 }
 
 static int
@@ -960,7 +961,8 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 		PROC_UNLOCK(p);
 		if (cr->cr_curtain)
 			curtain_free(cr->cr_curtain);
-		cr->cr_curtain = ct = curtain_compact(ct);
+		curtain_compact(&ct);
+		cr->cr_curtain = ct;
 		PROC_LOCK(p);
 		if (old_cr == p->p_ucred) {
 			crfree(old_cr);
