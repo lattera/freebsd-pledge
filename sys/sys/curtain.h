@@ -9,6 +9,7 @@ enum curtain_type {
 	CURTAINTYP_SOCKAF = 5,
 	CURTAINTYP_SOCKLVL = 6,
 	CURTAINTYP_SOCKOPT = 7,
+	CURTAINTYP_PRIV = 8,
 };
 
 enum curtain_level {
@@ -76,6 +77,7 @@ struct curtain_item {
 		struct {
 			int level, optname;
 		} sockopt;
+		int priv;
 #if 0
 		struct {
 			int parent_mib, child_mib;

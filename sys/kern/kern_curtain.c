@@ -258,6 +258,8 @@ curtain_key_hash(enum curtain_type type, union curtain_key key)
 		return ((unsigned)key.socklvl);
 	case CURTAINTYP_SOCKOPT:
 		return ((unsigned)(key.sockopt.level ^ key.sockopt.optname));
+	case CURTAINTYP_PRIV:
+		return ((unsigned)key.priv);
 	}
 	MPASS(0);
 	return (-1);
@@ -279,6 +281,8 @@ curtain_key_same(enum curtain_type type,
 	case CURTAINTYP_SOCKOPT:
 		return (key0.sockopt.level == key1.sockopt.level &&
 		        key0.sockopt.optname == key1.sockopt.optname);
+	case CURTAINTYP_PRIV:
+		return (key0.priv == key1.priv);
 	}
 	MPASS(0);
 	return (false);
@@ -428,23 +432,25 @@ sysfil_for_type(enum curtain_type type)
 		return (SYSFIL_ANY_SOCKOPT);
 	case CURTAINTYP_SOCKOPT:
 		return (SYSFIL_ANY_SOCKOPT);
+	case CURTAINTYP_PRIV:
+		return (SYSFIL_ANY_PRIV);
 	}
 	MPASS(0);
 	return (SYSFIL_DEFAULT);
 }
 
 static int
-curtain_check_key(struct thread *td, enum curtain_type type, union curtain_key key)
+curtain_check_cred(const struct ucred *cr, enum curtain_type type, union curtain_key key)
 {
-	/* TODO: handle level */
 	const struct curtain *ct;
-	if ((ct = td->td_ucred->cr_curtain)) {
-		struct curtain_item *item;
+	/* TODO: handle level */
+	if ((ct = cr->cr_curtain)) {
+		const struct curtain_item *item;
 		item = curtain_lookup(ct, type, key);
 		if (item && item->mode.on_self == CURTAINLVL_PASS)
 			return (0);
 	}
-	return (sysfil_check(td, sysfil_for_type(type)));
+	return (sysfil_check_cred(cr, sysfil_for_type(type)));
 }
 
 static void
@@ -656,6 +662,22 @@ curtain_build(int flags, size_t reqc, const struct curtainreq *reqv)
 			}
 			break;
 		}
+		case CURTAINTYP_PRIV: {
+			int *p = req->data;
+			size_t c = req->size / sizeof *p;
+			while (c--) {
+				struct curtain_item *item;
+				item = curtain_search(ct, req->type,
+				    (union curtain_key){ .priv = *p++ });
+				if (!item)
+					goto fail;
+				if (req_on_self)
+					item->mode.on_self = req->level;
+				if (req_on_exec)
+					item->mode.on_exec = req->level;
+			}
+			break;
+		}
 		default:
 			goto fail;
 		}
@@ -709,7 +731,7 @@ sysfil_require_ioctl(struct thread *td, u_long com)
 {
 	int sf;
 #ifdef SYSFIL
-	if (curtain_check_key(td, CURTAINTYP_IOCTL,
+	if (curtain_check_cred(td->td_ucred, CURTAINTYP_IOCTL,
 	    (union curtain_key){ .ioctl = com }) == 0)
 		return (0);
 #endif
@@ -745,7 +767,7 @@ int
 sysfil_require_sockaf(struct thread *td, int af)
 {
 #ifdef SYSFIL
-	if (curtain_check_key(td, CURTAINTYP_SOCKAF,
+	if (curtain_check_cred(td->td_ucred, CURTAINTYP_SOCKAF,
 	    (union curtain_key){ .sockaf = af }) == 0)
 		return (0);
 #endif
@@ -756,10 +778,10 @@ int
 sysfil_require_sockopt(struct thread *td, int level, int name)
 {
 #ifdef SYSFIL
-	if (curtain_check_key(td, CURTAINTYP_SOCKOPT,
+	if (curtain_check_cred(td->td_ucred, CURTAINTYP_SOCKOPT,
 	    (union curtain_key){ .sockopt = { level, name } }) == 0)
 		return (0);
-	if (curtain_check_key(td, CURTAINTYP_SOCKLVL,
+	if (curtain_check_cred(td->td_ucred, CURTAINTYP_SOCKLVL,
 	    (union curtain_key){ .socklvl = level }) == 0)
 		return (0);
 #endif
@@ -770,6 +792,9 @@ int
 sysfil_priv_check(struct ucred *cr, int priv)
 {
 #ifdef SYSFIL
+	if (curtain_check_cred(cr, CURTAINTYP_PRIV,
+	    (union curtain_key){ .priv = priv }) == 0)
+		return (0);
 	/*
 	 * Mostly a subset of what's being allowed for jails (see
 	 * prison_priv_check()) with some extra conditions based on sysfils.

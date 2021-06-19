@@ -41,6 +41,7 @@ struct simple_node {
 		int sockaf;
 		int socklvl;
 		int sockopt[2];
+		int priv;
 	} key;
 };
 
@@ -442,6 +443,39 @@ curtain_sockopts(struct curtain_slot *slot, const int (*sockopts)[2], int flags)
 }
 
 
+static int
+cmp_priv(const union simple_key *key0, const union simple_key *key1)
+{
+	return (key0->priv - key1->priv);
+}
+
+static void
+fill_priv(void **dest, struct simple_node *node)
+{
+	int *fill = *dest;
+	*fill++ = node->key.priv;
+	*dest = fill;
+}
+
+static struct simple_type privs_type = {
+	.type = CURTAINTYP_PRIV,
+	.ent_size = sizeof (int),
+	.cmp = cmp_priv,
+	.fill = fill_priv,
+};
+
+int
+curtain_priv(struct curtain_slot *slot, int priv, int flags)
+{
+	struct simple_mode *mode;
+	mode = get_simple(&privs_type, slot, (union simple_key){ .priv = priv });
+	if (!mode)
+		return (-1);
+	mode->level = flags2level(flags);
+	return (0);
+}
+
+
 static size_t unveils_count = 0;
 static struct unveil_node **unveils_table = NULL;
 static size_t unveils_table_size = 0;
@@ -720,6 +754,7 @@ curtain_submit_1(int flags, enum curtain_state min_state)
 		&sockafs_type,
 		&socklvls_type,
 		&sockopts_type,
+		&privs_type,
 	};
 	struct curtainreq reqv[1 + 2 * CURTAIN_ON_COUNT + nitems(simple_types) * CURTAIN_ON_COUNT * CURTAIN_LEVEL_COUNT], *reqp = reqv;
 	enum curtain_level levels_on[CURTAIN_ON_COUNT];

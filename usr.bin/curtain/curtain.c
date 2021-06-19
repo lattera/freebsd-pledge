@@ -27,6 +27,7 @@
 #include <netinet/tcp.h>
 
 #include "sysfiltab.h"
+#include "privtab.h"
 #include "pathexp.h"
 
 struct config {
@@ -192,13 +193,31 @@ parse_directive(struct parser *par, char *p)
 					return (parse_error(par, "unknown sysfil"));
 			}
 		}
-		return (0);
+
+	} else if (strmemcmp("priv", dir, dir_end - dir) == 0) {
+		while (*(p = skip_spaces(p))) {
+			char *w;
+			const struct privent *e;
+			p = skip_word((w = p), "");
+			if (w == p)
+				break;
+			for (e = privtab; e->name; e++)
+				if (strmemcmp(e->name, w, p - w) == 0)
+					break;
+			if (par->apply && (!unsafe || par->cfg->allow_unsafe)) {
+				if (e->name)
+					curtain_priv(par->slot, e->priv, 0);
+				else
+					return (parse_error(par, "unknown privilege"));
+			}
+		}
 
 	} else
 		return (parse_error(par, "unknown directive"));
 
 	if (*(p = skip_spaces(p)))
 		return (parse_error(par, "unexpected characters at end of line"));
+	return (0);
 }
 
 static int

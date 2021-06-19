@@ -46,6 +46,7 @@ int curtain_sockaf(struct curtain_slot *, int af, int flags);
 int curtain_socklvl(struct curtain_slot *, int level, int flags);
 int curtain_sockopt(struct curtain_slot *, int level, int optname, int flags);
 int curtain_sockopts(struct curtain_slot *, const int (*sockopts)[2], int flags);
+int curtain_priv(struct curtain_slot *, int priv, int flags);
 int curtain_unveil(struct curtain_slot *,
     const char *path, unsigned flags, unveil_perms uperms);
 int curtain_unveils_limit(struct curtain_slot *, unveil_perms uperms);

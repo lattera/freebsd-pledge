@@ -17,10 +17,13 @@ BASECONF=	curtain.conf
 GUICONFDIR=	/etc/curtain.d/@gui
 GUICONF=	fontconfig.conf
 
-CLEANFILES+=	sysfiltab.c
-SRCS+=sysfiltab.c
+CLEANFILES+=	sysfiltab.c privtab.c
+SRCS+=sysfiltab.c privtab.c
 SYSFIL_H=${SYSROOT:U${DESTDIR}}${INCLUDEDIR}/sys/sysfil.h
+PRIV_H=${SYSROOT:U${DESTDIR}}${INCLUDEDIR}/sys/priv.h
 sysfiltab.c: mksysfiltab.awk ${SYSFIL_H}
 	awk -f ${.CURDIR}/mksysfiltab.awk < ${SYSFIL_H} > ${.TARGET}
+privtab.c: mkprivtab.awk ${PRIV_H}
+	awk -f ${.CURDIR}/mkprivtab.awk < ${PRIV_H} > ${.TARGET}
 
 .include <bsd.prog.mk>
