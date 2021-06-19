@@ -66,9 +66,10 @@ enum promise_type {
 	PROMISE_SYSFLAGS,
 	PROMISE_SENDFILE,
 	PROMISE_NET,
+	PROMISE_UNIX,
 	PROMISE_INET,
 	PROMISE_INET_RAW,
-	PROMISE_UNIX,
+	PROMISE_MCAST,
 	PROMISE_SETFIB,
 	PROMISE_ROUTE,
 	PROMISE_RECVFD,
@@ -140,9 +141,10 @@ static const struct promise_name {
 	[PROMISE_CHMOD_SPECIAL] =	{ "chmod_special" },
 	[PROMISE_SYSFLAGS] =		{ "sysflags" },
 	[PROMISE_SENDFILE] =		{ "sendfile" },
+	[PROMISE_UNIX] =		{ "unix" },
 	[PROMISE_INET] =		{ "inet" },
 	[PROMISE_INET_RAW] =		{ "inet_raw" },
-	[PROMISE_UNIX] =		{ "unix" },
+	[PROMISE_MCAST] =		{ "mcast" },
 	[PROMISE_SETFIB] =		{ "setfib" },
 	[PROMISE_ROUTE] =		{ "route" },
 	[PROMISE_RECVFD] =		{ "recvfd" },
@@ -167,6 +169,7 @@ static const struct promise_name {
 
 static const enum promise_type depends_table[][2] = {
 	{ PROMISE_DNS, PROMISE_INET },
+	{ PROMISE_DNS, PROMISE_ROUTE }, /* XXX */
 	{ PROMISE_INET, PROMISE_NET },
 	{ PROMISE_UNIX, PROMISE_NET },
 };
@@ -230,15 +233,14 @@ static const struct promise_sysfil {
 	{ PROMISE_CHMOD_SPECIAL,	SYSFIL_CHMOD_SPECIAL },
 	{ PROMISE_SYSFLAGS,		SYSFIL_SYSFLAGS },
 	{ PROMISE_SENDFILE,		SYSFIL_SENDFILE },
+	{ PROMISE_UNIX,			SYSFIL_UNIX },
 	{ PROMISE_INET,			SYSFIL_NET },
 	{ PROMISE_INET_RAW,		SYSFIL_INET_RAW },
-	{ PROMISE_UNIX,			SYSFIL_UNIX },
+	{ PROMISE_MCAST,		SYSFIL_MCAST },
 	{ PROMISE_SETFIB,		SYSFIL_SETFIB },
 	{ PROMISE_ROUTE,		SYSFIL_ROUTE },
 	{ PROMISE_RECVFD,		SYSFIL_RECVFD },
 	{ PROMISE_SENDFD,		SYSFIL_SENDFD },
-	{ PROMISE_DNS,			SYSFIL_NET },
-	{ PROMISE_DNS,			SYSFIL_ROUTE }, /* XXX */
 	{ PROMISE_CRYPTODEV,		SYSFIL_CRYPTODEV },
 	{ PROMISE_MOUNT,		SYSFIL_MOUNT },
 	{ PROMISE_QUOTA,		SYSFIL_QUOTA },
@@ -261,6 +263,8 @@ static const struct promise_ioctl {
 	const unsigned long *ioctls;
 } ioctls_table[] = {
 	{ PROMISE_TTY, curtain_ioctls_tty_basic },
+	{ PROMISE_NET, curtain_ioctls_net_basic },
+	{ PROMISE_ROUTE, curtain_ioctls_net_route },
 };
 
 static const struct promise_sockaf {
@@ -312,9 +316,12 @@ static const struct promise_sockopt {
 	{ PROMISE_INET, IPPROTO_TCP, TCP_NODELAY },
 	{ PROMISE_INET, IPPROTO_TCP, TCP_MAXSEG },
 	{ PROMISE_INET, IPPROTO_TCP, TCP_NOPUSH },
-#if 0
+	{ PROMISE_INET, IPPROTO_TCP, TCP_KEEPINIT },
+	{ PROMISE_INET, IPPROTO_TCP, TCP_KEEPIDLE },
+	{ PROMISE_INET, IPPROTO_TCP, TCP_KEEPINTVL },
+	{ PROMISE_INET, IPPROTO_TCP, TCP_KEEPCNT },
+	{ PROMISE_INET, IPPROTO_TCP, TCP_INFO },
 	{ PROMISE_MCAST, SOL_SOCKET, SO_BROADCAST },
-#endif
 #endif
 	{ PROMISE_SETFIB, SOL_SOCKET, SO_SETFIB },
 	{ PROMISE_MAC, SOL_SOCKET, SO_LABEL },

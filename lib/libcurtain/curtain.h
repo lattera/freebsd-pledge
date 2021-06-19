@@ -51,5 +51,7 @@ int curtain_unveil(struct curtain_slot *,
 int curtain_unveils_limit(struct curtain_slot *, unveil_perms uperms);
 
 extern const unsigned long curtain_ioctls_tty_basic[];
+extern const unsigned long curtain_ioctls_net_basic[];
+extern const unsigned long curtain_ioctls_net_route[];
 
 #endif
