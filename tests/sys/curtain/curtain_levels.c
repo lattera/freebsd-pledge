@@ -63,11 +63,53 @@ ATF_TC_BODY(sysfil_level_kill, tc)
 	ATF_CHECK_ERRNO(EPERM, flock(fd, LOCK_EX) < 0);
 }
 
+
+ATF_TC_WITHOUT_HEAD(sysfil_raise_allow);
+ATF_TC_BODY(sysfil_raise_allow, tc)
+{
+	struct curtain_slot *slot0, *slot1;
+	int fd;
+	ATF_REQUIRE((fd = creat("test", 0666)) >= 0);
+	slot0 = curtain_slot();
+	slot1 = curtain_slot();
+	curtain_default(slot0, CURTAIN_DENY);
+	curtain_sysfil(slot0, SYSFIL_STDIO, CURTAIN_PASS);
+	curtain_state(slot1, CURTAIN_ON_SELF, CURTAIN_RESERVED);
+	curtain_sysfil(slot1, SYSFIL_FLOCK, CURTAIN_PASS);
+	ATF_REQUIRE(curtain_enforce() >= 0);
+	ATF_CHECK_ERRNO(EPERM, flock(fd, LOCK_EX) < 0);
+	curtain_state(slot1, CURTAIN_ON_SELF, CURTAIN_ENABLED);
+	ATF_REQUIRE(curtain_enforce() >= 0);
+	ATF_CHECK(flock(fd, LOCK_EX) >= 0);
+}
+
+ATF_TC_WITHOUT_HEAD(sysfil_raise_block);
+ATF_TC_BODY(sysfil_raise_block, tc)
+{
+	struct curtain_slot *slot0, *slot1;
+	int fd;
+	ATF_REQUIRE((fd = creat("test", 0666)) >= 0);
+	slot0 = curtain_slot();
+	slot1 = curtain_slot();
+	curtain_state(slot1, CURTAIN_ON_SELF, CURTAIN_DISABLED);
+	curtain_default(slot0, CURTAIN_DENY);
+	curtain_sysfil(slot0, SYSFIL_STDIO, CURTAIN_PASS);
+	curtain_sysfil(slot1, SYSFIL_FLOCK, CURTAIN_PASS);
+	ATF_REQUIRE(curtain_enforce() >= 0);
+	ATF_CHECK_ERRNO(EPERM, flock(fd, LOCK_EX) < 0);
+	curtain_state(slot1, CURTAIN_ON_SELF, CURTAIN_ENABLED);
+	ATF_REQUIRE(curtain_enforce() >= 0);
+	ATF_CHECK_ERRNO(EPERM, flock(fd, LOCK_EX) < 0);
+}
+
+
 ATF_TP_ADD_TCS(tp)
 {
 	ATF_TP_ADD_TC(tp, sysfil_level_pass);
 	ATF_TP_ADD_TC(tp, sysfil_level_deny);
 	ATF_TP_ADD_TC(tp, sysfil_level_trap);
 	ATF_TP_ADD_TC(tp, sysfil_level_kill);
+	ATF_TP_ADD_TC(tp, sysfil_raise_allow);
+	ATF_TP_ADD_TC(tp, sysfil_raise_block);
 	return (atf_no_error());
 }

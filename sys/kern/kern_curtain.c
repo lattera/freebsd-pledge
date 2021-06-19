@@ -18,17 +18,26 @@ __FBSDID("$FreeBSD$");
 #include <sys/signalvar.h>
 #include <sys/mman.h>
 #include <sys/counter.h>
+#include <sys/sdt.h>
 #include <sys/sysfil.h>
 #include <sys/unveil.h>
 #include <sys/curtain.h>
 
 #include <sys/filio.h>
 #include <sys/tty.h>
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <netinet/in.h>
 
 static MALLOC_DEFINE(M_CURTAIN, "curtain", "curtain restrictions");
+
+SDT_PROVIDER_DEFINE(curtain);
+SDT_PROBE_DEFINE3(curtain,, curtain_build, begin,
+    "int", "size_t", "const struct curtainreq *");
+SDT_PROBE_DEFINE1(curtain,, curtain_build, harden, "struct curtain *");
+SDT_PROBE_DEFINE1(curtain,, curtain_build, done, "struct curtain *");
+SDT_PROBE_DEFINE0(curtain,, curtain_build, failed);
+SDT_PROBE_DEFINE1(curtain,, do_curtainctl, limit, "struct curtain *");
+SDT_PROBE_DEFINE1(curtain,, do_curtainctl, compact, "struct curtain *");
+SDT_PROBE_DEFINE1(curtain,, do_curtainctl, assign, "struct curtain *");
+
 
 static bool __read_mostly sysfil_enabled = true;
 static unsigned __read_mostly sysfil_violation_log_level = 1;
@@ -211,8 +220,8 @@ mode_limit(struct curtain_mode *dst, const struct curtain_mode *src)
 {
 	dst->on_self_max = MAX(src->on_self_max, dst->on_self_max);
 	dst->on_exec_max = MAX(src->on_exec_max, dst->on_exec_max);
-	dst->on_self = MAX(MAX(src->on_self, dst->on_self), dst->on_self_max);
-	dst->on_exec = MAX(MAX(src->on_exec, dst->on_exec), dst->on_exec_max);
+	dst->on_self = MAX(dst->on_self, dst->on_self_max);
+	dst->on_exec = MAX(dst->on_exec, dst->on_exec_max);
 }
 
 static inline void
@@ -525,6 +534,8 @@ curtain_build(int flags, size_t reqc, const struct curtainreq *reqv)
 	enum curtain_level def_on_self, def_on_exec;
 	bool on_self, on_exec;
 
+	SDT_PROBE3(curtain,, curtain_build, begin, flags, reqc, reqv);
+
 	on_self = flags & CURTAINCTL_ON_SELF;
 	on_exec = flags & CURTAINCTL_ON_EXEC;
 
@@ -666,12 +677,16 @@ curtain_build(int flags, size_t reqc, const struct curtainreq *reqv)
 		            ct->ct_sysfils[SYSFIL_EXEC].on_exec),
 		        ct->ct_sysfils[SYSFIL_PROT_EXEC_LOOSE].on_exec);
 
-	if (flags & CURTAINCTL_ENFORCE)
+	if (flags & CURTAINCTL_ENFORCE) {
+		SDT_PROBE1(curtain,, curtain_build, harden, ct);
 		curtain_harden(ct);
+	}
 
+	SDT_PROBE1(curtain,, curtain_build, done, ct);
 	return (ct);
 
-fail:	curtain_free(ct);
+fail:	SDT_PROBE0(curtain,, curtain_build, failed);
+	curtain_free(ct);
 	return (NULL);
 }
 
@@ -959,9 +974,11 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 			curtain_limit_sysfils(ct, &cr->cr_sysfilset);
 		crhold(old_cr);
 		PROC_UNLOCK(p);
+		SDT_PROBE1(curtain,, do_curtainctl, limit, ct);
 		if (cr->cr_curtain)
 			curtain_free(cr->cr_curtain);
 		curtain_compact(&ct);
+		SDT_PROBE1(curtain,, do_curtainctl, compact, ct);
 		cr->cr_curtain = ct;
 		PROC_LOCK(p);
 		if (old_cr == p->p_ucred) {
@@ -979,9 +996,10 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 	}
 
 	if (flags & CURTAINCTL_ON_SELF) {
+		BIT_ZERO(SYSFILSET_BITS, &cr->cr_sysfilset);
 		for (int sf = 0; sf <= SYSFIL_LAST; sf++)
-			if (ct->ct_sysfils[sf].on_self != CURTAINLVL_PASS)
-				BIT_CLR(SYSFILSET_BITS, sf, &cr->cr_sysfilset);
+			if (ct->ct_sysfils[sf].on_self == CURTAINLVL_PASS)
+				BIT_SET(SYSFILSET_BITS, sf, &cr->cr_sysfilset);
 		MPASS(SYSFILSET_IS_RESTRICTED(&cr->cr_sysfilset));
 		MPASS(CRED_IN_RESTRICTED_MODE(cr));
 	}
@@ -994,6 +1012,7 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 	if (on_self && !PROC_IN_RESTRICTED_MODE(p))
 		panic("PROC_IN_RESTRICTED_MODE() bogus");
 	PROC_UNLOCK(p);
+	SDT_PROBE1(curtain,, do_curtainctl, assign, ct);
 
 #ifdef UNVEIL
 	for (req = reqv; req < &reqv[reqc]; req++) {
