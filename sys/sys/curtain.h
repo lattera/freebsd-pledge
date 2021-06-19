@@ -103,8 +103,6 @@ bool	curtain_cred_exec_restricted(const struct ucred *);
 void	curtain_cred_exec_switch(struct ucred *);
 void	curtain_cap_enter(struct thread *);
 
-int	curtain_check_key(struct thread *, enum curtain_type, union curtain_key);
-
 
 #define	SYSFIL_FAILED_ERRNO	EPERM
 
@@ -158,13 +156,6 @@ sysfil_failed(struct thread *td, int sf)
 	return (SYSFIL_FAILED_ERRNO);
 }
 
-int sysfil_require_vm_prot(struct thread *, vm_prot_t prot, bool loose);
-int sysfil_require_ioctl(struct thread *, u_long com);
-int sysfil_require_sockaf(struct thread *, int af);
-int sysfil_require_sockopt(struct thread *, int level, int name);
-
-int sysfil_priv_check(struct ucred *, int priv);
-
 static inline void
 sysfil_cred_init(struct ucred *cr)
 {
@@ -175,6 +166,13 @@ sysfil_cred_init(struct ucred *cr)
 }
 
 void sysfil_cred_rights(struct ucred *, cap_rights_t *);
+
+int sysfil_require_vm_prot(struct thread *, vm_prot_t prot, bool loose);
+int sysfil_require_ioctl(struct thread *, u_long com);
+int sysfil_require_sockaf(struct thread *, int af);
+int sysfil_require_sockopt(struct thread *, int level, int name);
+
+int sysfil_priv_check(struct ucred *, int priv);
 
 #endif
 

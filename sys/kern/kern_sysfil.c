@@ -64,234 +64,6 @@ STATNODE_COUNTER(probes, curtain_stats_probes, "");
 
 CTASSERT(CURTAIN_MAX_ITEMS <= (curtain_index)-1);
 
-int
-sysfil_require_vm_prot(struct thread *td, vm_prot_t prot, bool loose)
-{
-	if (prot & VM_PROT_EXECUTE)
-		return (sysfil_require(td, loose && !(prot & VM_PROT_WRITE) ?
-		    SYSFIL_PROT_EXEC_LOOSE : SYSFIL_PROT_EXEC));
-	return (0);
-}
-
-int
-sysfil_require_ioctl(struct thread *td, u_long com)
-{
-	int sf;
-#ifdef SYSFIL
-	if (curtain_check_key(td, CURTAINTYP_IOCTL,
-	    (union curtain_key){ .ioctl = com }) == 0)
-		return (0);
-#endif
-	switch (com) {
-	case FIOCLEX:
-	case FIONCLEX:
-	case FIONREAD:
-	case FIONWRITE:
-	case FIONSPACE:
-	case FIONBIO:
-	case FIOASYNC:
-	case FIOGETOWN:
-	case FIODTYPE:
-		/* always allowed ioctls */
-		sf = SYSFIL_ALWAYS;
-		break;
-	case TIOCGETA:
-		/* needed for isatty(3) */
-		sf = SYSFIL_STDIO;
-		break;
-	case FIOSETOWN:
-		/* also checked in setown() */
-		sf = SYSFIL_PROC;
-		break;
-	default:
-		sf = SYSFIL_ANY_IOCTL;
-		break;
-	}
-	return (sysfil_require(td, sf));
-}
-
-int
-sysfil_require_sockaf(struct thread *td, int af)
-{
-#ifdef SYSFIL
-	if (curtain_check_key(td, CURTAINTYP_SOCKAF,
-	    (union curtain_key){ .sockaf = af }) == 0)
-		return (0);
-#endif
-	return (sysfil_require(td, SYSFIL_ANY_SOCKAF));
-}
-
-int
-sysfil_require_sockopt(struct thread *td, int level, int name)
-{
-#ifdef SYSFIL
-	if (curtain_check_key(td, CURTAINTYP_SOCKOPT,
-	    (union curtain_key){ .sockopt = { level, name } }) == 0)
-		return (0);
-	if (curtain_check_key(td, CURTAINTYP_SOCKLVL,
-	    (union curtain_key){ .socklvl = level }) == 0)
-		return (0);
-#endif
-	return (sysfil_require(td, SYSFIL_ANY_SOCKOPT));
-}
-
-int
-sysfil_priv_check(struct ucred *cr, int priv)
-{
-#ifdef SYSFIL
-	/*
-	 * Mostly a subset of what's being allowed for jails (see
-	 * prison_priv_check()) with some extra conditions based on sysfils.
-	 * Some of those checks might be redundant with current syscall
-	 * filterings, but this might be hard to tell and including them here
-	 * anyway makes things a bit clearer.
-	 */
-	switch (priv) {
-	case PRIV_CRED_SETUID:
-	case PRIV_CRED_SETEUID:
-	case PRIV_CRED_SETGID:
-	case PRIV_CRED_SETEGID:
-	case PRIV_CRED_SETGROUPS:
-	case PRIV_CRED_SETREUID:
-	case PRIV_CRED_SETREGID:
-	case PRIV_CRED_SETRESUID:
-	case PRIV_CRED_SETRESGID:
-	case PRIV_PROC_SETLOGIN:
-	case PRIV_PROC_SETLOGINCLASS:
-		if (sysfil_check_cred(cr, SYSFIL_ID) == 0)
-			return (0);
-		break;
-	case PRIV_SEEOTHERGIDS:
-	case PRIV_SEEOTHERUIDS:
-		if (sysfil_check_cred(cr, SYSFIL_PS) == 0)
-			return (0);
-		break;
-	case PRIV_PROC_LIMIT:
-	case PRIV_PROC_SETRLIMIT:
-		if (sysfil_check_cred(cr, SYSFIL_RLIMIT) == 0)
-			return (0);
-		break;
-	case PRIV_JAIL_ATTACH:
-	case PRIV_JAIL_SET:
-	case PRIV_JAIL_REMOVE:
-		if (sysfil_check_cred(cr, SYSFIL_JAIL) == 0)
-			return (0);
-		break;
-	case PRIV_VFS_READ:
-	case PRIV_VFS_WRITE:
-	case PRIV_VFS_ADMIN:
-	case PRIV_VFS_EXEC:
-	case PRIV_VFS_LOOKUP:
-	case PRIV_VFS_BLOCKRESERVE:	/* XXXRW: Slightly surprising. */
-	case PRIV_VFS_CHFLAGS_DEV:
-	case PRIV_VFS_LINK:
-	case PRIV_VFS_STAT:
-	case PRIV_VFS_STICKYFILE:
-		/* Allowing to restrict this could be useful? */
-		return (0);
-	case PRIV_VFS_SYSFLAGS:
-		if (sysfil_check_cred(cr, SYSFIL_SYSFLAGS) == 0)
-			return (0);
-		break;
-	case PRIV_VFS_READ_DIR:
-		/* Let other policies handle this (like is done for jails). */
-		return (0);
-	case PRIV_VFS_CHOWN:
-	case PRIV_VFS_SETGID:
-	case PRIV_VFS_RETAINSUGID:
-		if (sysfil_check_cred(cr, SYSFIL_CHOWN) == 0)
-			return (0);
-		break;
-	case PRIV_VFS_CHROOT:
-	case PRIV_VFS_FCHROOT:
-		if (sysfil_check_cred(cr, SYSFIL_CHROOT) == 0)
-			return (0);
-		break;
-	case PRIV_VM_MLOCK:
-	case PRIV_VM_MUNLOCK:
-		if (sysfil_check_cred(cr, SYSFIL_MLOCK) == 0)
-			return (0);
-		break;
-	case PRIV_NETINET_RESERVEDPORT:
-#if 0
-	case PRIV_NETINET_REUSEPORT:
-	case PRIV_NETINET_SETHDROPTS:
-#endif
-		return (0);
-	case PRIV_NETINET_RAW:
-		if (sysfil_check_cred(cr, SYSFIL_INET_RAW) == 0)
-			return (0);
-		break;
-#if 0
-	case PRIV_NETINET_GETCRED:
-		return (0);
-#endif
-	case PRIV_ADJTIME:
-	case PRIV_NTP_ADJTIME:
-	case PRIV_CLOCK_SETTIME:
-		if (sysfil_check_cred(cr, SYSFIL_SETTIME) == 0)
-			return (0);
-		break;
-	case PRIV_VFS_GETFH:
-	case PRIV_VFS_FHOPEN:
-	case PRIV_VFS_FHSTAT:
-	case PRIV_VFS_FHSTATFS:
-	case PRIV_VFS_GENERATION:
-		if (sysfil_check_cred(cr, SYSFIL_FH) == 0)
-			return (0);
-		break;
-	case PRIV_NETINET_IPFW:
-	case PRIV_NETINET_DUMMYNET:
-	case PRIV_NETINET_PF:
-		if (sysfil_check_cred(cr, SYSFIL_PFIL) == 0)
-			return (0);
-		break;
-	}
-	return (sysfil_check_cred(cr, SYSFIL_ANY_PRIV));
-#else
-	return (0);
-#endif
-}
-
-#ifdef SYSFIL
-static void
-sysfil_log_violation(struct thread *td, int sf, bool signaled)
-{
-	struct proc *p = td->td_proc;
-	struct ucred *cr = td->td_ucred;
-	log(LOG_ERR, "pid %d (%s), jid %d, uid %d: violated sysfil #%d restrictions%s\n",
-	    p->p_pid, p->p_comm, cr->cr_prison->pr_id, cr->cr_uid, sf,
-	    signaled ? " and was signaled" : "");
-}
-#endif
-
-void
-sysfil_violation(struct thread *td, int sf, int error)
-{
-#ifdef SYSFIL
-	struct curtain *ct;
-	enum curtain_level lvl;
-	int sig;
-	ct = td->td_ucred->cr_curtain;
-	lvl = ct ? ct->ct_sysfils[sf].on_self : CURTAINLVL_DENY;
-	sig = lvl >= CURTAINLVL_KILL ? SIGKILL :
-	      lvl >= CURTAINLVL_TRAP ? SIGTRAP : 0;
-	if (sysfil_violation_log_level >= 2 ? true :
-	    sysfil_violation_log_level >= 1 ? sig != 0 :
-	                                      false)
-		sysfil_log_violation(td, sf, sig != 0);
-	if (sig != 0) {
-		ksiginfo_t ksi;
-		ksiginfo_init_trap(&ksi);
-		ksi.ksi_signo = sig;
-		ksi.ksi_code = SI_SYSFIL;
-		ksi.ksi_sysfil = sf;
-		ksi.ksi_errno = error;
-		trapsignal(td, &ksi);
-	}
-#endif
-}
-
 #ifdef SYSFIL
 
 static void
@@ -651,7 +423,7 @@ sysfil_for_type(enum curtain_type type)
 	return (SYSFIL_DEFAULT);
 }
 
-int
+static int
 curtain_check_key(struct thread *td, enum curtain_type type, union curtain_key key)
 {
 	/* TODO: handle level */
@@ -902,6 +674,236 @@ fail:	curtain_free(ct);
 	return (NULL);
 }
 
+
+int
+sysfil_require_vm_prot(struct thread *td, vm_prot_t prot, bool loose)
+{
+	if (prot & VM_PROT_EXECUTE)
+		return (sysfil_require(td, loose && !(prot & VM_PROT_WRITE) ?
+		    SYSFIL_PROT_EXEC_LOOSE : SYSFIL_PROT_EXEC));
+	return (0);
+}
+
+int
+sysfil_require_ioctl(struct thread *td, u_long com)
+{
+	int sf;
+#ifdef SYSFIL
+	if (curtain_check_key(td, CURTAINTYP_IOCTL,
+	    (union curtain_key){ .ioctl = com }) == 0)
+		return (0);
+#endif
+	switch (com) {
+	case FIOCLEX:
+	case FIONCLEX:
+	case FIONREAD:
+	case FIONWRITE:
+	case FIONSPACE:
+	case FIONBIO:
+	case FIOASYNC:
+	case FIOGETOWN:
+	case FIODTYPE:
+		/* always allowed ioctls */
+		sf = SYSFIL_ALWAYS;
+		break;
+	case TIOCGETA:
+		/* needed for isatty(3) */
+		sf = SYSFIL_STDIO;
+		break;
+	case FIOSETOWN:
+		/* also checked in setown() */
+		sf = SYSFIL_PROC;
+		break;
+	default:
+		sf = SYSFIL_ANY_IOCTL;
+		break;
+	}
+	return (sysfil_require(td, sf));
+}
+
+int
+sysfil_require_sockaf(struct thread *td, int af)
+{
+#ifdef SYSFIL
+	if (curtain_check_key(td, CURTAINTYP_SOCKAF,
+	    (union curtain_key){ .sockaf = af }) == 0)
+		return (0);
+#endif
+	return (sysfil_require(td, SYSFIL_ANY_SOCKAF));
+}
+
+int
+sysfil_require_sockopt(struct thread *td, int level, int name)
+{
+#ifdef SYSFIL
+	if (curtain_check_key(td, CURTAINTYP_SOCKOPT,
+	    (union curtain_key){ .sockopt = { level, name } }) == 0)
+		return (0);
+	if (curtain_check_key(td, CURTAINTYP_SOCKLVL,
+	    (union curtain_key){ .socklvl = level }) == 0)
+		return (0);
+#endif
+	return (sysfil_require(td, SYSFIL_ANY_SOCKOPT));
+}
+
+int
+sysfil_priv_check(struct ucred *cr, int priv)
+{
+#ifdef SYSFIL
+	/*
+	 * Mostly a subset of what's being allowed for jails (see
+	 * prison_priv_check()) with some extra conditions based on sysfils.
+	 * Some of those checks might be redundant with current syscall
+	 * filterings, but this might be hard to tell and including them here
+	 * anyway makes things a bit clearer.
+	 */
+	switch (priv) {
+	case PRIV_CRED_SETUID:
+	case PRIV_CRED_SETEUID:
+	case PRIV_CRED_SETGID:
+	case PRIV_CRED_SETEGID:
+	case PRIV_CRED_SETGROUPS:
+	case PRIV_CRED_SETREUID:
+	case PRIV_CRED_SETREGID:
+	case PRIV_CRED_SETRESUID:
+	case PRIV_CRED_SETRESGID:
+	case PRIV_PROC_SETLOGIN:
+	case PRIV_PROC_SETLOGINCLASS:
+		if (sysfil_check_cred(cr, SYSFIL_ID) == 0)
+			return (0);
+		break;
+	case PRIV_SEEOTHERGIDS:
+	case PRIV_SEEOTHERUIDS:
+		if (sysfil_check_cred(cr, SYSFIL_PS) == 0)
+			return (0);
+		break;
+	case PRIV_PROC_LIMIT:
+	case PRIV_PROC_SETRLIMIT:
+		if (sysfil_check_cred(cr, SYSFIL_RLIMIT) == 0)
+			return (0);
+		break;
+	case PRIV_JAIL_ATTACH:
+	case PRIV_JAIL_SET:
+	case PRIV_JAIL_REMOVE:
+		if (sysfil_check_cred(cr, SYSFIL_JAIL) == 0)
+			return (0);
+		break;
+	case PRIV_VFS_READ:
+	case PRIV_VFS_WRITE:
+	case PRIV_VFS_ADMIN:
+	case PRIV_VFS_EXEC:
+	case PRIV_VFS_LOOKUP:
+	case PRIV_VFS_BLOCKRESERVE:	/* XXXRW: Slightly surprising. */
+	case PRIV_VFS_CHFLAGS_DEV:
+	case PRIV_VFS_LINK:
+	case PRIV_VFS_STAT:
+	case PRIV_VFS_STICKYFILE:
+		/* Allowing to restrict this could be useful? */
+		return (0);
+	case PRIV_VFS_SYSFLAGS:
+		if (sysfil_check_cred(cr, SYSFIL_SYSFLAGS) == 0)
+			return (0);
+		break;
+	case PRIV_VFS_READ_DIR:
+		/* Let other policies handle this (like is done for jails). */
+		return (0);
+	case PRIV_VFS_CHOWN:
+	case PRIV_VFS_SETGID:
+	case PRIV_VFS_RETAINSUGID:
+		if (sysfil_check_cred(cr, SYSFIL_CHOWN) == 0)
+			return (0);
+		break;
+	case PRIV_VFS_CHROOT:
+	case PRIV_VFS_FCHROOT:
+		if (sysfil_check_cred(cr, SYSFIL_CHROOT) == 0)
+			return (0);
+		break;
+	case PRIV_VM_MLOCK:
+	case PRIV_VM_MUNLOCK:
+		if (sysfil_check_cred(cr, SYSFIL_MLOCK) == 0)
+			return (0);
+		break;
+	case PRIV_NETINET_RESERVEDPORT:
+#if 0
+	case PRIV_NETINET_REUSEPORT:
+	case PRIV_NETINET_SETHDROPTS:
+#endif
+		return (0);
+	case PRIV_NETINET_RAW:
+		if (sysfil_check_cred(cr, SYSFIL_INET_RAW) == 0)
+			return (0);
+		break;
+#if 0
+	case PRIV_NETINET_GETCRED:
+		return (0);
+#endif
+	case PRIV_ADJTIME:
+	case PRIV_NTP_ADJTIME:
+	case PRIV_CLOCK_SETTIME:
+		if (sysfil_check_cred(cr, SYSFIL_SETTIME) == 0)
+			return (0);
+		break;
+	case PRIV_VFS_GETFH:
+	case PRIV_VFS_FHOPEN:
+	case PRIV_VFS_FHSTAT:
+	case PRIV_VFS_FHSTATFS:
+	case PRIV_VFS_GENERATION:
+		if (sysfil_check_cred(cr, SYSFIL_FH) == 0)
+			return (0);
+		break;
+	case PRIV_NETINET_IPFW:
+	case PRIV_NETINET_DUMMYNET:
+	case PRIV_NETINET_PF:
+		if (sysfil_check_cred(cr, SYSFIL_PFIL) == 0)
+			return (0);
+		break;
+	}
+	return (sysfil_check_cred(cr, SYSFIL_ANY_PRIV));
+#else
+	return (0);
+#endif
+}
+
+#ifdef SYSFIL
+static void
+sysfil_log_violation(struct thread *td, int sf, bool signaled)
+{
+	struct proc *p = td->td_proc;
+	struct ucred *cr = td->td_ucred;
+	log(LOG_ERR, "pid %d (%s), jid %d, uid %d: violated sysfil #%d restrictions%s\n",
+	    p->p_pid, p->p_comm, cr->cr_prison->pr_id, cr->cr_uid, sf,
+	    signaled ? " and was signaled" : "");
+}
+#endif
+
+void
+sysfil_violation(struct thread *td, int sf, int error)
+{
+#ifdef SYSFIL
+	struct curtain *ct;
+	enum curtain_level lvl;
+	int sig;
+	ct = td->td_ucred->cr_curtain;
+	lvl = ct ? ct->ct_sysfils[sf].on_self : CURTAINLVL_DENY;
+	sig = lvl >= CURTAINLVL_KILL ? SIGKILL :
+	      lvl >= CURTAINLVL_TRAP ? SIGTRAP : 0;
+	if (sysfil_violation_log_level >= 2 ? true :
+	    sysfil_violation_log_level >= 1 ? sig != 0 :
+	                                      false)
+		sysfil_log_violation(td, sf, sig != 0);
+	if (sig != 0) {
+		ksiginfo_t ksi;
+		ksiginfo_init_trap(&ksi);
+		ksi.ksi_signo = sig;
+		ksi.ksi_code = SI_SYSFIL;
+		ksi.ksi_sysfil = sf;
+		ksi.ksi_errno = error;
+		trapsignal(td, &ksi);
+	}
+#endif
+}
+
+
 static int
 do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq *reqv)
 {
