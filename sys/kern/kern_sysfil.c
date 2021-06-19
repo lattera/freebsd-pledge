@@ -439,8 +439,8 @@ mode_limit(struct curtain_mode *dst, const struct curtain_mode *src)
 {
 	dst->on_self_max = MAX(src->on_self_max, dst->on_self_max);
 	dst->on_exec_max = MAX(src->on_exec_max, dst->on_exec_max);
-	dst->on_self = MAX(src->on_self, dst->on_self_max);
-	dst->on_exec = MAX(src->on_exec, dst->on_exec_max);
+	dst->on_self = MAX(MAX(src->on_self, dst->on_self), dst->on_self_max);
+	dst->on_exec = MAX(MAX(src->on_exec, dst->on_exec), dst->on_exec_max);
 }
 
 static inline void
@@ -666,6 +666,17 @@ curtain_check_key(struct thread *td, enum curtain_type type, union curtain_key k
 }
 
 static void
+curtain_harden(struct curtain *ct)
+{
+	struct curtain_item *item;
+	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
+		if (item->type != 0)
+			mode_harden(&item->mode);
+	for (int sf = 0; sf <= SYSFIL_LAST; sf++)
+		mode_harden(&ct->ct_sysfils[sf]);
+}
+
+static void
 curtain_limit_sysfils(struct curtain *ct, const sysfilset_t *sfs)
 {
 	struct curtain_item *item;
@@ -882,10 +893,8 @@ curtain_build(int flags, size_t reqc, const struct curtainreq *reqv)
 		            ct->ct_sysfils[SYSFIL_EXEC].on_exec),
 		        ct->ct_sysfils[SYSFIL_PROT_EXEC_LOOSE].on_exec);
 
-	if (flags & CURTAINCTL_ENFORCE) {
-		for (int sf = 0; sf <= SYSFIL_LAST; sf++)
-			mode_harden(&ct->ct_sysfils[sf]);
-	}
+	if (flags & CURTAINCTL_ENFORCE)
+		curtain_harden(ct);
 
 	return (ct);
 
