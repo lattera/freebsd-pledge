@@ -22,6 +22,7 @@ __FBSDID("$FreeBSD$");
 
 enum promise_type {
 	PROMISE_ERROR,
+	PROMISE_TRAP,
 	PROMISE_BASIC, /* same as PROMISE_STDIO but without the unveils */
 	PROMISE_STDIO,
 	PROMISE_UNVEIL,
@@ -98,6 +99,7 @@ static const struct promise_name {
 	const char name[PROMISE_NAME_SIZE];
 } names_table[PROMISE_COUNT] = {
 	[PROMISE_ERROR] =		{ "error" },
+	[PROMISE_TRAP] =		{ "trap" },
 	[PROMISE_BASIC] =		{ "basic" },
 	[PROMISE_STDIO] =		{ "stdio" },
 	[PROMISE_UNVEIL] =		{ "unveil" },
@@ -548,6 +550,8 @@ do_promises_slots(enum curtain_on on,
 
 	if (fill[PROMISE_ERROR])
 		curtain_default(promise_slots[PROMISE_ERROR], CURTAIN_DENY);
+	if (fill[PROMISE_TRAP])
+		curtain_default(promise_slots[PROMISE_TRAP], CURTAIN_TRAP);
 
 	if (!always_slot) {
 		always_slot = curtain_slot_neutral();

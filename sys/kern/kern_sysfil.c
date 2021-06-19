@@ -866,13 +866,13 @@ sysfil_priv_check(struct ucred *cr, int priv)
 
 #ifdef SYSFIL
 static void
-sysfil_log_violation(struct thread *td, int sf, bool signaled)
+sysfil_log_violation(struct thread *td, int sf, int sig)
 {
 	struct proc *p = td->td_proc;
 	struct ucred *cr = td->td_ucred;
 	log(LOG_ERR, "pid %d (%s), jid %d, uid %d: violated sysfil #%d restrictions%s\n",
 	    p->p_pid, p->p_comm, cr->cr_prison->pr_id, cr->cr_uid, sf,
-	    signaled ? " and was signaled" : "");
+	    sig == SIGKILL ? " and was killed" : sig != 0 ? " and was signaled" : "");
 }
 #endif
 
@@ -890,7 +890,7 @@ sysfil_violation(struct thread *td, int sf, int error)
 	if (sysfil_violation_log_level >= 2 ? true :
 	    sysfil_violation_log_level >= 1 ? sig != 0 :
 	                                      false)
-		sysfil_log_violation(td, sf, sig != 0);
+		sysfil_log_violation(td, sf, sig);
 	if (sig != 0) {
 		ksiginfo_t ksi;
 		ksiginfo_init_trap(&ksi);
