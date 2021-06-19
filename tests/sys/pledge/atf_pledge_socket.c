@@ -248,7 +248,6 @@ ATF_TC_BODY(pledge_unix_still_somewhat_hides_fs, tc)
 
 ATF_TP_ADD_TCS(tp)
 {
-	(void)tp;
 	ATF_TP_ADD_TC(tp, socket_af_unix_allow);
 	ATF_TP_ADD_TC(tp, socket_af_unix_deny);
 	ATF_TP_ADD_TC(tp, socket_af_inet_allow);

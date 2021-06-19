@@ -35,6 +35,8 @@ ATF_TESTS_C+=	atf_unveil_exec
 ATF_TESTS_C+=	atf_unveil_fattr
 ATF_TESTS_C+=	atf_unveil_emptypath
 
+ATF_TESTS_C+=	atf_curtain_levels
+
 PLAIN_TESTS_C+=	openbsd-unveil-syscalls
 WARNS.openbsd-unveil-syscalls=3
 

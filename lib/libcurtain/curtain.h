@@ -39,7 +39,7 @@ int curtain_apply(void);
 int curtain_enforce(void);
 
 int curtain_default(struct curtain_slot *slot, unsigned flags);
-int curtain_sysfil(struct curtain_slot *, int sysfil);
+int curtain_sysfil(struct curtain_slot *, int sysfil, int flags);
 int curtain_ioctl(struct curtain_slot *, unsigned long ioctl, int flags);
 int curtain_ioctls(struct curtain_slot *, const unsigned long *ioctls, int flags);
 int curtain_unveil(struct curtain_slot *,

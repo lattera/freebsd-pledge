@@ -75,7 +75,6 @@ ATF_TC_BODY(tty_ioctls_deny, tc)
 
 ATF_TP_ADD_TCS(tp)
 {
-	(void)tp;
 	ATF_TP_ADD_TC(tp, isatty_vnode);
 	ATF_TP_ADD_TC(tp, isatty_pipe);
 	ATF_TP_ADD_TC(tp, tty_ioctls_pass_enotty);

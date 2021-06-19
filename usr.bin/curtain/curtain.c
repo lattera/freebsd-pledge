@@ -183,7 +183,7 @@ parse_directive(struct parser *par, char *p)
 					break;
 			if (par->apply && (!unsafe || par->cfg->allow_unsafe)) {
 				if (e->name)
-					curtain_sysfil(par->slot, e->sysfil);
+					curtain_sysfil(par->slot, e->sysfil, 0);
 				else
 					return (parse_error(par, "unknown sysfil"));
 			}
@@ -708,15 +708,15 @@ main(int argc, char *argv[])
 	if (!signaling)
 		curtain_default(main_slot, CURTAIN_DENY);
 	if (!no_protexec)
-		curtain_sysfil(main_slot, SYSFIL_PROT_EXEC);
+		curtain_sysfil(main_slot, SYSFIL_PROT_EXEC, 0);
 	if (!no_network)
 		*cfg.tags_fill++ = "@network";
 	if (run_shell) {
 		*cfg.tags_fill++ = "@session";
-		curtain_sysfil(main_slot, SYSFIL_SAME_SESSION);
+		curtain_sysfil(main_slot, SYSFIL_SAME_SESSION, 0);
 	}
 	if (new_pgrp) {
-		curtain_sysfil(main_slot, SYSFIL_SAME_PGRP);
+		curtain_sysfil(main_slot, SYSFIL_SAME_PGRP, 0);
 		if (getpgid(0) != getpid()) {
 			r = setpgid(0, 0);
 			if (r < 0)

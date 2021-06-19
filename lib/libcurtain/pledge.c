@@ -379,17 +379,17 @@ sysfils_for_uperms(struct curtain_slot *slot, unveil_perms uperms)
 	 * TODO: Could probably reduce these when the only unveils for certain
 	 * permissions are on non-directories.
 	 */
-	if (uperms & UPERM_READ) curtain_sysfil(slot, SYSFIL_RPATH);
+	if (uperms & UPERM_READ) curtain_sysfil(slot, SYSFIL_RPATH, 0);
 	/* Note that UPERM_WRITE does not imply SYSFIL_FATTR. */
-	if (uperms & UPERM_WRITE) curtain_sysfil(slot, SYSFIL_WPATH);
-	if (uperms & (UPERM_CREATE | UPERM_DELETE)) curtain_sysfil(slot, SYSFIL_CPATH);
-	if (uperms & UPERM_EXECUTE) curtain_sysfil(slot, SYSFIL_EXEC);
-	if (uperms & UPERM_SETATTR) curtain_sysfil(slot, SYSFIL_FATTR);
-	if (uperms & UPERM_UNIX) curtain_sysfil(slot, SYSFIL_UNIX);
+	if (uperms & UPERM_WRITE) curtain_sysfil(slot, SYSFIL_WPATH, 0);
+	if (uperms & (UPERM_CREATE | UPERM_DELETE)) curtain_sysfil(slot, SYSFIL_CPATH, 0);
+	if (uperms & UPERM_EXECUTE) curtain_sysfil(slot, SYSFIL_EXEC, 0);
+	if (uperms & UPERM_SETATTR) curtain_sysfil(slot, SYSFIL_FATTR, 0);
+	if (uperms & UPERM_UNIX) curtain_sysfil(slot, SYSFIL_UNIX, 0);
 	if (uperms & UPERM_TMPDIR) {
-		curtain_sysfil(slot, SYSFIL_RPATH);
-		curtain_sysfil(slot, SYSFIL_WPATH);
-		curtain_sysfil(slot, SYSFIL_CPATH);
+		curtain_sysfil(slot, SYSFIL_RPATH, 0);
+		curtain_sysfil(slot, SYSFIL_WPATH, 0);
+		curtain_sysfil(slot, SYSFIL_CPATH, 0);
 	}
 }
 
@@ -448,7 +448,7 @@ do_promises_slots(enum curtain_on on,
 
 	for (ps = sysfils_table; ps != &sysfils_table[nitems(sysfils_table)]; ps++)
 		if (fill_sysfils[ps->type])
-			curtain_sysfil(promise_sysfil_slots[ps->type], ps->sysfil);
+			curtain_sysfil(promise_sysfil_slots[ps->type], ps->sysfil, 0);
 
 	for (pi = ioctls_table; pi != &ioctls_table[nitems(ioctls_table)]; pi++)
 		if (fill_sysfils[pi->type])
@@ -464,7 +464,7 @@ do_promises_slots(enum curtain_on on,
 		 * This is different from the "unveil" promise which is handled
 		 * specially in do_pledge().
 		 */
-		curtain_sysfil(always_slot, SYSFIL_UNVEIL);
+		curtain_sysfil(always_slot, SYSFIL_UNVEIL, 0);
 		/*
 		 * Always keep the root directory chdir()-able (but not
 		 * necessarily stat()-able or readable).  This is sufficient to
