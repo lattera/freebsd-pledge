@@ -66,12 +66,18 @@ ATF_TC_BODY(socketpair_allow, tc)
 	ATF_CHECK(close(fds[1]) >= 0);
 }
 
-static const int basic_optnames[] = {
-	SO_ERROR,
-	SO_DOMAIN,
-	SO_TYPE,
-	SO_PROTOCOL,
-	SO_PROTOTYPE,
+static const int basic_optnames[][2] = {
+	{ SOL_SOCKET, SO_ERROR },
+	{ SOL_SOCKET, SO_NOSIGPIPE },
+};
+
+static const int net_optnames[][2] = {
+	{ SOL_SOCKET, SO_KEEPALIVE },
+	{ SOL_SOCKET, SO_TIMESTAMP },
+	{ SOL_SOCKET, SO_DOMAIN },
+	{ SOL_SOCKET, SO_TYPE },
+	{ SOL_SOCKET, SO_PROTOCOL },
+	{ SOL_SOCKET, SO_PROTOTYPE },
 };
 
 ATF_TC_WITHOUT_HEAD(basic_sockopts_allow);
@@ -79,22 +85,38 @@ ATF_TC_BODY(basic_sockopts_allow, tc)
 {
 	int fd, val;
 	ATF_REQUIRE((fd = socket(AF_LOCAL, SOCK_STREAM, 0)) >= 0);
-	ATF_REQUIRE(pledge("stdio inet", "") >= 0);
+	ATF_REQUIRE(pledge("stdio", "") >= 0);
 	for (size_t i = 0; i < nitems(basic_optnames); i++) {
 		socklen_t len = sizeof val;
-		ATF_CHECK(getsockopt(fd, SOL_SOCKET, basic_optnames[i], &val, &len) >= 0);
+		ATF_CHECK(getsockopt(fd, basic_optnames[i][0], basic_optnames[i][1], &val, &len) >= 0);
 	}
 }
 
-ATF_TC_WITHOUT_HEAD(basic_sockopts_deny);
-ATF_TC_BODY(basic_sockopts_deny, tc)
+ATF_TC_WITHOUT_HEAD(net_sockopts_allow);
+ATF_TC_BODY(net_sockopts_allow, tc)
+{
+	int fd, val;
+	ATF_REQUIRE((fd = socket(AF_LOCAL, SOCK_STREAM, 0)) >= 0);
+	ATF_REQUIRE(pledge("stdio inet", "") >= 0);
+	for (size_t i = 0; i < nitems(basic_optnames); i++) {
+		socklen_t len = sizeof val;
+		ATF_CHECK(getsockopt(fd, basic_optnames[i][0], basic_optnames[i][1], &val, &len) >= 0);
+	}
+	for (size_t i = 0; i < nitems(net_optnames); i++) {
+		socklen_t len = sizeof val;
+		ATF_CHECK(getsockopt(fd, net_optnames[i][0], net_optnames[i][1], &val, &len) >= 0);
+	}
+}
+
+ATF_TC_WITHOUT_HEAD(net_sockopts_deny);
+ATF_TC_BODY(net_sockopts_deny, tc)
 {
 	int fd, val;
 	ATF_REQUIRE((fd = socket(AF_LOCAL, SOCK_STREAM, 0)) >= 0);
 	ATF_REQUIRE(pledge("error stdio", "") >= 0);
-	for (size_t i = 0; i < nitems(basic_optnames); i++) {
+	for (size_t i = 0; i < nitems(net_optnames); i++) {
 		socklen_t len = sizeof val;
-		ATF_CHECK_ERRNO(EPERM, getsockopt(fd, SOL_SOCKET, basic_optnames[i], &val, &len) < 0);
+		ATF_CHECK_ERRNO(EPERM, getsockopt(fd, net_optnames[i][0], net_optnames[i][1], &val, &len) < 0);
 	}
 }
 
@@ -287,7 +309,8 @@ ATF_TP_ADD_TCS(tp)
 	ATF_TP_ADD_TC(tp, socket_af_inet_deny);
 	ATF_TP_ADD_TC(tp, socketpair_allow);
 	ATF_TP_ADD_TC(tp, basic_sockopts_allow);
-	ATF_TP_ADD_TC(tp, basic_sockopts_deny);
+	ATF_TP_ADD_TC(tp, net_sockopts_allow);
+	ATF_TP_ADD_TC(tp, net_sockopts_deny);
 	ATF_TP_ADD_TC(tp, pass_fd_same_proc);
 	ATF_TP_ADD_TC(tp, pass_fd_both_allow);
 	ATF_TP_ADD_TC(tp, pass_fd_send_deny);

@@ -259,7 +259,6 @@ static const struct promise_sockaf {
 	enum promise_type type;
 	int af;
 } sockafs_table[] = {
-	/* XXX some of these should be allowed for "stdio"? */
 	{ PROMISE_UNIX, AF_UNIX },
 #ifdef AF_INET
 	{ PROMISE_INET, AF_INET },
@@ -273,8 +272,11 @@ static const struct promise_sockopt {
 	enum promise_type type;
 	const int (*sockopts)[2];
 } sockopts_table[] = {
+	{ PROMISE_STDIO, curtain_sockopts_basic },
 	{ PROMISE_UNIX, curtain_sockopts_basic },
+	{ PROMISE_UNIX, curtain_sockopts_net },
 	{ PROMISE_INET, curtain_sockopts_basic },
+	{ PROMISE_INET, curtain_sockopts_net },
 	{ PROMISE_INET, curtain_sockopts_inet },
 };
 

@@ -6,6 +6,11 @@
 
 const int curtain_sockopts_basic[][2] = {
 	{ SOL_SOCKET, SO_ERROR },
+	{ SOL_SOCKET, SO_NOSIGPIPE },
+	{ -1, -1 },
+};
+
+const int curtain_sockopts_net[][2] = {
 	{ SOL_SOCKET, SO_REUSEADDR },
 	{ SOL_SOCKET, SO_REUSEPORT },
 	{ SOL_SOCKET, SO_REUSEPORT_LB },
@@ -17,7 +22,6 @@ const int curtain_sockopts_basic[][2] = {
 	{ SOL_SOCKET, SO_RCVLOWAT },
 	{ SOL_SOCKET, SO_SNDTIMEO },
 	{ SOL_SOCKET, SO_RCVTIMEO },
-	{ SOL_SOCKET, SO_NOSIGPIPE },
 	{ SOL_SOCKET, SO_TIMESTAMP },
 	{ SOL_SOCKET, SO_BINTIME },
 	{ SOL_SOCKET, SO_ACCEPTCONN },

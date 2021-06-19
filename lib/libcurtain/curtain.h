@@ -52,6 +52,7 @@ int curtain_unveils_limit(struct curtain_slot *, unveil_perms uperms);
 
 extern const unsigned long curtain_ioctls_tty_basic[];
 extern const int curtain_sockopts_basic[][2];
+extern const int curtain_sockopts_net[][2];
 extern const int curtain_sockopts_inet[][2];
 
 #endif
