@@ -690,13 +690,17 @@ fail:	SDT_PROBE0(curtain,, curtain_build, failed);
 	return (NULL);
 }
 
+#endif /* SYSFIL */
+
 
 int
 sysfil_require_vm_prot(struct thread *td, vm_prot_t prot, bool loose)
 {
+#ifdef SYSFIL
 	if (prot & VM_PROT_EXECUTE)
 		return (sysfil_require(td, loose && !(prot & VM_PROT_WRITE) ?
 		    SYSFIL_PROT_EXEC_LOOSE : SYSFIL_PROT_EXEC));
+#endif
 	return (0);
 }
 
@@ -920,6 +924,8 @@ sysfil_violation(struct thread *td, int sf, int error)
 }
 
 
+#ifdef SYSFIL
+
 static int
 do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq *reqv)
 {
@@ -1247,4 +1253,4 @@ sysfil_sysinit(void *arg)
 
 SYSINIT(sysfil_sysinit, SI_SUB_COPYRIGHT, SI_ORDER_ANY, sysfil_sysinit, NULL);
 
-#endif
+#endif /* SYSFIL */
