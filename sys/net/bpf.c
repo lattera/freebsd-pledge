@@ -64,7 +64,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/uio.h>
 #include <sys/sysent.h>
 #include <sys/systm.h>
-#include <sys/sysfil.h>
 
 #include <sys/event.h>
 #include <sys/file.h>
@@ -248,9 +247,6 @@ static struct cdevsw bpf_cdevsw = {
 	.d_poll =	bpfpoll,
 	.d_name =	"bpf",
 	.d_kqfilter =	bpfkqfilter,
-#ifdef SYSFIL
-	.d_sysfil =	SYSFIL_BPF,
-#endif
 };
 
 static struct filterops bpfread_filtops = {

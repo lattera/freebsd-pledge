@@ -46,7 +46,7 @@
 __FBSDID("$FreeBSD$");
 
 #include <sys/capsicum.h>
-#include <sys/sysfil.h>
+#include <sys/curtain.h>
 #include <sys/ktr.h>
 #include <sys/vmmeter.h>
 #ifdef KTRACE

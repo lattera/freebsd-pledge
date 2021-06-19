@@ -72,7 +72,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/socketvar.h>
 #include <sys/syscallsubr.h>
 #include <sys/sysctl.h>
-#include <sys/sysfil.h>
+#include <sys/curtain.h>
 
 #ifdef REGRESSION
 FEATURE(regression,
@@ -2129,6 +2129,10 @@ crfree_final(struct ucred *cr)
 		prison_free(cr->cr_prison);
 	if (cr->cr_loginclass != NULL)
 		loginclass_free(cr->cr_loginclass);
+#ifdef SYSFIL
+	if (cr->cr_curtain != NULL)
+		curtain_free(cr->cr_curtain);
+#endif
 #ifdef AUDIT
 	audit_cred_destroy(cr);
 #endif
@@ -2157,6 +2161,10 @@ crcopy(struct ucred *dest, struct ucred *src)
 	uihold(dest->cr_ruidinfo);
 	prison_hold(dest->cr_prison);
 	loginclass_hold(dest->cr_loginclass);
+#ifdef SYSFIL
+	if (dest->cr_curtain)
+		curtain_hold(dest->cr_curtain);
+#endif
 #ifdef AUDIT
 	audit_cred_copy(src, dest);
 #endif

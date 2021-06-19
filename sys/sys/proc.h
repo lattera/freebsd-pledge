@@ -852,11 +852,9 @@ struct proc {
  * should be done for both Capsicum and pledge().
  */
 #define	PROC_IN_RESTRICTED_MODE(p)	CRED_IN_RESTRICTED_MODE((p)->p_ucred)
-#define	PROC_IN_RESTRICTED_EXEC_MODE(p)	CRED_IN_RESTRICTED_EXEC_MODE((p)->p_ucred)
 #define	PROC_IN_CAPABILITY_MODE(p)	CRED_IN_CAPABILITY_MODE((p)->p_ucred)
 
 #define	IN_RESTRICTED_MODE(td)		CRED_IN_RESTRICTED_MODE((td)->td_ucred)
-#define	IN_RESTRICTED_EXEC_MODE(td)	CRED_IN_RESTRICTED_EXEC_MODE((td)->td_ucred)
 #define	IN_CAPABILITY_MODE(td)		CRED_IN_CAPABILITY_MODE((td)->td_ucred)
 
 /*

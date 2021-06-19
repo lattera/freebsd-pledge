@@ -42,7 +42,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/capsicum.h>
-#include <sys/sysfil.h>
+#include <sys/curtain.h>
 #include <sys/kernel.h>
 #include <sys/lock.h>
 #include <sys/mutex.h>
@@ -73,7 +73,6 @@ __FBSDID("$FreeBSD$");
 
 #include <security/audit/audit.h>
 #include <security/mac/mac_framework.h>
-#include <sys/sysfil.h>
 
 static int sendit(struct thread *td, int s, struct msghdr *mp, int flags);
 static int recvit(struct thread *td, int s, struct msghdr *mp, void *namelenp);

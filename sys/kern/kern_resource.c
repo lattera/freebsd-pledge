@@ -60,7 +60,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysent.h>
 #include <sys/time.h>
 #include <sys/umtx.h>
-#include <sys/sysfil.h>
+#include <sys/curtain.h>
 
 #include <vm/vm.h>
 #include <vm/vm_param.h>

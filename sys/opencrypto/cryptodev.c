@@ -57,7 +57,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/fcntl.h>
 #include <sys/bus.h>
 #include <sys/sdt.h>
-#include <sys/sysfil.h>
 #include <sys/syscallsubr.h>
 
 #include <opencrypto/cryptodev.h>
@@ -1357,9 +1356,6 @@ static struct cdevsw crypto_cdevsw = {
 	.d_open =	crypto_open,
 	.d_ioctl =	crypto_ioctl,
 	.d_name =	"crypto",
-#ifdef	SYSFIL
-	.d_sysfil =	SYSFIL_CRYPTODEV,
-#endif
 };
 static struct cdev *crypto_dev;
 

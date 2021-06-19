@@ -45,7 +45,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/sdt.h>
 #include <sys/sysctl.h>
 #include <sys/systm.h>
-#include <sys/sysfil.h>
+#include <sys/curtain.h>
 
 #include <security/mac/mac_framework.h>
 

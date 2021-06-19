@@ -50,7 +50,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/timepps.h>
 #include <sys/syscallsubr.h>
 #include <sys/sysctl.h>
-#include <sys/sysfil.h>
+#include <sys/curtain.h>
 
 #ifdef PPS_SYNC
 FEATURE(pps_sync, "Support usage of external PPS signal by kernel PLL");

@@ -19,12 +19,15 @@ __FBSDID("$FreeBSD$");
 #include <sys/mman.h>
 #include <sys/sysfil.h>
 #include <sys/unveil.h>
+#include <sys/curtain.h>
 
 #include <sys/filio.h>
 #include <sys/tty.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <netinet/in.h>
+
+static MALLOC_DEFINE(M_CURTAIN, "curtain", "curtain restrictions");
 
 static bool __read_mostly sysfil_enabled = true;
 static unsigned __read_mostly sysfil_violation_log_level = 1;
@@ -41,6 +44,8 @@ SYSCTL_UINT(_security_curtain, OID_AUTO, log_sysfil_violation,
     CTLFLAG_RW, &sysfil_violation_log_level, 0,
     "Log violations of sysfil restrictions");
 
+CTASSERT(CURTAIN_MAX_ITEMS <= (curtain_index)-1);
+
 int
 sysfil_require_vm_prot(struct thread *td, vm_prot_t prot, bool loose)
 {
@@ -51,10 +56,14 @@ sysfil_require_vm_prot(struct thread *td, vm_prot_t prot, bool loose)
 }
 
 int
-sysfil_require_ioctl(struct thread *td, int sf, u_long com)
+sysfil_require_ioctl(struct thread *td, u_long com)
 {
-	if (sysfil_check(td, SYSFIL_ANY_IOCTL) == 0)
+	int sf;
+#ifdef SYSFIL
+	if (curtain_check_key(td, CURTAINTYP_IOCTL,
+	    (union curtain_key){ .ioctl = com }) == 0)
 		return (0);
+#endif
 	switch (com) {
 	case FIOCLEX:
 	case FIONCLEX:
@@ -75,6 +84,9 @@ sysfil_require_ioctl(struct thread *td, int sf, u_long com)
 	case FIOSETOWN:
 		/* also checked in setown() */
 		sf = SYSFIL_PROC;
+		break;
+	default:
+		sf = SYSFIL_ANY_IOCTL;
 		break;
 	}
 	return (sysfil_require(td, sf));
@@ -268,19 +280,21 @@ void
 sysfil_violation(struct thread *td, int sf, int error)
 {
 #ifdef SYSFIL
-	bool trap = sysfil_check(td, SYSFIL_ERROR) != 0;
+	struct curtain *ct;
+	enum curtain_level lvl;
+	int sig;
+	ct = td->td_ucred->cr_curtain;
+	lvl = ct ? ct->ct_sysfils[sf].on_self : CURTAINLVL_DENY;
+	sig = lvl >= CURTAINLVL_KILL ? SIGKILL :
+	      lvl >= CURTAINLVL_TRAP ? SIGTRAP : 0;
 	if (sysfil_violation_log_level >= 2 ? true :
-	    sysfil_violation_log_level >= 1 ? trap :
+	    sysfil_violation_log_level >= 1 ? sig != 0 :
 	                                      false)
-		sysfil_log_violation(td, sf, trap);
-	if (trap) {
+		sysfil_log_violation(td, sf, sig != 0);
+	if (sig != 0) {
 		ksiginfo_t ksi;
-		/*
-		 * OpenBSD sends an "uncatchable" SIGABRT.  Not sure how to
-		 * correctly do that, so instead just send a SIGKILL.
-		 */
 		ksiginfo_init_trap(&ksi);
-		ksi.ksi_signo = SIGKILL;
+		ksi.ksi_signo = sig;
 		ksi.ksi_code = SI_SYSFIL;
 		ksi.ksi_sysfil = sf;
 		ksi.ksi_errno = error;
@@ -292,43 +306,518 @@ sysfil_violation(struct thread *td, int sf, int error)
 #ifdef SYSFIL
 
 static void
-sysfilset_fill(sysfilset_t *sysfilset, int sf)
+curtain_init(struct curtain *ct, size_t nslots)
 {
-	/*
-	 * "Expand" sysfils passed by the user.  Some sysfils don't make much
-	 * sense without some others.
-	 */
-	if (!SYSFIL_VALID(sf))
+	if (!powerof2(nslots) || nslots != (curtain_index)nslots)
+		panic("invalid curtain nslots %zu", nslots);
+	/* NOTE: zeroization leads to all levels being set to CURTAINLVL_PASS */
+	*ct = (struct curtain){
+		.ct_ref = 1,
+		.ct_nitems = 0,
+		.ct_nslots = nslots,
+		.ct_fill = ct->ct_slots,
+	};
+	for (curtain_index i = 0; i < nslots; i++)
+		ct->ct_slots[i].type = 0;
+}
+
+static struct curtain *
+curtain_alloc(size_t nslots)
+{
+	struct curtain *ct;
+	ct = malloc(sizeof *ct + nslots * sizeof *ct->ct_slots, M_CURTAIN, M_WAITOK);
+	return (ct);
+}
+
+static struct curtain *
+curtain_make(size_t nitems)
+{
+	size_t nslots;
+	struct curtain *ct;
+	for (nslots = nitems != 0; nslots != 0 && nslots < nitems; nslots <<= 1);
+	if (nslots < nitems)
+		return (NULL);
+	ct = curtain_alloc(nslots);
+	curtain_init(ct, nslots);
+	return (ct);
+}
+
+void
+curtain_hold(struct curtain *ct)
+{
+	refcount_acquire(&ct->ct_ref);
+}
+
+void
+curtain_free(struct curtain *ct)
+{
+	if (refcount_release(&ct->ct_ref))
+		free(ct, M_CURTAIN);
+}
+
+static void
+curtain_copy(struct curtain *dst, const struct curtain *src)
+{
+	memcpy(dst, src, sizeof *src + src->ct_nslots * sizeof *src->ct_slots);
+	dst->ct_ref = 1;
+}
+
+static struct curtain *
+curtain_dup(const struct curtain *src)
+{
+	struct curtain *dst;
+	dst = curtain_alloc(src->ct_nslots);
+	curtain_copy(dst, src);
+	return (dst);
+}
+
+bool
+curtain_cred_need_exec_switch(const struct ucred *cr)
+{
+	struct curtain *ct = cr->cr_curtain;
+	if (!ct)
+		return (false);
+	for (int sf = 0; sf <= SYSFIL_LAST; sf++)
+		if (ct->ct_sysfils[sf].on_self != ct->ct_sysfils[sf].on_exec ||
+		    ct->ct_sysfils[sf].on_self_max != ct->ct_sysfils[sf].on_exec_max)
+			return (true);
+	return (false);
+}
+
+bool
+curtain_cred_exec_restricted(const struct ucred *cr)
+{
+	struct curtain_item *item;
+	struct curtain *ct = cr->cr_curtain;
+	if (!ct)
+		return (false);
+	for (int sf = 0; sf <= SYSFIL_LAST; sf++)
+		if (ct->ct_sysfils[sf].on_exec != CURTAINLVL_PASS ||
+		    ct->ct_sysfils[sf].on_exec_max != CURTAINLVL_PASS)
+			return (true);
+	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
+		if (item->type != 0 &&
+		    (item->mode.on_exec != CURTAINLVL_PASS ||
+		     item->mode.on_exec_max != CURTAINLVL_PASS))
+			return (true);
+	return (false);
+}
+
+void
+curtain_cred_exec_switch(struct ucred *cr)
+{
+	struct curtain_item *item;
+	struct curtain *ct;
+	KASSERT(cr->cr_ref == 1, ("modifying shared ucred"));
+	if (!(ct = cr->cr_curtain))
+		return; /* NOTE: sysfilset kept as-is */
+
+	if (!curtain_cred_exec_restricted(cr)) {
+		curtain_free(ct);
+		sysfil_cred_init(cr);
 		return;
-	switch (sf) {
-	case SYSFIL_RPATH:
-	case SYSFIL_WPATH:
-	case SYSFIL_CPATH:
-	case SYSFIL_DPATH:
-		BIT_SET(SYSFILSET_BITS, SYSFIL_PATH, sysfilset);
-		break;
-	case SYSFIL_PROT_EXEC:
-		BIT_SET(SYSFILSET_BITS, SYSFIL_PROT_EXEC_LOOSE, sysfilset);
-		break;
-	case SYSFIL_INET:
-	case SYSFIL_INET_RAW:
-	case SYSFIL_UNIX:
-		BIT_SET(SYSFILSET_BITS, SYSFIL_NET, sysfilset);
-		break;
-	case SYSFIL_CPUSET:
-		BIT_SET(SYSFILSET_BITS, SYSFIL_SCHED, sysfilset);
-		break;
-	case SYSFIL_ANY_PROCESS:
-		BIT_SET(SYSFILSET_BITS, SYSFIL_SAME_SESSION, sysfilset);
-		/* FALLTHROUGH */
-	case SYSFIL_SAME_SESSION:
-		BIT_SET(SYSFILSET_BITS, SYSFIL_SAME_PGRP, sysfilset);
-		/* FALLTHROUGH */
-	case SYSFIL_SAME_PGRP:
-		BIT_SET(SYSFILSET_BITS, SYSFIL_CHILD_PROCESS, sysfilset);
-		break;
 	}
-	BIT_SET(SYSFILSET_BITS, sf, sysfilset);
+
+	ct = curtain_dup(ct);
+	BIT_ZERO(SYSFILSET_BITS, &cr->cr_sysfilset);
+	for (int sf = 0; sf <= SYSFIL_LAST; sf++) {
+		ct->ct_sysfils[sf].on_self     = ct->ct_sysfils[sf].on_exec;
+		ct->ct_sysfils[sf].on_self_max = ct->ct_sysfils[sf].on_exec_max;
+		if (ct->ct_sysfils[sf].on_self == CURTAINLVL_PASS)
+			BIT_SET(SYSFILSET_BITS, sf, &cr->cr_sysfilset);
+	}
+	MPASS(SYSFILSET_IS_RESTRICTED(&cr->cr_sysfilset));
+	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
+		if (item->type != 0) {
+			item->mode.on_self     = item->mode.on_exec;
+			item->mode.on_self_max = item->mode.on_exec_max;
+		}
+
+	curtain_free(cr->cr_curtain);
+	cr->cr_curtain = ct;
+	MPASS(CRED_IN_RESTRICTED_MODE(cr));
+}
+
+static inline void
+mode_set(struct curtain_mode *mode, enum curtain_level lvl)
+{
+	mode->on_self = mode->on_exec = lvl;
+	mode->on_self_max = mode->on_exec_max = lvl;
+}
+
+static inline void
+mode_limit(struct curtain_mode *dst, const struct curtain_mode *src)
+{
+	dst->on_self_max = MAX(src->on_self_max, dst->on_self_max);
+	dst->on_exec_max = MAX(src->on_exec_max, dst->on_exec_max);
+	dst->on_self = MAX(src->on_self, dst->on_self_max);
+	dst->on_exec = MAX(src->on_exec, dst->on_exec_max);
+}
+
+static inline void
+mode_cap(struct curtain_mode *mode, enum curtain_level lvl)
+{
+	struct curtain_mode cap;
+	mode_set(&cap, lvl);
+	mode_limit(mode, &cap);
+}
+
+static inline void
+mode_harden(struct curtain_mode *mode)
+{
+	mode->on_self = mode->on_self_max = MAX(mode->on_self, mode->on_self_max);
+	mode->on_exec = mode->on_exec_max = MAX(mode->on_exec, mode->on_exec_max);
+}
+
+static unsigned
+curtain_key_hash(enum curtain_type type, union curtain_key key)
+{
+	switch (type) {
+	case CURTAINTYP_DEFAULT:
+	case CURTAINTYP_SYSFIL:
+	case CURTAINTYP_UNVEIL:
+		break;
+	case CURTAINTYP_IOCTL:
+		return ((unsigned)key.ioctl);
+	}
+	MPASS(0);
+	return (-1);
+}
+
+static bool
+curtain_key_same(enum curtain_type type,
+    union curtain_key key0, union curtain_key key1)
+{
+	switch (type) {
+	case CURTAINTYP_DEFAULT:
+	case CURTAINTYP_SYSFIL:
+	case CURTAINTYP_UNVEIL:
+		break;
+	case CURTAINTYP_IOCTL:
+		return (key0.ioctl == key1.ioctl);
+	}
+	MPASS(0);
+	return (false);
+}
+
+static inline struct curtain_item *
+curtain_hash_head(struct curtain *ct, unsigned key_hash)
+{
+	if (ct->ct_nslots == 0)
+		return (NULL);
+	return (&ct->ct_slots[key_hash & (ct->ct_nslots - 1)]);
+}
+
+static inline struct curtain_item *
+curtain_hash_next(struct curtain *ct, const struct curtain_item *item)
+{
+	struct curtain_item *next;
+	MPASS(item->type != 0);
+	MPASS(item->chain < ct->ct_nslots);
+	next = &ct->ct_slots[item->chain];
+	MPASS(next->type != 0);
+	return (next == item ? NULL : next);
+}
+
+static inline void
+curtain_hash_init(struct curtain *ct, struct curtain_item *item)
+{
+	item->chain = item - ct->ct_slots;
+	MPASS(item->chain < ct->ct_nslots);
+}
+
+static inline void
+curtain_hash_link(struct curtain *ct,
+    struct curtain_item *item, const struct curtain_item *next)
+{
+	MPASS(item->type != 0);
+	MPASS(next->type != 0);
+	item->chain = (next ? next : item) - ct->ct_slots;
+	MPASS(curtain_hash_next(ct, item) == next);
+}
+
+static struct curtain_item *
+curtain_lookup(const struct curtain *ctc, enum curtain_type type, union curtain_key key)
+{
+	struct curtain *ct = __DECONST(struct curtain *, ctc);
+	struct curtain_item *item;
+	item = curtain_hash_head(ct, curtain_key_hash(type, key));
+	if (!item || item->type == 0)
+		return (NULL);
+	do {
+		if (item->type == type && curtain_key_same(type, key, item->key))
+			break;
+	} while ((item = curtain_hash_next(ct, item)));
+	return (item);
+}
+
+static struct curtain_item *
+curtain_search(struct curtain *ct, enum curtain_type type, union curtain_key key)
+{
+	struct curtain_item *item, *prev;
+	item = curtain_hash_head(ct, curtain_key_hash(type, key));
+	if (item && item->type != 0) {
+		do {
+			prev = item;
+			if (item->type == type && curtain_key_same(type, key, item->key))
+				break;
+		} while ((item = curtain_hash_next(ct, item)));
+		if (!item) {
+			struct curtain_item *fill;
+			while (ct->ct_fill < &ct->ct_slots[ct->ct_nslots])
+				if ((fill = ct->ct_fill++)->type == 0) {
+					item = fill;
+					break;
+				}
+		}
+	} else
+		prev = NULL;
+	if (!item) {
+		ct->ct_overflowed = true;
+	} else if (item->type == 0) {
+		ct->ct_nitems++;
+		item->type = type;
+		item->key = key;
+		curtain_hash_init(ct, item);
+		if (prev)
+			curtain_hash_link(ct, prev, item);
+		mode_set(&item->mode, CURTAINLVL_PASS);
+	}
+	return (item);
+}
+
+static struct curtain *
+curtain_dup_compact(const struct curtain *src)
+{
+	struct curtain_item *di;
+	const struct curtain_item *si;
+	struct curtain *dst;
+	dst = curtain_make(src->ct_nitems);
+	dst->ct_overflowed = src->ct_overflowed;
+	memcpy(dst->ct_sysfils, src->ct_sysfils, sizeof dst->ct_sysfils);
+	for (si = src->ct_slots; si < &src->ct_slots[src->ct_nslots]; si++)
+		if (si->type != 0) {
+			di = curtain_search(dst, si->type, si->key);
+			di->mode = si->mode;
+		}
+#ifdef INVARIANTS
+	for (si = src->ct_slots; si < &src->ct_slots[src->ct_nslots]; si++)
+		if (si->type != 0) {
+			di = curtain_lookup(dst, si->type, si->key);
+			MPASS(di);
+			MPASS(memcmp(&di->mode, &si->mode, sizeof di->mode) == 0);
+		}
+#endif
+	return (dst);
+}
+
+static struct curtain *
+curtain_compact(struct curtain *src)
+{
+	struct curtain *dst;
+	dst = curtain_dup_compact(src);
+	curtain_free(src);
+	return (dst);
+}
+
+static int
+sysfil_for_type(enum curtain_type type)
+{
+	switch (type) {
+	case CURTAINTYP_DEFAULT:
+	case CURTAINTYP_SYSFIL:
+	case CURTAINTYP_UNVEIL:
+		break;
+	case CURTAINTYP_IOCTL:
+		return (SYSFIL_ANY_IOCTL);
+	}
+	MPASS(0);
+	return (SYSFIL_DEFAULT);
+}
+
+int
+curtain_check_key(struct thread *td, enum curtain_type type, union curtain_key key)
+{
+	const struct curtain *ct;
+	if ((ct = td->td_ucred->cr_curtain)) {
+		struct curtain_item *item;
+		item = curtain_lookup(ct, type, key);
+		if (item && item->mode.on_self == CURTAINLVL_PASS)
+			return (0);
+	}
+	return (sysfil_check(td, sysfil_for_type(type)));
+}
+
+static void
+curtain_limit_sysfils(struct curtain *ct, const sysfilset_t *sfs)
+{
+	struct curtain_item *item;
+	KASSERT(ct->ct_ref == 1, ("modifying shared curtain"));
+	for (int sf = 0; sf <= SYSFIL_LAST; sf++)
+		if (!BIT_ISSET(SYSFILSET_BITS, sf, sfs))
+			mode_cap(&ct->ct_sysfils[sf], CURTAINLVL_DENY);
+	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
+		if (item->type != 0)
+			if (!BIT_ISSET(SYSFILSET_BITS, sysfil_for_type(item->type), sfs))
+				mode_cap(&item->mode, CURTAINLVL_DENY);
+}
+
+static void
+curtain_limit(struct curtain *dst, const struct curtain *src)
+{
+	struct curtain_item *di;
+	const struct curtain_item *si;
+	KASSERT(dst->ct_ref == 1, ("modifying shared curtain"));
+	for (di = dst->ct_slots; di < &dst->ct_slots[dst->ct_nslots]; di++)
+		if (di->type != 0)
+			mode_limit(&di->mode,
+			    (si = curtain_lookup(src, di->type, di->key))
+			        ? &si->mode
+			        : &src->ct_sysfils[sysfil_for_type(di->type)]);
+	for (si = src->ct_slots; si < &src->ct_slots[src->ct_nslots]; si++)
+		if (si->type != 0) {
+			if (!curtain_lookup(dst, si->type, si->key) &&
+			    (di = curtain_search(dst, si->type, si->key))) {
+				/* XXX dst curtain may be full */
+				/* NOTE: limiting the dst sysfils must be done AFTER this */
+				di->mode = dst->ct_sysfils[sysfil_for_type(di->type)];
+				mode_limit(&di->mode, &si->mode);
+			}
+		}
+	for (int sf = 0; sf <= SYSFIL_LAST; sf++)
+		mode_limit(&dst->ct_sysfils[sf], &src->ct_sysfils[sf]);
+}
+
+/* Some sysfils shouldn't be disabled via curtainctl(2). */
+static const int sysfils_always[] = { SYSFIL_ALWAYS, SYSFIL_UNCAPSICUM };
+/* Some sysfils don't make much sense without some others. */
+static const int sysfils_expand[][2] = {
+	{ SYSFIL_RPATH,		SYSFIL_PATH		},
+	{ SYSFIL_WPATH,		SYSFIL_PATH		},
+	{ SYSFIL_CPATH,		SYSFIL_PATH		},
+	{ SYSFIL_DPATH,		SYSFIL_PATH		},
+	{ SYSFIL_PROT_EXEC,	SYSFIL_PROT_EXEC_LOOSE	},
+	{ SYSFIL_INET,		SYSFIL_NET		},
+	{ SYSFIL_INET_RAW,	SYSFIL_NET		},
+	{ SYSFIL_UNIX,		SYSFIL_NET		},
+	{ SYSFIL_CPUSET,	SYSFIL_SCHED		},
+	{ SYSFIL_ANY_PROCESS,	SYSFIL_SAME_SESSION	},
+	{ SYSFIL_SAME_SESSION,	SYSFIL_SAME_PGRP	},
+	{ SYSFIL_SAME_PGRP,	SYSFIL_CHILD_PROCESS	},
+};
+CTASSERT(SYSFIL_SAME_SESSION > SYSFIL_ANY_PROCESS);
+CTASSERT(SYSFIL_SAME_PGRP > SYSFIL_SAME_SESSION);
+CTASSERT(SYSFIL_CHILD_PROCESS > SYSFIL_SAME_PGRP);
+
+static struct curtain *
+curtain_build(int flags, size_t reqc, const struct curtainreq *reqv)
+{
+	struct curtain *ct;
+	const struct curtainreq *req;
+	enum curtain_level def_on_self, def_on_exec;
+	bool on_self, on_exec;
+
+	on_self = flags & CURTAINCTL_ON_SELF;
+	on_exec = flags & CURTAINCTL_ON_EXEC;
+
+	ct = curtain_make(CURTAIN_MAX_ITEMS);
+
+	def_on_self = def_on_exec = CURTAINLVL_DENY;
+	for (req = reqv; req < &reqv[reqc]; req++) {
+		bool req_on_self = on_self && req->flags & CURTAINREQ_ON_SELF;
+		bool req_on_exec = on_exec && req->flags & CURTAINREQ_ON_EXEC;
+		if (req->type == CURTAINTYP_DEFAULT) {
+			if (req_on_self)
+				def_on_self = req->level;
+			if (req_on_exec)
+				def_on_exec = req->level;
+		}
+	}
+	for (int sf = 0; sf <= SYSFIL_LAST; sf++) {
+		if (on_self)
+			ct->ct_sysfils[sf].on_self = def_on_self;
+		if (on_exec)
+			ct->ct_sysfils[sf].on_exec = def_on_exec;
+	}
+	if (on_self)
+		ct->ct_sysfils[SYSFIL_DEFAULT].on_self = MAX(CURTAINLVL_DENY, def_on_self);
+	if (on_exec)
+		ct->ct_sysfils[SYSFIL_DEFAULT].on_exec = MAX(CURTAINLVL_DENY, def_on_exec);
+	for (size_t i = 0; i < nitems(sysfils_always); i++) {
+		if (on_self)
+			ct->ct_sysfils[sysfils_always[i]].on_self = CURTAINLVL_PASS;
+		if (on_exec)
+			ct->ct_sysfils[sysfils_always[i]].on_exec = CURTAINLVL_PASS;
+	}
+
+	for (req = reqv; req < &reqv[reqc]; req++) {
+		bool req_on_self = on_self && req->flags & CURTAINREQ_ON_SELF;
+		bool req_on_exec = on_exec && req->flags & CURTAINREQ_ON_EXEC;
+		switch (req->type) {
+		case CURTAINTYP_DEFAULT:
+			break; /* handled earlier */
+		case CURTAINTYP_SYSFIL: {
+			int *sfp = req->data;
+			size_t sfc = req->size / sizeof *sfp;
+			while (sfc--) {
+				int sf = *sfp++;
+				if (!SYSFIL_USER_VALID(sf))
+					goto fail;
+				if (req_on_self)
+					ct->ct_sysfils[sf].on_self = req->level;
+				if (req_on_exec)
+					ct->ct_sysfils[sf].on_exec = req->level;
+			}
+			break;
+		}
+		case CURTAINTYP_UNVEIL:
+			break; /* handled elsewhere */
+		case CURTAINTYP_IOCTL: {
+			unsigned long *p = req->data;
+			size_t c = req->size / sizeof *p;
+			while (c--) {
+				struct curtain_item *item;
+				item = curtain_search(ct, req->type,
+				    (union curtain_key){ .ioctl = *p++ });
+				if (!item)
+					goto fail;
+				if (req_on_self)
+					item->mode.on_self = req->level;
+				if (req_on_exec)
+					item->mode.on_exec = req->level;
+			}
+			break;
+		}
+		default:
+			goto fail;
+		}
+	}
+
+	for (size_t i = 0; i < nitems(sysfils_expand); i++) {
+		if (on_self)
+			ct->ct_sysfils[sysfils_expand[i][1]].on_self =
+			    MIN(ct->ct_sysfils[sysfils_expand[i][0]].on_self,
+			        ct->ct_sysfils[sysfils_expand[i][1]].on_self);
+		if (on_exec)
+			ct->ct_sysfils[sysfils_expand[i][1]].on_exec =
+			    MIN(ct->ct_sysfils[sysfils_expand[i][0]].on_exec,
+			        ct->ct_sysfils[sysfils_expand[i][1]].on_exec);
+	}
+	if (on_exec)
+		ct->ct_sysfils[SYSFIL_PROT_EXEC_LOOSE].on_exec =
+		    MIN(MIN(ct->ct_sysfils[SYSFIL_EXEC].on_self,
+		            ct->ct_sysfils[SYSFIL_EXEC].on_exec),
+		        ct->ct_sysfils[SYSFIL_PROT_EXEC_LOOSE].on_exec);
+
+	if (flags & CURTAINCTL_ENFORCE) {
+		for (int sf = 0; sf <= SYSFIL_LAST; sf++)
+			mode_harden(&ct->ct_sysfils[sf]);
+	}
+
+	return (ct);
+
+fail:	curtain_free(ct);
+	return (NULL);
 }
 
 static int
@@ -336,150 +825,121 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 {
 	struct proc *p = td->td_proc;
 	struct ucred *cr, *old_cr;
+	struct curtain *ct;
 	const struct curtainreq *req;
-	int error;
-	sysfilset_t sysfilset_self, sysfilset_exec;
+	int error = 0;
 #ifdef UNVEIL
-	struct unveil_base *base = &td->td_proc->p_unveils;
+	struct unveil_base *base = &p->p_unveils;
 #endif
+	bool on_self, on_exec;
 
 	if (!sysfil_enabled)
 		return (ENOSYS);
 
-	BIT_ZERO(SYSFILSET_BITS, &sysfilset_self);
-	BIT_SET(SYSFILSET_BITS, SYSFIL_ALWAYS, &sysfilset_self);
-	BIT_SET(SYSFILSET_BITS, SYSFIL_UNCAPSICUM, &sysfilset_self);
-	BIT_COPY(SYSFILSET_BITS, &sysfilset_self, &sysfilset_exec);
+	on_self = flags & CURTAINCTL_ON_SELF;
+	on_exec = flags & CURTAINCTL_ON_EXEC;
 
 #ifdef UNVEIL
 	unveil_base_write_begin(base);
-#endif
 
-	cr = crget();
-	PROC_LOCK(p);
-	old_cr = crcopysafe(p, cr);
-	error = 0;
-
-	for (req = reqv; req < &reqv[reqc]; req++) {
-		bool on_self = flags & CURTAINCTL_ON_SELF &&
-		               req->flags & CURTAINREQ_ON_SELF,
-		     on_exec = flags & CURTAINCTL_ON_EXEC &&
-		               req->flags & CURTAINREQ_ON_EXEC;
-		switch (req->type) {
-		case CURTAIN_SYSFIL: {
-			int *sfp = req->data;
-			size_t sfc = req->size / sizeof *sfp;
-			while (sfc--) {
-				int sf = *sfp++;
-				if (!SYSFIL_USER_VALID(sf)) {
-					error = EINVAL;
-					goto out1;
-				}
-				if (flags & CURTAINCTL_REQUIRE &&
-				     ((on_self && !BIT_ISSET(SYSFILSET_BITS,
-				           sf, &cr->cr_sysfilset)) ||
-				      (on_exec && !BIT_ISSET(SYSFILSET_BITS,
-				           sf, &cr->cr_sysfilset_exec)))) {
-					error = EPERM;
-					goto out1;
-				}
-				if (on_self)
-					sysfilset_fill(&sysfilset_self, sf);
-				if (on_exec)
-					sysfilset_fill(&sysfilset_exec, sf);
-			}
-			break;
-		}
-#ifdef UNVEIL
-		case CURTAIN_UNVEIL: {
+	/*
+	 * Validate the unveil indexes first since there's no bailing out once
+	 * we've started updating them.
+	 */
+	for (req = reqv; req < &reqv[reqc]; req++)
+		if (req->type == CURTAINTYP_UNVEIL) {
 			struct curtainent_unveil *entp = req->data;
 			size_t entc = req->size / sizeof *entp;
-			while (entc--) { /* just check the indexes first */
+			while (entc--) {
 				error = unveil_index_check(base, (entp++)->index);
 				if (error)
-					goto out1;
+					goto out2;
 			}
-			break;
 		}
 #endif
-		default:
-			error = EINVAL;
-			goto out1;
+
+	ct = curtain_build(flags, reqc, reqv);
+	if (!ct) {
+		error = EINVAL;
+		goto out2;
+	}
+
+	do {
+		cr = crget();
+		PROC_LOCK(p);
+		old_cr = crcopysafe(p, cr);
+		if (cr->cr_curtain)
+			curtain_limit(ct, cr->cr_curtain);
+		else
+			curtain_limit_sysfils(ct, &cr->cr_sysfilset);
+		crhold(old_cr);
+		PROC_UNLOCK(p);
+		if (cr->cr_curtain)
+			curtain_free(cr->cr_curtain);
+		cr->cr_curtain = ct = curtain_compact(ct);
+		PROC_LOCK(p);
+		if (old_cr == p->p_ucred) {
+			crfree(old_cr);
+			break;
 		}
-	};
+		PROC_UNLOCK(p);
+		crfree(old_cr);
+		crfree(cr);
+	} while (true);
+
+	if (ct->ct_overflowed) {
+		error = EINVAL;
+		goto out1;
+	}
 
 	if (flags & CURTAINCTL_ON_SELF) {
-		BIT_AND(SYSFILSET_BITS, &cr->cr_sysfilset, &sysfilset_self);
+		for (int sf = 0; sf <= SYSFIL_LAST; sf++)
+			if (ct->ct_sysfils[sf].on_self != CURTAINLVL_PASS)
+				BIT_CLR(SYSFILSET_BITS, sf, &cr->cr_sysfilset);
 		MPASS(SYSFILSET_IS_RESTRICTED(&cr->cr_sysfilset));
 		MPASS(CRED_IN_RESTRICTED_MODE(cr));
 	}
-	if (flags & CURTAINCTL_ON_EXEC) {
-		if (BIT_ISSET(SYSFILSET_BITS, SYSFIL_EXEC, &cr->cr_sysfilset) ||
-		    BIT_ISSET(SYSFILSET_BITS, SYSFIL_EXEC, &sysfilset_exec))
-			/*
-			 * On OpenBSD, executing dynamically linked binaries
-			 * works with just the "exec" pledge (the "prot_exec"
-			 * pledge is only enforced after the dynamic linker has
-			 * done its job).  Not so for us, so implicitly allow
-			 * PROT_EXEC for now. XXX
-			 */
-			BIT_SET(SYSFILSET_BITS, SYSFIL_PROT_EXEC_LOOSE, &sysfilset_exec);
-		BIT_AND(SYSFILSET_BITS, &cr->cr_sysfilset_exec, &sysfilset_exec);
-		MPASS(SYSFILSET_IS_RESTRICTED(&cr->cr_sysfilset_exec));
-		MPASS(CRED_IN_RESTRICTED_EXEC_MODE(cr));
-	}
 
-	if (flags & (CURTAINCTL_ENFORCE|CURTAINCTL_ENGAGE)) {
-		proc_set_cred(p, cr);
-		crfree(old_cr);
-		if (flags & CURTAINCTL_ON_SELF && !PROC_IN_RESTRICTED_MODE(p))
-			panic("PROC_IN_RESTRICTED_MODE() bogus after curtainctl(2)");
-		if (flags & CURTAINCTL_ON_EXEC && !PROC_IN_RESTRICTED_EXEC_MODE(p))
-			panic("PROC_IN_RESTRICTED_EXEC_MODE() bogus after curtainctl(2)");
-	} else {
-		crfree(cr);
-		cr = old_cr;
-	}
+	if (!(flags & (CURTAINCTL_ENFORCE | CURTAINCTL_ENGAGE)))
+		goto out1;
+
+	proc_set_cred(p, cr);
+	crfree(old_cr);
+	if (on_self && !PROC_IN_RESTRICTED_MODE(p))
+		panic("PROC_IN_RESTRICTED_MODE() bogus");
 	PROC_UNLOCK(p);
 
 #ifdef UNVEIL
 	for (req = reqv; req < &reqv[reqc]; req++) {
-		bool on_self = flags & CURTAINCTL_ON_SELF &&
-		               req->flags & CURTAINREQ_ON_SELF,
-		     on_exec = flags & CURTAINCTL_ON_EXEC &&
-		               req->flags & CURTAINREQ_ON_EXEC;
-		if (req->type == CURTAIN_UNVEIL) {
+		bool req_on_self = on_self && req->flags & CURTAINREQ_ON_SELF;
+		bool req_on_exec = on_exec && req->flags & CURTAINREQ_ON_EXEC;
+		if (req->type == CURTAINTYP_UNVEIL) {
 			struct curtainent_unveil *entp = req->data;
 			size_t entc = req->size / sizeof *entp;
 			while (entc--) {
-				if (on_self)
+				if (req_on_self)
 					unveil_index_set(base, entp->index,
 					    UNVEIL_ON_SELF, entp->uperms);
-				if (on_exec)
+				if (req_on_exec)
 					unveil_index_set(base, entp->index,
 					    UNVEIL_ON_EXEC, entp->uperms);
 				entp++;
 			}
 		}
 	}
-
-	if (flags & (CURTAINCTL_ENFORCE|CURTAINCTL_ENGAGE)) {
-		if (flags & CURTAINCTL_ON_SELF)
-			unveil_base_activate(base, UNVEIL_ON_SELF);
-		if (flags & CURTAINCTL_ON_EXEC)
-			unveil_base_activate(base, UNVEIL_ON_EXEC);
-		if (flags & CURTAINCTL_ENFORCE) {
-			if (flags & CURTAINCTL_ON_SELF)
-				unveil_base_enforce(base, UNVEIL_ON_SELF);
-			if (flags & CURTAINCTL_ON_EXEC)
-				unveil_base_enforce(base, UNVEIL_ON_EXEC);
-		}
-		unveil_lockdown_fd(td);
+	if (on_self)
+		unveil_base_activate(base, UNVEIL_ON_SELF);
+	if (on_exec)
+		unveil_base_activate(base, UNVEIL_ON_EXEC);
+	if (flags & CURTAINCTL_ENFORCE) {
+		if (on_self)
+			unveil_base_enforce(base, UNVEIL_ON_SELF);
+		if (on_exec)
+			unveil_base_enforce(base, UNVEIL_ON_EXEC);
 	}
-
+	unveil_lockdown_fd(td);
 #endif
 	goto out2;
-
 out1:
 	PROC_UNLOCK(p);
 	crfree(cr);
@@ -496,7 +956,7 @@ int
 sys_curtainctl(struct thread *td, struct curtainctl_args *uap)
 {
 #ifdef SYSFIL
-	size_t reqc, reqi, rem;
+	size_t reqc, reqi, avail;
 	struct curtainreq *reqv;
 	int flags, error;
 	flags = uap->flags;
@@ -511,24 +971,27 @@ sys_curtainctl(struct thread *td, struct curtainctl_args *uap)
 	error = copyin(uap->reqv, reqv, reqc * sizeof *reqv);
 	if (error)
 		goto out;
-	rem = CURTAINCTL_MAX_SIZE;
+	avail = CURTAINCTL_MAX_SIZE;
 	while (reqi < reqc) {
 		struct curtainreq *req = &reqv[reqi];
 		void *udata = req->data;
-		if (rem < req->size) {
+		if (avail < req->size || (req->data == NULL && req->size != 0)) {
 			error = EINVAL;
 			goto out;
 		}
 		reqi++;
-		rem -= req->size;
-		req->data = malloc(req->size, M_TEMP, M_WAITOK);
-		error = copyin(udata, req->data, req->size);
-		if (error)
-			goto out;
+		if (udata) {
+			avail -= req->size;
+			req->data = malloc(req->size, M_TEMP, M_WAITOK);
+			error = copyin(udata, req->data, req->size);
+			if (error)
+				goto out;
+		}
 	}
 	error = do_curtainctl(td, flags, reqc, reqv);
 out:	while (reqi--)
-		free(reqv[reqi].data, M_TEMP);
+		if (reqv[reqi].data)
+			free(reqv[reqi].data, M_TEMP);
 	free(reqv, M_TEMP);
 	return (error);
 #else
@@ -536,8 +999,52 @@ out:	while (reqi--)
 #endif /* SYSFIL */
 }
 
+#ifdef SYSFIL
 
-#if defined(SYSFIL)
+void
+curtain_cap_enter(struct thread *td)
+{
+	struct proc *p = td->td_proc;
+	struct ucred *cr, *old_cr;
+	struct curtain *ct;
+
+	do {
+		cr = crget();
+		PROC_LOCK(p);
+		old_cr = crcopysafe(p, cr);
+		if (!cr->cr_curtain) {
+			ct = NULL;
+			break;
+		}
+		crhold(old_cr);
+		PROC_UNLOCK(p);
+		ct = curtain_dup(cr->cr_curtain);
+		curtain_free(cr->cr_curtain);
+		cr->cr_curtain = ct;
+		PROC_LOCK(p);
+		if (old_cr == p->p_ucred) {
+			crfree(old_cr);
+			break;
+		}
+		PROC_UNLOCK(p);
+		crfree(old_cr);
+		crfree(cr);
+	} while (true);
+
+	BIT_CLR(SYSFILSET_BITS, SYSFIL_UNCAPSICUM, &cr->cr_sysfilset);
+	if (ct)
+		mode_cap(&ct->ct_sysfils[SYSFIL_UNCAPSICUM], CURTAINLVL_DENY);
+	MPASS(CRED_IN_CAPABILITY_MODE(cr));
+	MPASS(CRED_IN_RESTRICTED_MODE(cr));
+
+	proc_set_cred(p, cr);
+	if (!PROC_IN_RESTRICTED_MODE(p))
+		panic("PROC_IN_RESTRICTED_MODE() bogus");
+	if (!PROC_IN_CAPABILITY_MODE(p))
+		panic("PROC_IN_CAPABILITY_MODE() bogus");
+	PROC_UNLOCK(p);
+	crfree(old_cr);
+}
 
 static cap_rights_t __read_mostly cap_sysfil_rpath_rights;
 static cap_rights_t __read_mostly cap_sysfil_wpath_rights;

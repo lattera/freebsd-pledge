@@ -38,8 +38,6 @@
 #include <sys/rwlock.h>
 #include <sys/sysent.h>
 
-#include <sys/sysfil.h>
-
 #include <vm/vm.h>
 #include <vm/vm_object.h>
 #include <vm/vm_page.h>
@@ -96,9 +94,6 @@ struct cdevsw dsp_cdevsw = {
 	.d_mmap =	dsp_mmap,
 	.d_mmap_single = dsp_mmap_single,
 	.d_name =	"dsp",
-#ifdef SYSFIL
-	.d_sysfil =	SYSFIL_AUDIO,
-#endif
 };
 
 static eventhandler_tag dsp_ehtag = NULL;

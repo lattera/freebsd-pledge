@@ -68,8 +68,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/unistd.h>
 #include <sys/selinfo.h>
 
-#include <sys/sysfil.h>
-
 #ifdef HAVE_KERNEL_OPTION_HEADERS
 #include "opt_snd.h"
 #endif
@@ -118,9 +116,6 @@ static struct cdevsw seq_cdevsw = {
 	.d_ioctl = mseq_ioctl,
 	.d_poll = mseq_poll,
 	.d_name = "sequencer",
-#ifdef SYSFIL
-	.d_sysfil = SYSFIL_AUDIO,
-#endif
 };
 
 struct seq_softc {

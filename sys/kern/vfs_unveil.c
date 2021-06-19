@@ -30,7 +30,7 @@ __FBSDID("$FreeBSD$");
 
 #ifdef UNVEIL
 
-MALLOC_DEFINE(M_UNVEIL, "unveil", "unveil");
+static MALLOC_DEFINE(M_UNVEIL, "unveil", "vnode unveils");
 
 static bool __read_mostly unveil_enabled = true;
 static unsigned int __read_mostly unveil_max_nodes_per_process = 128;

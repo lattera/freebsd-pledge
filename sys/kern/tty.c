@@ -66,7 +66,6 @@ __FBSDID("$FreeBSD$");
 #undef TTYDEFCHARS
 #include <sys/ucred.h>
 #include <sys/vnode.h>
-#include <sys/sysfil.h>
 
 #include <fs/devfs/devfs.h>
 
@@ -808,9 +807,6 @@ static struct cdevsw ttydev_cdevsw = {
 	.d_mmap		= ttydev_mmap,
 	.d_name		= "ttydev",
 	.d_flags	= D_TTY,
-#ifdef	SYSFIL
-	.d_sysfil	= SYSFIL_TTY,
-#endif
 };
 
 /*
@@ -903,9 +899,6 @@ static struct cdevsw ttyil_cdevsw = {
 	.d_ioctl	= ttyil_ioctl,
 	.d_name		= "ttyil",
 	.d_flags	= D_TTY,
-#ifdef	SYSFIL
-	.d_sysfil	= SYSFIL_TTY,
-#endif
 };
 
 static void
@@ -2232,9 +2225,6 @@ static struct cdevsw ttyconsdev_cdevsw = {
 	.d_mmap		= ttydev_mmap,
 	.d_name		= "ttyconsdev",
 	.d_flags	= D_TTY,
-#ifdef	SYSFIL
-	.d_sysfil	= SYSFIL_TTY,
-#endif
 };
 
 static void

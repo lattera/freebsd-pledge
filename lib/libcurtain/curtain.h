@@ -19,6 +19,13 @@ enum curtain_state {
 enum {
 	CURTAIN_UNVEIL_INHERIT = 1 << 0,
 	CURTAIN_UNVEIL_INSPECT = 1 << 1,
+
+	CURTAIN_LEVEL_SHIFT = 24,
+	CURTAIN_LEVEL_MASK = 0x3 << CURTAIN_LEVEL_SHIFT,
+	CURTAIN_PASS = 0 << CURTAIN_LEVEL_SHIFT,
+	CURTAIN_DENY = 1 << CURTAIN_LEVEL_SHIFT,
+	CURTAIN_TRAP = 2 << CURTAIN_LEVEL_SHIFT,
+	CURTAIN_KILL = 3 << CURTAIN_LEVEL_SHIFT,
 };
 
 struct curtain_slot *curtain_slot(void);
@@ -31,9 +38,14 @@ void curtain_state(struct curtain_slot *, enum curtain_on, enum curtain_state);
 int curtain_apply(void);
 int curtain_enforce(void);
 
+int curtain_default(struct curtain_slot *slot, unsigned flags);
 int curtain_sysfil(struct curtain_slot *, int sysfil);
+int curtain_ioctl(struct curtain_slot *, unsigned long ioctl, int flags);
+int curtain_ioctls(struct curtain_slot *, const unsigned long *ioctls, int flags);
 int curtain_unveil(struct curtain_slot *,
     const char *path, unsigned flags, unveil_perms uperms);
 int curtain_unveils_limit(struct curtain_slot *, unveil_perms uperms);
+
+extern const unsigned long curtain_ioctls_tty_basic[];
 
 #endif

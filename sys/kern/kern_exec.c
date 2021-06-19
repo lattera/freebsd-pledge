@@ -39,7 +39,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/acct.h>
 #include <sys/asan.h>
 #include <sys/capsicum.h>
-#include <sys/sysfil.h>
+#include <sys/curtain.h>
 #include <sys/compressor.h>
 #include <sys/eventhandler.h>
 #include <sys/exec.h>
@@ -548,7 +548,9 @@ interpret:
 	if (credential_changing &&
 #ifdef CAPABILITY_MODE
 	    !CRED_IN_CAPABILITY_MODE(oldcred) &&
-	    !CRED_IN_RESTRICTED_EXEC_MODE(oldcred) &&
+#endif
+#ifdef SYSFIL
+	    !curtain_cred_exec_restricted(oldcred) &&
 #endif
 #ifdef UNVEIL
 	    !unveil_exec_is_active(td) &&
@@ -601,10 +603,10 @@ interpret:
 	/*
 	 * Switch pending cred to its on-exec sysfils.
 	 */
-	if (sysfil_cred_need_exec_switch(oldcred)) {
+	if (curtain_cred_need_exec_switch(oldcred)) {
 		if (!imgp->newcred)
 			imgp->newcred = crdup(oldcred);
-		sysfil_cred_exec_switch(imgp->newcred);
+		curtain_cred_exec_switch(imgp->newcred);
 	}
 #endif
 

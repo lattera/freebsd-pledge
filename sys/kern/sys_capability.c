@@ -79,6 +79,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/ucred.h>
 #include <sys/uio.h>
 #include <sys/ktrace.h>
+#include <sys/curtain.h>
 
 #include <security/audit/audit.h>
 
@@ -101,12 +102,15 @@ FEATURE(security_capability_mode, "Capsicum Capability Mode");
 int
 sys_cap_enter(struct thread *td, struct cap_enter_args *uap)
 {
+#ifndef SYSFIL
 	struct ucred *newcred, *oldcred;
 	struct proc *p;
-
+#endif
 	if (IN_CAPABILITY_MODE(td))
 		return (0);
-
+#ifdef SYSFIL
+	curtain_cap_enter(td);
+#else
 	newcred = crget();
 	p = td->td_proc;
 	PROC_LOCK(p);
@@ -114,16 +118,14 @@ sys_cap_enter(struct thread *td, struct cap_enter_args *uap)
 	CRED_SET_CAPABILITY_MODE(newcred);
 	MPASS(CRED_IN_CAPABILITY_MODE(newcred));
 	MPASS(CRED_IN_RESTRICTED_MODE(newcred));
-	MPASS(CRED_IN_RESTRICTED_EXEC_MODE(newcred));
 	proc_set_cred(p, newcred);
 	if (!PROC_IN_RESTRICTED_MODE(p))
-		panic("PROC_IN_RESTRICTED_MODE() bogus after cap_enter(2)");
-	if (!PROC_IN_RESTRICTED_EXEC_MODE(p))
-		panic("PROC_IN_RESTRICTED_EXEC_MODE() bogus after cap_enter(2)");
+		panic("PROC_IN_RESTRICTED_MODE() bogus");
 	if (!PROC_IN_CAPABILITY_MODE(p))
-		panic("PROC_IN_CAPABILITY_MODE() bogus after cap_enter(2)");
+		panic("PROC_IN_CAPABILITY_MODE() bogus");
 	PROC_UNLOCK(p);
 	crfree(oldcred);
+#endif
 	return (0);
 }
 

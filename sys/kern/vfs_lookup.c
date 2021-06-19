@@ -47,7 +47,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/dirent.h>
 #include <sys/kernel.h>
 #include <sys/capsicum.h>
-#include <sys/sysfil.h>
+#include <sys/curtain.h>
 #include <sys/fcntl.h>
 #include <sys/jail.h>
 #include <sys/lock.h>

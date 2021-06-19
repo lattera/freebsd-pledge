@@ -53,7 +53,7 @@
 #include <sys/socketvar.h>
 #include <sys/sysctl.h>
 #include <sys/systm.h>
-#include <sys/sysfil.h>
+#include <sys/curtain.h>
 
 #include <net/if.h>
 #include <net/if_var.h>

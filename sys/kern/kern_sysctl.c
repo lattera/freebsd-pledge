@@ -49,6 +49,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/fail.h>
 #include <sys/systm.h>
 #include <sys/capsicum.h>
+#include <sys/curtain.h>
 #include <sys/kernel.h>
 #include <sys/limits.h>
 #include <sys/sysctl.h>
@@ -2201,14 +2202,19 @@ sysctl_root(SYSCTL_HANDLER_ARGS)
 	 * If the process is in capability mode, then don't permit reading or
 	 * writing unless specifically granted for the node.
 	 */
-	if (IN_RESTRICTED_MODE(req->td)) {
-		if (((req->oldptr && !(oid->oid_kind & CTLFLAG_CAPRD)) ||
-		     (req->newptr && !(oid->oid_kind & CTLFLAG_CAPWR))) &&
-		    (IN_CAPABILITY_MODE(req->td) ||
-		     !(oid->oid_kind & CTLFLAG_RESTRICT))) {
+	if (IN_CAPABILITY_MODE(req->td)) {
+		if ((req->oldptr && !(oid->oid_kind & CTLFLAG_CAPRD)) ||
+		    (req->newptr && !(oid->oid_kind & CTLFLAG_CAPWR))) {
 			error = EPERM;
 			goto out;
 		}
+	}
+#endif
+#ifdef SYSFIL
+	if (!(oid->oid_kind & (CTLFLAG_RESTRICT|CTLFLAG_CAPRW))) {
+		error = sysfil_check(req->td, SYSFIL_ANY_SYSCTL);
+		if (error)
+			goto out;
 	}
 #endif
 

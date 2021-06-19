@@ -69,7 +69,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysctl.h>
 #include <sys/md5.h>
 #include <sys/ucred.h>
-#include <sys/sysfil.h>
 
 #include <net/if.h>
 #include <net/if_var.h>
@@ -242,9 +241,6 @@ static struct cdevsw pf_cdevsw = {
 	.d_ioctl =	pfioctl,
 	.d_name =	PF_NAME,
 	.d_version =	D_VERSION,
-#ifdef SYSFIL
-	.d_sysfil =	SYSFIL_PFIL,
-#endif
 };
 
 volatile VNET_DEFINE_STATIC(int, pf_pfil_hooked);

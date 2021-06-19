@@ -67,7 +67,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/ttycom.h>
 #include <sys/uio.h>
 #include <sys/user.h>
-#include <sys/sysfil.h>
 
 #include <machine/stdarg.h>
 
@@ -621,9 +620,6 @@ static struct fileops ptsdev_ops = {
 	.fo_sendfile	= invfo_sendfile,
 	.fo_fill_kinfo	= ptsdev_fill_kinfo,
 	.fo_flags	= DFLAG_PASSABLE,
-#ifdef	SYSFIL
-	.fo_sysfil	= SYSFIL_TTY,
-#endif
 };
 
 /*

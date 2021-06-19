@@ -5,6 +5,8 @@
 #include <errno.h>
 #include <err.h>
 #include <sysexits.h>
+#include <sys/param.h>
+#include <sys/curtain.h>
 #include <sys/unveil.h>
 #include <sys/sysfil.h>
 
@@ -12,9 +14,17 @@
 
 struct curtain_slot {
 	struct curtain_slot *next;
-	struct unveil_mode *unveil_modes;
+	struct default_mode *default_mode;
 	struct sysfil_mode *sysfil_modes;
+	struct ioctl_mode *ioctl_modes;
+	struct unveil_mode *unveil_modes;
 	enum curtain_state state_on[CURTAIN_ON_COUNT];
+};
+
+struct default_mode {
+	struct curtain_slot *slot;
+	struct default_mode *next;
+	enum curtain_level level;
 };
 
 struct sysfil_mode {
@@ -27,6 +37,19 @@ struct sysfil_node {
 	struct sysfil_node *next;
 	struct sysfil_mode *modes;
 	int sysfil;
+};
+
+struct ioctl_mode {
+	struct curtain_slot *slot;
+	struct ioctl_node *node;
+	struct ioctl_mode *node_next, *slot_next;
+	enum curtain_level level;
+};
+
+struct ioctl_node {
+	struct ioctl_node *next;
+	struct ioctl_mode *modes;
+	unsigned long ioctl;
 };
 
 struct unveil_mode {
@@ -49,8 +72,13 @@ struct unveil_node {
 
 static struct curtain_slot *curtain_slots = NULL;
 
+static struct default_mode *default_modes = NULL;
+
 static size_t sysfils_count = 0;
 static struct sysfil_node *sysfils_list = NULL;
+
+static size_t ioctls_count = 0;
+static struct ioctl_node *ioctls_list = NULL;
 
 static size_t unveils_count = 0;
 static struct unveil_node **unveils_table = NULL;
@@ -110,6 +138,49 @@ void
 curtain_state(struct curtain_slot *slot, enum curtain_on on, enum curtain_state state)
 { slot->state_on[on] = state; }
 
+static enum curtain_level
+flags2level(int flags)
+{
+	switch (flags & CURTAIN_LEVEL_MASK) {
+	case CURTAIN_PASS: return (CURTAINLVL_PASS); break;
+	case CURTAIN_DENY: return (CURTAINLVL_DENY); break;
+	case CURTAIN_TRAP: return (CURTAINLVL_TRAP); break;
+	default:           return (CURTAINLVL_KILL); break;
+	}
+}
+
+
+int
+curtain_default(struct curtain_slot *slot, unsigned flags)
+{
+	struct default_mode *mode;
+	if (!(mode = slot->default_mode)) {
+		mode = malloc(sizeof *mode);
+		if (!mode)
+			err(EX_TEMPFAIL, "malloc");
+		*mode = (struct default_mode){
+			.slot = slot,
+			.next = default_modes,
+			.level = -1,
+		};
+		default_modes = slot->default_mode = mode;
+	}
+	mode->level = flags2level(flags);
+	return (0);
+}
+
+static void
+fill_defaults(enum curtain_level level_on[CURTAIN_ON_COUNT], enum curtain_state min_state)
+{
+	struct default_mode *mode;
+	for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++) {
+		level_on[on] = CURTAINLVL_KILL;
+		for (mode = default_modes; mode; mode = mode->next)
+			if (mode->slot->state_on[on] >= min_state)
+				level_on[on] = MIN(mode->level, level_on[on]);
+	}
+}
+
 
 static struct sysfil_node *
 get_sysfil(int sysfil)
@@ -135,6 +206,7 @@ get_sysfil(int sysfil)
 int
 curtain_sysfil(struct curtain_slot *slot, int sysfil)
 {
+	/* TODO: support level flags */
 	struct sysfil_node *node;
 	struct sysfil_mode *mode, **link;
 	node = get_sysfil(sysfil);
@@ -143,8 +215,6 @@ curtain_sysfil(struct curtain_slot *slot, int sysfil)
 	for (link = &node->modes; (mode = *link); link = &mode->node_next)
 		if (mode->slot == slot)
 			break;
-	if (mode)
-		return (0);
 	if (!mode) {
 		mode = malloc(sizeof *mode);
 		if (!mode)
@@ -171,6 +241,78 @@ fill_sysfils(unsigned *ents[CURTAIN_ON_COUNT], enum curtain_state min_state)
 			for (mode = node->modes; mode; mode = mode->node_next)
 				if (mode->slot->state_on[on] >= min_state) {
 					*ents[on]++ = node->sysfil;
+					break;
+				}
+}
+
+
+static struct ioctl_node *
+get_ioctl(unsigned long ioctl)
+{
+	struct ioctl_node *node, **link;
+	for (link = &ioctls_list; (node = *link); link = &node->next)
+		if (ioctl <= node->ioctl) {
+			if (ioctl != node->ioctl)
+				node = NULL;
+			break;
+		}
+	if (!node) {
+		node = malloc(sizeof *node);
+		if (!node)
+			err(EX_TEMPFAIL, "malloc");
+		*node = (struct ioctl_node){ .ioctl = ioctl, .next = *link };
+		*link = node;
+	}
+	return (node);
+}
+
+int
+curtain_ioctl(struct curtain_slot *slot, unsigned long ioctl, int flags)
+{
+	/* TODO: support level flags */
+	struct ioctl_node *node;
+	struct ioctl_mode *mode, **link;
+	node = get_ioctl(ioctl);
+	if (!node)
+		return (-1);
+	for (link = &node->modes; (mode = *link); link = &mode->node_next)
+		if (mode->slot == slot)
+			break;
+	if (!mode) {
+		mode = malloc(sizeof *mode);
+		if (!mode)
+			err(EX_TEMPFAIL, "malloc");
+		*mode = (struct ioctl_mode){
+			.slot = slot,
+			.node = node,
+			.slot_next = slot->ioctl_modes,
+			.node_next = *link,
+		};
+		slot->ioctl_modes = *link = mode;
+		ioctls_count++;
+	}
+	mode->level = flags2level(flags);
+	return (0);
+}
+
+int
+curtain_ioctls(struct curtain_slot *slot, const unsigned long *ioctls, int flags)
+{
+	for (const unsigned long *p = ioctls; *p; p++)
+		curtain_ioctl(slot, *p, flags);
+	return (0);
+}
+
+static void
+fill_ioctls(unsigned long *ents[CURTAIN_ON_COUNT], enum curtain_state min_state)
+{
+	struct ioctl_node *node;
+	struct ioctl_mode *mode;
+	for (node = ioctls_list; node; node = node->next)
+		for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++)
+			for (mode = node->modes; mode; mode = mode->node_next)
+				if (mode->slot->state_on[on] >= min_state) {
+					*ents[on]++ = node->ioctl;
 					break;
 				}
 }
@@ -444,32 +586,50 @@ static const int curtainreq_flags[CURTAIN_ON_COUNT] = {
 static int
 curtain_submit_1(int flags, enum curtain_state min_state)
 {
-	struct curtainreq reqv[2 * CURTAIN_ON_COUNT], *reqp = reqv;
+	struct curtainreq reqv[4 * CURTAIN_ON_COUNT], *reqp = reqv;
+	enum curtain_level levels_on[CURTAIN_ON_COUNT];
 	unsigned sysfils_v[CURTAIN_ON_COUNT][sysfils_count];
 	unsigned *sysfils_p[CURTAIN_ON_COUNT];
+	unsigned long ioctls_v[CURTAIN_ON_COUNT][ioctls_count];
+	unsigned long *ioctls_p[CURTAIN_ON_COUNT];
 	struct curtainent_unveil unveils_v[CURTAIN_ON_COUNT][unveils_count];
 	struct curtainent_unveil *unveils_p[CURTAIN_ON_COUNT];
 
+	fill_defaults(levels_on, min_state);
 	for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++) {
 		sysfils_p[on] = sysfils_v[on];
+		ioctls_p[on] = ioctls_v[on];
 		unveils_p[on] = unveils_v[on];
 	}
 	fill_sysfils(sysfils_p, min_state);
+	fill_ioctls(ioctls_p, min_state);
 	fill_unveils(unveils_p, min_state);
 
 	for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++)
 		if (flags & curtainctl_flags[on]) {
-			size_t sysfils_c, unveils_c;
+			size_t sysfils_c, unveils_c, ioctls_c;
+			*reqp++ = (struct curtainreq){
+				.type = CURTAINTYP_DEFAULT,
+				.flags = curtainreq_flags[on],
+				.level = levels_on[on],
+			};
 			if ((sysfils_c = sysfils_p[on] - sysfils_v[on]) != 0)
 				*reqp++ = (struct curtainreq){
-					.type = CURTAIN_SYSFIL,
+					.type = CURTAINTYP_SYSFIL,
 					.flags = curtainreq_flags[on],
 					.data = sysfils_v[on],
 					.size = sysfils_c * sizeof **sysfils_v,
 				};
+			if ((ioctls_c = ioctls_p[on] - ioctls_v[on]) != 0)
+				*reqp++ = (struct curtainreq){
+					.type = CURTAINTYP_IOCTL,
+					.flags = curtainreq_flags[on],
+					.data = ioctls_v[on],
+					.size = ioctls_c * sizeof **ioctls_v,
+				};
 			if ((unveils_c = unveils_p[on] - unveils_v[on]) != 0)
 				*reqp++ = (struct curtainreq){
-					.type = CURTAIN_UNVEIL,
+					.type = CURTAINTYP_UNVEIL,
 					.flags = curtainreq_flags[on],
 					.data = unveils_v[on],
 					.size = unveils_c * sizeof **unveils_v,

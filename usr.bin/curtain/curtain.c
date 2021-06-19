@@ -703,8 +703,10 @@ main(int argc, char *argv[])
 	argv += optind;
 	argc -= optind;
 
+	curtain_ioctls(main_slot, curtain_ioctls_tty_basic, 0);
+
 	if (!signaling)
-		curtain_sysfil(main_slot, SYSFIL_ERROR);
+		curtain_default(main_slot, CURTAIN_DENY);
 	if (!no_protexec)
 		curtain_sysfil(main_slot, SYSFIL_PROT_EXEC);
 	if (!no_network)

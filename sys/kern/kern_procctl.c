@@ -43,7 +43,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/syscallsubr.h>
 #include <sys/sysproto.h>
 #include <sys/wait.h>
-#include <sys/sysfil.h>
+#include <sys/curtain.h>
 
 #include <vm/vm.h>
 #include <vm/pmap.h>

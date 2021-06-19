@@ -75,7 +75,7 @@ __FBSDID("$FreeBSD$");
 #ifdef KTRACE
 #include <sys/ktrace.h>
 #endif
-#include <sys/sysfil.h>
+#include <sys/curtain.h>
 
 #include <security/audit/audit.h>
 
@@ -774,7 +774,7 @@ kern_ioctl(struct thread *td, int fd, u_long com, caddr_t data)
 	}
 #endif
 #ifdef SYSFIL
-	error = sysfil_require_ioctl(td, fp->f_ops->fo_sysfil, com);
+	error = sysfil_require_ioctl(td, com);
 	if (error)
 		goto out;
 #endif

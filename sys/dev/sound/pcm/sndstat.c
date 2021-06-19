@@ -45,8 +45,6 @@
 #include <sys/sysent.h>
 #endif
 
-#include <sys/sysfil.h>
-
 #include <dev/sound/pcm/sound.h>
 #include <dev/sound/pcm/pcm.h>
 #include <dev/sound/version.h>
@@ -73,9 +71,6 @@ static struct cdevsw sndstat_cdevsw = {
 	.d_ioctl =	sndstat_ioctl,
 	.d_name =	"sndstat",
 	.d_flags =	D_TRACKCLOSE,
-#ifdef SYSFIL
-	.d_sysfil =	SYSFIL_AUDIO,
-#endif
 };
 
 struct sndstat_entry {

@@ -84,6 +84,7 @@ enum promise_type {
 	PROMISE_ANY_PRIV,
 	PROMISE_ANY_IOCTL,
 	PROMISE_ANY_SOCKOPT,
+	PROMISE_ANY_SYSCTL,
 	PROMISE_AUDIO,
 	PROMISE_COUNT /* must be last */
 };
@@ -157,6 +158,7 @@ static const struct promise_name {
 	[PROMISE_ANY_PRIV] =		{ "any_priv" },
 	[PROMISE_ANY_IOCTL] =		{ "any_ioctl" },
 	[PROMISE_ANY_SOCKOPT] =		{ "any_sockopt" },
+	[PROMISE_ANY_SYSCTL] =		{ "any_sysctl" },
 	[PROMISE_AUDIO] =		{ "audio" },
 };
 
@@ -164,7 +166,6 @@ static const struct promise_sysfil {
 	enum promise_type type;
 	int sysfil;
 } sysfils_table[] = {
-	{ PROMISE_ERROR,		SYSFIL_ERROR },
 	{ PROMISE_BASIC,		SYSFIL_STDIO },
 	{ PROMISE_STDIO,		SYSFIL_STDIO },
 	{ PROMISE_UNVEIL,		SYSFIL_UNVEIL },
@@ -242,7 +243,15 @@ static const struct promise_sysfil {
 	{ PROMISE_ANY_PRIV,		SYSFIL_ANY_PRIV },
 	{ PROMISE_ANY_IOCTL,		SYSFIL_ANY_IOCTL },
 	{ PROMISE_ANY_SOCKOPT,		SYSFIL_ANY_SOCKOPT },
+	{ PROMISE_ANY_SYSCTL,		SYSFIL_ANY_SYSCTL },
 	{ PROMISE_AUDIO,		SYSFIL_AUDIO },
+};
+
+static const struct promise_ioctl {
+	enum promise_type type;
+	const unsigned long *ioctls;
+} ioctls_table[] = {
+	{ PROMISE_TTY, curtain_ioctls_tty_basic },
 };
 
 static const char *const root_path = "/";
@@ -393,6 +402,7 @@ do_promises_slots(enum curtain_on on,
 	bool fill_sysfils[PROMISE_COUNT], fill_unveils[PROMISE_COUNT];
 	const struct promise_unveil *pu;
 	const struct promise_sysfil *ps;
+	const struct promise_ioctl *pi;
 	bool tainted;
 
 	/*
@@ -439,6 +449,13 @@ do_promises_slots(enum curtain_on on,
 	for (ps = sysfils_table; ps != &sysfils_table[nitems(sysfils_table)]; ps++)
 		if (fill_sysfils[ps->type])
 			curtain_sysfil(promise_sysfil_slots[ps->type], ps->sysfil);
+
+	for (pi = ioctls_table; pi != &ioctls_table[nitems(ioctls_table)]; pi++)
+		if (fill_sysfils[pi->type])
+			curtain_ioctls(promise_sysfil_slots[ps->type], pi->ioctls, 0);
+
+	if (fill_sysfils[PROMISE_ERROR])
+		curtain_default(promise_sysfil_slots[PROMISE_ERROR], CURTAIN_DENY);
 
 	if (!always_slot) {
 		always_slot = curtain_slot_neutral();

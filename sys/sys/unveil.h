@@ -2,7 +2,6 @@
 #define	_SYS_UNVEIL_H_
 
 #include <sys/types.h>
-#include <sys/malloc.h>
 #include <sys/vnode.h>
 #include <sys/queue.h>
 #include <sys/tree.h>
@@ -87,10 +86,6 @@ struct curtainent_unveil {
 
 
 #ifdef _KERNEL
-
-#ifdef UNVEIL
-MALLOC_DECLARE(M_UNVEIL);
-#endif
 
 enum unveil_on {
 	UNVEIL_ON_SELF,

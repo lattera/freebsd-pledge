@@ -76,7 +76,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/ktrace.h>
 #endif
 #include <machine/atomic.h>
-#include <sys/sysfil.h>
 
 #include <vm/uma.h>
 
@@ -144,9 +143,6 @@ static struct fileops kqueueops = {
 	.fo_chown = invfo_chown,
 	.fo_sendfile = invfo_sendfile,
 	.fo_fill_kinfo = kqueue_fill_kinfo,
-#ifdef	SYSFIL
-	.fo_sysfil = SYSFIL_ALWAYS,
-#endif
 };
 
 static int 	knote_attach(struct knote *kn, struct kqueue *kq);

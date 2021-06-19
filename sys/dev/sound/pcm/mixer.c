@@ -34,8 +34,6 @@
 
 #include <dev/sound/pcm/sound.h>
 
-#include <sys/sysfil.h>
-
 #include "feeder_if.h"
 #include "mixer_if.h"
 
@@ -107,9 +105,6 @@ static struct cdevsw mixer_cdevsw = {
 	.d_close =	mixer_close,
 	.d_ioctl =	mixer_ioctl,
 	.d_name =	"mixer",
-#ifdef SYSFIL
-	.d_sysfil =	SYSFIL_AUDIO,
-#endif
 };
 
 /**

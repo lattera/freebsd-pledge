@@ -65,13 +65,13 @@
 #define	SYSFIL_CHROOT		30
 #define	SYSFIL_JAIL		31
 #define	SYSFIL_SCHED		32
-#define	SYSFIL_ERROR		33
+#define	SYSFIL__UNUSED0		33
 #define	SYSFIL_PS		34
 #define	SYSFIL_INET		35
 #define	SYSFIL_INET_RAW		36
 #define	SYSFIL_UNIX		37
 #define	SYSFIL_MCAST		38
-#define	SYSFIL__UNUSED0		39
+#define	SYSFIL_ANY_SYSCTL	39
 #define	SYSFIL_CHMOD_SPECIAL	40
 #define	SYSFIL_SYSFLAGS		41
 #define	SYSFIL_ANY_AF		42
@@ -100,6 +100,8 @@
 #define	SYSFIL_PFIL		65
 #define	SYSFIL_AUDIO		66
 #define	SYSFIL_LAST		66 /* UPDATE ME!!! */
+
+#define	SYSFIL_COUNT		(SYSFIL_LAST + 1)
 
 #ifdef _KERNEL
 CTASSERT(SYSFIL_UNCAPSICUM == SYSFILSET_NOT_IN_CAPABILITY_MODE_BIT);
@@ -139,127 +141,5 @@ CTASSERT(SYSFIL_LAST < SYSFIL_SIZE);
 
 #define	SYSFIL_VALID(i)		((i) >= 0 && (i) <= SYSFIL_LAST)
 #define	SYSFIL_USER_VALID(i)	(SYSFIL_VALID(i) && (i) >= SYSFIL_STDIO)
-
-
-struct curtainreq {
-	unsigned type;
-	int flags;
-	size_t size;
-	void *data;
-};
-
-#define	CURTAINCTL_MAX_REQS	1024
-#define	CURTAINCTL_MAX_SIZE	(16 << 10)
-
-int curtainctl(int flags, size_t reqc, struct curtainreq *reqv);
-
-#define	CURTAINCTL_VERSION_MASK	(0xff << 24)
-#define	CURTAINCTL_VERSION	(1 << 24)
-
-#define	CURTAINCTL_ENGAGE	(1 <<  0 | CURTAINCTL_VERSION)
-#define	CURTAINCTL_REQUIRE	(1 <<  1 | CURTAINCTL_VERSION)
-#define	CURTAINCTL_ENFORCE	(1 <<  2 | CURTAINCTL_VERSION)
-
-#define	CURTAINCTL_ON_SELF	(1 << 16)
-#define	CURTAINCTL_ON_EXEC	(1 << 17)
-
-#define	CURTAINREQ_ON_SELF	(1 << 16)
-#define	CURTAINREQ_ON_EXEC	(1 << 17)
-
-#define	CURTAIN_SYSFIL		1
-#define	CURTAIN_UNVEIL		2
-
-
-#ifdef _KERNEL
-
-#define	SYSFIL_FAILED_ERRNO	EPERM
-
-static inline int
-sysfil_match_cred(const struct ucred *cr, int sf) {
-#ifdef SYSFIL
-	return (BIT_ISSET(SYSFILSET_BITS, sf, &cr->cr_sysfilset));
-#else
-	return (1);
-#endif
-}
-
-static inline int
-sysfil_check_cred(const struct ucred *cr, int sf)
-{
-	if (__predict_false(!SYSFIL_VALID(sf)))
-		return (EINVAL);
-	if (__predict_false(!sysfil_match_cred(cr, sf)))
-		return (SYSFIL_FAILED_ERRNO);
-	return (0);
-}
-
-
-static inline int
-sysfil_check(const struct thread *td, int sf)
-{
-	return (sysfil_check_cred(td->td_ucred, sf));
-}
-
-void sysfil_violation(struct thread *, int sf, int error);
-
-/*
- * Note: sysfil_require() may acquire the PROC_LOCK to send a violation signal.
- * Thus it must not be called with the PROC_LOCK (or any other incompatible
- * lock) currently being held.
- */
-static inline int
-sysfil_require(struct thread *td, int sf)
-{
-	int error;
-	PROC_LOCK_ASSERT(td->td_proc, MA_NOTOWNED);
-	error = sysfil_check(td, sf);
-	if (__predict_false(error))
-		sysfil_violation(td, sf, error);
-	return (error);
-}
-
-static inline int
-sysfil_failed(struct thread *td, int sf)
-{
-	sysfil_violation(td, sf, SYSFIL_FAILED_ERRNO);
-	return (SYSFIL_FAILED_ERRNO);
-}
-
-int sysfil_require_vm_prot(struct thread *, vm_prot_t prot, bool loose);
-int sysfil_require_ioctl(struct thread *, int sf, u_long com);
-int sysfil_require_af(struct thread *, int af);
-int sysfil_require_sockopt(struct thread *, int level, int name);
-
-int sysfil_priv_check(struct ucred *, int priv);
-
-static inline void
-sysfil_cred_init(struct ucred *cr)
-{
-#ifdef SYSFIL
-	BIT_FILL(SYSFILSET_BITS, &cr->cr_sysfilset);
-	BIT_FILL(SYSFILSET_BITS, &cr->cr_sysfilset_exec);
-#endif
-}
-
-static inline bool
-sysfil_cred_need_exec_switch(const struct ucred *cr)
-{
-#ifdef SYSFIL
-	return (BIT_CMP(SYSFILSET_BITS, &cr->cr_sysfilset, &cr->cr_sysfilset_exec) != 0);
-#endif
-	return (false);
-}
-
-static inline void
-sysfil_cred_exec_switch(struct ucred *cr)
-{
-#ifdef SYSFIL
-	cr->cr_sysfilset = cr->cr_sysfilset_exec;
-#endif
-}
-
-void sysfil_cred_rights(struct ucred *, cap_rights_t *);
-
-#endif
 
 #endif

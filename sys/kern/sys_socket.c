@@ -61,7 +61,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/un.h>
 #include <sys/unpcb.h>
 #include <sys/user.h>
-#include <sys/sysfil.h>
 
 #include <net/if.h>
 #include <net/if_var.h>
@@ -116,9 +115,6 @@ struct fileops	socketops = {
 	.fo_fill_kinfo = soo_fill_kinfo,
 	.fo_aio_queue = soo_aio_queue,
 	.fo_flags = DFLAG_PASSABLE,
-#ifdef SYSFIL
-	.fo_sysfil = SYSFIL_SOCKET_IOCTL,
-#endif
 };
 
 static int
