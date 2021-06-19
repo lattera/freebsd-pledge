@@ -64,6 +64,7 @@ enum promise_type {
 	PROMISE_CHMOD_SPECIAL,
 	PROMISE_SYSFLAGS,
 	PROMISE_SENDFILE,
+	PROMISE_NET,
 	PROMISE_INET,
 	PROMISE_INET_RAW,
 	PROMISE_UNIX,
@@ -161,6 +162,12 @@ static const struct promise_name {
 	[PROMISE_ANY_SOCKOPT] =		{ "any_sockopt" },
 	[PROMISE_ANY_SYSCTL] =		{ "any_sysctl" },
 	[PROMISE_AUDIO] =		{ "audio" },
+};
+
+static const enum promise_type depends_table[][2] = {
+	{ PROMISE_DNS, PROMISE_INET },
+	{ PROMISE_INET, PROMISE_NET },
+	{ PROMISE_UNIX, PROMISE_NET },
 };
 
 static const struct promise_sysfil {
@@ -273,10 +280,7 @@ static const struct promise_sockopt {
 	const int (*sockopts)[2];
 } sockopts_table[] = {
 	{ PROMISE_STDIO, curtain_sockopts_basic },
-	{ PROMISE_UNIX, curtain_sockopts_basic },
-	{ PROMISE_UNIX, curtain_sockopts_net },
-	{ PROMISE_INET, curtain_sockopts_basic },
-	{ PROMISE_INET, curtain_sockopts_net },
+	{ PROMISE_NET, curtain_sockopts_net },
 	{ PROMISE_INET, curtain_sockopts_inet },
 };
 
@@ -422,11 +426,24 @@ sysfils_for_uperms(struct curtain_slot *slot, unveil_perms uperms)
 
 static void
 do_promises_slots(enum curtain_on on,
-    const enum curtain_state promises[],
-    const enum curtain_state unveil_promises[])
+    enum curtain_state promises[],
+    enum curtain_state unveil_promises[])
 {
 	bool fill[PROMISE_COUNT], fill_unveils[PROMISE_COUNT];
-	bool tainted;
+	bool tainted, changed;
+
+#define	FOREACH_ARRAY(ent, tab) \
+	for (__typeof(&(tab)[0]) (ent) = (tab); (ent) < &(tab)[nitems(tab)]; (ent)++)
+
+	do { /* enable promises that enabled promises depend on */
+		changed = false;
+		FOREACH_ARRAY(e, depends_table) {
+			if (promises[(*e)[1]] < promises[(*e)[0]]) {
+				promises[(*e)[1]] = promises[(*e)[0]];
+				changed = true;
+			}
+		}
+	} while (changed);
 
 	/*
 	 * Initialize promise slots on first use.  Sysfil and unveils are
@@ -452,9 +469,6 @@ do_promises_slots(enum curtain_on on,
 		if (promise_unveil_slots[promise])
 			curtain_state(promise_unveil_slots[promise], on, state);
 	}
-
-#define	FOREACH_ARRAY(ent, tab) \
-	for (__typeof(&(tab)[0]) (ent) = (tab); (ent) < &(tab)[nitems(tab)]; (ent)++)
 
 	tainted = issetugid() != 0;
 	FOREACH_ARRAY(e, unveils_table) {
@@ -527,8 +541,8 @@ do_pledge(enum curtain_state *promises_on[CURTAIN_ON_COUNT])
 		if (!promises_on[on])
 			continue;
 		has_pledges_on[on] = true;
-		wanted_uperms = uperms_for_promises(promises_on[on]);
 		do_promises_slots(on, promises_on[on], promises_on[on]);
+		wanted_uperms = uperms_for_promises(promises_on[on]);
 		if (custom_slot_on[on]) {
 			curtain_unveils_limit(custom_slot_on[on], wanted_uperms);
 			unveil_enable_delayed(on); /* see do_unveil_both() */
