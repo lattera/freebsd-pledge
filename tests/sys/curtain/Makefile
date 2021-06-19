@@ -36,6 +36,7 @@ ATF_TESTS_C+=	unveil_fattr
 ATF_TESTS_C+=	unveil_emptypath
 
 ATF_TESTS_C+=	curtain_levels
+ATF_TESTS_C+=	curtainctl_overflow
 
 PLAIN_TESTS_C+=	openbsd-unveil-syscalls
 WARNS.openbsd-unveil-syscalls=3

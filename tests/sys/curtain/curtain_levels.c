@@ -7,8 +7,6 @@
 #include <atf-c.h>
 #include <curtain.h>
 
-#include "path-utils.h"
-
 ATF_TC_WITHOUT_HEAD(sysfil_level_pass);
 ATF_TC_BODY(sysfil_level_pass, tc)
 {

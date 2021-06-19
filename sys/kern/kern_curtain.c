@@ -71,7 +71,7 @@ STATNODE_COUNTER(probes, curtain_stats_probes, "");
 
 #endif
 
-CTASSERT(CURTAIN_MAX_ITEMS <= (curtain_index)-1);
+CTASSERT(CURTAINCTL_MAX_ITEMS <= (curtain_index)-1);
 
 #ifdef SYSFIL
 
@@ -539,7 +539,7 @@ curtain_build(int flags, size_t reqc, const struct curtainreq *reqv)
 	on_self = flags & CURTAINCTL_ON_SELF;
 	on_exec = flags & CURTAINCTL_ON_EXEC;
 
-	ct = curtain_make(CURTAIN_MAX_ITEMS);
+	ct = curtain_make(CURTAINCTL_MAX_ITEMS);
 
 	def_on_self = def_on_exec = CURTAINLVL_DENY;
 	for (req = reqv; req < &reqv[reqc]; req++) {
