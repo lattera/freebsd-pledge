@@ -744,6 +744,7 @@ unveil_index_set(struct unveil_base *base,
 	return (EINVAL);
 }
 
+
 void
 unveil_lockdown_fd(struct thread *td)
 {

@@ -19,6 +19,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/mman.h>
 #include <sys/counter.h>
 #include <sys/sdt.h>
+#include <sys/conf.h>
 #include <sys/sysfil.h>
 #include <sys/unveil.h>
 #include <sys/curtain.h>
@@ -207,6 +208,15 @@ curtain_cred_exec_switch(struct ucred *cr)
 	cr->cr_curtain = ct;
 	MPASS(CRED_IN_RESTRICTED_MODE(cr));
 }
+
+bool
+curtain_device_unveil_bypass(struct thread *td, struct cdev *dev)
+{
+	return (td->td_ucred == dev->si_cred &&
+	        dev->si_devsw->d_flags & D_TTY &&
+	        sysfil_check(td, SYSFIL_TTY) == 0);
+}
+
 
 static inline void
 mode_set(struct curtain_mode *mode, enum curtain_level lvl)

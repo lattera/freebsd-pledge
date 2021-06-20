@@ -905,6 +905,9 @@ unveil_lookup_check(struct nameidata *ndp)
 		}
 		if (cap_rights_contains(&haverights, needrights))
 			return (0);
+		if (ndp->ni_vp && ndp->ni_vp->v_type == VCHR && ndp->ni_vp->v_rdev &&
+		    curtain_device_unveil_bypass(cnp->cn_thread, ndp->ni_vp->v_rdev))
+			return (0);
 	}
 	return (uperms & UPERM_EXPOSE ? EACCES : ENOENT);
 }

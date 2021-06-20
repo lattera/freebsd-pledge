@@ -43,7 +43,7 @@ enum promise_type {
 	PROMISE_EXEC,
 	PROMISE_PROT_EXEC,
 	PROMISE_TTY,
-	PROMISE_TTY_PTS,
+	PROMISE_PTS,
 	PROMISE_RLIMIT,
 	PROMISE_SCHED,
 	PROMISE_SETTIME,
@@ -117,7 +117,7 @@ static const struct promise_name {
 	[PROMISE_EXEC] =		{ "exec" },
 	[PROMISE_PROT_EXEC] =		{ "prot_exec" },
 	[PROMISE_TTY] =			{ "tty" },
-	[PROMISE_TTY_PTS] =		{ "tty_pts" },
+	[PROMISE_PTS] =			{ "pts" },
 	[PROMISE_RLIMIT] =		{ "rlimit" },
 	[PROMISE_SCHED] =		{ "sched" },
 	[PROMISE_SETTIME] =		{ "settime" },
@@ -201,7 +201,7 @@ static const struct promise_sysfil {
 	{ PROMISE_EXEC,			SYSFIL_EXEC },
 	{ PROMISE_PROT_EXEC,		SYSFIL_PROT_EXEC },
 	{ PROMISE_TTY,			SYSFIL_TTY },
-	{ PROMISE_TTY_PTS,		SYSFIL_TTY },
+	{ PROMISE_PTS,			SYSFIL_TTY },
 	{ PROMISE_RLIMIT,		SYSFIL_RLIMIT },
 	{ PROMISE_SCHED,		SYSFIL_SCHED },
 	{ PROMISE_SETTIME,		SYSFIL_SETTIME },
@@ -253,6 +253,7 @@ static const struct promise_ioctl {
 	const unsigned long *ioctls;
 } ioctls_table[] = {
 	{ PROMISE_TTY, curtain_ioctls_tty_basic },
+	{ PROMISE_PTS, curtain_ioctls_tty_pts },
 	{ PROMISE_NET, curtain_ioctls_net_basic },
 	{ PROMISE_ROUTE, curtain_ioctls_net_route },
 };
@@ -374,7 +375,6 @@ static const struct promise_unveil {
 	{ _PATH_SERVICES_DB, R,				PROMISE_DNS },
 	{ _PATH_PROTOCOLS, R,				PROMISE_DNS },
 	{ _PATH_TTY, R|W|A,				PROMISE_TTY },
-	{ _PATH_DEV "/pts/", R|W|A,			PROMISE_TTY_PTS }, /* !!! */
 	{ _PATH_NS_CONF, R,				PROMISE_GETPW },
 	{ _PATH_MP_DB, R,				PROMISE_GETPW },
 	{ _PATH_SMP_DB, R,				PROMISE_GETPW },

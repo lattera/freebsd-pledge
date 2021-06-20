@@ -727,6 +727,7 @@ main(int argc, char *argv[])
 	argc -= optind;
 
 	curtain_ioctls(main_slot, curtain_ioctls_tty_basic, 0);
+	curtain_ioctls(main_slot, curtain_ioctls_tty_pts, 0);
 
 	if (!signaling)
 		curtain_default(main_slot, CURTAIN_DENY);

@@ -104,6 +104,8 @@ bool	curtain_cred_exec_restricted(const struct ucred *);
 void	curtain_cred_exec_switch(struct ucred *);
 void	curtain_cap_enter(struct thread *);
 
+bool	curtain_device_unveil_bypass(struct thread *, struct cdev *);
+
 
 #define	SYSFIL_FAILED_ERRNO	EPERM
 

@@ -1,6 +1,8 @@
 #include <curtain.h>
 #include <sys/param.h>
 
+#include <sys/filio.h>
+
 #include <termios.h>
 #include <sys/ttycom.h>
 
@@ -22,6 +24,7 @@ const unsigned long curtain_ioctls_tty_basic[] = {
 	TIOCSETA,
 	TIOCSETAW,
 	TIOCSETAF,
+	TIOCNOTTY,
 	TIOCSTOP,
 	TIOCSTART,
 	TIOCSCTTY,
@@ -31,6 +34,14 @@ const unsigned long curtain_ioctls_tty_basic[] = {
 	TIOCFLUSH,
 	TIOCGWINSZ,
 	TIOCSWINSZ,
+	-1
+};
+
+const unsigned long curtain_ioctls_tty_pts[] = {
+	TIOCPKT,
+	TIOCGPTN,
+	TIOCPTMASTER,
+	FIODGNAME,
 	-1
 };
 
