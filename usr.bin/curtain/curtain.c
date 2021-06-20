@@ -718,12 +718,13 @@ main(int argc, char *argv[])
 	char *sh_argv[2];
 	int ch, r;
 	char *promises = NULL;
-	bool autotag = false, autotag_unsafe = false;
-	bool nofork = false;
-	bool pty_wrap = false;
-	bool signaling = false,
+	bool autotag = false,
+	     autotag_unsafe = false,
+	     signaling = false,
+	     no_fork = false,
 	     run_shell = false,
 	     login_shell = false,
+	     new_session = false,
 	     new_pgrp = false,
 	     no_network = false,
 	     no_protexec = false;
@@ -735,7 +736,7 @@ main(int argc, char *argv[])
 	const char *tags_buf[64];
 	struct config cfg;
 	struct curtain_slot *unveils_slot, *main_slot;
-	bool do_exec;
+	bool do_exec, pty_wrap;
 	int status;
 
 	cfg = (struct config){
@@ -814,7 +815,7 @@ main(int argc, char *argv[])
 			  cmd_arg0 = optarg;
 			  break;
 		case 'S':
-			  pty_wrap = true;
+			  new_session = true;
 			  run_shell = true;
 			  break;
 		case 's':
@@ -826,7 +827,7 @@ main(int argc, char *argv[])
 			  run_shell = true;
 			  break;
 		case 'f':
-			  nofork = true;
+			  no_fork = true;
 			  break;
 		case 'X':
 			  x11_mode = X11_UNTRUSTED;
@@ -871,7 +872,7 @@ main(int argc, char *argv[])
 #endif
 		*cfg.tags_fill++ = "@network";
 	}
-	if (pty_wrap) {
+	if (new_session) {
 		curtain_sysfil(main_slot, SYSFIL_SAME_SESSION, 0);
 		*cfg.tags_fill++ = "@session";
 	}
@@ -887,7 +888,7 @@ main(int argc, char *argv[])
 		}
 	}
 	if (x11_mode != X11_NONE) {
-		if (nofork)
+		if (no_fork)
 			errx(EX_USAGE, "X11 mode incompatible with -f");
 		*cfg.tags_fill++ = "@x11";
 		*cfg.tags_fill++ = "@gui";
@@ -898,7 +899,7 @@ main(int argc, char *argv[])
 		*cfg.tags_fill++ = "@gui";
 		prepare_wayland(main_slot);
 	}
-	if (!nofork) {
+	if (!no_fork) {
 		prepare_tmpdir(main_slot);
 	} else {
 		/*
@@ -975,19 +976,19 @@ main(int argc, char *argv[])
 		cmd_arg0 = p;
 	}
 
-	if (pty_wrap && nofork)
-		errx(EX_USAGE, "pty wrapping mode incompatible with -f");
+	if (new_session && no_fork)
+		errx(EX_USAGE, "-S is incompatible with -f");
+	pty_wrap = false;
 
-	if (!(do_exec = nofork)) {
-		bool dosetsid;
-		dosetsid = false;
-		if (pty_wrap) {
+	if (!(do_exec = no_fork)) {
+		bool do_setsid;
+		do_setsid = false;
+		if (new_session) {
 			if (isatty(STDIN_FILENO) > 0) {
 				pty_wrap_setup();
-			} else {
-				dosetsid = true;
-				pty_wrap = false;
-			}
+				pty_wrap = true;
+			} else
+				do_setsid = true;
 		}
 
 		child_pid = 0;
@@ -1006,7 +1007,7 @@ main(int argc, char *argv[])
 				r = login_tty(pty_slave_fd);
 				if (r < 0)
 					err(EX_OSERR, "login_tty");
-			} else if (dosetsid) {
+			} else if (do_setsid) {
 				r = setsid();
 				if (r < 0)
 					err(EX_OSERR, "setsid");
@@ -1026,7 +1027,7 @@ main(int argc, char *argv[])
 		execvp(file, argv);
 		err(EX_OSERR, "%s", file);
 	}
-	assert(!nofork && child_pid > 0);
+	assert(!no_fork && child_pid > 0);
 
 	if (pty_wrap)
 		pty_wrap_loop();
