@@ -81,6 +81,25 @@ ps_visibility_body() {
 	atf_check -s not-exit:0 -o empty -e not-empty curtain ps -p $$
 }
 
+atf_test_case session_with_non_tty
+session_with_non_tty_body() {
+	ps -o sid -p $$ > not-exp
+	echo 'ps -o sid -p $$' | atf_check -o not-file:not-exp curtain -S
+}
+
+atf_test_case script_with_cmd
+script_with_cmd_body() {
+	atf_check -o not-empty script typescript echo test
+	sed -e '1d' -e '$d' -e 's;\r$;!;g' typescript > out
+	cat << '.' >> exp
+Command: echo test
+test!
+
+Command exit status: 0
+.
+	atf_check -o file:exp cat out
+}
+
 atf_init_test_cases() {
 	atf_add_test_case cmd_true
 	atf_add_test_case cmd_false
@@ -95,4 +114,6 @@ atf_init_test_cases() {
 	atf_add_test_case date_localtime
 	atf_add_test_case sh_bg_wait
 	atf_add_test_case ps_visibility
+	atf_add_test_case script_with_cmd
+	atf_add_test_case session_with_non_tty
 }
