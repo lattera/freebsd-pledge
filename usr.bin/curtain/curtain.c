@@ -4,9 +4,11 @@
 #include <dirent.h>
 #include <err.h>
 #include <errno.h>
+#include <libutil.h>
 #include <limits.h>
 #include <paths.h>
 #include <pledge.h>
+#include <poll.h>
 #include <pwd.h>
 #include <signal.h>
 #include <stdbool.h>
@@ -14,12 +16,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/param.h>
 #include <sys/stat.h>
 #include <sys/sysfil.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sysexits.h>
+#include <termios.h>
 #include <unistd.h>
 
 #include <sys/socket.h>
@@ -575,10 +579,117 @@ prepare_wayland(struct curtain_slot *slot)
 }
 
 
+static struct termios tty_saved_termios;
+static int pty_master_fd, pty_slave_fd;
+
+static void
+restore_tty()
+{
+	int r;
+	r = tcsetattr(STDIN_FILENO, TCSADRAIN, &tty_saved_termios);
+	if (r < 0)
+		warn("tcsetattr");
+}
+
+static void
+handle_sigwinch(int sig)
+{
+	int r;
+	struct winsize ws;
+	(void)sig;
+	if (pty_master_fd < 0)
+		return;
+	r = ioctl(STDIN_FILENO, TIOCGWINSZ, &ws);
+	if (r >= 0)
+		r = ioctl(pty_master_fd, TIOCSWINSZ, &ws);
+	if (r < 0)
+		warn("ioctl");
+}
+
+static void
+pty_wrap_setup()
+{
+	bool has_tt, has_ws;
+	struct termios tt;
+	struct winsize ws;
+	int r;
+	r = tcgetattr(STDIN_FILENO, &tt);
+	if (!(has_tt = r >= 0))
+		warn("tcgetattr");
+	r = ioctl(STDIN_FILENO, TIOCGWINSZ, &ws);
+	if (!(has_ws = r >= 0))
+		warn("ioctl");
+
+	r = openpty(&pty_master_fd, &pty_slave_fd, NULL,
+	    has_tt ? &tt : NULL, has_ws ? &ws : NULL);
+	if (r < 0)
+		err(EX_OSERR, "openpty");
+
+	if (has_tt) {
+		tty_saved_termios = tt;
+		atexit(restore_tty);
+		cfmakeraw(&tt);
+		r = tcsetattr(STDIN_FILENO, TCSAFLUSH, &tt);
+		if (r < 0)
+			warn("tcsetattr");
+	}
+	if (has_ws)
+		signal(SIGWINCH, handle_sigwinch);
+}
+
+static void
+pty_wrap_loop()
+{
+	struct pollfd pfds[] = {
+		{ .fd = STDIN_FILENO, .events = POLLIN },
+		{ .fd = pty_master_fd, .events = POLLIN },
+	};
+	char buf[1024];
+	int r;
+	while (true) {
+		r = poll(pfds, 2, INFTIM);
+		if (r <= 0) {
+			if (r < 0 && errno != EINTR)
+				err(EX_OSERR, "poll");
+			continue;
+		}
+
+		if (pfds[0].revents & POLLNVAL)
+			errx(EX_OSERR, "poll POLLNVAL");
+		if (pfds[0].revents & (POLLIN|POLLHUP|POLLERR)) {
+			r = read(STDIN_FILENO, buf, sizeof buf);
+			if (r < 0)
+				err(EX_IOERR, "read");
+			if (r == 0) {
+				close(pty_master_fd);
+				pty_master_fd = -1;
+				break;
+			}
+			r = write(pty_master_fd, buf, r);
+			if (r < 0)
+				err(EX_IOERR, "write");
+		}
+
+		if (pfds[1].revents & POLLNVAL)
+			errx(EX_OSERR, "poll POLLNVAL");
+		if (pfds[1].revents & (POLLIN|POLLHUP|POLLERR)) {
+			r = read(pty_master_fd, buf, sizeof buf);
+			if (r < 0)
+				err(EX_IOERR, "read");
+			if (r == 0)
+				break;
+			r = write(STDOUT_FILENO, buf, r);
+			if (r < 0)
+				err(EX_IOERR, "write");
+		}
+	}
+}
+
+
 static pid_t child_pid;
 
 static void
-signal_handler(int sig)
+handle_exit(int sig)
 {
 	assert(child_pid >= 0);
 	if (child_pid)
@@ -596,7 +707,7 @@ usage(void)
 {
 	fprintf(stderr, "usage: %s [-fkgenaAXYW] "
 	    "[-t tag] [-p promises] [-u unveil ...] "
-	    "[-sl] cmd [arg ...]\n",
+	    "[-Ssl] cmd [arg ...]\n",
 	    getprogname());
 	exit(EX_USAGE);
 }
@@ -609,6 +720,7 @@ main(int argc, char *argv[])
 	char *promises = NULL;
 	bool autotag = false, autotag_unsafe = false;
 	bool nofork = false;
+	bool pty_wrap = false;
 	bool signaling = false,
 	     run_shell = false,
 	     login_shell = false,
@@ -636,7 +748,7 @@ main(int argc, char *argv[])
 	curtain_enable((main_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 	curtain_enable((unveils_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 
-	while ((ch = getopt(argc, argv, "fkgenaAt:p:u:0:slXYW")) != -1)
+	while ((ch = getopt(argc, argv, "fkgenaAt:p:u:0:SslXYW")) != -1)
 		switch (ch) {
 		case 'k':
 			signaling = true;
@@ -701,11 +813,16 @@ main(int argc, char *argv[])
 		case '0':
 			  cmd_arg0 = optarg;
 			  break;
+		case 'S':
+			  pty_wrap = true;
+			  run_shell = true;
+			  break;
+		case 's':
+			  run_shell = true;
+			  break;
 		case 'l':
 			  /* TODO: reset env? */
 			  login_shell = true;
-			  /* FALLTHROUGH */
-		case 's':
 			  run_shell = true;
 			  break;
 		case 'f':
@@ -754,9 +871,12 @@ main(int argc, char *argv[])
 #endif
 		*cfg.tags_fill++ = "@network";
 	}
-	if (run_shell) {
-		*cfg.tags_fill++ = "@session";
+	if (pty_wrap) {
 		curtain_sysfil(main_slot, SYSFIL_SAME_SESSION, 0);
+		*cfg.tags_fill++ = "@session";
+	}
+	if (run_shell) {
+		*cfg.tags_fill++ = "@shell";
 	}
 	if (new_pgrp) {
 		curtain_sysfil(main_slot, SYSFIL_SAME_PGRP, 0);
@@ -855,26 +975,47 @@ main(int argc, char *argv[])
 		cmd_arg0 = p;
 	}
 
+	if (pty_wrap && nofork)
+		errx(EX_USAGE, "pty wrapping mode incompatible with -f");
+
 	if (!(do_exec = nofork)) {
+		bool dosetsid;
+		dosetsid = false;
+		if (pty_wrap) {
+			if (isatty(STDIN_FILENO) > 0) {
+				pty_wrap_setup();
+			} else {
+				dosetsid = true;
+				pty_wrap = false;
+			}
+		}
+
 		child_pid = 0;
-		signal(SIGHUP, signal_handler);
-		signal(SIGINT, signal_handler);
-		signal(SIGQUIT, signal_handler);
-		signal(SIGTERM, signal_handler);
+		signal(SIGHUP, handle_exit);
+		signal(SIGINT, handle_exit);
+		signal(SIGQUIT, handle_exit);
+		signal(SIGTERM, handle_exit);
 
 		child_pid = vfork();
 		if (child_pid < 0)
 			err(EX_TEMPFAIL, "fork");
 		if ((do_exec = child_pid == 0)) {
 			err_set_exit(_exit);
-#if 0
-			/* XXX This makes /dev/tty not work. */
-			pid = setsid();
-			if (pid < 0)
-				err(EX_OSERR, "setsid");
-#endif
-		} else
+			if (pty_wrap) {
+				close(pty_master_fd);
+				r = login_tty(pty_slave_fd);
+				if (r < 0)
+					err(EX_OSERR, "login_tty");
+			} else if (dosetsid) {
+				r = setsid();
+				if (r < 0)
+					err(EX_OSERR, "setsid");
+			}
+		} else {
 			err_set_exit(NULL);
+			if (pty_wrap)
+				close(pty_slave_fd);
+		}
 	}
 	if (do_exec) {
 		char *file;
@@ -886,6 +1027,9 @@ main(int argc, char *argv[])
 		err(EX_OSERR, "%s", file);
 	}
 	assert(!nofork && child_pid > 0);
+
+	if (pty_wrap)
+		pty_wrap_loop();
 
 	r = waitpid(child_pid, &status, 0);
 	if (r < 0)
