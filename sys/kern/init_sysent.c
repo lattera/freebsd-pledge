@@ -261,7 +261,7 @@ struct sysent sysent[] = {
 	{ .sy_narg = AS(sysctl_args), .sy_call = (sy_call_t *)sys___sysctl, .sy_auevent = AUE_SYSCTL, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 202 = __sysctl */
 	{ .sy_narg = AS(mlock_args), .sy_call = (sy_call_t *)sys_mlock, .sy_auevent = AUE_MLOCK, .sy_flags = (SYSFIL_MLOCK << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 203 = mlock */
 	{ .sy_narg = AS(munlock_args), .sy_call = (sy_call_t *)sys_munlock, .sy_auevent = AUE_MUNLOCK, .sy_flags = (SYSFIL_MLOCK << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 204 = munlock */
-	{ .sy_narg = AS(undelete_args), .sy_call = (sy_call_t *)sys_undelete, .sy_auevent = AUE_UNDELETE, .sy_flags = (SYSFIL_WPATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 205 = undelete */
+	{ .sy_narg = AS(undelete_args), .sy_call = (sy_call_t *)sys_undelete, .sy_auevent = AUE_UNDELETE, .sy_flags = (SYSFIL_CPATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 205 = undelete */
 	{ .sy_narg = AS(futimes_args), .sy_call = (sy_call_t *)sys_futimes, .sy_auevent = AUE_FUTIMES, .sy_flags = (SYSFIL_FATTR << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 206 = futimes */
 	{ .sy_narg = AS(getpgid_args), .sy_call = (sy_call_t *)sys_getpgid, .sy_auevent = AUE_GETPGID, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 207 = getpgid */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 208 = reserved for local use */
@@ -490,8 +490,8 @@ struct sysent sysent[] = {
 	{ .sy_narg = AS(thr_exit_args), .sy_call = (sy_call_t *)sys_thr_exit, .sy_auevent = AUE_THR_EXIT, .sy_flags = (SYSFIL_THREAD << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 431 = thr_exit */
 	{ .sy_narg = AS(thr_self_args), .sy_call = (sy_call_t *)sys_thr_self, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_THREAD_CHECKED << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 432 = thr_self */
 	{ .sy_narg = AS(thr_kill_args), .sy_call = (sy_call_t *)sys_thr_kill, .sy_auevent = AUE_THR_KILL, .sy_flags = (SYSFIL_THREAD_CHECKED << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 433 = thr_kill */
-	{ .sy_narg = AS(curtainctl_args), .sy_call = (sy_call_t *)sys_curtainctl, .sy_auevent = AUE_CURTAINCTL, .sy_flags = (SYSFIL_ALWAYS << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 434 = curtainctl */
-	{ .sy_narg = AS(unveilreg_args), .sy_call = (sy_call_t *)sys_unveilreg, .sy_auevent = AUE_UNVEILREG, .sy_flags = (SYSFIL_UNVEIL << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 435 = unveilreg */
+	{ .sy_narg = AS(curtainctl_args), .sy_call = (sy_call_t *)sys_curtainctl, .sy_auevent = AUE_CURTAINCTL, .sy_flags = (SYSFIL_CURTAIN << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 434 = curtainctl */
+	{ .sy_narg = AS(unveilreg_args), .sy_call = (sy_call_t *)sys_unveilreg, .sy_auevent = AUE_UNVEILREG, .sy_flags = (SYSFIL_CURTAIN << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 435 = unveilreg */
 	{ .sy_narg = AS(jail_attach_args), .sy_call = (sy_call_t *)sys_jail_attach, .sy_auevent = AUE_JAIL_ATTACH, .sy_flags = (SYSFIL_JAIL << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 436 = jail_attach */
 	{ .sy_narg = AS(extattr_list_fd_args), .sy_call = (sy_call_t *)sys_extattr_list_fd, .sy_auevent = AUE_EXTATTR_LIST_FD, .sy_flags = (SYSFIL_EXTATTR << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 437 = extattr_list_fd */
 	{ .sy_narg = AS(extattr_list_file_args), .sy_call = (sy_call_t *)sys_extattr_list_file, .sy_auevent = AUE_EXTATTR_LIST_FILE, .sy_flags = (SYSFIL_EXTATTR << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 438 = extattr_list_file */

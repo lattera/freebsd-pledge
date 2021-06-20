@@ -1212,7 +1212,7 @@
 		    size_t len
 		);
 	}
-205	AUE_UNDELETE	STD|SYSFIL_WPATH {
+205	AUE_UNDELETE	STD|SYSFIL_CPATH {
 		int undelete(
 		    _In_z_ const char *path
 		);
@@ -2271,14 +2271,14 @@
 		    int sig
 		);
 	}
-434	AUE_CURTAINCTL	STD|SYSFIL_ALWAYS {
+434	AUE_CURTAINCTL	STD|SYSFIL_CURTAIN {
 		int curtainctl(
 		    int flags,
 		    size_t reqc,
 		    struct curtainreq *reqv
 		);
 	}
-435	AUE_UNVEILREG	STD|SYSFIL_UNVEIL {
+435	AUE_UNVEILREG	STD|SYSFIL_CURTAIN {
 		int unveilreg(
 		    int flags,
 		    struct unveilreg *reg

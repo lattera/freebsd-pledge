@@ -81,6 +81,7 @@ struct ucred {
 #ifdef SYSFIL
 	sysfilset_t	cr_sysfilset;
 	struct curtain	*cr_curtain;
+	void		*cr_pspare;	/* general use */
 #else
 	u_int		cr_flags;	/* credential flags */
 	void		*cr_pspare2[2];	/* general use 2 */

@@ -72,6 +72,7 @@ ATF_TC_BODY(sysfil_raise_allow, tc)
 	slot1 = curtain_slot();
 	curtain_default(slot0, CURTAIN_DENY);
 	curtain_sysfil(slot0, SYSFIL_STDIO, CURTAIN_PASS);
+	curtain_sysfil(slot0, SYSFIL_CURTAIN, CURTAIN_PASS);
 	curtain_state(slot1, CURTAIN_ON_SELF, CURTAIN_RESERVED);
 	curtain_sysfil(slot1, SYSFIL_FLOCK, CURTAIN_PASS);
 	ATF_REQUIRE(curtain_enforce() >= 0);
@@ -92,6 +93,7 @@ ATF_TC_BODY(sysfil_raise_block, tc)
 	curtain_state(slot1, CURTAIN_ON_SELF, CURTAIN_DISABLED);
 	curtain_default(slot0, CURTAIN_DENY);
 	curtain_sysfil(slot0, SYSFIL_STDIO, CURTAIN_PASS);
+	curtain_sysfil(slot0, SYSFIL_CURTAIN, CURTAIN_PASS);
 	curtain_sysfil(slot1, SYSFIL_FLOCK, CURTAIN_PASS);
 	ATF_REQUIRE(curtain_enforce() >= 0);
 	ATF_CHECK_ERRNO(EPERM, flock(fd, LOCK_EX) < 0);

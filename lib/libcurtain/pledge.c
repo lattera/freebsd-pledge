@@ -83,15 +83,11 @@ enum promise_type {
 	PROMISE_MOUNT,
 	PROMISE_QUOTA,
 	PROMISE_FH,
-	PROMISE_SOCKET_IOCTL,
-	PROMISE_BPF,
-	PROMISE_PFIL,
 	PROMISE_ANY_SOCKAF,
 	PROMISE_ANY_PRIV,
 	PROMISE_ANY_IOCTL,
 	PROMISE_ANY_SOCKOPT,
 	PROMISE_ANY_SYSCTL,
-	PROMISE_AUDIO,
 	PROMISE_COUNT /* must be last */
 };
 
@@ -160,15 +156,11 @@ static const struct promise_name {
 	[PROMISE_MOUNT] =		{ "mount" },
 	[PROMISE_QUOTA] =		{ "quota" },
 	[PROMISE_FH] =			{ "fh" },
-	[PROMISE_SOCKET_IOCTL] =	{ "socket_ioctl" },
-	[PROMISE_BPF] =			{ "bpf" },
-	[PROMISE_PFIL] =		{ "pfil" },
 	[PROMISE_ANY_SOCKAF] =		{ "any_sockaf" },
 	[PROMISE_ANY_PRIV] =		{ "any_priv" },
 	[PROMISE_ANY_IOCTL] =		{ "any_ioctl" },
 	[PROMISE_ANY_SOCKOPT] =		{ "any_sockopt" },
 	[PROMISE_ANY_SYSCTL] =		{ "any_sysctl" },
-	[PROMISE_AUDIO] =		{ "audio" },
 };
 
 static const enum promise_type depends_table[][2] = {
@@ -184,7 +176,6 @@ static const struct promise_sysfil {
 } sysfils_table[] = {
 	{ PROMISE_BASIC,		SYSFIL_STDIO },
 	{ PROMISE_STDIO,		SYSFIL_STDIO },
-	{ PROMISE_UNVEIL,		SYSFIL_UNVEIL },
 	{ PROMISE_RPATH,		SYSFIL_RPATH },
 	{ PROMISE_WPATH,		SYSFIL_WPATH },
 	{ PROMISE_CPATH,		SYSFIL_CPATH },
@@ -250,17 +241,11 @@ static const struct promise_sysfil {
 	{ PROMISE_MOUNT,		SYSFIL_MOUNT },
 	{ PROMISE_QUOTA,		SYSFIL_QUOTA },
 	{ PROMISE_FH,			SYSFIL_FH },
-	{ PROMISE_SOCKET_IOCTL,		SYSFIL_SOCKET_IOCTL },
-	{ PROMISE_BPF,			SYSFIL_BPF },
-	{ PROMISE_BPF,			SYSFIL_SOCKET_IOCTL }, /* XXX */
-	{ PROMISE_PFIL,			SYSFIL_PFIL },
-	{ PROMISE_PFIL,			SYSFIL_INET_RAW }, /* XXX for ipfw */
 	{ PROMISE_ANY_SOCKAF,		SYSFIL_ANY_SOCKAF },
 	{ PROMISE_ANY_PRIV,		SYSFIL_ANY_PRIV },
 	{ PROMISE_ANY_IOCTL,		SYSFIL_ANY_IOCTL },
 	{ PROMISE_ANY_SOCKOPT,		SYSFIL_ANY_SOCKOPT },
 	{ PROMISE_ANY_SYSCTL,		SYSFIL_ANY_SYSCTL },
-	{ PROMISE_AUDIO,		SYSFIL_AUDIO },
 };
 
 static const struct promise_ioctl {
@@ -399,12 +384,6 @@ static const struct promise_unveil {
 	{ _PATH_ETC "/ssl/private/", N,			PROMISE_SSL },
 	{ _PATH_LOCALBASE "/etc/ssl/", R,		PROMISE_SSL },
 	{ _PATH_LOCALBASE "/etc/ssl/private/", N,	PROMISE_SSL },
-	{ _PATH_DEV "/bpf", R|W,			PROMISE_BPF },
-	{ _PATH_DEV "/pfil", R|W,			PROMISE_PFIL },
-	{ _PATH_DEV "/pf", R|W,				PROMISE_PFIL },
-	{ _PATH_DEV "/sndstat", R|W,			PROMISE_AUDIO },
-	{ _PATH_DEV "/mixer", R|W,			PROMISE_AUDIO },
-	{ _PATH_DEV "/dsp", R|W,			PROMISE_AUDIO },
 	{ tmp_path, T,					PROMISE_TMPPATH },
 #undef	T
 #undef	A
@@ -474,17 +453,19 @@ uperms_for_promises(const enum curtain_state *promises)
 static void
 sysfils_for_uperms(struct curtain_slot *slot, unveil_perms uperms)
 {
-	/*
-	 * TODO: Could probably reduce these when the only unveils for certain
-	 * permissions are on non-directories.
-	 */
-	if (uperms & UPERM_READ) curtain_sysfil(slot, SYSFIL_RPATH, 0);
+	if (uperms & UPERM_READ)
+		curtain_sysfil(slot, SYSFIL_RPATH, 0);
 	/* Note that UPERM_WRITE does not imply SYSFIL_FATTR. */
-	if (uperms & UPERM_WRITE) curtain_sysfil(slot, SYSFIL_WPATH, 0);
-	if (uperms & (UPERM_CREATE | UPERM_DELETE)) curtain_sysfil(slot, SYSFIL_CPATH, 0);
-	if (uperms & UPERM_EXECUTE) curtain_sysfil(slot, SYSFIL_EXEC, 0);
-	if (uperms & UPERM_SETATTR) curtain_sysfil(slot, SYSFIL_FATTR, 0);
-	if (uperms & UPERM_UNIX) curtain_sysfil(slot, SYSFIL_UNIX, 0);
+	if (uperms & UPERM_WRITE)
+		curtain_sysfil(slot, SYSFIL_WPATH, 0);
+	if (uperms & (UPERM_CREATE | UPERM_DELETE))
+		curtain_sysfil(slot, SYSFIL_CPATH, 0);
+	if (uperms & UPERM_EXECUTE)
+		curtain_sysfil(slot, SYSFIL_EXEC, 0);
+	if (uperms & UPERM_SETATTR)
+		curtain_sysfil(slot, SYSFIL_FATTR, 0);
+	if (uperms & UPERM_UNIX)
+		curtain_sysfil(slot, SYSFIL_UNIX, 0);
 	if (uperms & UPERM_TMPDIR) {
 		curtain_sysfil(slot, SYSFIL_RPATH, 0);
 		curtain_sysfil(slot, SYSFIL_WPATH, 0);
@@ -579,11 +560,11 @@ do_promises_slots(enum curtain_on on,
 	if (!always_slot) {
 		always_slot = curtain_slot_neutral();
 		/*
-		 * Always allow to reduce unveil permissions later on.
+		 * Always allow to reduce curtain/unveil permissions later on.
 		 * This is different from the "unveil" promise which is handled
 		 * specially in do_pledge().
 		 */
-		curtain_sysfil(always_slot, SYSFIL_UNVEIL, 0);
+		curtain_sysfil(always_slot, SYSFIL_CURTAIN, 0);
 		/*
 		 * Always keep the root directory chdir()-able (but not
 		 * necessarily stat()-able or readable).  This is sufficient to
