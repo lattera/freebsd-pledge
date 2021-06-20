@@ -766,7 +766,14 @@ do_unveil_add(struct thread *td, struct unveil_base *base, int flags, struct unv
 	int error;
 	if ((reg.atflags & ~(AT_SYMLINK_NOFOLLOW | AT_RESOLVE_BENEATH)) != 0)
 		return (EINVAL);
-	ndflags = (reg.atflags & AT_SYMLINK_NOFOLLOW ? NOFOLLOW : FOLLOW) |
+	/*
+	 * NOTE: When doing a lookup to add an unveil, namei() behaves
+	 * similarly to CREATE/REMOVE/RENAME lookups with respect to
+	 * non-existent final path components and requires that either
+	 * WANTPARENT or LOCKPARENT be enabled.
+	 */
+	ndflags = WANTPARENT |
+	    (reg.atflags & AT_SYMLINK_NOFOLLOW ? NOFOLLOW : FOLLOW) |
 	    (reg.atflags & AT_RESOLVE_BENEATH ? RBENEATH : 0);
 	NDINIT_ATRIGHTS(&nd, LOOKUP, ndflags,
 	    UIO_USERSPACE, reg.path, reg.atfd, &cap_fchdir_rights, td);
