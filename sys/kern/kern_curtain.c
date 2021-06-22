@@ -146,11 +146,17 @@ bool
 curtain_cred_need_exec_switch(const struct ucred *cr)
 {
 	struct curtain *ct = cr->cr_curtain;
+	struct curtain_item *item;
 	if (!ct)
 		return (false);
 	for (int sf = 0; sf <= SYSFIL_LAST; sf++)
 		if (ct->ct_sysfils[sf].on_self != ct->ct_sysfils[sf].on_exec ||
 		    ct->ct_sysfils[sf].on_self_max != ct->ct_sysfils[sf].on_exec_max)
+			return (true);
+	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
+		if (item->type != 0 &&
+		    (item->mode.on_self != item->mode.on_exec ||
+		     item->mode.on_self_max != item->mode.on_exec_max))
 			return (true);
 	return (false);
 }
@@ -158,8 +164,8 @@ curtain_cred_need_exec_switch(const struct ucred *cr)
 bool
 curtain_cred_exec_restricted(const struct ucred *cr)
 {
-	struct curtain_item *item;
 	struct curtain *ct = cr->cr_curtain;
+	struct curtain_item *item;
 	if (!ct)
 		return (false);
 	for (int sf = 0; sf <= SYSFIL_LAST; sf++)
