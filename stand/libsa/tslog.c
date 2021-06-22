@@ -1,7 +1,6 @@
 /*-
- * SPDX-License-Identifier: BSD-2-Clause
- *
- * Copyright (c) 2019 Dmitry Chagin
+ * Copyright (c) 2021 Colin Percival
+ * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,27 +22,57 @@
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- *
- * $FreeBSD$
  */
 
-#ifndef _LINUX_COMMON_H_
-#define _LINUX_COMMON_H_
+#include <sys/cdefs.h>
+__FBSDID("$FreeBSD$");
 
-struct ifnet	*ifname_linux_to_bsd(struct thread *td,
-		    const char *lxname, char *bsdname);
-void		linux_ifflags(struct ifnet *ifp, short *flags);
-int		linux_ifhwaddr(struct ifnet *ifp, struct l_sockaddr *lsa);
+#include <sys/types.h>
 
-int		linux_to_bsd_domain(int domain);
-int		bsd_to_linux_domain(int domain);
-int		bsd_to_linux_sockaddr(const struct sockaddr *sa,
-		    struct l_sockaddr **lsa, socklen_t len);
-int		linux_to_bsd_sockaddr(const struct l_sockaddr *lsa,
-		    struct sockaddr **sap, socklen_t *len);
-void		linux_to_bsd_poll_events(struct thread *td, int fd,
-		    short lev, short *bev);
-void		bsd_to_linux_poll_events(short bev, short *lev);
+#include <machine/cpufunc.h>
 
+#include <stand.h>
 
-#endif /* _LINUX_COMMON_H_ */
+/* Buffer for holding tslog data in string format. */
+static char * tslog_buf = NULL;
+static size_t tslog_buflen = 0;
+static size_t tslog_bufpos = 0;
+
+void
+tslog_setbuf(void * buf, size_t len)
+{
+
+	tslog_buf = (char *)buf;
+	tslog_buflen = len;
+	tslog_bufpos = 0;
+}
+
+void
+tslog_getbuf(void ** buf, size_t * len)
+{
+
+	*buf = (void *)tslog_buf;
+	*len = tslog_bufpos;
+}
+
+void
+tslog(const char * type, const char * f, const char * s)
+{
+#if defined(__amd64__) || defined(__i386__)
+	uint64_t tsc = rdtsc();
+#else
+	uint64_t tsc = 0;
+#endif
+	int len;
+
+	/* If we have no buffer, do nothing. */
+	if (tslog_buf == NULL)
+		return;
+
+	/* Append to existing buffer, if we have enough space. */
+	len = snprintf(&tslog_buf[tslog_bufpos],
+	    tslog_buflen - tslog_bufpos, "0x0 %llu %s %s%s%s\n",
+	    (unsigned long long)tsc, type, f, s ? " " : "", s ? s : "");
+	if ((len > 0) && (tslog_bufpos + len <= tslog_buflen))
+		tslog_bufpos += len;
+}
