@@ -509,6 +509,11 @@ retry:
 	else
 		SLIST_INSERT_HEAD(parent, oidp, oid_link);
 
+	if (oidp->oid_serial == 0) {
+		static uint64_t newserial = 1;
+		oidp->oid_serial = newserial++;
+	}
+
 	if ((oidp->oid_kind & CTLTYPE) != CTLTYPE_NODE &&
 #ifdef VIMAGE
 	    (oidp->oid_kind & CTLFLAG_VNET) == 0 &&
@@ -2132,6 +2137,11 @@ sysctl_find_oid(int *name, u_int namelen, struct sysctl_oid **noid,
 		if (oid == NULL)
 			return (ENOENT);
 
+#ifdef SYSFIL
+		if (req && req->td && IN_RESTRICTED_MODE(req->td))
+			curtain_sysctl_req_amend(req, oid);
+#endif
+
 		indx++;
 		if ((oid->oid_kind & CTLTYPE) == CTLTYPE_NODE) {
 			if (oid->oid_handler != NULL || indx == namelen) {
@@ -2157,6 +2167,18 @@ sysctl_find_oid(int *name, u_int namelen, struct sysctl_oid **noid,
 		}
 	}
 	return (ENOENT);
+}
+
+int
+sysctl_lookup(int *name, u_int namelen, struct sysctl_oid **noid,
+    int *nindx, struct sysctl_req *req)
+{
+	struct rm_priotracker tracker;
+	int error;
+	SYSCTL_RLOCK(&tracker);
+	error = sysctl_find_oid(name, namelen, noid, nindx, req);
+	SYSCTL_RUNLOCK(&tracker);
+	return (error);
 }
 
 /*
@@ -2212,7 +2234,7 @@ sysctl_root(SYSCTL_HANDLER_ARGS)
 #endif
 #ifdef SYSFIL
 	if (!(oid->oid_kind & (CTLFLAG_RESTRICT|CTLFLAG_CAPRW))) {
-		error = sysfil_check(req->td, SYSFIL_ANY_SYSCTL);
+		error = sysfil_require_sysctl_req(req);
 		if (error)
 			goto out;
 	}

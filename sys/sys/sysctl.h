@@ -40,6 +40,7 @@
 
 #ifdef _KERNEL
 #include <sys/queue.h>
+#include <sys/types.h>
 #endif
 
 struct thread;
@@ -181,6 +182,7 @@ struct sysctl_req {
 	int		(*newfunc)(struct sysctl_req *, void *, size_t);
 	size_t		 validlen;
 	int		 flags;
+	uint64_t	 last_curtain_serial;
 };
 
 SLIST_HEAD(sysctl_oid_list, sysctl_oid);
@@ -204,6 +206,7 @@ struct sysctl_oid {
 	u_int		 oid_running;
 	const char	*oid_descr;
 	const char	*oid_label;
+	uint64_t	 oid_serial;
 };
 
 #define	SYSCTL_IN(r, p, l)	(r->newfunc)(r, p, l)
@@ -1171,6 +1174,8 @@ int	userland_sysctl(struct thread *td, int *name, u_int namelen, void *old,
 	    size_t *oldlenp, int inkernel, const void *new, size_t newlen,
 	    size_t *retval, int flags);
 int	sysctl_find_oid(int *name, u_int namelen, struct sysctl_oid **noid,
+	    int *nindx, struct sysctl_req *req);
+int	sysctl_lookup(int *name, u_int namelen, struct sysctl_oid **noid,
 	    int *nindx, struct sysctl_req *req);
 void	sysctl_wlock(void);
 void	sysctl_wunlock(void);

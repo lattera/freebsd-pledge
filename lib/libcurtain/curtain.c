@@ -5,6 +5,8 @@
 #include <errno.h>
 #include <err.h>
 #include <sysexits.h>
+#include <sys/types.h>
+#include <sys/sysctl.h>
 #include <sys/param.h>
 #include <sys/curtain.h>
 #include <sys/unveil.h>
@@ -42,6 +44,7 @@ struct simple_node {
 		int socklvl;
 		int sockopt[2];
 		int priv;
+		const int *mib;
 	} key;
 };
 
@@ -476,6 +479,61 @@ curtain_priv(struct curtain_slot *slot, int priv, int flags)
 }
 
 
+static int
+cmp_sysctl(const union simple_key *key0, const union simple_key *key1)
+{
+	const int *mib0 = key0->mib, *mib1 = key1->mib;
+	while (*mib0 >= 0 || *mib1 >= 0) {
+		int cmp = *mib0++ - *mib1++;
+		if (cmp != 0)
+			return (cmp);
+	}
+	return (0);
+}
+
+static void
+fill_sysctl(void **dest, struct simple_node *node)
+{
+	int *fill = *dest;
+	const int *mib = node->key.mib;
+	do {
+		*fill++ = *mib;
+	} while (*mib++ >= 0);
+	*dest = fill;
+}
+
+static struct simple_type sysctls_type = {
+	.type = CURTAINTYP_SYSCTL,
+	.ent_size = (CTL_MAXNAME + 1) * sizeof (int), /* XXX */
+	.cmp = cmp_sysctl,
+	.fill = fill_sysctl,
+};
+
+int
+curtain_sysctl(struct curtain_slot *slot, const char *sysctl, int flags)
+{
+	int mibv[64], *mibp;
+	size_t mibn;
+	int r;
+	struct simple_mode *mode;
+	mibn = nitems(mibv);
+	r = sysctlnametomib(sysctl, mibv, &mibn);
+	if (r < 0) {
+		if (errno != ENOENT)
+			warn("%s", sysctl);
+		return (-1);
+	}
+	mibp = malloc((mibn + 1) * sizeof *mibp);
+	memcpy(mibp, mibv, mibn * sizeof *mibp);
+	mibp[mibn] = -1;
+	mode = get_simple(&sysctls_type, slot, (union simple_key){ .mib = mibp });
+	if (!mode)
+		return (-1);
+	mode->level = flags2level(flags);
+	return (0);
+}
+
+
 static size_t unveils_count = 0;
 static struct unveil_node **unveils_table = NULL;
 static size_t unveils_table_size = 0;
@@ -755,6 +813,7 @@ curtain_submit_1(int flags, enum curtain_state min_state)
 		&socklvls_type,
 		&sockopts_type,
 		&privs_type,
+		&sysctls_type,
 	};
 	struct curtainreq reqv[1 + 2 * CURTAIN_ON_COUNT + nitems(simple_types) * CURTAIN_ON_COUNT * CURTAIN_LEVEL_COUNT], *reqp = reqv;
 	enum curtain_level levels_on[CURTAIN_ON_COUNT];

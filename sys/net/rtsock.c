@@ -53,7 +53,6 @@
 #include <sys/socketvar.h>
 #include <sys/sysctl.h>
 #include <sys/systm.h>
-#include <sys/curtain.h>
 
 #include <net/if.h>
 #include <net/if_var.h>
@@ -2568,10 +2567,6 @@ sysctl_rtsock(SYSCTL_HANDLER_ARGS)
 	u_char	af;
 	struct	walkarg w;
 
-	error = sysfil_require(req->td, SYSFIL_ROUTE);
-	if (error)
-		return (error);
-
 	name ++;
 	namelen--;
 	if (req->newptr)
@@ -2681,8 +2676,7 @@ sysctl_rtsock(SYSCTL_HANDLER_ARGS)
 	return (error);
 }
 
-static SYSCTL_NODE(_net, PF_ROUTE, routetable,
-    CTLFLAG_RD | CTLFLAG_RESTRICT | CTLFLAG_MPSAFE,
+static SYSCTL_NODE(_net, PF_ROUTE, routetable, CTLFLAG_RD | CTLFLAG_MPSAFE,
     sysctl_rtsock, "Return route tables and interface/address lists");
 
 /*

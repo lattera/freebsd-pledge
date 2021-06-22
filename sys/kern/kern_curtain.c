@@ -276,6 +276,8 @@ curtain_key_hash(enum curtain_type type, union curtain_key key)
 		return (key.sockopt.level ^ key.sockopt.optname);
 	case CURTAINTYP_PRIV:
 		return (key.priv);
+	case CURTAINTYP_SYSCTL:
+		return (key.sysctl.serial);
 	}
 	MPASS(0);
 	return (-1);
@@ -299,6 +301,8 @@ curtain_key_same(enum curtain_type type,
 		        key0.sockopt.optname == key1.sockopt.optname);
 	case CURTAINTYP_PRIV:
 		return (key0.priv == key1.priv);
+	case CURTAINTYP_SYSCTL:
+		return (key0.sysctl.serial == key1.sysctl.serial);
 	}
 	MPASS(0);
 	return (false);
@@ -450,6 +454,8 @@ sysfil_for_type(enum curtain_type type)
 		return (SYSFIL_ANY_SOCKOPT);
 	case CURTAINTYP_PRIV:
 		return (SYSFIL_ANY_PRIV);
+	case CURTAINTYP_SYSCTL:
+		return (SYSFIL_ANY_SYSCTL);
 	}
 	MPASS(0);
 	return (SYSFIL_DEFAULT);
@@ -694,6 +700,36 @@ curtain_build(int flags, size_t reqc, const struct curtainreq *reqv)
 			}
 			break;
 		}
+		case CURTAINTYP_SYSCTL: {
+			int *namep = req->data;
+			size_t namec = req->size / sizeof *namep, namei = 0;
+			while (namei < namec) {
+				struct curtain_item *item;
+				struct sysctl_oid *oidp;
+				int error;
+				if (namep[namei] >= 0) {
+					namei++;
+					continue;
+				}
+				error = sysctl_lookup(namep, namei, &oidp, NULL, NULL);
+				if (error && error != ENOENT)
+					goto fail;
+				namep += namei + 1;
+				namec -= namei + 1;
+				namei = 0;
+				item = curtain_search(ct, req->type,
+				    (union curtain_key){
+				        .sysctl = { .serial = oidp->oid_serial }
+				    });
+				if (!item)
+					goto fail;
+				if (req_on_self)
+					item->mode.on_self = req->level;
+				if (req_on_exec)
+					item->mode.on_exec = req->level;
+			}
+			break;
+		}
 		default:
 			goto fail;
 		}
@@ -919,6 +955,28 @@ sysfil_priv_check(struct ucred *cr, int priv)
 #endif
 }
 
+int
+sysfil_require_sysctl_req(struct sysctl_req *req)
+{
+#ifdef SYSFIL
+	struct thread *td;
+	if (!(td = req->td))
+		return (0);
+	if (curtain_check_cred(td->td_ucred, CURTAINTYP_SYSCTL,
+	    (union curtain_key){ .sysctl = {
+	        .serial = req->last_curtain_serial
+	    } }) == 0)
+		return (0);
+#if 0
+	return (sysfil_require(td, SYSFIL_ANY_SYSCTL));
+#else
+	return (sysfil_check(td, SYSFIL_ANY_SYSCTL));
+#endif
+#else
+	return (0);
+#endif
+}
+
 #ifdef SYSFIL
 static void
 sysfil_log_violation(struct thread *td, int sf, int sig)
@@ -957,6 +1015,24 @@ sysfil_violation(struct thread *td, int sf, int error)
 	}
 #endif
 }
+
+
+#ifdef SYSFIL
+void
+curtain_sysctl_req_amend(struct sysctl_req *req, const struct sysctl_oid *oid)
+{
+	const struct curtain *ct;
+	const struct curtain_item *item;
+	if (!(req->td && (ct = req->td->td_ucred->cr_curtain)))
+		return;
+	item = curtain_lookup(ct, CURTAINTYP_SYSCTL,
+	    (union curtain_key){ .sysctl = { .serial = oid->oid_serial } });
+	if (item) {
+		MPASS(item->key.sysctl.serial == oid->oid_serial);
+		req->last_curtain_serial = item->key.sysctl.serial;
+	}
+}
+#endif
 
 
 #ifdef SYSFIL

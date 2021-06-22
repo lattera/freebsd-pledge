@@ -198,6 +198,20 @@ parse_directive(struct parser *par, char *p)
 			}
 		}
 
+	} else if (strmemcmp("sysctl", dir, dir_end - dir) == 0) {
+		while (*(p = skip_spaces(p))) {
+			char *w, c;
+			p = skip_word((w = p), "");
+			if (w == p)
+				break;
+			if (par->apply && (!unsafe || par->cfg->allow_unsafe)) {
+				c = *p;
+				*p = '\0';
+				curtain_sysctl(par->slot, w, 0);
+				*p = c;
+			}
+		}
+
 	} else if (strmemcmp("priv", dir, dir_end - dir) == 0) {
 		while (*(p = skip_spaces(p))) {
 			char *w;

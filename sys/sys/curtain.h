@@ -10,6 +10,7 @@ enum curtain_type {
 	CURTAINTYP_SOCKLVL = 6,
 	CURTAINTYP_SOCKOPT = 7,
 	CURTAINTYP_PRIV = 8,
+	CURTAINTYP_SYSCTL = 9,
 };
 
 enum curtain_level {
@@ -51,6 +52,7 @@ int curtainctl(int flags, size_t reqc, struct curtainreq *reqv);
 #include <sys/types.h>
 #include <sys/sysfil.h>
 #include <sys/ucred.h>
+#include <sys/sysctl.h>
 
 struct curtain_mode {
 	uint8_t on_self     : 2;
@@ -67,24 +69,23 @@ struct curtain_item {
 	curtain_index chain;
 	union curtain_key {
 		/*
-		 * XXX ioctls are supposed to be longs, but all of them fit in
-		 * an int.  This shrinks this struct by 4 bytes (due to less
-		 * padding due to alignment requirements).
+		 * Using __packed to reduce the alignment requirements on
+		 * specific members to save 4 bytes per item on 64-bits archs.
 		 */
-		unsigned int ioctl;
+		unsigned long __packed ioctl;
 		int sockaf;
 		int socklvl;
 		struct {
 			int level, optname;
 		} sockopt;
 		int priv;
-#if 0
 		struct {
-			int parent_mib, child_mib;
-		} sysctl;
-#endif
+			uint64_t serial;
+		} __packed sysctl;
 	} key;
 };
+
+CTASSERT(sizeof(struct curtain_item) <= 12);
 
 struct curtain {
 	volatile int ct_ref;
@@ -105,6 +106,7 @@ void	curtain_cred_exec_switch(struct ucred *);
 void	curtain_cap_enter(struct thread *);
 
 bool	curtain_device_unveil_bypass(struct thread *, struct cdev *);
+void	curtain_sysctl_req_amend(struct sysctl_req *, const struct sysctl_oid *);
 
 
 #define	SYSFIL_FAILED_ERRNO	EPERM
@@ -174,6 +176,7 @@ int sysfil_require_vm_prot(struct thread *, vm_prot_t prot, bool loose);
 int sysfil_require_ioctl(struct thread *, u_long com);
 int sysfil_require_sockaf(struct thread *, int af);
 int sysfil_require_sockopt(struct thread *, int level, int name);
+int sysfil_require_sysctl_req(struct sysctl_req *);
 
 int sysfil_priv_check(struct ucred *, int priv);
 

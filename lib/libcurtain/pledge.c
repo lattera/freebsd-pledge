@@ -235,7 +235,6 @@ static const struct promise_sysfil {
 	{ PROMISE_INET,			SYSFIL_NET },
 	{ PROMISE_INET_RAW,		SYSFIL_INET_RAW },
 	{ PROMISE_SETFIB,		SYSFIL_SETFIB },
-	{ PROMISE_ROUTE,		SYSFIL_ROUTE },
 	{ PROMISE_RECVFD,		SYSFIL_RECVFD },
 	{ PROMISE_SENDFD,		SYSFIL_SENDFD },
 	{ PROMISE_CRYPTODEV,		SYSFIL_CRYPTODEV },
@@ -339,6 +338,13 @@ static const struct promise_sockopt {
 	{ PROMISE_SETFIB, SOL_SOCKET, SO_SETFIB },
 	{ PROMISE_MAC, SOL_SOCKET, SO_LABEL },
 	{ PROMISE_MAC, SOL_SOCKET, SO_PEERLABEL },
+};
+
+static const struct promise_sysctl {
+	enum promise_type promise;
+	const char *sysctl;
+} sysctls_table[] = {
+	{ PROMISE_ROUTE, "net.routetable" },
 };
 
 static const char *const root_path = "/";
@@ -556,6 +562,10 @@ do_promises_slots(enum curtain_on on,
 	FOREACH_ARRAY(e, sockopts_table)
 		if (fill[e->promise])
 			curtain_sockopt(promise_slots[e->promise], e->level, e->optname, 0);
+
+	FOREACH_ARRAY(e, sysctls_table)
+		if (fill[e->promise])
+			curtain_sysctl(promise_slots[e->promise], e->sysctl, 0);
 
 	if (fill[PROMISE_ERROR])
 		curtain_default(promise_slots[PROMISE_ERROR], CURTAIN_DENY);
