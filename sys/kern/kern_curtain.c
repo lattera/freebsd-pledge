@@ -267,15 +267,15 @@ curtain_key_hash(enum curtain_type type, union curtain_key key)
 	CURTAIN_KEY_INVALID_TYPE_CASES
 		break;
 	case CURTAINTYP_IOCTL:
-		return ((unsigned)key.ioctl);
+		return (key.ioctl ^ key.ioctl >> 5);
 	case CURTAINTYP_SOCKAF:
-		return ((unsigned)key.sockaf);
+		return (key.sockaf);
 	case CURTAINTYP_SOCKLVL:
-		return ((unsigned)key.socklvl);
+		return (key.socklvl);
 	case CURTAINTYP_SOCKOPT:
-		return ((unsigned)(key.sockopt.level ^ key.sockopt.optname));
+		return (key.sockopt.level ^ key.sockopt.optname);
 	case CURTAINTYP_PRIV:
-		return ((unsigned)key.priv);
+		return (key.priv);
 	}
 	MPASS(0);
 	return (-1);

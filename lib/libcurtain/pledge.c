@@ -88,6 +88,7 @@ enum promise_type {
 	PROMISE_ANY_IOCTL,
 	PROMISE_ANY_SOCKOPT,
 	PROMISE_ANY_SYSCTL,
+	PROMISE_AUDIO,
 	PROMISE_COUNT /* must be last */
 };
 
@@ -161,6 +162,7 @@ static const struct promise_name {
 	[PROMISE_ANY_IOCTL] =		{ "any_ioctl" },
 	[PROMISE_ANY_SOCKOPT] =		{ "any_sockopt" },
 	[PROMISE_ANY_SYSCTL] =		{ "any_sysctl" },
+	[PROMISE_AUDIO] =		{ "audio" },
 };
 
 static const enum promise_type depends_table[][2] = {
@@ -255,6 +257,7 @@ static const struct promise_ioctl {
 	{ PROMISE_PTS, curtain_ioctls_tty_pts },
 	{ PROMISE_NET, curtain_ioctls_net_basic },
 	{ PROMISE_ROUTE, curtain_ioctls_net_route },
+	{ PROMISE_AUDIO, curtain_ioctls_oss },
 };
 
 static const struct promise_sockaf {
@@ -383,6 +386,9 @@ static const struct promise_unveil {
 	{ _PATH_ETC "/ssl/private/", N,			PROMISE_SSL },
 	{ _PATH_LOCALBASE "/etc/ssl/", R,		PROMISE_SSL },
 	{ _PATH_LOCALBASE "/etc/ssl/private/", N,	PROMISE_SSL },
+	{ _PATH_DEV "/sndstat", R|W,                    PROMISE_AUDIO },
+	{ _PATH_DEV "/mixer", R|W,                      PROMISE_AUDIO },
+	{ _PATH_DEV "/dsp", R|W,                        PROMISE_AUDIO },
 	{ tmp_path, T,					PROMISE_TMPPATH },
 #undef	T
 #undef	A
