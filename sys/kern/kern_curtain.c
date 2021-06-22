@@ -69,6 +69,8 @@ SYSCTL_NODE(_security_curtain, OID_AUTO, stats,
 
 STATNODE_COUNTER(lookups, curtain_stats_lookups, "");
 STATNODE_COUNTER(probes, curtain_stats_probes, "");
+STATNODE_COUNTER(long_lookups, curtain_stats_long_lookups, "");
+STATNODE_COUNTER(long_probes, curtain_stats_long_probes, "");
 
 #endif
 
@@ -79,14 +81,15 @@ CTASSERT(CURTAINCTL_MAX_ITEMS <= (curtain_index)-1);
 static void
 curtain_init(struct curtain *ct, size_t nslots)
 {
-	if (!powerof2(nslots) || nslots != (curtain_index)nslots)
+	if (nslots != (curtain_index)nslots)
 		panic("invalid curtain nslots %zu", nslots);
 	/* NOTE: zeroization leads to all levels being set to CURTAINLVL_PASS */
 	*ct = (struct curtain){
 		.ct_ref = 1,
 		.ct_nitems = 0,
 		.ct_nslots = nslots,
-		.ct_fill = 0,
+		.ct_modulo = nslots,
+		.ct_cellar = nslots,
 	};
 	for (curtain_index i = 0; i < nslots; i++)
 		ct->ct_slots[i].type = 0;
@@ -105,11 +108,10 @@ curtain_make(size_t nitems)
 {
 	size_t nslots;
 	struct curtain *ct;
-	for (nslots = nitems != 0; nslots != 0 && nslots < nitems; nslots <<= 1);
-	if (nslots < nitems)
-		return (NULL);
+	nslots = nitems + nitems/8;
 	ct = curtain_alloc(nslots);
 	curtain_init(ct, nslots);
+	ct->ct_modulo = nitems + nitems/16;
 	return (ct);
 }
 
@@ -313,7 +315,7 @@ curtain_hash_head(struct curtain *ct, unsigned key_hash)
 {
 	if (ct->ct_nslots == 0)
 		return (NULL);
-	return (&ct->ct_slots[key_hash & (ct->ct_nslots - 1)]);
+	return (&ct->ct_slots[key_hash % ct->ct_modulo]);
 }
 
 static inline struct curtain_item *
@@ -364,6 +366,10 @@ curtain_lookup(const struct curtain *ctc, enum curtain_type type, union curtain_
 #ifdef CURTAIN_STATS
 	counter_u64_add(curtain_stats_lookups, 1);
 	counter_u64_add(curtain_stats_probes, probes);
+	if (probes > 5) {
+		counter_u64_add(curtain_stats_long_lookups, 1);
+		counter_u64_add(curtain_stats_long_probes, probes);
+	}
 #endif
 	return (item);
 }
@@ -379,14 +385,12 @@ curtain_search(struct curtain *ct, enum curtain_type type, union curtain_key key
 			if (item->type == type && curtain_key_same(type, key, item->key))
 				break;
 		} while ((item = curtain_hash_next(ct, item)));
-		if (!item) {
-			struct curtain_item *fill;
-			while (ct->ct_fill < ct->ct_nslots)
-				if ((fill = &ct->ct_slots[ct->ct_fill++])->type == 0) {
-					item = fill;
+		if (!item)
+			while (ct->ct_cellar != 0)
+				if (ct->ct_slots[--ct->ct_cellar].type == 0) {
+					item = &ct->ct_slots[ct->ct_cellar];
 					break;
 				}
-		}
 	} else
 		prev = NULL;
 	if (!item) {
@@ -734,6 +738,9 @@ curtain_build(int flags, size_t reqc, const struct curtainreq *reqv)
 			goto fail;
 		}
 	}
+
+	if (ct->ct_nitems > CURTAINCTL_MAX_ITEMS)
+		goto fail;
 
 	for (size_t i = 0; i < nitems(sysfils_expand); i++) {
 		if (on_self)
