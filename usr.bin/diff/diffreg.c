@@ -467,6 +467,7 @@ static FILE *
 opentemp(const char *f)
 {
 	char buf[BUFSIZ], tempfile[PATH_MAX];
+	const char *tmpdir;
 	ssize_t nread;
 	int ifd, ofd;
 
@@ -475,7 +476,13 @@ opentemp(const char *f)
 	else if ((ifd = open(f, O_RDONLY, 0644)) == -1)
 		return (NULL);
 
-	(void)strlcpy(tempfile, _PATH_TMP "/diff.XXXXXXXX", sizeof(tempfile));
+	tmpdir = issetugid() == 0 ? getenv("TMPDIR") : NULL;
+	tmpdir = tmpdir == NULL ? _PATH_TMP : tmpdir;
+	if (snprintf(tempfile, sizeof(tempfile), "%s/diff.XXXXXXXX", tmpdir) < 0) {
+		close(ifd);
+		return (NULL);
+	}
+
 
 	if ((ofd = mkstemp(tempfile)) == -1) {
 		close(ifd);

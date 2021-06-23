@@ -374,9 +374,12 @@ histcmd(int argc, char **argv __unused)
 	 * If editing, grab a temp file.
 	 */
 	if (editor) {
+		const char *tmpdir;
 		int fd;
 		INTOFF;		/* easier */
-		sprintf(editfilestr, "%s/_shXXXXXX", _PATH_TMP);
+		if (privileged || (tmpdir = getenv("TMPDIR")) == NULL)
+			tmpdir = _PATH_TMP;
+		sprintf(editfilestr, "%s/_shXXXXXX", tmpdir);
 		if ((fd = mkstemp(editfilestr)) < 0)
 			error("can't create temporary file %s", editfile);
 		editfile = editfilestr;
