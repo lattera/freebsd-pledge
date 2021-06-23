@@ -109,12 +109,17 @@ skip_word(char *p, const char *brk)
 }
 
 static int
+expect_eol(struct parser *par, char *p)
+{
+	if (*(p = skip_spaces(p)))
+		return (parse_error(par, "unexpected characters at end of line"));
+	return (0);
+}
+
+static int
 do_unveil_callback(void *ctx, char *path)
 {
 	struct parser *par = ctx;
-#if 0
-	fprintf(stderr, "%s %u\n", path, par->uperms);
-#endif
 	curtain_unveil(par->slot, path, CURTAIN_UNVEIL_INSPECT, par->uperms);
 	return (0);
 }
@@ -166,6 +171,73 @@ parse_unveil(struct parser *par, char *p)
 }
 
 static int
+parse_sysfil(struct parser *par, char *p, bool apply)
+{
+	while (*(p = skip_spaces(p))) {
+		char *w;
+		const struct sysfilent *e;
+		p = skip_word((w = p), "");
+		if (w == p)
+			break;
+		for (e = sysfiltab; e->name; e++)
+			if (strmemcmp(e->name, w, p - w) == 0)
+				break;
+		if (!e->name)
+			return (parse_error(par, "unknown sysfil"));
+		if (apply)
+			curtain_sysfil(par->slot, e->sysfil, 0);
+	}
+	return (expect_eol(par, p));
+}
+
+static int
+parse_sysctl(struct parser *par, char *p, bool apply)
+{
+	while (*(p = skip_spaces(p))) {
+		char *w, c;
+		p = skip_word((w = p), "");
+		if (w == p)
+			break;
+		if (apply) {
+			c = *p;
+			*p = '\0';
+			curtain_sysctl(par->slot, w, 0);
+			*p = c;
+		}
+	}
+	return (expect_eol(par, p));
+}
+
+static int
+parse_priv(struct parser *par, char *p, bool apply)
+{
+	while (*(p = skip_spaces(p))) {
+		char *w;
+		const struct privent *e;
+		p = skip_word((w = p), "");
+		if (w == p)
+			break;
+		for (e = privtab; e->name; e++)
+			if (strmemcmp(e->name, w, p - w) == 0)
+				break;
+		if (!e->name)
+			return (parse_error(par, "unknown privilege"));
+		if (apply)
+			curtain_priv(par->slot, e->priv, 0);
+	}
+	return (expect_eol(par, p));
+}
+
+static const struct {
+	const char name[8];
+	int (*func)(struct parser *par, char *p, bool apply);
+} directives[] = {
+	{ "sysfil", parse_sysfil },
+	{ "sysctl", parse_sysctl },
+	{ "priv", parse_priv },
+};
+
+static int
 parse_directive(struct parser *par, char *p)
 {
 	char *dir, *dir_end;
@@ -178,64 +250,11 @@ parse_directive(struct parser *par, char *p)
 		p++, unsafe = true;
 	else
 		unsafe = false;
-
-
-	if (strmemcmp("sysfil", dir, dir_end - dir) == 0) {
-		while (*(p = skip_spaces(p))) {
-			char *w;
-			const struct sysfilent *e;
-			p = skip_word((w = p), "");
-			if (w == p)
-				break;
-			for (e = sysfiltab; e->name; e++)
-				if (strmemcmp(e->name, w, p - w) == 0)
-					break;
-			if (par->apply && (!unsafe || par->cfg->allow_unsafe)) {
-				if (e->name)
-					curtain_sysfil(par->slot, e->sysfil, 0);
-				else
-					return (parse_error(par, "unknown sysfil"));
-			}
-		}
-
-	} else if (strmemcmp("sysctl", dir, dir_end - dir) == 0) {
-		while (*(p = skip_spaces(p))) {
-			char *w, c;
-			p = skip_word((w = p), "");
-			if (w == p)
-				break;
-			if (par->apply && (!unsafe || par->cfg->allow_unsafe)) {
-				c = *p;
-				*p = '\0';
-				curtain_sysctl(par->slot, w, 0);
-				*p = c;
-			}
-		}
-
-	} else if (strmemcmp("priv", dir, dir_end - dir) == 0) {
-		while (*(p = skip_spaces(p))) {
-			char *w;
-			const struct privent *e;
-			p = skip_word((w = p), "");
-			if (w == p)
-				break;
-			for (e = privtab; e->name; e++)
-				if (strmemcmp(e->name, w, p - w) == 0)
-					break;
-			if (par->apply && (!unsafe || par->cfg->allow_unsafe)) {
-				if (e->name)
-					curtain_priv(par->slot, e->priv, 0);
-				else
-					return (parse_error(par, "unknown privilege"));
-			}
-		}
-
-	} else
-		return (parse_error(par, "unknown directive"));
-
-	if (*(p = skip_spaces(p)))
-		return (parse_error(par, "unexpected characters at end of line"));
-	return (0);
+	for (size_t i = 0; i < nitems(directives); i++)
+		if (strmemcmp(directives[i].name, dir, dir_end - dir) == 0)
+			return (directives[i].func(par, p,
+			    par->apply && (!unsafe || par->cfg->allow_unsafe)));
+	return (parse_error(par, "unknown directive"));
 }
 
 static int
