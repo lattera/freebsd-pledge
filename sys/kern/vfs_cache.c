@@ -63,6 +63,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysctl.h>
 #include <sys/sysproto.h>
 #include <sys/vnode.h>
+#include <sys/unveil.h>
 #include <ck_queue.h>
 #ifdef KTRACE
 #include <sys/ktrace.h>
@@ -4207,7 +4208,7 @@ cache_can_fplookup(struct cache_fpl *fpl)
 		return (false);
 	}
 #ifdef UNVEIL
-	if (!(ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)) {
+	if (unveil_namei_enabled(ndp)) {
 		cache_fpl_aborted_early(fpl);
 		return (false);
 	}

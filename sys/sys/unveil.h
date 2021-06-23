@@ -11,6 +11,7 @@
 #include <sys/limits.h>
 #include <sys/capsicum.h>
 #include <sys/proc.h>
+#include <sys/namei.h>
 #endif
 
 #define	UPERM_NONE		(0)
@@ -112,6 +113,19 @@ unveil_exec_is_active(struct thread *td)
 #endif
 }
 
+static inline bool
+unveil_namei_enabled(struct nameidata *ndp)
+{
+#ifdef UNVEIL
+	if (ndp->ni_startdir == NULL && /* NDINIT_ATVP() */
+	    unveil_is_active(ndp->ni_cnd.cn_thread) &&
+	    !(ndp->ni_cnd.cn_flags & NOUNVEILCHECK))
+		return (true);
+	if (ndp->ni_unveil.save)
+		return (true);
+#endif
+	return (false);
+}
 
 void unveil_proc_exec_switch(struct thread *);
 

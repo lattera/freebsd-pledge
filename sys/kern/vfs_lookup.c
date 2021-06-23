@@ -330,6 +330,11 @@ namei_setup(struct nameidata *ndp, struct vnode **dpp, struct pwd **pwdp)
 		}
 	}
 #endif
+#ifdef UNVEIL
+	if (unveil_namei_enabled(ndp))
+		ndp->ni_lcf |= NI_LCF_UNVEIL_ENABLED;
+#endif
+
 	error = 0;
 
 	/*
@@ -509,7 +514,7 @@ namei_emptypath(struct nameidata *ndp)
 	}
 
 #ifdef UNVEIL
-	if (unveil_is_active(cnp->cn_thread)) {
+	if (ndp->ni_lcf & NI_LCF_UNVEIL_ENABLED) {
 		unveil_perms uperms;
 		cap_rights_t haverights;
 		uperms = ndp->ni_unveil.effective_uperms;
@@ -833,19 +838,17 @@ unveil_lookup_tolerate_error(struct nameidata *ndp, int error)
 static int
 unveil_lookup_start(struct nameidata *ndp, struct vnode *dp)
 {
-	struct thread *td = ndp->ni_cnd.cn_thread;
-	if (!unveil_is_active(td) && !ndp->ni_unveil.save) {
-		ndp->ni_lcf |= NI_LCF_UNVEIL_DISABLED;
+	struct componentname *cnp = &ndp->ni_cnd;
+	if (!(ndp->ni_lcf & NI_LCF_UNVEIL_ENABLED))
 		return (0);
-	}
-	return (unveil_traverse_begin(td, &ndp->ni_unveil, dp));
+	return (unveil_traverse_begin(cnp->cn_thread, &ndp->ni_unveil, dp));
 }
 
 static inline int
 unveil_lookup_descend(struct nameidata *ndp, struct vnode *dvp)
 {
 	struct componentname *cnp = &ndp->ni_cnd;
-	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
+	if (!(ndp->ni_lcf & NI_LCF_UNVEIL_ENABLED))
 		return (0);
 	return (unveil_traverse(cnp->cn_thread, &ndp->ni_unveil,
 	    dvp, NULL, 0, NULL, false));
@@ -856,7 +859,7 @@ unveil_lookup_name(struct nameidata *ndp,
     struct vnode *dvp, struct vnode *vp)
 {
 	struct componentname *cnp = &ndp->ni_cnd;
-	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
+	if (!(ndp->ni_lcf & NI_LCF_UNVEIL_ENABLED))
 		return (0);
 	return (unveil_traverse(cnp->cn_thread, &ndp->ni_unveil,
 	    dvp, cnp->cn_nameptr, cnp->cn_namelen, vp,
@@ -868,7 +871,7 @@ unveil_lookup_dotdot(struct nameidata *ndp,
     struct vnode *pdvp, struct vnode *dvp)
 {
 	struct componentname *cnp = &ndp->ni_cnd;
-	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
+	if (!(ndp->ni_lcf & NI_LCF_UNVEIL_ENABLED))
 		return;
 	unveil_traverse_dotdot(cnp->cn_thread, &ndp->ni_unveil, pdvp);
 }
@@ -879,7 +882,7 @@ unveil_lookup_check(struct nameidata *ndp)
 	struct componentname *cnp = &ndp->ni_cnd;
 	cap_rights_t haverights, *needrights;
 	unveil_perms uperms;
-	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
+	if (!(ndp->ni_lcf & NI_LCF_UNVEIL_ENABLED))
 		return (0);
 	uperms = unveil_traverse_effective_uperms(
 	    cnp->cn_thread, &ndp->ni_unveil);
@@ -921,7 +924,7 @@ static inline void
 unveil_lookup_end(struct nameidata *ndp)
 {
 	struct componentname *cnp = &ndp->ni_cnd;
-	if (ndp->ni_lcf & NI_LCF_UNVEIL_DISABLED)
+	if (!(ndp->ni_lcf & NI_LCF_UNVEIL_ENABLED))
 		return;
 	unveil_traverse_end(cnp->cn_thread, &ndp->ni_unveil);
 }

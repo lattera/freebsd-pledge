@@ -180,7 +180,7 @@ int	cache_fplookup(struct nameidata *ndp, enum cache_fpl_status *status,
 #define	AUDITVNODE1	0x00040000 /* audit the looked up vnode information */
 #define	AUDITVNODE2	0x00080000 /* audit the looked up vnode information */
 #define	NOCAPCHECK	0x00100000 /* do not perform capability checks */
-/* UNUSED		0x00200000 */
+#define	NOUNVEILCHECK	0x00200000 /* do not enforce unveil restrictions */
 /* UNUSED		0x00400000 */
 /* UNUSED		0x00800000 */
 #define	HASBUF		0x01000000 /* has allocated pathname buffer */
@@ -211,7 +211,7 @@ int	cache_fplookup(struct nameidata *ndp, enum cache_fpl_status *status,
  */
 #define	NI_LCF_STRICTRELATIVE	0x0001	/* relative lookup only */
 #define	NI_LCF_CAP_DOTDOT	0x0002	/* ".." in strictrelative case */
-#define	NI_LCF_UNVEIL_DISABLED	0x0020	/* unveil restrictions not enforced */
+#define	NI_LCF_UNVEIL_ENABLED	0x0020	/* unveil restrictions being enforced */
 
 /*
  * Initialization of a nameidata structure.
