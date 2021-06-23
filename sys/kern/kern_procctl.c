@@ -592,16 +592,14 @@ sys_procctl(struct thread *td, struct procctl_args *uap)
 
 	if (IN_RESTRICTED_MODE(td)) {
 		int sf = SYSFIL_DEFAULT;
-		bool self = uap->idtype == P_PID && uap->id == td->td_proc->p_pid;
 		switch (uap->com) {
 		case PROC_REAP_ACQUIRE:
 		case PROC_REAP_RELEASE:
+		case PROC_REAP_STATUS:
 		case PROC_REAP_GETPIDS:
 		case PROC_REAP_KILL:
-			if (!self)
-				break;
-			/* FALLTHROUGH_*/
-		case PROC_REAP_STATUS:
+		case PROC_PDEATHSIG_CTL:
+		case PROC_PDEATHSIG_STATUS:
 			sf = SYSFIL_REAP;
 			break;
 		}
