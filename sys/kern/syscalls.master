@@ -3241,12 +3241,12 @@
 		    size_t len
 		);
 	}
-578	AUE_AIO_WRITEV	STD {
+578	AUE_AIO_WRITEV	STD|SYSFIL_AIO {
 		int aio_writev(
 		    _Inout_ struct aiocb *aiocbp
 		);
 	}
-579	AUE_AIO_READV	STD {
+579	AUE_AIO_READV	STD|SYSFIL_AIO {
 		int aio_readv(
 		    _Inout_ struct aiocb *aiocbp
 		);
