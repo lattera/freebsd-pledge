@@ -15,6 +15,8 @@
 
 #include <sys/soundcard.h>
 
+#include <crypto/cryptodev.h>
+
 const unsigned long curtain_ioctls_tty_basic[] = {
 	TIOCSBRK,
 	TIOCCBRK,
@@ -306,3 +308,12 @@ const unsigned long curtain_ioctls_oss[] = {
 	-1
 };
 
+const unsigned long curtain_ioctls_cryptodev[] = {
+	CIOCGSESSION,
+	CIOCFSESSION,
+	CIOCCRYPT,
+	CIOCGSESSION2,
+	CIOCFINDDEV,
+	CIOCCRYPTAEAD,
+	-1
+};

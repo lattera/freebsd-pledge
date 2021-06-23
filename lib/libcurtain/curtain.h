@@ -57,5 +57,6 @@ extern const unsigned long curtain_ioctls_tty_pts[];
 extern const unsigned long curtain_ioctls_net_basic[];
 extern const unsigned long curtain_ioctls_net_route[];
 extern const unsigned long curtain_ioctls_oss[];
+extern const unsigned long curtain_ioctls_cryptodev[];
 
 #endif

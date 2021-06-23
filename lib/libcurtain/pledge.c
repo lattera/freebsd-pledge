@@ -237,7 +237,6 @@ static const struct promise_sysfil {
 	{ PROMISE_SETFIB,		SYSFIL_SETFIB },
 	{ PROMISE_RECVFD,		SYSFIL_RECVFD },
 	{ PROMISE_SENDFD,		SYSFIL_SENDFD },
-	{ PROMISE_CRYPTODEV,		SYSFIL_CRYPTODEV },
 	{ PROMISE_MOUNT,		SYSFIL_MOUNT },
 	{ PROMISE_QUOTA,		SYSFIL_QUOTA },
 	{ PROMISE_FH,			SYSFIL_FH },
@@ -257,6 +256,7 @@ static const struct promise_ioctl {
 	{ PROMISE_NET, curtain_ioctls_net_basic },
 	{ PROMISE_ROUTE, curtain_ioctls_net_route },
 	{ PROMISE_AUDIO, curtain_ioctls_oss },
+	{ PROMISE_CRYPTODEV, curtain_ioctls_cryptodev },
 };
 
 static const struct promise_sockaf {
