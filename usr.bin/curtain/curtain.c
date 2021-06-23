@@ -449,7 +449,9 @@ prepare_tmpdir(struct curtain_slot *slot)
 	if (r < 0)
 		err(EX_OSERR, "setenv");
 	r = curtain_unveil(slot, new_tmpdir, CURTAIN_UNVEIL_INSPECT,
-	    UPERM_READ|UPERM_WRITE|UPERM_SETATTR|UPERM_CREATE|UPERM_DELETE|UPERM_UNIX);
+	    UPERM_READ | UPERM_WRITE | UPERM_SETATTR |
+	    UPERM_CREATE | UPERM_DELETE | UPERM_UNIX |
+	    UPERM_EXECUTE);
 	if (r < 0)
 		err(EX_OSERR, "%s", new_tmpdir);
 }
