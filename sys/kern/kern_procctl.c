@@ -591,18 +591,23 @@ sys_procctl(struct thread *td, struct procctl_args *uap)
 	int error, error1, flags, signum;
 
 	if (IN_RESTRICTED_MODE(td)) {
-		/* when sandboxed, only allow operations on self */
-		if (uap->idtype != P_PID || uap->id != td->td_proc->p_pid)
-			return sysfil_failed(td, SYSFIL_DEFAULT);
-		/* whitelist of allowed commands */
+		int sf = SYSFIL_DEFAULT;
+		bool self = uap->idtype == P_PID && uap->id == td->td_proc->p_pid;
 		switch (uap->com) {
-		case PROC_TRAPCAP_CTL:
-		case PROC_TRAPCAP_STATUS:
-			/* TODO: Should only allow to enable? */
+		case PROC_REAP_ACQUIRE:
+		case PROC_REAP_RELEASE:
+		case PROC_REAP_GETPIDS:
+		case PROC_REAP_KILL:
+			if (!self)
+				break;
+			/* FALLTHROUGH_*/
+		case PROC_REAP_STATUS:
+			sf = SYSFIL_REAP;
 			break;
-		default:
-			return sysfil_failed(td, SYSFIL_DEFAULT);
 		}
+		error = sysfil_require(td, sf);
+		if (error)
+			return (error);
 	}
 
 	if (uap->com >= PROC_PROCCTL_MD_MIN)

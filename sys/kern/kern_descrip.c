@@ -1744,6 +1744,7 @@ filecaps_fill(struct filecaps *fcaps)
 	fcaps->fc_ioctls = NULL;
 	fcaps->fc_nioctls = -1;
 	fcaps->fc_fcntls = CAP_FCNTL_ALL;
+	fcaps->fc_noreopen = false;
 }
 
 /*

@@ -2998,7 +2998,7 @@
 		    _In_ struct aiocb *aiocbp
 		);
 	}
-544	AUE_PROCCTL	STD|SYSFIL_ALWAYS {
+544	AUE_PROCCTL	STD|SYSFIL_PROC {
 		int procctl(
 		    idtype_t idtype,
 		    id_t id,
