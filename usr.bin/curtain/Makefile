@@ -14,7 +14,7 @@ CONFGROUPS=	BASECONF GUICONF
 BASECONFDIR=	/etc
 BASECONF=	curtain.conf
 
-GUICONFDIR=	/etc/curtain.d/@gui
+GUICONFDIR=	/etc/curtain.d/_gui.d
 GUICONF=	fontconfig.conf
 
 CLEANFILES+=	sysfiltab.c privtab.c

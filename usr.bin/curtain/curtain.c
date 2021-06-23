@@ -93,7 +93,7 @@ skip_spaces(char *p)
 	return (p);
 }
 
-static char *
+static inline char *
 skip_word(char *p, const char *brk)
 {
 	while (*p) {
@@ -378,7 +378,15 @@ load_tags_d(const char *base, struct config *cfg)
 		int r;
 		if (tag[0] == '.')
 			continue;
-		r = snprintf(path, sizeof path, "%s/%s", base, tag);
+
+		r = snprintf(path, sizeof path, "%s/%s.conf", base, tag);
+		if (r < 0) {
+			warn("snprintf");
+			continue;
+		}
+		load_config(path, cfg);
+
+		r = snprintf(path, sizeof path, "%s/%s.d", base, tag);
 		if (r < 0) {
 			warn("snprintf");
 			continue;
@@ -392,7 +400,10 @@ load_tags_d(const char *base, struct config *cfg)
 		while ((ent = readdir(dir))) {
 			if (ent->d_name[0] == '.')
 				continue;
-			r = snprintf(path, sizeof path, "%s/%s/%s", base, tag, ent->d_name);
+			if (ent->d_namlen < 5 ||
+			    strcmp(ent->d_name + ent->d_namlen - 5, ".conf") != 0)
+				continue;
+			r = snprintf(path, sizeof path, "%s/%s.d/%s", base, tag, ent->d_name);
 			if (r < 0) {
 				warn("snprintf");
 				continue;
@@ -905,14 +916,14 @@ main(int argc, char *argv[])
 		curtain_socklvl(main_slot, IPPROTO_TCP, 0);
 		curtain_socklvl(main_slot, IPPROTO_UDP, 0);
 #endif
-		*cfg.tags_fill++ = "@network";
+		*cfg.tags_fill++ = "_network";
 	}
 	if (new_session) {
 		curtain_sysfil(main_slot, SYSFIL_SAME_SESSION, 0);
-		*cfg.tags_fill++ = "@session";
+		*cfg.tags_fill++ = "_session";
 	}
 	if (run_shell) {
-		*cfg.tags_fill++ = "@shell";
+		*cfg.tags_fill++ = "_shell";
 	}
 	if (new_pgrp) {
 		curtain_sysfil(main_slot, SYSFIL_SAME_PGRP, 0);
@@ -925,13 +936,13 @@ main(int argc, char *argv[])
 	if (x11_mode != X11_NONE) {
 		if (no_fork)
 			errx(EX_USAGE, "X11 mode incompatible with -f");
-		*cfg.tags_fill++ = "@x11";
-		*cfg.tags_fill++ = "@gui";
+		*cfg.tags_fill++ = "_x11";
+		*cfg.tags_fill++ = "_gui";
 		prepare_x11(main_slot, x11_mode == X11_TRUSTED);
 	};
 	if (wayland) {
-		*cfg.tags_fill++ = "@wayland";
-		*cfg.tags_fill++ = "@gui";
+		*cfg.tags_fill++ = "_wayland";
+		*cfg.tags_fill++ = "_gui";
 		prepare_wayland(main_slot);
 	}
 	if (!no_fork) {
@@ -956,8 +967,8 @@ main(int argc, char *argv[])
 			warn("%s", tmpdir);
 	}
 
-	if (autotag)
-		*cfg.tags_fill++ = argc ? argv[0] : "@shell";
+	if (autotag && argc)
+		*cfg.tags_fill++ = argv[0];
 	cfg.allow_unsafe = autotag_unsafe;
 	load_tags(&cfg);
 
