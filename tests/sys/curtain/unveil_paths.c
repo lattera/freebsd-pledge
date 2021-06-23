@@ -345,10 +345,15 @@ ATF_TC_BODY(protect_file, tc)
 	ATF_CHECK_ERRNO(EACCES, rename("p", "o") < 0);
 	ATF_CHECK_ERRNO(EACCES, rename("p", "u") < 0);
 	ATF_CHECK_ERRNO(EACCES, rename("u", "p") < 0);
+	/*
+	 * Hard-linking a file under a path unveiled with higher permissions
+	 * would allow to modify it.
+	 */
 	ATF_CHECK_ERRNO(EACCES, link("p", "o") < 0);
+	/* Already wouldn't be allowed, but let's have a look at the errnos... */
 	ATF_CHECK_ERRNO(EACCES, link("p", "u") < 0); /* EEXIST otherwise */
-	ATF_CHECK_ERRNO(EACCES, link("u", "p") < 0); /* EEXIST otherwise */
-	ATF_CHECK_ERRNO(EACCES, symlink("x", "p") < 0); /* EEXIST otherwise */
+	ATF_CHECK_ERRNO(EEXIST, link("u", "p") < 0);
+	ATF_CHECK_ERRNO(EEXIST, symlink("x", "p") < 0);
 }
 
 ATF_TC_WITHOUT_HEAD(dev_stdin);

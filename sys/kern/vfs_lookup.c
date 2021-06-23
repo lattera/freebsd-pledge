@@ -909,7 +909,12 @@ unveil_lookup_check(struct nameidata *ndp)
 		    curtain_device_unveil_bypass(cnp->cn_thread, ndp->ni_vp->v_rdev))
 			return (0);
 	}
-	return (uperms & UPERM_EXPOSE ? EACCES : ENOENT);
+	if (uperms & UPERM_EXPOSE) {
+		if (ndp->ni_vp && cnp->cn_nameiop == CREATE)
+			return (EEXIST); /* `mkdir -p` */
+		return (EACCES);
+	}
+	return (ENOENT);
 }
 
 static inline void

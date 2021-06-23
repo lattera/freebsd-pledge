@@ -100,6 +100,11 @@ Command exit status: 0
 	atf_check -o file:exp cat out
 }
 
+atf_test_case tmpdir_mkdir_p
+tmpdir_mkdir_p_body() {
+	atf_check curtain sh -c 'mkdir -p "$TMPDIR/test" && rmdir "$TMPDIR/test"'
+}
+
 atf_init_test_cases() {
 	atf_add_test_case cmd_true
 	atf_add_test_case cmd_false
@@ -116,4 +121,5 @@ atf_init_test_cases() {
 	atf_add_test_case ps_visibility
 	atf_add_test_case script_with_cmd
 	atf_add_test_case session_with_non_tty
+	atf_add_test_case tmpdir_mkdir_p
 }
