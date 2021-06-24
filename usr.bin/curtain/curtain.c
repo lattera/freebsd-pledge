@@ -116,6 +116,47 @@ expect_eol(struct parser *par, char *p)
 	return (0);
 }
 
+static char *
+parse_merge_tags(struct parser *par, char *p, bool apply) {
+	do {
+		char *tag, *tag_end;
+		bool found;
+		tag = p = skip_spaces(p);
+		tag_end = p = skip_word(p, ":]");
+		if (tag == tag_end)
+			break;
+		if (apply) {
+			found = false;
+			for (const char **tagp = par->cfg->tags_base;
+			    tagp < par->cfg->tags_last; tagp++)
+				if (strmemcmp(*tagp, tag, tag_end - tag) == 0) {
+					found = true;
+					break;
+				}
+			if (!found) {
+				if (par->cfg->tags_fill == par->cfg->tags_end) {
+					parse_error(par, "too many tags in stack");
+					return (NULL);
+				}
+				tag = strmemdup(tag, tag_end - tag);
+				if (!tag)
+					err(EX_TEMPFAIL, NULL);
+				*par->cfg->tags_fill++ = tag;
+			}
+		}
+	} while (true);
+	return (p);
+}
+
+static int
+parse_merge(struct parser *par, char *p, bool apply)
+{
+	p = parse_merge_tags(par, p, apply);
+	if (!p)
+		return (-1);
+	return (expect_eol(par, p));
+}
+
 static int
 do_unveil_callback(void *ctx, char *path)
 {
@@ -233,6 +274,7 @@ static const struct {
 	const char name[8];
 	int (*func)(struct parser *par, char *p, bool apply);
 } directives[] = {
+	{ "merge", parse_merge },
 	{ "unveil", parse_unveil },
 	{ "sysfil", parse_sysfil },
 	{ "sysctl", parse_sysctl },
@@ -271,7 +313,8 @@ parse_section(struct parser *par, char *p)
 		par->apply = true;
 	} else {
 		par->apply = false;
-		for (const char **tagp = par->cfg->tags_base; tagp < par->cfg->tags_last; tagp++)
+		for (const char **tagp = par->cfg->tags_base;
+		    tagp < par->cfg->tags_last; tagp++)
 			if (strmemcmp(*tagp, tag, tag_end - tag) == 0) {
 				par->apply = true;
 				break;
@@ -280,30 +323,9 @@ parse_section(struct parser *par, char *p)
 
 	p = skip_spaces(p);
 	if (*p == ':') {
-		p++;
-		do {
-			bool found;
-			tag = p = skip_spaces(p);
-			tag_end = p = skip_word(p, ":]");
-			if (tag == tag_end)
-				break;
-			if (par->apply) {
-				found = false;
-				for (const char **tagp = par->cfg->tags_base; tagp < par->cfg->tags_last; tagp++)
-					if (strmemcmp(*tagp, tag, tag_end - tag) == 0) {
-						found = true;
-						break;
-					}
-				if (!found) {
-					if (par->cfg->tags_fill == par->cfg->tags_end)
-						return (parse_error(par, "too many tags in stack"));
-					tag = strmemdup(tag, tag_end - tag);
-					if (!tag)
-						err(EX_TEMPFAIL, NULL);
-					*par->cfg->tags_fill++ = tag;
-				}
-			}
-		} while (true);
+		p = parse_merge_tags(par, ++p, par->apply);
+		if (!p)
+			return (-1);
 	}
 
 	if (*p++ != ']')
