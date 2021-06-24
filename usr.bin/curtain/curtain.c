@@ -137,12 +137,12 @@ do_unveil(struct parser *par, const char *pattern)
 }
 
 static int
-parse_unveil(struct parser *par, char *p)
+parse_unveil(struct parser *par, char *p, bool apply)
 {
 	char *pattern, *pattern_end, *perms, *perms_end;
 	int r;
 
-	pattern = p;
+	pattern = p = skip_spaces(p);
 	pattern_end = p = skip_word(p, "");
 
 	if (*(p = skip_spaces(p)) == ':') {
@@ -168,7 +168,7 @@ parse_unveil(struct parser *par, char *p)
 		par->uperms = UPERM_READ;
 	}
 
-	return (par->apply ? do_unveil(par, pattern) : 0);
+	return (apply ? do_unveil(par, pattern) : 0);
 }
 
 static int
@@ -233,6 +233,7 @@ static const struct {
 	const char name[8];
 	int (*func)(struct parser *par, char *p, bool apply);
 } directives[] = {
+	{ "unveil", parse_unveil },
 	{ "sysfil", parse_sysfil },
 	{ "sysctl", parse_sysctl },
 	{ "priv", parse_priv },
@@ -323,7 +324,7 @@ parse_line(struct parser *par)
 		return (parse_section(par, p));
 	if (p[0] == '.' && p[1] != '/')
 		return (parse_directive(par, p));
-	return (parse_unveil(par, p));
+	return (parse_unveil(par, p, par->apply));
 }
 
 static int
