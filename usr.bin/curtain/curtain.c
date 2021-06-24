@@ -53,6 +53,20 @@ struct parser {
 	unveil_perms uperms;
 };
 
+static const struct {
+	const char name[16];
+	const unsigned long *ioctls;
+} ioctls_bundles[] = {
+	{ "tty_basic", curtain_ioctls_tty_basic },
+	{ "tty_pts", curtain_ioctls_tty_pts },
+	{ "net_basic", curtain_ioctls_net_basic },
+	{ "net_route", curtain_ioctls_net_route },
+	{ "oss", curtain_ioctls_oss },
+	{ "cryptodev", curtain_ioctls_cryptodev },
+	{ "bpf", curtain_ioctls_bpf_all },
+};
+
+
 static int
 strmemcmp(const char *s, const char *b, size_t n)
 {
@@ -269,6 +283,29 @@ parse_priv(struct parser *par, char *p, bool apply)
 	return (expect_eol(par, p));
 }
 
+static void
+parse_ioctls(struct parser *par, char *p, bool apply)
+{
+	while (*(p = skip_spaces(p))) {
+		char *w;
+		const unsigned long *bundle;
+		p = skip_word((w = p), "");
+		if (w == p)
+			break;
+		bundle = NULL;
+		for (size_t i = 0; i < nitems(ioctls_bundles); i++)
+			if (strmemcmp(ioctls_bundles[i].name, w, p - w) == 0) {
+				bundle = ioctls_bundles[i].ioctls;
+				break;
+			}
+		if (!bundle)
+			parse_error(par, "unknown ioctl bundle");
+		else if (apply)
+			curtain_ioctls(par->slot, bundle, 0);
+	}
+	return (expect_eol(par, p));
+}
+
 static const struct {
 	const char name[8];
 	void (*func)(struct parser *par, char *p, bool apply);
@@ -278,6 +315,7 @@ static const struct {
 	{ "sysfil", parse_sysfil },
 	{ "sysctl", parse_sysctl },
 	{ "priv", parse_priv },
+	{ "ioctls", parse_ioctls },
 };
 
 static void
@@ -907,9 +945,6 @@ main(int argc, char *argv[])
 	argv += optind;
 	argc -= optind;
 
-	curtain_ioctls(main_slot, curtain_ioctls_tty_basic, 0);
-	curtain_ioctls(main_slot, curtain_ioctls_tty_pts, 0);
-
 	if (!signaling)
 		curtain_default(main_slot, CURTAIN_DENY);
 	if (!no_protexec)
@@ -928,8 +963,6 @@ main(int argc, char *argv[])
 		curtain_socklvl(main_slot, IPPROTO_IPV6, 0);
 #endif
 #if defined(AF_INET) || defined(AF_INET6)
-		curtain_ioctls(main_slot, curtain_ioctls_net_basic, 0);
-		curtain_ioctls(main_slot, curtain_ioctls_net_route, 0);
 		curtain_socklvl(main_slot, IPPROTO_TCP, 0);
 		curtain_socklvl(main_slot, IPPROTO_UDP, 0);
 #endif
