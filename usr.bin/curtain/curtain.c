@@ -143,7 +143,7 @@ parse_unveil(struct parser *par, char *p)
 	int r;
 
 	pattern = p;
-	pattern_end = p = skip_word(p, ":");
+	pattern_end = p = skip_word(p, "");
 
 	if (*(p = skip_spaces(p)) == ':') {
 		p = skip_spaces(++p);
@@ -162,12 +162,13 @@ parse_unveil(struct parser *par, char *p)
 		r = unveil_parse_perms(&par->uperms, perms);
 		if (r < 0)
 			return (parse_error(par, "invalid unveil permissions"));
-	} else
+	} else {
+		if (*p)
+			return (parse_error(par, "unexpected characters at end of line"));
 		par->uperms = UPERM_READ;
+	}
 
-	if (!par->apply)
-		return (0);
-	return (do_unveil(par, pattern));
+	return (par->apply ? do_unveil(par, pattern) : 0);
 }
 
 static int

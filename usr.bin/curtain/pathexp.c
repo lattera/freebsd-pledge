@@ -11,6 +11,7 @@ struct pathexp {
 	char *exp_base, *exp_end;
 	void *callback_data;
 	int (*callback)(void *, char *);
+	bool tolerate_empty_vars;
 	const char *error;
 };
 
@@ -104,7 +105,7 @@ expand_envvar(struct pathexp *a, const char *p, char *e, size_t depth)
 {
 	const char *q;
 	char *value;
-	bool brace;
+	bool brace, set;
 	if ((brace = (*p == '{')))
 		p++;
 	q = p;
@@ -119,11 +120,13 @@ expand_envvar(struct pathexp *a, const char *p, char *e, size_t depth)
 		value = getenv(name);
 	}
 	p = q;
+	set = value;
 	if (brace) {
-		bool colon, set;
-		if ((colon = (*p == ':')))
+		if (*p == ':') {
 			p++;
-		set = value && (!colon || *value);
+			if (set && !*value)
+				set = false;
+		}
 		if (*p == '-') {
 			p++;
 			if (!set)
@@ -132,12 +135,14 @@ expand_envvar(struct pathexp *a, const char *p, char *e, size_t depth)
 			p++;
 			if (set)
 				return (expand(a, p, e, depth + 1));
-		} else if (colon)
+		} else if (p[-1] == ':')
 			return (error(a, "unexpected colon"));
 		p = skip(p);
 		if (!p || *p++ != '}')
 			return (error(a, "expected closing brace for variable"));
 	}
+	if (!set && !a->tolerate_empty_vars)
+		return (0);
 	if (value) {
 		size_t len;
 		len = strlen(value);
@@ -152,20 +157,24 @@ expand_envvar(struct pathexp *a, const char *p, char *e, size_t depth)
 static int
 expand(struct pathexp *a, const char *pat, char *exp, size_t depth)
 {
-	int r;
 	while (*pat) {
 		switch (*pat) {
-		case '{':
+		case '{': {
+			int r, m;
 			pat++;
+			m = 0;
 			do {
 				r = expand(a, pat, exp, depth + 1);
 				if (r < 0)
 					return (r);
+				if (r > m)
+					m = r;
 				pat = skip(pat);
 				if (!pat)
 					goto unterm;
 			} while (*pat++ == ',');
-			return (0);
+			return (m);
+		}
 		case '}':
 			if (!depth--)
 				return (error(a, "unexpected closing brace"));
@@ -211,6 +220,7 @@ pathexp(const char *pat, char *exp, size_t exp_size,
 	struct pathexp a = {
 		.callback = callback,
 		.callback_data = callback_data,
+		.tolerate_empty_vars = false,
 		.exp_base = exp,
 		.exp_end = exp + exp_size,
 	};
