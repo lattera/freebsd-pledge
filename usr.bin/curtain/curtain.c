@@ -48,6 +48,7 @@ struct parser {
 	char *line;
 	size_t line_size;
 	bool apply;
+	bool error;
 	struct curtain_slot *slot;
 	unveil_perms uperms;
 };
@@ -75,11 +76,11 @@ strmemdup(const char *b, size_t n)
 	return (s);
 }
 
-static int
+static void
 parse_error(struct parser *par, const char *error)
 {
+	par->error = true;
 	warnx("%s:%zu: %s", par->file_name, (uintmax_t)par->line_no, error);
-	return (-1);
 }
 
 static char *
@@ -108,12 +109,11 @@ skip_word(char *p, const char *brk)
 	return (p);
 }
 
-static int
+static void
 expect_eol(struct parser *par, char *p)
 {
 	if (*(p = skip_spaces(p)))
-		return (parse_error(par, "unexpected characters at end of line"));
-	return (0);
+		parse_error(par, "unexpected characters at end of line");
 }
 
 static char *
@@ -148,12 +148,12 @@ parse_merge_tags(struct parser *par, char *p, bool apply) {
 	return (p);
 }
 
-static int
+static void
 parse_merge(struct parser *par, char *p, bool apply)
 {
 	p = parse_merge_tags(par, p, apply);
 	if (!p)
-		return (-1);
+		return;
 	return (expect_eol(par, p));
 }
 
@@ -165,7 +165,7 @@ do_unveil_callback(void *ctx, char *path)
 	return (0);
 }
 
-static int
+static void
 do_unveil(struct parser *par, const char *pattern)
 {
 	char buf[PATH_MAX];
@@ -173,20 +173,19 @@ do_unveil(struct parser *par, const char *pattern)
 	const char *error;
 	r = pathexp(pattern, buf, sizeof buf, &error, do_unveil_callback, par);
 	if (r < 0)
-		return (parse_error(par, error));
-	return (0);
+		parse_error(par, error);
 }
 
-static int
+static void
 parse_unveil(struct parser *par, char *p, bool apply)
 {
 	char *pattern, *pattern_end, *perms, *perms_end;
-	int r;
 
 	pattern = p = skip_spaces(p);
 	pattern_end = p = skip_word(p, "");
 
 	if (*(p = skip_spaces(p)) == ':') {
+		int r;
 		p = skip_spaces(++p);
 		perms = p;
 		while (*p && !isspace(*p))
@@ -212,7 +211,7 @@ parse_unveil(struct parser *par, char *p, bool apply)
 	return (apply ? do_unveil(par, pattern) : 0);
 }
 
-static int
+static void
 parse_sysfil(struct parser *par, char *p, bool apply)
 {
 	while (*(p = skip_spaces(p))) {
@@ -225,14 +224,14 @@ parse_sysfil(struct parser *par, char *p, bool apply)
 			if (strmemcmp(e->name, w, p - w) == 0)
 				break;
 		if (!e->name)
-			return (parse_error(par, "unknown sysfil"));
-		if (apply)
+			parse_error(par, "unknown sysfil");
+		else if (apply)
 			curtain_sysfil(par->slot, e->sysfil, 0);
 	}
 	return (expect_eol(par, p));
 }
 
-static int
+static void
 parse_sysctl(struct parser *par, char *p, bool apply)
 {
 	while (*(p = skip_spaces(p))) {
@@ -250,7 +249,7 @@ parse_sysctl(struct parser *par, char *p, bool apply)
 	return (expect_eol(par, p));
 }
 
-static int
+static void
 parse_priv(struct parser *par, char *p, bool apply)
 {
 	while (*(p = skip_spaces(p))) {
@@ -263,8 +262,8 @@ parse_priv(struct parser *par, char *p, bool apply)
 			if (strmemcmp(e->name, w, p - w) == 0)
 				break;
 		if (!e->name)
-			return (parse_error(par, "unknown privilege"));
-		if (apply)
+			parse_error(par, "unknown privilege");
+		else if (apply)
 			curtain_priv(par->slot, e->priv, 0);
 	}
 	return (expect_eol(par, p));
@@ -272,7 +271,7 @@ parse_priv(struct parser *par, char *p, bool apply)
 
 static const struct {
 	const char name[8];
-	int (*func)(struct parser *par, char *p, bool apply);
+	void (*func)(struct parser *par, char *p, bool apply);
 } directives[] = {
 	{ "merge", parse_merge },
 	{ "unveil", parse_unveil },
@@ -281,7 +280,7 @@ static const struct {
 	{ "priv", parse_priv },
 };
 
-static int
+static void
 parse_directive(struct parser *par, char *p)
 {
 	char *dir, *dir_end;
@@ -298,10 +297,10 @@ parse_directive(struct parser *par, char *p)
 		if (strmemcmp(directives[i].name, dir, dir_end - dir) == 0)
 			return (directives[i].func(par, p,
 			    par->apply && (!unsafe || par->cfg->allow_unsafe)));
-	return (parse_error(par, "unknown directive"));
+	parse_error(par, "unknown directive");
 }
 
-static int
+static void
 parse_section(struct parser *par, char *p)
 {
 	char *tag, *tag_end;
@@ -323,25 +322,25 @@ parse_section(struct parser *par, char *p)
 
 	p = skip_spaces(p);
 	if (*p == ':') {
-		p = parse_merge_tags(par, ++p, par->apply);
+		p++;
+		p = parse_merge_tags(par, p, par->apply);
 		if (!p)
-			return (-1);
+			return;
 	}
 
 	if (*p++ != ']')
 		return (parse_error(par, "expected closing bracket"));
 	if (*(p = skip_spaces(p)))
 		return (parse_error(par, "unexpected characters at end of line"));
-	return (0);
 }
 
-static int
+static void
 parse_line(struct parser *par)
 {
 	char *p;
 	p = skip_spaces(par->line);
 	if (!*p)
-		return (0);
+		return;
 	if (*p == '[')
 		return (parse_section(par, p));
 	if (p[0] == '.' && p[1] != '/')
@@ -349,19 +348,13 @@ parse_line(struct parser *par)
 	return (parse_unveil(par, p, par->apply));
 }
 
-static int
+static void
 parse_config(struct parser *par)
 {
-	bool errors = false;
 	while (getline(&par->line, &par->line_size, par->file) >= 0) {
-		int r;
 		par->line_no++;
-		r = parse_line(par);
-		if (r < 0)
-			errors = true;
-
+		parse_line(par);
 	}
-	return (errors ? -1 : 0);
 }
 
 static int
@@ -372,7 +365,7 @@ load_config(const char *path, struct config *cfg)
 		.apply = !cfg->skip_default_tag,
 		.cfg = cfg,
 	};
-	int r, saved_errno;
+	int saved_errno;
 #if 0
 	warnx("%s: %s", __FUNCTION__, path);
 #endif
@@ -383,11 +376,11 @@ load_config(const char *path, struct config *cfg)
 			warn("%s", par.file_name);
 		return (-1);
 	}
-	r = parse_config(&par);
+	parse_config(&par);
 	saved_errno = errno;
 	fclose(par.file);
 	errno = saved_errno;
-	return (r);
+	return (par.error ? -1 : 0);
 }
 
 
