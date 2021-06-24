@@ -11,7 +11,7 @@ struct pathexp {
 	char *exp_base, *exp_end;
 	void *callback_data;
 	int (*callback)(void *, char *);
-	bool tolerate_empty_vars;
+	bool tolerate_unset_vars, tolerate_empty_vars;
 	const char *error;
 };
 
@@ -105,7 +105,7 @@ expand_envvar(struct pathexp *a, const char *p, char *e, size_t depth)
 {
 	const char *q;
 	char *value;
-	bool brace, set;
+	bool brace;
 	if ((brace = (*p == '{')))
 		p++;
 	q = p;
@@ -120,13 +120,13 @@ expand_envvar(struct pathexp *a, const char *p, char *e, size_t depth)
 		value = getenv(name);
 	}
 	p = q;
-	set = value;
 	if (brace) {
+		bool set;
 		if (*p == ':') {
 			p++;
-			if (set && !*value)
-				set = false;
-		}
+			set = value && *value;
+		} else
+			set = value;
 		if (*p == '-') {
 			p++;
 			if (!set)
@@ -141,16 +141,17 @@ expand_envvar(struct pathexp *a, const char *p, char *e, size_t depth)
 		if (!p || *p++ != '}')
 			return (error(a, "expected closing brace for variable"));
 	}
-	if (!set && !a->tolerate_empty_vars)
-		return (0);
 	if (value) {
 		size_t len;
 		len = strlen(value);
+		if (len == 0 && !a->tolerate_empty_vars)
+			return (0);
 		if ((size_t)(a->exp_end - e) < len)
 			return (toobig(a));
 		memcpy(e, value, len);
 		e += len;
-	}
+	} else if (!a->tolerate_unset_vars)
+		return (0);
 	return (expand(a, p, e, depth));
 }
 
@@ -220,7 +221,6 @@ pathexp(const char *pat, char *exp, size_t exp_size,
 	struct pathexp a = {
 		.callback = callback,
 		.callback_data = callback_data,
-		.tolerate_empty_vars = false,
 		.exp_base = exp,
 		.exp_end = exp + exp_size,
 	};
