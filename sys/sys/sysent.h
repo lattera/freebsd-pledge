@@ -283,6 +283,9 @@ struct syscall_helper_data {
     .syscall_no = NO_SYSCALL					\
 }
 
+#define	SY_HLP_STATIC			SY_THR_STATIC
+#define	SY_HLP_PRESERVE_SYFLAGS		0x10000
+
 int	syscall_module_handler(struct module *mod, int what, void *arg);
 int	syscall_helper_register(struct syscall_helper_data *sd, int flags);
 int	syscall_helper_unregister(struct syscall_helper_data *sd);

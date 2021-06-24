@@ -116,7 +116,7 @@ kern_syscall_register(struct sysent *sysents, int *offset,
 {
 	int i;
 
-	if ((flags & ~SY_THR_STATIC) != 0)
+	if ((flags & ~(SY_HLP_STATIC | SY_HLP_PRESERVE_SYFLAGS)) != 0)
 		return (EINVAL);
 
 	if (*offset == NO_SYSCALL) {
@@ -139,8 +139,11 @@ kern_syscall_register(struct sysent *sysents, int *offset,
 	    ("dynamic syscall is not protected"));
 	*old_sysent = sysents[*offset];
 	new_sysent->sy_thrcnt = SY_THR_ABSENT;
+	if ((flags & SY_HLP_PRESERVE_SYFLAGS) != 0)
+		new_sysent->sy_flags = old_sysent->sy_flags;
 	sysents[*offset] = *new_sysent;
-	atomic_store_rel_32(&sysents[*offset].sy_thrcnt, flags);
+	atomic_store_rel_32(&sysents[*offset].sy_thrcnt,
+	    (flags & SY_HLP_STATIC) != 0 ? SY_THR_STATIC : 0);
 	return (0);
 }
 
