@@ -1,0 +1,33 @@
+
+[_pwddb]
+/etc/pwd.db				: r
+
+[_browser]
+~/Downloads/				: rwc
+
+[vi : _pwddb]
+~/.{n,}exrc				: r
+/etc/vi.exrc				: r
+# recovery handling needs to be able to read the user database
+/var/tmp/vi.recover/			: rwc
+
+[git]
+~/.gitconfig				: r
+
+[firefox : _browser]
+.sysfil! posixipc
+~/.mozilla/firefox/			: rwc
+~/.cache/mozilla/firefox/		: rwc
+
+[chrome : _browser]
+# NOTE: When running chromium as an "untrusted" X11 client (curtain -X), the
+# setting "Use system title bar and borders" in the "Appearance" section must
+# be enabled.
+.sysfil! posixipc
+~/.config/chromium/			: rwc
+~/.cache/chromium/			: rwc
+
+[thunderbird]
+.sysfil! posixipc
+~/.thunderbird/				: rwc
+~/.cache/thunderbird/			: rwc

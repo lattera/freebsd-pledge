@@ -263,6 +263,8 @@
             ..
             csh
             ..
+            curtain
+            ..
             diskless
             ..
             dma

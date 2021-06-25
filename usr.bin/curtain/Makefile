@@ -17,6 +17,11 @@ BASECONF=	curtain.conf
 GUICONFDIR=	/etc/curtain.d/_gui.d
 GUICONF=	fontconfig.conf
 
+.if ${MK_EXAMPLES} != "no"
+FILESDIR=	${SHAREDIR}/examples/curtain
+FILES=		curtain.conf.sample
+.endif
+
 CLEANFILES+=	sysfiltab.c privtab.c
 SRCS+=sysfiltab.c privtab.c
 SYSFIL_H=${SYSROOT:U${DESTDIR}}${INCLUDEDIR}/sys/sysfil.h
