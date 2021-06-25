@@ -47,7 +47,8 @@ struct parser {
 	off_t line_no;
 	char *line;
 	size_t line_size;
-	bool apply;
+	bool skip;
+	bool matched_section;
 	bool error;
 	struct curtain_slot *slot;
 	unveil_perms uperms;
@@ -129,6 +130,27 @@ expect_eol(struct parser *par, char *p)
 	if (*(p = skip_spaces(p)))
 		parse_error(par, "unexpected characters at end of line");
 }
+
+static int load_config(const char *path, struct config *);
+
+static void
+parse_include(struct parser *par, char *p, bool apply)
+{
+	while (*(p = skip_spaces(p))) {
+		char *w, c;
+		p = skip_word((w = p), "");
+		if (w == p)
+			break;
+		if (apply) {
+			c = *p;
+			*p = '\0';
+			load_config(w, par->cfg);
+			*p = c;
+		}
+	}
+	return (expect_eol(par, p));
+}
+
 
 static char *
 parse_merge_tags(struct parser *par, char *p, bool apply) {
@@ -310,6 +332,7 @@ static const struct {
 	const char name[8];
 	void (*func)(struct parser *par, char *p, bool apply);
 } directives[] = {
+	{ "include", parse_include },
 	{ "merge", parse_merge },
 	{ "unveil", parse_unveil },
 	{ "sysfil", parse_sysfil },
@@ -334,7 +357,9 @@ parse_directive(struct parser *par, char *p)
 	for (size_t i = 0; i < nitems(directives); i++)
 		if (strmemcmp(directives[i].name, dir, dir_end - dir) == 0)
 			return (directives[i].func(par, p,
-			    par->apply && (!unsafe || par->cfg->allow_unsafe)));
+			    (!unsafe || par->cfg->allow_unsafe) &&
+			    (directives[i].func == parse_include ?
+			         par->matched_section : !par->skip)));
 	parse_error(par, "unknown directive");
 }
 
@@ -347,13 +372,16 @@ parse_section(struct parser *par, char *p)
 	tag = p = skip_spaces(p);
 	tag_end = p = skip_word(p, ":]");
 	if (tag == tag_end) {
-		par->apply = true;
+		par->matched_section = true;
+		par->skip = par->cfg->skip_default_tag;
 	} else {
-		par->apply = false;
+		par->matched_section = false;
+		par->skip = true;
 		for (const char **tagp = par->cfg->tags_base;
 		    tagp < par->cfg->tags_last; tagp++)
 			if (strmemcmp(*tagp, tag, tag_end - tag) == 0) {
-				par->apply = true;
+				par->matched_section = true;
+				par->skip = false;
 				break;
 			}
 	}
@@ -361,7 +389,7 @@ parse_section(struct parser *par, char *p)
 	p = skip_spaces(p);
 	if (*p == ':') {
 		p++;
-		p = parse_merge_tags(par, p, par->apply);
+		p = parse_merge_tags(par, p, par->matched_section);
 		if (!p)
 			return;
 	}
@@ -383,7 +411,7 @@ parse_line(struct parser *par)
 		return (parse_section(par, p));
 	if (p[0] == '.' && p[1] != '/')
 		return (parse_directive(par, p));
-	return (parse_unveil(par, p, par->apply));
+	return (parse_unveil(par, p, !par->skip));
 }
 
 static void
@@ -400,7 +428,8 @@ load_config(const char *path, struct config *cfg)
 {
 	struct parser par = {
 		.file_name = path,
-		.apply = !cfg->skip_default_tag,
+		.matched_section = true,
+		.skip = cfg->skip_default_tag,
 		.cfg = cfg,
 	};
 	int saved_errno;
