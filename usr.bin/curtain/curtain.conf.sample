@@ -1,21 +1,143 @@
+# Sample sandboxing profiles for some common applications.
+#
+# This is WIP and mostly intended for testing.
+#
+# VARIOUS NOTES:
+#
+# Unveil paths that end in "/" will be ignored if the path does not refer to an
+# existing directory.  While it's possible to unveil a directory by name, the
+# semantics are different, so these configurations attempt to consistently only
+# do it one way.  Consequence is that applications' private directories must
+# already exist before attempting to run them in a sandbox.
+#
+# Some applications actually require their "unsafe" permissions (directives
+# suffixed with "!"), while some of them just work better with them.
+#
+# Menus and windows often have a thick black border in untrusted X11 mode.
+# Windows from applications that try to use client-side decorations (most Gnome
+# and XFCE applications by default) will not be movable.
+#
+# The file browsing dialogs will generally not react well to trying to browse
+# outside of the unveiled areas (but doesn't seem to crash so far).
+#
+# Video players are greatly slowed down under untrusted X11 mode.  Fullscreen
+# mode will not work.
+#
+# Under Wayland, some programs won't work without DRM access.
+#
+# fontconfig will complain about unwritable cache directories.
+#
+# dconf and dbus will be unusable.  Unveiling their paths probably works, but
+# is probably too insecure to make the sandboxing even worth it.
+#
+# pulseaudio will be unusable, but thankfully some programs just start using
+# OSS directly instead.
 
-[_pwddb]
-/etc/pwd.db				: r
+[_editor]
+~/Documents/				: rwc
+~/Templates/				: rwc
 
 [_browser]
+.merge _audio
 ~/Downloads/				: rwc
 
-[vi : _pwddb]
+[_p2p]
+~/Downloads/				: rwc
+
+[_player]
+.merge _audio
+~/Music/				: r
+~/Videos/				: r
+
+[_viewer]
+~/Pictures/				: r
+
+
+[vi : _editor]
 ~/.{n,}exrc				: r
 /etc/vi.exrc				: r
 # recovery handling needs to be able to read the user database
-/var/tmp/vi.recover/			: rwc
+.merge! _pwddb
+.unveil! /var/tmp/vi.recover/		: rwc
 
 [git]
 ~/.gitconfig				: r
 
-[firefox : _browser]
+[tcpdump]
+.merge bpf
+
+[wireshark]
+.merge bpf
+~/.config/wireshark/			: rwc
+
+[emacs : _editor]
+.merge! _pwddb
+~/.emacs/
+~/.emacs.d/				: rwc
+~/.config/emacs/			: rwc
+
+[abiword : _editor]
+~/.config/abiword/			: rwc
+
+[gimp : _editor]
+/usr/local/etc/gimp/			: r
+~/.config/GIMP/				: rwc
+~/.cache/gimp/				: rwc
+
+[inkscape : _editor]
 .sysfil! posixipc
+~/.cache/inkscape/			: rwc
+~/.config/inkscape/			: rwc
+
+[libreoffice : _editor]
+.merge! _pwddb
+.unveil! /tmp				: rwc
+~/.config/libreoffice/			: rwc
+
+[xpdf : _viewer]
+/usr/local/etc/papersize		: r
+/usr/local/etc/xpdfrc			: r
+~/.xpdfrc				: rwc
+
+[gv : _viewer]
+~/.gv					: r
+
+[epdfview : _viewer]
+~/.config/epdfview/			: rwc
+
+[okular : _viewer]
+~/.config/okularrc			: rwc
+~/.local/share/okular/			: rwc
+
+[geeqie : _viewer]
+~/.config/geeqie/			: rwc
+~/.local/share/geeqie/			: rwc
+~/.cache/geeqie/			: rwc
+
+[shotwell : _viewer]
+# Has trouble saving its configs.
+~/.shotwell/				: rwc
+~/.local/share/shotwell/		: rwc
+~/.cache/shotwell/			: rwc
+
+[gpicview : _viewer]
+~/.config/gpicview/			: rwc
+
+[sxiv : _viewer]
+~/.config/sxiv/				: rwc
+~/.cache/sxiv/				: rwc
+
+[hexchat]
+~/.config/hexchat/			: rwc
+
+[pidgin]
+~/.purple				: rwc
+
+[firefox : _browser]
+# NOTE: Sometimes crash due to X11 errors with -X.  Works better under -Y/-W.
+# Run with GDK_BACKEND=wayland for -W.  When giving it DRM access, it sometimes
+# doesn't activate until the second start.
+.sysfil posixipc
 ~/.mozilla/firefox/			: rwc
 ~/.cache/mozilla/firefox/		: rwc
 
@@ -23,11 +145,43 @@
 # NOTE: When running chromium as an "untrusted" X11 client (curtain -X), the
 # setting "Use system title bar and borders" in the "Appearance" section must
 # be enabled.
-.sysfil! posixipc
+.sysfil posixipc
 ~/.config/chromium/			: rwc
 ~/.cache/chromium/			: rwc
 
 [thunderbird]
-.sysfil! posixipc
+.sysfil posixipc
 ~/.thunderbird/				: rwc
 ~/.cache/thunderbird/			: rwc
+
+[falkon : _browser]
+~/.config/falkon/			: rwc
+~/.cache/falkon/			: rwc
+
+[otter-browser : _browser]
+~/.config/otter/			: rwc
+~/.cache/Otter/				: rwc
+
+[qbittorrent : _p2p]
+# NOTE: Best to disable the tray icon feature under -X.
+~/.local/share/qBittorrent/		: rwc
+~/.config/qBittorrent/			: rwc
+~/.cache/qBittorrent/			: rwc
+
+[deluge : _p2p]
+~/.config/deluge/			: rwc
+
+[audacious : _player]
+~/.config/audacious/			: rwc
+
+[mpv : _player]
+~/.mpv/					: rwc
+~/.config/mpv/				: rwc
+
+[mplayer : _player]
+~/.mplayer/				: rwc
+
+[vlc : _player]
+~/.config/vlc/				: rwc
+~/.local/share/vlc/			: rwc
+
