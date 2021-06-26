@@ -64,10 +64,10 @@
 ~/.gitconfig				: r
 
 [tcpdump]
-.merge bpf
+.merge _bpf
 
 [wireshark]
-.merge bpf
+.merge _bpf
 ~/.config/wireshark/			: rw
 
 [emacs : _editor]
