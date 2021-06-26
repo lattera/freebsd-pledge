@@ -29,6 +29,49 @@
 
 #include "common.h"
 
+static bool
+match_path(const char *p, const char *q)
+{
+	while (*p && *q) {
+		char pp, qq;
+		while (p[0] == '/' && p[1] == '/')
+			p++;
+		while (q[0] == '/' && q[1] == '/')
+			q++;
+		pp = *p ? *p : '/';
+		qq = *q ? *q : '/';
+		p++, q++;
+		if (pp != qq)
+			return (false);
+	}
+	return (true);
+}
+
+bool
+is_tmpdir(const char *path)
+{
+	static const char *tmpdir = NULL;
+	if (!tmpdir && !(tmpdir = getenv("TMPDIR")))
+		tmpdir = _PATH_TMP;
+	return (match_path(tmpdir, path));
+}
+
+void
+check_tmpdir(struct curtain_slot *slot, const char *tmpdir)
+{
+	int r;
+	char *path;
+	r = asprintf(&path, "%s/krb5cc_%u", tmpdir, geteuid());
+	if (r < 0)
+		err(EX_TEMPFAIL, "asprintf");
+	if (eaccess(path, R_OK) >= 0) {
+		warnx("Kerberos credentials cache found in shared temporary directory; adding an unveil to hide it: %s", path);
+		r = curtain_unveil(slot, path, 0, UPERM_NONE);
+		if (r < 0)
+			err(EX_OSERR, "%s", path);
+	}
+}
+
 static char *new_tmpdir = NULL;
 
 static void
@@ -423,7 +466,7 @@ preexec_cleanup(void)
 static void
 usage(void)
 {
-	fprintf(stderr, "usage: %s [-fkgenaAXYWD] "
+	fprintf(stderr, "usage: %s [-vfkgenaAXYWD] "
 	    "[-t tag] [-p promises] [-u unveil ...] "
 	    "[-Ssl] cmd [arg ...]\n",
 	    getprogname());
@@ -437,7 +480,8 @@ main(int argc, char *argv[])
 	int ch, r;
 	char *promises = NULL;
 	unsigned unsafe_level = 0;
-	bool autotag = false,
+	bool verbose = false,
+	     autotag = false,
 	     signaling = false,
 	     no_fork = false,
 	     run_shell = false,
@@ -452,24 +496,21 @@ main(int argc, char *argv[])
 	char *cmd_arg0 = NULL;
 	char abspath[PATH_MAX];
 	size_t abspath_len = 0;
-	const char *tags_buf[64];
 	struct config cfg;
 	struct curtain_slot *unveils_slot, *main_slot;
 	bool do_exec, pty_wrap;
 	int status;
 
-	cfg = (struct config){
-		.tags_base = tags_buf,
-		.tags_last = tags_buf,
-		.tags_fill = tags_buf,
-		.tags_end = &tags_buf[nitems(tags_buf)],
-	};
+	cfg = (struct config){ 0 };
 
 	curtain_enable((main_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 	curtain_enable((unveils_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 
-	while ((ch = getopt(argc, argv, "fkgenaA!t:p:u:0:SslXYWD")) != -1)
+	while ((ch = getopt(argc, argv, "vfkgenaA!t:p:u:0:SslXYWD")) != -1)
 		switch (ch) {
+		case 'v':
+			cfg.verbose = verbose = true;
+			break;
 		case 'k':
 			signaling = true;
 			break;
@@ -492,9 +533,7 @@ main(int argc, char *argv[])
 			unsafe_level++;
 			break;
 		case 't':
-			if (cfg.tags_fill == &tags_buf[nitems(tags_buf) / 2])
-				errx(EX_USAGE, "too many tags");
-			*cfg.tags_fill++ = optarg;
+			config_tag_push(&cfg, optarg);
 			break;
 		case 'p':
 			for (char *p = optarg; *p; p++)
@@ -575,6 +614,7 @@ main(int argc, char *argv[])
 		curtain_sysfil(main_slot, SYSFIL_PROT_EXEC, 0);
 	if (!no_network) {
 		/* TODO: this should be specified in config files */
+		/* XXX This is all very permissive. */
 		curtain_sockaf(main_slot, AF_UNIX, 0);
 		/* XXX SO_SETFIB, SO_LABEL/SO_PEERLABEL */
 		curtain_socklvl(main_slot, SOL_SOCKET, 0);
@@ -590,14 +630,14 @@ main(int argc, char *argv[])
 		curtain_socklvl(main_slot, IPPROTO_TCP, 0);
 		curtain_socklvl(main_slot, IPPROTO_UDP, 0);
 #endif
-		*cfg.tags_fill++ = "_network";
+		config_tag_push(&cfg, "_network");
 	}
 	if (new_session) {
 		curtain_sysfil(main_slot, SYSFIL_SAME_SESSION, 0);
-		*cfg.tags_fill++ = "_session";
+		config_tag_push(&cfg, "_session");
 	}
 	if (run_shell) {
-		*cfg.tags_fill++ = "_shell";
+		config_tag_push(&cfg, "_shell");
 	}
 	if (new_pgrp) {
 		curtain_sysfil(main_slot, SYSFIL_SAME_PGRP, 0);
@@ -610,24 +650,30 @@ main(int argc, char *argv[])
 	if (x11_mode != X11_NONE) {
 		if (no_fork)
 			errx(EX_USAGE, "X11 mode incompatible with -f");
-		*cfg.tags_fill++ = "_x11";
-		*cfg.tags_fill++ = "_gui";
+		config_tag_push(&cfg, "_x11");
+		config_tag_push(&cfg, "_gui");
 		prepare_x11(main_slot, x11_mode == X11_TRUSTED);
 	};
 	if (wayland) {
-		*cfg.tags_fill++ = "_wayland";
-		*cfg.tags_fill++ = "_gui";
+		config_tag_push(&cfg, "_wayland");
+		config_tag_push(&cfg, "_gui");
 		prepare_wayland(main_slot);
 	}
 	if (dbus) {
 		if (no_fork)
 			errx(EX_USAGE, "-D incompatible with -f");
-		*cfg.tags_fill++ = "_dbus";
+		config_tag_push(&cfg, "_dbus");
 		/*
 		 * XXX dbus-daemon currently being run unsandboxed.
 		 */
 		prepare_dbus(main_slot);
 	}
+
+	if (autotag && argc)
+		config_tag_push(&cfg, argv[0]);
+	cfg.unsafe_level = unsafe_level;
+	config_load_tags(&cfg);
+
 	if (!no_fork) {
 		prepare_tmpdir(main_slot);
 	} else {
@@ -648,12 +694,9 @@ main(int argc, char *argv[])
 		    CURTAIN_UNVEIL_INSPECT, UPERM_TMPDIR);
 		if (r < 0)
 			warn("%s", tmpdir);
+		/* Must use the same slot that was used to unveil the TMPDIR. */
+		check_tmpdir(main_slot, tmpdir);
 	}
-
-	if (autotag && argc)
-		*cfg.tags_fill++ = argv[0];
-	cfg.unsafe_level = unsafe_level;
-	load_tags(&cfg);
 
 	if (promises) {
 		r = pledge(NULL, promises);

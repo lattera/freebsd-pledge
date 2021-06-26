@@ -92,7 +92,7 @@
 [libreoffice : _editor]
 .merge! _pwddb
 .unveil!! /tmp				: rw
-~/.config/libreoffice/			: rw
+~/.config/libreoffice/			: rwu
 
 [xpdf : _viewer]
 /usr/local/etc/papersize		: r

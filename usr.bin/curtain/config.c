@@ -1,11 +1,11 @@
 #include <assert.h>
 #include <ctype.h>
 #include <curtain.h>
-#include <curtain.h>
 #include <dirent.h>
 #include <err.h>
 #include <errno.h>
 #include <paths.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,7 +24,8 @@ struct parser {
 	char *line;
 	size_t line_size;
 	bool skip;
-	bool matched_section;
+	bool matched;
+	bool visited;
 	bool error;
 	struct curtain_slot *slot;
 	unveil_perms uperms;
@@ -67,7 +68,7 @@ parse_unveil_perms(unveil_perms *uperms, const char *s)
 	return (0);
 }
 
-
+
 static int
 strmemcmp(const char *s, const char *b, size_t n)
 {
@@ -79,18 +80,26 @@ strmemcmp(const char *s, const char *b, size_t n)
 	return (n ? -1 : *s ? 1 : 0);
 }
 
-static char *
-strmemdup(const char *b, size_t n)
+struct config_tag *
+config_tag_push_mem(struct config *cfg, const char *buf, size_t len)
 {
-	char *s;
-	s = malloc(n + 1);
-	if (!s)
-		return (NULL);
-	memcpy(s, b, n);
-	s[n] = '\0';
-	return (s);
+	struct config_tag *tag;
+	for (tag = cfg->tags_pending; tag; tag = tag->chain)
+		if (strmemcmp(tag->name, buf, len) == 0)
+			break;
+	if (tag)
+		return (tag);
+	tag = malloc(sizeof *tag + len + 1);
+	if (!tag)
+		err(EX_TEMPFAIL, "malloc");
+	*tag = (struct config_tag){ .chain = cfg->tags_pending };
+	memcpy(tag->name, buf, len);
+	tag->name[len] = '\0';
+	cfg->tags_pending = tag;
+	return (tag);
 }
 
+
 static void
 parse_error(struct parser *par, const char *error)
 {
@@ -98,7 +107,7 @@ parse_error(struct parser *par, const char *error)
 	warnx("%s:%zu: %s", par->file_name, (uintmax_t)par->line_no, error);
 }
 
-static char *
+static inline char *
 skip_spaces(char *p)
 {
 	while (isspace(*p))
@@ -131,7 +140,8 @@ expect_eol(struct parser *par, char *p)
 		parse_error(par, "unexpected characters at end of line");
 }
 
-static int load_config(const char *path, struct config *);
+
+static int process_file(struct config *, const char *path);
 
 static void
 parse_include(struct parser *par, char *p, bool apply)
@@ -144,7 +154,7 @@ parse_include(struct parser *par, char *p, bool apply)
 		if (apply) {
 			c = *p;
 			*p = '\0';
-			load_config(w, par->cfg);
+			process_file(par->cfg, w);
 			*p = c;
 		}
 	}
@@ -153,33 +163,16 @@ parse_include(struct parser *par, char *p, bool apply)
 
 
 static char *
-parse_merge_tags(struct parser *par, char *p, bool apply) {
+parse_merge_tags(struct parser *par, char *p, bool apply)
+{
 	do {
 		char *tag, *tag_end;
-		bool found;
 		tag = p = skip_spaces(p);
 		tag_end = p = skip_word(p, ":]");
 		if (tag == tag_end)
 			break;
-		if (apply) {
-			found = false;
-			for (const char **tagp = par->cfg->tags_base;
-			    tagp < par->cfg->tags_last; tagp++)
-				if (strmemcmp(*tagp, tag, tag_end - tag) == 0) {
-					found = true;
-					break;
-				}
-			if (!found) {
-				if (par->cfg->tags_fill == par->cfg->tags_end) {
-					parse_error(par, "too many tags in stack");
-					return (NULL);
-				}
-				tag = strmemdup(tag, tag_end - tag);
-				if (!tag)
-					err(EX_TEMPFAIL, NULL);
-				*par->cfg->tags_fill++ = tag;
-			}
-		}
+		if (apply)
+			config_tag_push_mem(par->cfg, tag, tag_end - tag);
 	} while (true);
 	return (p);
 }
@@ -197,6 +190,8 @@ static int
 do_unveil_callback(void *ctx, char *path)
 {
 	struct parser *par = ctx;
+	if (is_tmpdir(path))
+		check_tmpdir(par->slot, path);
 	curtain_unveil(par->slot, path, CURTAIN_UNVEIL_INSPECT, par->uperms);
 	return (0);
 }
@@ -354,41 +349,52 @@ parse_directive(struct parser *par, char *p)
 	while (*p == '!')
 		p++, unsafe_level++;
 	for (size_t i = 0; i < nitems(directives); i++)
-		if (strmemcmp(directives[i].name, dir, dir_end - dir) == 0)
-			return (directives[i].func(par, p,
-			    (unsafe_level <= par->cfg->unsafe_level) &&
+		if (strmemcmp(directives[i].name, dir, dir_end - dir) == 0) {
+			bool apply = unsafe_level <= par->cfg->unsafe_level &&
 			    (directives[i].func == parse_include ?
-			         par->matched_section : !par->skip)));
+			     par->matched : !par->skip);
+			/*
+			 * Only parse unnecessarily the first time a file is
+			 * being processed to report syntax errors to the user.
+			 */
+			if (!apply && par->visited)
+				return;
+			return (directives[i].func(par, p, apply));
+		}
 	parse_error(par, "unknown directive");
 }
 
 static void
 parse_section(struct parser *par, char *p)
 {
-	char *tag, *tag_end;
+	char *name, *name_end;
 	assert(*p == '[');
 	p++;
-	tag = p = skip_spaces(p);
-	tag_end = p = skip_word(p, ":]");
-	if (tag == tag_end) {
-		par->matched_section = true;
-		par->skip = par->cfg->skip_default_tag;
+	name = p = skip_spaces(p);
+	name_end = p = skip_word(p, ":]");
+
+	if (name == name_end) {
+		/* [] restores initial state */
+		par->matched = true;
+		par->skip = par->visited;
 	} else {
-		par->matched_section = false;
-		par->skip = true;
-		for (const char **tagp = par->cfg->tags_base;
-		    tagp < par->cfg->tags_last; tagp++)
-			if (strmemcmp(*tagp, tag, tag_end - tag) == 0) {
-				par->matched_section = true;
-				par->skip = false;
+		/* Determine if the section has already been processed before. */
+		struct config_tag *tag;
+		bool visited;
+		for (visited = false, tag = par->cfg->tags_current; tag; tag = tag->chain) {
+			if (tag == par->cfg->tags_visited)
+				visited = true;
+			if (strmemcmp(tag->name, name, name_end - name) == 0)
 				break;
-			}
+		}
+		par->matched = tag;
+		par->skip = !tag || visited;
 	}
 
 	p = skip_spaces(p);
 	if (*p == ':') {
 		p++;
-		p = parse_merge_tags(par, p, par->matched_section);
+		p = parse_merge_tags(par, p, par->matched);
 		if (!p)
 			return;
 	}
@@ -408,8 +414,19 @@ parse_line(struct parser *par)
 		return;
 	if (*p == '[')
 		return (parse_section(par, p));
+	/*
+	 * Parse everything at least once to report syntax errors.
+	 *
+	 * Note that directives may need to be re-processed even in sections
+	 * known to already have been applied to re-process .include directives
+	 * in case there are sections in included files for newly enabled tags.
+	 */
+	if (!par->matched && par->visited)
+		return;
 	if (p[0] == '.' && p[1] != '/')
 		return (parse_directive(par, p));
+	if (par->skip && par->visited)
+		return;
 	return (parse_unveil(par, p, !par->skip));
 }
 
@@ -423,24 +440,29 @@ parse_config(struct parser *par)
 }
 
 static int
-load_config(const char *path, struct config *cfg)
+process_file(struct config *cfg, const char *path)
 {
 	struct parser par = {
-		.file_name = path,
-		.matched_section = true,
-		.skip = cfg->skip_default_tag,
 		.cfg = cfg,
+		.file_name = path,
+		.matched = true,
+		.skip = cfg->tags_visited,
+		.visited = cfg->tags_visited,
 	};
 	int saved_errno;
-#if 0
-	warnx("%s: %s", __FUNCTION__, path);
-#endif
 	curtain_enable((par.slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 	par.file = fopen(path, "r");
 	if (!par.file) {
 		if (errno != ENOENT)
 			warn("%s", par.file_name);
 		return (-1);
+	}
+	if (cfg->verbose) {
+		fprintf(stderr, "%s: processing \"%s\" with tags [", getprogname(), path);
+		for (const struct config_tag *tag = cfg->tags_current; tag; tag = tag->chain)
+			fprintf(stderr, "%s%s", tag->name,
+			    !tag->chain ? "" : tag->chain == cfg->tags_visited ? "; " : ", ");
+		fprintf(stderr, "]\n");
 	}
 	parse_config(&par);
 	saved_errno = errno;
@@ -451,83 +473,108 @@ load_config(const char *path, struct config *cfg)
 
 
 static void
-load_tags_d(const char *base, struct config *cfg)
+pathfmt(char *path, const char *fmt, ...)
+{
+	int r;
+	va_list ap;
+	va_start(ap, fmt);
+	r = vsnprintf(path, PATH_MAX, fmt, ap);
+	va_end(ap);
+	if (r < 0)
+		err(EX_TEMPFAIL, "snprintf");
+}
+
+static void
+config_load_tag(struct config *cfg, struct config_tag *tag, const char *base)
 {
 	char path[PATH_MAX];
-	for (const char **tagp = cfg->tags_base; tagp < cfg->tags_last; tagp++) {
-		const char *tag = *tagp;
-		DIR *dir;
-		struct dirent *ent;
-		int r;
-		if (tag[0] == '.')
-			continue;
+	DIR *dir;
+	struct dirent *ent;
+	int r;
+	if (tag->name[0] == '.' || strchr(tag->name, '/'))
+		return;
 
-		r = snprintf(path, sizeof path, "%s/%s.conf", base, tag);
-		if (r < 0) {
-			warn("snprintf");
-			continue;
-		}
-		load_config(path, cfg);
+	pathfmt(path, "%s/%s.conf", base, tag->name);
+	process_file(cfg, path);
 
-		r = snprintf(path, sizeof path, "%s/%s.d", base, tag);
-		if (r < 0) {
-			warn("snprintf");
-			continue;
-		}
-		dir = opendir(path);
-		if (!dir) {
-			if (errno != ENOENT)
-				warn("%s", path);
-			continue;
-		}
-		while ((ent = readdir(dir))) {
-			if (ent->d_name[0] == '.')
-				continue;
-			if (ent->d_namlen < 5 ||
-			    strcmp(ent->d_name + ent->d_namlen - 5, ".conf") != 0)
-				continue;
-			r = snprintf(path, sizeof path, "%s/%s.d/%s", base, tag, ent->d_name);
-			if (r < 0) {
-				warn("snprintf");
-				continue;
-			}
-			load_config(path, cfg);
-		}
-		r = closedir(dir);
-		if (r < 0)
+	pathfmt(path, "%s/%s.d", base, tag->name);
+	dir = opendir(path);
+	if (!dir) {
+		if (errno != ENOENT)
 			warn("%s", path);
+		return;
+	}
+	while ((ent = readdir(dir))) {
+		if (ent->d_name[0] == '.')
+			continue;
+		if (ent->d_namlen < 5 ||
+		    strcmp(ent->d_name + ent->d_namlen - 5, ".conf") != 0)
+			continue;
+		pathfmt(path, "%s/%s.d/%s", base, tag->name, ent->d_name);
+		process_file(cfg, path);
+	}
+	r = closedir(dir);
+	if (r < 0)
+		warn("%s", path);
+}
+
+static void
+config_load_tags_d(struct config *cfg, const char *base)
+{
+	bool visited = false;
+	for (struct config_tag *tag = cfg->tags_current; tag; tag = tag->chain) {
+		struct config_tag *saved_tags_visited = cfg->tags_visited;
+		if (tag == cfg->tags_visited)
+			visited = true;
+		/* Don't skip anything in files that haven't been visited yet. */
+		if (!visited)
+			cfg->tags_visited = NULL;
+		config_load_tag(cfg, tag, base);
+		if (!visited)
+			cfg->tags_visited = saved_tags_visited;
 	}
 }
 
 void
-load_tags(struct config *cfg)
+config_load_tags(struct config *cfg)
 {
 	char path[PATH_MAX];
 	const char *home;
 	home = getenv("HOME");
 
+	/*
+	 * The tags list contains all of the section names that must be applied
+	 * when parsing the configuration files.
+	 *
+	 * The are 3 pointers into the list.  The sublist beginning at
+	 * tags_visited is for tags for which the corresponding curtain.d
+	 * configuration files have already been processed.  The sublist at
+	 * tags_current is for the tags currently being processed by an
+	 * iteration of this loop.  Newly enabled tags are inserted at
+	 * tags_pending and aren't processed until the next iteration.
+	 *
+	 * This is used to skip over sections that have already been applied
+	 * when reparsing the same files to apply newly enabled tags.
+	 */
 	do {
-		cfg->tags_last = cfg->tags_fill;
+		cfg->tags_current = cfg->tags_pending;
 
-		load_config(_PATH_ETC "/curtain.conf", cfg);
-		load_config(_PATH_LOCALBASE "/etc/curtain.conf", cfg);
+		process_file(cfg, _PATH_ETC "/curtain.conf");
+		process_file(cfg, _PATH_LOCALBASE "/etc/curtain.conf");
 		if (home) {
-			strlcpy(path, home, sizeof path);
-			strlcat(path, "/.curtain.conf", sizeof path);
-			load_config(path, cfg);
+			pathfmt(path, "%s/.curtain.conf", home);
+			process_file(cfg, path);
 		}
 
-		cfg->skip_default_tag = false;
-
-		load_tags_d(_PATH_ETC "/curtain.d", cfg);
-		load_tags_d(_PATH_LOCALBASE "/etc/curtain.d", cfg);
+		config_load_tags_d(cfg, _PATH_ETC "/curtain.d");
+		config_load_tags_d(cfg, _PATH_LOCALBASE "/etc/curtain.d");
 		if (home) {
-			strlcpy(path, home, sizeof path);
-			strlcat(path, "/.curtain.d", sizeof path);
-			load_tags_d(path, cfg);
+			pathfmt(path, "%s/.curtain.d", home);
+			config_load_tags_d(cfg, path);
 		}
 
-		cfg->skip_default_tag = true;
-	} while (cfg->tags_last != cfg->tags_fill);
+		cfg->tags_visited = cfg->tags_current;
+
+	} while (cfg->tags_current != cfg->tags_pending);
 }
 

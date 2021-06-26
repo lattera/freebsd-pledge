@@ -2,17 +2,37 @@
 #define	_CURTAIN_COMMON_H
 
 #include <stdbool.h>
+#include <string.h>
+#include <curtain.h>
 #include <sys/unveil.h>
 
 struct config {
-	const char **tags_base, **tags_last, **tags_fill, **tags_end;
+	struct config_tag *tags_pending, *tags_current, *tags_visited;
 	unsigned unsafe_level;
-	bool skip_default_tag;
+	bool verbose;
+};
+
+struct config_tag {
+	struct config_tag *chain;
+	char name[];
 };
 
 int parse_unveil_perms(unveil_perms *, const char *);
 
-void load_tags(struct config *);
+struct config_tag *config_tag_push_mem(struct config *, const char *buf, size_t len);
+
+static inline struct config_tag *
+config_tag_push(struct config *cfg, const char *name)
+{
+	return (config_tag_push_mem(cfg, name, strlen(name)));
+}
+
+void config_load_tags(struct config *);
+
+
+bool is_tmpdir(const char *path);
+void check_tmpdir(struct curtain_slot *, const char *tmpdir);
+
 
 extern const struct privent {
 	const char *name;

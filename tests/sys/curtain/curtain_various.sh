@@ -105,6 +105,22 @@ tmpdir_mkdir_p_body() {
 	atf_check curtain sh -c 'mkdir -p "$TMPDIR/test" && rmdir "$TMPDIR/test"'
 }
 
+atf_test_case shared_tmpdir_protects_krb5cc
+shared_tmpdir_protects_krb5cc_body() {
+	local newtmpdir="$(mktemp -d -t test)" || exit
+	local krb5cc="$newtmpdir/krb5cc_$(id -u)"
+	local readable="$newtmpdir/readable"
+	echo test1 > "$readable"
+	TMPDIR="$newtmpdir" atf_check -o file:"$readable" \
+		curtain -f cat "$readable"
+	atf_check unlink "$readable"
+	echo test2 > "$krb5cc"
+	TMPDIR="$newtmpdir" atf_check -s not-exit:0 -o empty -e not-empty \
+		curtain -f cat "$krb5cc"
+	atf_check unlink "$krb5cc"
+	atf_check rmdir "$newtmpdir"
+}
+
 atf_init_test_cases() {
 	atf_add_test_case cmd_true
 	atf_add_test_case cmd_false
@@ -122,4 +138,5 @@ atf_init_test_cases() {
 	atf_add_test_case script_with_cmd
 	atf_add_test_case session_with_non_tty
 	atf_add_test_case tmpdir_mkdir_p
+	atf_add_test_case shared_tmpdir_protects_krb5cc
 }
