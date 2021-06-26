@@ -36,8 +36,8 @@
 
 struct config {
 	const char **tags_base, **tags_last, **tags_fill, **tags_end;
+	unsigned unsafe_level;
 	bool skip_default_tag;
-	bool allow_unsafe;
 };
 
 struct parser {
@@ -345,19 +345,17 @@ static void
 parse_directive(struct parser *par, char *p)
 {
 	char *dir, *dir_end;
-	bool unsafe;
+	unsigned unsafe_level;
 	assert(*p == '.');
-	p++;
-	dir = p = skip_spaces(p);
+	dir = p = skip_spaces(p + 1);
 	dir_end = p = skip_word(p, "!");
-	if (*p == '!')
-		p++, unsafe = true;
-	else
-		unsafe = false;
+	unsafe_level = 0;
+	while (*p == '!')
+		p++, unsafe_level++;
 	for (size_t i = 0; i < nitems(directives); i++)
 		if (strmemcmp(directives[i].name, dir, dir_end - dir) == 0)
 			return (directives[i].func(par, p,
-			    (!unsafe || par->cfg->allow_unsafe) &&
+			    (unsafe_level <= par->cfg->unsafe_level) &&
 			    (directives[i].func == parse_include ?
 			         par->matched_section : !par->skip)));
 	parse_error(par, "unknown directive");
@@ -940,8 +938,8 @@ main(int argc, char *argv[])
 	char *sh_argv[2];
 	int ch, r;
 	char *promises = NULL;
+	unsigned unsafe_level = 0;
 	bool autotag = false,
-	     autotag_unsafe = false,
 	     signaling = false,
 	     no_fork = false,
 	     run_shell = false,
@@ -972,7 +970,7 @@ main(int argc, char *argv[])
 	curtain_enable((main_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 	curtain_enable((unveils_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 
-	while ((ch = getopt(argc, argv, "fkgenaAt:p:u:0:SslXYWD")) != -1)
+	while ((ch = getopt(argc, argv, "fkgenaA!t:p:u:0:SslXYWD")) != -1)
 		switch (ch) {
 		case 'k':
 			signaling = true;
@@ -990,7 +988,10 @@ main(int argc, char *argv[])
 			autotag = true;
 			break;
 		case 'A':
-			autotag = autotag_unsafe = true;
+			autotag = true;
+			/* FALLTHROUGH */
+		case '!':
+			unsafe_level++;
 			break;
 		case 't':
 			if (cfg.tags_fill == &tags_buf[nitems(tags_buf) / 2])
@@ -1153,7 +1154,7 @@ main(int argc, char *argv[])
 
 	if (autotag && argc)
 		*cfg.tags_fill++ = argv[0];
-	cfg.allow_unsafe = autotag_unsafe;
+	cfg.unsafe_level = unsafe_level;
 	load_tags(&cfg);
 
 	if (promises) {

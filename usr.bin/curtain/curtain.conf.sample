@@ -91,7 +91,7 @@
 
 [libreoffice : _editor]
 .merge! _pwddb
-.unveil! /tmp				: rwc
+.unveil!! /tmp				: rwc
 ~/.config/libreoffice/			: rwc
 
 [xpdf : _viewer]
