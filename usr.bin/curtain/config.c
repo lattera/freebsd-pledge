@@ -241,6 +241,7 @@ parse_unveil(struct parser *par, char *p, bool apply)
 	} else {
 		if (*p)
 			return (parse_error(par, "unexpected characters at end of line"));
+		*pattern_end = '\0';
 		par->uperms = UPERM_READ;
 	}
 
