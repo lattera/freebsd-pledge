@@ -31,7 +31,7 @@ void config_load_tags(struct config *);
 
 
 bool is_tmpdir(const char *path);
-void check_tmpdir(struct curtain_slot *, const char *tmpdir);
+void protect_shared_dir(struct curtain_slot *, const char *tmpdir);
 
 
 extern const struct privent {

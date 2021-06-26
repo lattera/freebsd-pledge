@@ -190,8 +190,7 @@ static int
 do_unveil_callback(void *ctx, char *path)
 {
 	struct parser *par = ctx;
-	if (is_tmpdir(path))
-		check_tmpdir(par->slot, path);
+	protect_shared_dir(par->slot, path);
 	curtain_unveil(par->slot, path, CURTAIN_UNVEIL_INSPECT, par->uperms);
 	return (0);
 }

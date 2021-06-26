@@ -32,43 +32,51 @@
 static bool
 match_path(const char *p, const char *q)
 {
-	while (*p && *q) {
+	while (*p || *q) {
 		char pp, qq;
 		while (p[0] == '/' && p[1] == '/')
 			p++;
 		while (q[0] == '/' && q[1] == '/')
 			q++;
-		pp = *p ? *p : '/';
-		qq = *q ? *q : '/';
-		p++, q++;
+		pp = *p ? *p++ : '/';
+		qq = *q ? *q++ : '/';
 		if (pp != qq)
 			return (false);
 	}
 	return (true);
 }
 
-bool
-is_tmpdir(const char *path)
-{
-	static const char *tmpdir = NULL;
-	if (!tmpdir && !(tmpdir = getenv("TMPDIR")))
-		tmpdir = _PATH_TMP;
-	return (match_path(tmpdir, path));
-}
-
 void
-check_tmpdir(struct curtain_slot *slot, const char *tmpdir)
+protect_shared_dir(struct curtain_slot *slot, const char *dir)
 {
+	static const char *tmpdir = NULL, *tmux_tmpdir = NULL;
 	int r;
 	char *path;
-	r = asprintf(&path, "%s/krb5cc_%u", tmpdir, geteuid());
-	if (r < 0)
-		err(EX_TEMPFAIL, "asprintf");
-	if (eaccess(path, R_OK) >= 0) {
-		warnx("Kerberos credentials cache found in shared temporary directory; adding an unveil to hide it: %s", path);
-		r = curtain_unveil(slot, path, 0, UPERM_NONE);
+	if (!tmpdir && !(tmpdir = getenv("TMPDIR")))
+		tmpdir = _PATH_TMP;
+	if (match_path(tmpdir, dir)) {
+		r = asprintf(&path, "%s/krb5cc_%u", dir, geteuid());
 		if (r < 0)
-			err(EX_OSERR, "%s", path);
+			err(EX_TEMPFAIL, "asprintf");
+		if (eaccess(path, R_OK) >= 0) {
+			warnx("Kerberos credentials cache found in shared temporary directory; adding an unveil to hide it: %s", path);
+			r = curtain_unveil(slot, path, 0, UPERM_NONE);
+			if (r < 0)
+				err(EX_OSERR, "%s", path);
+		}
+	}
+	if (!tmux_tmpdir && !(tmux_tmpdir = getenv("TMUX_TMPDIR")))
+		tmux_tmpdir = tmpdir;
+	if (match_path(tmpdir, dir)) {
+		r = asprintf(&path, "%s/tmux-%u", dir, geteuid());
+		if (r < 0)
+			err(EX_TEMPFAIL, "asprintf");
+		if (eaccess(path, X_OK) >= 0) {
+			warnx("tmux socket directory found in shared temporary directory; adding an unveil to hide it: %s", path);
+			r = curtain_unveil(slot, path, 0, UPERM_NONE);
+			if (r < 0)
+				err(EX_OSERR, "%s", path);
+		}
 	}
 }
 
@@ -695,7 +703,7 @@ main(int argc, char *argv[])
 		if (r < 0)
 			warn("%s", tmpdir);
 		/* Must use the same slot that was used to unveil the TMPDIR. */
-		check_tmpdir(main_slot, tmpdir);
+		protect_shared_dir(main_slot, tmpdir);
 	}
 
 	if (promises) {
