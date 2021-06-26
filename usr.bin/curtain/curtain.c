@@ -9,6 +9,7 @@
 #include <poll.h>
 #include <pwd.h>
 #include <signal.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -29,57 +30,56 @@
 
 #include "common.h"
 
-static bool
-match_path(const char *p, const char *q)
-{
-	while (*p || *q) {
-		char pp, qq;
-		while (p[0] == '/' && p[1] == '/')
-			p++;
-		while (q[0] == '/' && q[1] == '/')
-			q++;
-		pp = *p ? *p++ : '/';
-		qq = *q ? *q++ : '/';
-		if (pp != qq)
-			return (false);
-	}
-	return (true);
-}
+static const char *old_tmpdir = NULL;
 
-void
-protect_shared_dir(struct curtain_slot *slot, const char *dir)
+static void
+pathfmt(char *path, const char *fmt, ...)
 {
-	static const char *tmpdir = NULL, *tmux_tmpdir = NULL;
 	int r;
-	char *path;
-	if (!tmpdir && !(tmpdir = getenv("TMPDIR")))
-		tmpdir = _PATH_TMP;
-	if (match_path(tmpdir, dir)) {
-		r = asprintf(&path, "%s/krb5cc_%u", dir, geteuid());
-		if (r < 0)
-			err(EX_TEMPFAIL, "asprintf");
-		if (eaccess(path, R_OK) >= 0) {
-			warnx("Kerberos credentials cache found in shared temporary directory; adding an unveil to hide it: %s", path);
-			r = curtain_unveil(slot, path, 0, UPERM_NONE);
-			if (r < 0)
-				err(EX_OSERR, "%s", path);
-		}
-	}
-	if (!tmux_tmpdir && !(tmux_tmpdir = getenv("TMUX_TMPDIR")))
-		tmux_tmpdir = tmpdir;
-	if (match_path(tmpdir, dir)) {
-		r = asprintf(&path, "%s/tmux-%u", dir, geteuid());
-		if (r < 0)
-			err(EX_TEMPFAIL, "asprintf");
-		if (eaccess(path, X_OK) >= 0) {
-			warnx("tmux socket directory found in shared temporary directory; adding an unveil to hide it: %s", path);
-			r = curtain_unveil(slot, path, 0, UPERM_NONE);
-			if (r < 0)
-				err(EX_OSERR, "%s", path);
-		}
-	}
+	va_list ap;
+	va_start(ap, fmt);
+	r = vsnprintf(path, PATH_MAX, fmt, ap);
+	va_end(ap);
+	if (r < 0)
+		err(EX_TEMPFAIL, "snprintf");
 }
 
+static void
+reprotect_1(struct curtain_slot *slot)
+{
+	const char *tmux_tmpdir;
+	char path[PATH_MAX];
+
+	/* TODO: This should be moved to a config file. */
+
+	pathfmt(path, "%s/krb5cc_%u", old_tmpdir, geteuid());
+	curtain_unveil(slot, path, 0, UPERM_NONE);
+
+	if (!(tmux_tmpdir = getenv("TMUX_TMPDIR")))
+		tmux_tmpdir = old_tmpdir;
+	pathfmt(path, "%s/tmux-%u", tmux_tmpdir, geteuid());
+	curtain_unveil(slot, path, 0, UPERM_NONE);
+}
+
+static void
+reprotect(void)
+{
+	/*
+	 * Re-apply another layer of unveils to hide potentially dangerous
+	 * files that might allow to escape the sandbox.
+	 */
+	struct curtain_slot *slot;
+	int r;
+	curtain_unveils_reset_all();
+	curtain_enable((slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
+	curtain_unveil(slot, "/", 0, UPERM_ALL);
+	reprotect_1(slot);
+	r = curtain_enforce();
+	if (r < 0)
+		err(EX_NOPERM, "curtain_enforce");
+}
+
+
 static char *new_tmpdir = NULL;
 
 static void
@@ -682,6 +682,9 @@ main(int argc, char *argv[])
 	cfg.unsafe_level = unsafe_level;
 	config_load_tags(&cfg);
 
+	if (!(old_tmpdir = getenv("TMPDIR")))
+		old_tmpdir = _PATH_TMP;
+
 	if (!no_fork) {
 		prepare_tmpdir(main_slot);
 	} else {
@@ -702,8 +705,7 @@ main(int argc, char *argv[])
 		    CURTAIN_UNVEIL_INSPECT, UPERM_TMPDIR);
 		if (r < 0)
 			warn("%s", tmpdir);
-		/* Must use the same slot that was used to unveil the TMPDIR. */
-		protect_shared_dir(main_slot, tmpdir);
+		cfg.need_reprotect = true;
 	}
 
 	if (promises) {
@@ -718,6 +720,9 @@ main(int argc, char *argv[])
 		if (r < 0)
 			err(EX_NOPERM, "curtain_enforce");
 	}
+
+	if (cfg.need_reprotect)
+		reprotect();
 
 
 	if (argc == 0) {

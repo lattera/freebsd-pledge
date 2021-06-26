@@ -190,7 +190,6 @@ static int
 do_unveil_callback(void *ctx, char *path)
 {
 	struct parser *par = ctx;
-	protect_shared_dir(par->slot, path);
 	curtain_unveil(par->slot, path, CURTAIN_UNVEIL_INSPECT, par->uperms);
 	return (0);
 }
@@ -323,8 +322,16 @@ parse_ioctls(struct parser *par, char *p, bool apply)
 	return (expect_eol(par, p));
 }
 
+static void
+parse_reprotect(struct parser *par, char *p, bool apply)
+{
+	if (apply)
+		par->cfg->need_reprotect = true;
+	return (expect_eol(par, p));
+}
+
 static const struct {
-	const char name[8];
+	const char name[16];
 	void (*func)(struct parser *par, char *p, bool apply);
 } directives[] = {
 	{ "include", parse_include },
@@ -334,6 +341,7 @@ static const struct {
 	{ "sysctl", parse_sysctl },
 	{ "priv", parse_priv },
 	{ "ioctls", parse_ioctls },
+	{ "reprotect", parse_reprotect },
 };
 
 static void

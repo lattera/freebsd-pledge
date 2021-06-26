@@ -10,6 +10,7 @@ struct config {
 	struct config_tag *tags_pending, *tags_current, *tags_visited;
 	unsigned unsafe_level;
 	bool verbose;
+	bool need_reprotect;
 };
 
 struct config_tag {
@@ -28,10 +29,6 @@ config_tag_push(struct config *cfg, const char *name)
 }
 
 void config_load_tags(struct config *);
-
-
-bool is_tmpdir(const char *path);
-void protect_shared_dir(struct curtain_slot *, const char *tmpdir);
 
 
 extern const struct privent {

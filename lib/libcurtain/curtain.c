@@ -137,6 +137,12 @@ flags2level(int flags)
 
 static struct default_mode *default_modes = NULL;
 
+static void
+reinit_defaults(void)
+{
+	default_modes = NULL;
+}
+
 int
 curtain_default(struct curtain_slot *slot, unsigned flags)
 {
@@ -177,6 +183,13 @@ struct simple_type {
 	int (*cmp)(const union simple_key *, const union simple_key *);
 	void (*fill)(void **, struct simple_node *);
 };
+
+static void
+reinit_simples(struct simple_type *type)
+{
+	type->count = 0;
+	type->list = NULL;
+}
 
 static struct simple_node *
 get_simple_node(struct simple_type *type, const union simple_key *key)
@@ -538,6 +551,14 @@ static size_t unveils_count = 0;
 static struct unveil_node **unveils_table = NULL;
 static size_t unveils_table_size = 0;
 
+static void
+reinit_unveils(void)
+{
+	unveils_count = 0;
+	unveils_table = NULL;
+	unveils_table_size = 0;
+}
+
 static struct unveil_node **
 get_unveil_index_link(unsigned idx)
 {
@@ -685,6 +706,21 @@ curtain_unveils_limit(struct curtain_slot *slot, unveil_perms uperms)
 	return (0);
 }
 
+int
+curtain_unveils_reset_all(void)
+{
+	struct unveil_node *node, **link;
+	struct unveil_mode *mode;
+	for (link = unveils_table; link < &unveils_table[unveils_table_size]; link++)
+		if ((node = *link))
+			for (mode = node->modes; mode; mode = mode->node_next) {
+				mode->uperms = UPERM_NONE;
+				mode->inherit = true;
+				mode->inspect = false;
+			}
+	return (0);
+}
+
 static void
 fill_unveils_1(struct unveil_node *node, struct unveil_mode *inherit_head,
     struct curtainent_unveil *ents[CURTAIN_ON_COUNT], enum curtain_state min_state)
@@ -793,6 +829,27 @@ fill_unveils(struct curtainent_unveil *ents[CURTAIN_ON_COUNT], enum curtain_stat
 }
 
 
+static struct simple_type *const simple_types[] = {
+	&sysfils_type,
+	&ioctls_type,
+	&sockafs_type,
+	&socklvls_type,
+	&sockopts_type,
+	&privs_type,
+	&sysctls_type,
+};
+
+void
+curtain_reinit(void)
+{
+	/* TODO: free memory */
+	reinit_defaults();
+	for (size_t i = 0; i < nitems(simple_types); i++)
+		reinit_simples(simple_types[i]);
+	reinit_unveils();
+	curtain_slots = NULL;
+}
+
 static const int curtainctl_flags[CURTAIN_ON_COUNT] = {
 	[CURTAIN_ON_SELF] = CURTAINCTL_ON_SELF,
 	[CURTAIN_ON_EXEC] = CURTAINCTL_ON_EXEC,
@@ -806,15 +863,6 @@ static const int curtainreq_flags[CURTAIN_ON_COUNT] = {
 static int
 curtain_submit_1(int flags, enum curtain_state min_state)
 {
-	struct simple_type *simple_types[] = {
-		&sysfils_type,
-		&ioctls_type,
-		&sockafs_type,
-		&socklvls_type,
-		&sockopts_type,
-		&privs_type,
-		&sysctls_type,
-	};
 	struct curtainreq reqv[1 + 2 * CURTAIN_ON_COUNT + nitems(simple_types) * CURTAIN_ON_COUNT * CURTAIN_LEVEL_COUNT], *reqp = reqv;
 	enum curtain_level levels_on[CURTAIN_ON_COUNT];
 
@@ -921,7 +969,7 @@ curtain_submit(bool enforce)
 }
 
 int
-curtain_apply(void) { return (curtain_submit(false)); }
+curtain_engage(void) { return (curtain_submit(false)); }
 
 int
 curtain_enforce(void) { return (curtain_submit(true)); }

@@ -703,7 +703,7 @@ do_unveil_on(enum curtain_on on, const char *path, unveil_perms uperms)
 		r = curtain_unveil(custom_slot_on[on], path, 0, uperms);
 		if (r < 0)
 			return (r);
-		return (curtain_apply());
+		return (curtain_engage());
 	} else /* unveil(NULL, NULL) */
 		return (curtain_enforce());
 }
@@ -740,7 +740,7 @@ do_unveil_both(const char *path, unveil_perms uperms)
 				r = curtain_unveil(custom_slot_on[on], path, 0, uperms);
 		if (r < 0)
 			return (r);
-		return (curtain_apply());
+		return (curtain_engage());
 	} else /* unveil(NULL, NULL) */
 		return (curtain_enforce());
 }
