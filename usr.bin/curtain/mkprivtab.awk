@@ -1,7 +1,7 @@
 BEGIN {
 	print "#include <stddef.h>"
 	print "#include <sys/priv.h>"
-	print "#include \"privtab.h\""
+	print "#include \"common.h\""
 	print
 	print "const struct privent privtab[] = {"
 }

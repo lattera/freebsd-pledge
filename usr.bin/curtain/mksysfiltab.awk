@@ -1,7 +1,7 @@
 BEGIN {
 	print "#include <stddef.h>"
 	print "#include <sys/sysfil.h>"
-	print "#include \"sysfiltab.h\""
+	print "#include \"common.h\""
 	print
 	print "const struct sysfilent sysfiltab[] = {"
 }
