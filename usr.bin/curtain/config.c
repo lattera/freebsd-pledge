@@ -6,7 +6,6 @@
 #include <err.h>
 #include <errno.h>
 #include <paths.h>
-#include <pledge.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -43,6 +42,30 @@ static const struct {
 	{ "cryptodev", curtain_ioctls_cryptodev },
 	{ "bpf", curtain_ioctls_bpf_all },
 };
+
+
+int
+parse_unveil_perms(unveil_perms *uperms, const char *s)
+{
+	*uperms = UPERM_NONE;
+	while (*s)
+		switch (*s++) {
+		case 'b': *uperms |= UPERM_BROWSE; break;
+		case 'r': *uperms |= UPERM_READ; break;
+		case 'm': *uperms |= UPERM_WRITE; break;
+		case 'w': *uperms |= UPERM_WRITE | UPERM_SETATTR |
+		                     UPERM_CREATE | UPERM_DELETE; break;
+		case 'a': *uperms |= UPERM_SETATTR; break;
+		case 'c': *uperms |= UPERM_CREATE | UPERM_DELETE; break;
+		case 'x': *uperms |= UPERM_EXECUTE; break;
+		case 'i': *uperms |= UPERM_INSPECT; break;
+		case 't': *uperms |= UPERM_TMPDIR; break;
+		case 'u': *uperms |= UPERM_UNIX; break;
+		default:
+			return (-1);
+		}
+	return (0);
+}
 
 
 static int
@@ -212,7 +235,7 @@ parse_unveil(struct parser *par, char *p, bool apply)
 			return (parse_error(par, "empty pattern"));
 
 		*perms_end = '\0';
-		r = unveil_parse_perms(&par->uperms, perms);
+		r = parse_unveil_perms(&par->uperms, perms);
 		if (r < 0)
 			return (parse_error(par, "invalid unveil permissions"));
 	} else {

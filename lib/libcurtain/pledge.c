@@ -745,7 +745,7 @@ do_unveil_both(const char *path, unveil_perms uperms)
 		return (curtain_enforce());
 }
 
-int
+static int
 unveil_parse_perms(unveil_perms *uperms, const char *s)
 {
 	*uperms = UPERM_NONE;

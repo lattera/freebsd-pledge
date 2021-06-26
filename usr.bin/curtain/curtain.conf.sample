@@ -34,15 +34,15 @@
 # OSS directly instead.
 
 [_editor]
-~/Documents/				: rwc
-~/Templates/				: rwc
+~/Documents/				: rw
+~/Templates/				: rw
 
 [_browser]
 .merge _audio
-~/Downloads/				: rwc
+~/Downloads/				: rw
 
 [_p2p]
-~/Downloads/				: rwc
+~/Downloads/				: rw
 
 [_player]
 .merge _audio
@@ -58,7 +58,7 @@
 /etc/vi.exrc				: r
 # recovery handling needs to be able to read the user database
 .merge! _pwddb
-.unveil! /var/tmp/vi.recover/		: rwc
+.unveil! /var/tmp/vi.recover/		: rw
 
 [git]
 ~/.gitconfig				: r
@@ -68,120 +68,120 @@
 
 [wireshark]
 .merge bpf
-~/.config/wireshark/			: rwc
+~/.config/wireshark/			: rw
 
 [emacs : _editor]
 .merge! _pwddb
 ~/.emacs/
-~/.emacs.d/				: rwc
-~/.config/emacs/			: rwc
+~/.emacs.d/				: rw
+~/.config/emacs/			: rw
 
 [abiword : _editor]
-~/.config/abiword/			: rwc
+~/.config/abiword/			: rw
 
 [gimp : _editor]
 /usr/local/etc/gimp/			: r
-~/.config/GIMP/				: rwc
-~/.cache/gimp/				: rwc
+~/.config/GIMP/				: rw
+~/.cache/gimp/				: rw
 
 [inkscape : _editor]
 .sysfil! posixipc
-~/.cache/inkscape/			: rwc
-~/.config/inkscape/			: rwc
+~/.cache/inkscape/			: rw
+~/.config/inkscape/			: rw
 
 [libreoffice : _editor]
 .merge! _pwddb
-.unveil!! /tmp				: rwc
-~/.config/libreoffice/			: rwc
+.unveil!! /tmp				: rw
+~/.config/libreoffice/			: rw
 
 [xpdf : _viewer]
 /usr/local/etc/papersize		: r
 /usr/local/etc/xpdfrc			: r
-~/.xpdfrc				: rwc
+~/.xpdfrc				: rw
 
 [gv : _viewer]
 ~/.gv					: r
 
 [epdfview : _viewer]
-~/.config/epdfview/			: rwc
+~/.config/epdfview/			: rw
 
 [okular : _viewer]
-~/.config/okularrc			: rwc
-~/.local/share/okular/			: rwc
+~/.config/okularrc			: rw
+~/.local/share/okular/			: rw
 
 [geeqie : _viewer]
-~/.config/geeqie/			: rwc
-~/.local/share/geeqie/			: rwc
-~/.cache/geeqie/			: rwc
+~/.config/geeqie/			: rw
+~/.local/share/geeqie/			: rw
+~/.cache/geeqie/			: rw
 
 [shotwell : _viewer]
 # Has trouble saving its configs.
-~/.shotwell/				: rwc
-~/.local/share/shotwell/		: rwc
-~/.cache/shotwell/			: rwc
+~/.shotwell/				: rw
+~/.local/share/shotwell/		: rw
+~/.cache/shotwell/			: rw
 
 [gpicview : _viewer]
-~/.config/gpicview/			: rwc
+~/.config/gpicview/			: rw
 
 [sxiv : _viewer]
-~/.config/sxiv/				: rwc
-~/.cache/sxiv/				: rwc
+~/.config/sxiv/				: rw
+~/.cache/sxiv/				: rw
 
 [hexchat]
-~/.config/hexchat/			: rwc
+~/.config/hexchat/			: rw
 
 [pidgin]
-~/.purple				: rwc
+~/.purple				: rw
 
 [firefox : _browser]
 # NOTE: Sometimes crash due to X11 errors with -X.  Works better under -Y/-W.
 # Run with GDK_BACKEND=wayland for -W.  When giving it DRM access, it sometimes
 # doesn't activate until the second start.
 .sysfil posixipc
-~/.mozilla/firefox/			: rwc
-~/.cache/mozilla/firefox/		: rwc
+~/.mozilla/firefox/			: rw
+~/.cache/mozilla/firefox/		: rw
 
 [chrome : _browser]
 # NOTE: When running chromium as an "untrusted" X11 client (curtain -X), the
 # setting "Use system title bar and borders" in the "Appearance" section must
 # be enabled.
 .sysfil posixipc
-~/.config/chromium/			: rwc
-~/.cache/chromium/			: rwc
+~/.config/chromium/			: rw
+~/.cache/chromium/			: rw
 
 [thunderbird]
 .sysfil posixipc
-~/.thunderbird/				: rwc
-~/.cache/thunderbird/			: rwc
+~/.thunderbird/				: rw
+~/.cache/thunderbird/			: rw
 
 [falkon : _browser]
-~/.config/falkon/			: rwc
-~/.cache/falkon/			: rwc
+~/.config/falkon/			: rw
+~/.cache/falkon/			: rw
 
 [otter-browser : _browser]
-~/.config/otter/			: rwc
-~/.cache/Otter/				: rwc
+~/.config/otter/			: rw
+~/.cache/Otter/				: rw
 
 [qbittorrent : _p2p]
 # NOTE: Best to disable the tray icon feature under -X.
-~/.local/share/qBittorrent/		: rwc
-~/.config/qBittorrent/			: rwc
-~/.cache/qBittorrent/			: rwc
+~/.local/share/qBittorrent/		: rw
+~/.config/qBittorrent/			: rw
+~/.cache/qBittorrent/			: rw
 
 [deluge : _p2p]
-~/.config/deluge/			: rwc
+~/.config/deluge/			: rw
 
 [audacious : _player]
-~/.config/audacious/			: rwc
+~/.config/audacious/			: rw
 
 [mpv : _player]
-~/.mpv/					: rwc
-~/.config/mpv/				: rwc
+~/.mpv/					: rw
+~/.config/mpv/				: rw
 
 [mplayer : _player]
-~/.mplayer/				: rwc
+~/.mplayer/				: rw
 
 [vlc : _player]
-~/.config/vlc/				: rwc
-~/.local/share/vlc/			: rwc
+~/.config/vlc/				: rw
+~/.local/share/vlc/			: rw
 

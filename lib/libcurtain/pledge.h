@@ -4,7 +4,6 @@
 #include <sys/unveil.h>
 
 int	pledge(const char *, const char *);
-int	unveil_parse_perms(unveil_perms *, const char *);
 int	unveil(const char *, const char *);
 int	unveilself(const char *, const char *);
 int	unveilexec(const char *, const char *);

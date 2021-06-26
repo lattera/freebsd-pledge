@@ -524,7 +524,7 @@ main(int argc, char *argv[])
 					errc(EX_OSFILE, ENAMETOOLONG, "%s", path);
 				path = abspath;
 			}
-			r = unveil_parse_perms(&uperms, perms);
+			r = parse_unveil_perms(&uperms, perms);
 			if (r < 0)
 				errx(EX_USAGE, "invalid unveil permissions: %s", perms);
 			r = curtain_unveil(unveils_slot, path,
