@@ -45,4 +45,15 @@ extern const struct sysfilent {
 	int sysfil;
 } sysfiltab[];
 
+extern const struct socklvlent {
+	const char *name;
+	int socklvl;
+} socklvltab[];
+
+extern const struct sockafent {
+	const char *name;
+	int sockaf;
+} sockaftab[];
+
+
 #endif

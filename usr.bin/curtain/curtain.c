@@ -621,23 +621,6 @@ main(int argc, char *argv[])
 	if (!no_protexec)
 		curtain_sysfil(main_slot, SYSFIL_PROT_EXEC, 0);
 	if (!no_network) {
-		/* TODO: this should be specified in config files */
-		/* XXX This is all very permissive. */
-		curtain_sockaf(main_slot, AF_UNIX, 0);
-		/* XXX SO_SETFIB, SO_LABEL/SO_PEERLABEL */
-		curtain_socklvl(main_slot, SOL_SOCKET, 0);
-#ifdef AF_INET
-		curtain_sockaf(main_slot, AF_INET, 0);
-		curtain_socklvl(main_slot, IPPROTO_IP, 0);
-#endif
-#ifdef AF_INET6
-		curtain_sockaf(main_slot, AF_INET6, 0);
-		curtain_socklvl(main_slot, IPPROTO_IPV6, 0);
-#endif
-#if defined(AF_INET) || defined(AF_INET6)
-		curtain_socklvl(main_slot, IPPROTO_TCP, 0);
-		curtain_socklvl(main_slot, IPPROTO_UDP, 0);
-#endif
 		config_tag_push(&cfg, "_network");
 	}
 	if (new_session) {

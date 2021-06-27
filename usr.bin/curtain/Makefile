@@ -22,13 +22,20 @@ FILESDIR=	${SHAREDIR}/examples/curtain
 FILES=		curtain.conf.sample
 .endif
 
-CLEANFILES+=	sysfiltab.c privtab.c
-SRCS+=sysfiltab.c privtab.c
-SYSFIL_H=${SYSROOT:U${DESTDIR}}${INCLUDEDIR}/sys/sysfil.h
-PRIV_H=${SYSROOT:U${DESTDIR}}${INCLUDEDIR}/sys/priv.h
-sysfiltab.c: mksysfiltab.awk ${SYSFIL_H}
-	awk -f ${.CURDIR}/mksysfiltab.awk < ${SYSFIL_H} > ${.TARGET}
-privtab.c: mkprivtab.awk ${PRIV_H}
-	awk -f ${.CURDIR}/mkprivtab.awk < ${PRIV_H} > ${.TARGET}
+MKTABFILES=	sysfiltab.c privtab.c socklvltab.c sockaftab.c
+CLEANFILES+=	$(MKTABFILES)
+SRCS+=		$(MKTABFILES)
+SYS_SYSFIL_H=	${SYSROOT:U${DESTDIR}}${INCLUDEDIR}/sys/sysfil.h
+SYS_PRIV_H=	${SYSROOT:U${DESTDIR}}${INCLUDEDIR}/sys/priv.h
+NETINET_IN=	${SYSROOT:U${DESTDIR}}${INCLUDEDIR}/netinet/in.h
+SYS_SOCKET_H=	${SYSROOT:U${DESTDIR}}${INCLUDEDIR}/sys/socket.h
+sysfiltab.c: mksysfiltab.awk ${SYS_SYSFIL_H}
+	awk -f ${.CURDIR}/mksysfiltab.awk < ${SYS_SYSFIL_H} > ${.TARGET}
+privtab.c: mkprivtab.awk ${SYS_PRIV_H}
+	awk -f ${.CURDIR}/mkprivtab.awk < ${SYS_PRIV_H} > ${.TARGET}
+socklvltab.c: mksocklvltab.awk ${NETINET_IN}
+	awk -f ${.CURDIR}/mksocklvltab.awk < ${NETINET_IN} > ${.TARGET}
+sockaftab.c: mksockaftab.awk ${SYS_SOCKET_H}
+	awk -f ${.CURDIR}/mksockaftab.awk < ${SYS_SOCKET_H} > ${.TARGET}
 
 .include <bsd.prog.mk>

@@ -345,6 +345,46 @@ parse_ioctls(struct parser *par, char *p, bool apply)
 }
 
 static void
+parse_sockaf(struct parser *par, char *p, bool apply)
+{
+	while (*(p = skip_spaces(p))) {
+		char *w;
+		const struct sockafent *e;
+		p = skip_word((w = p), "");
+		if (w == p)
+			break;
+		for (e = sockaftab; e->name; e++)
+			if (strmemcmp(e->name, w, p - w) == 0)
+				break;
+		if (!e->name)
+			parse_error(par, "unknown address family");
+		else if (apply)
+			curtain_sockaf(par->slot, e->sockaf, 0);
+	}
+	return (expect_eol(par, p));
+}
+
+static void
+parse_socklvl(struct parser *par, char *p, bool apply)
+{
+	while (*(p = skip_spaces(p))) {
+		char *w;
+		const struct socklvlent *e;
+		p = skip_word((w = p), "");
+		if (w == p)
+			break;
+		for (e = socklvltab; e->name; e++)
+			if (strmemcmp(e->name, w, p - w) == 0)
+				break;
+		if (!e->name)
+			parse_error(par, "unknown socket level");
+		else if (apply)
+			curtain_socklvl(par->slot, e->socklvl, 0);
+	}
+	return (expect_eol(par, p));
+}
+
+static void
 parse_reprotect(struct parser *par, char *p, bool apply)
 {
 	if (apply)
@@ -363,6 +403,8 @@ static const struct {
 	{ "sysctl", parse_sysctl },
 	{ "priv", parse_priv },
 	{ "ioctls", parse_ioctls },
+	{ "sockaf", parse_sockaf },
+	{ "socklvl", parse_socklvl },
 	{ "reprotect", parse_reprotect },
 };
 
