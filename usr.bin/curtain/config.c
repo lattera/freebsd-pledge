@@ -371,15 +371,12 @@ parse_directive(struct parser *par, char *p)
 	parse_error(par, "unknown directive");
 }
 
-static void
-parse_section(struct parser *par, char *p)
+static char *
+parse_section_pred(struct parser *par, char *p)
 {
 	char *name, *name_end;
-	assert(*p == '[');
-	p++;
 	name = p = skip_spaces(p);
 	name_end = p = skip_word(p, ":]");
-
 	if (name == name_end) {
 		/* [] restores initial state */
 		par->matched = true;
@@ -397,15 +394,20 @@ parse_section(struct parser *par, char *p)
 		par->matched = tag;
 		par->skip = !tag || visited;
 	}
+	return (p);
+}
 
-	p = skip_spaces(p);
-	if (*p == ':') {
+static void
+parse_section(struct parser *par, char *p)
+{
+	assert(*p == '[');
+	p = parse_section_pred(par, p + 1);
+	if (*(p = skip_spaces(p)) == ':') {
 		p++;
 		p = parse_merge_tags(par, p, par->matched);
 		if (!p)
 			return;
 	}
-
 	if (*p++ != ']')
 		return (parse_error(par, "expected closing bracket"));
 	if (*(p = skip_spaces(p)))
