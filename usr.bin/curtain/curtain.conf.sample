@@ -38,14 +38,14 @@
 ~/Templates/				: rw
 
 [_browser]
-.merge _audio
+@merge _audio
 ~/Downloads/				: rw
 
 [_p2p]
 ~/Downloads/				: rw
 
 [_player]
-.merge _audio
+@merge _audio
 ~/Music/				: r
 ~/Videos/				: r
 
@@ -57,21 +57,21 @@
 ~/.{n,}exrc				: r
 /etc/vi.exrc				: r
 # recovery handling needs to be able to read the user database
-.merge! _pwddb
-.unveil! /var/tmp/vi.recover/		: rw
+@merge! _pwddb
+@unveil! /var/tmp/vi.recover/		: rw
 
 [git]
 ~/.gitconfig				: r
 
 [tcpdump]
-.merge _bpf
+@merge _bpf
 
 [wireshark]
-.merge _bpf
+@merge _bpf
 ~/.config/wireshark/			: rw
 
 [emacs : _editor]
-.merge! _pwddb
+@merge! _pwddb
 ~/.emacs/
 ~/.emacs.d/				: rw
 ~/.config/emacs/			: rw
@@ -85,14 +85,14 @@
 ~/.cache/gimp/				: rw
 
 [inkscape : _editor]
-.sysfil! posixipc
+@sysfil! posixipc
 ~/.cache/inkscape/			: rw
 ~/.config/inkscape/			: rw
 
 [libreoffice : _editor]
-.merge! _pwddb
-.unveil!! /tmp				: rwu
-.reprotect!!
+@merge! _pwddb
+@unveil!! /tmp				: rwu
+@reprotect!!
 ~/.config/libreoffice/			: rw
 
 [xpdf : _viewer]
@@ -138,7 +138,7 @@
 # NOTE: Sometimes crash due to X11 errors with -X.  Works better under -Y/-W.
 # Run with GDK_BACKEND=wayland for -W.  When giving it DRM access, it sometimes
 # doesn't activate until the second start.
-.sysfil posixipc
+@sysfil posixipc
 ~/.mozilla/firefox/			: rw
 ~/.cache/mozilla/firefox/		: rw
 
@@ -146,12 +146,12 @@
 # NOTE: When running chromium as an "untrusted" X11 client (curtain -X), the
 # setting "Use system title bar and borders" in the "Appearance" section must
 # be enabled.
-.sysfil posixipc
+@sysfil posixipc
 ~/.config/chromium/			: rw
 ~/.cache/chromium/			: rw
 
 [thunderbird]
-.sysfil posixipc
+@sysfil posixipc
 ~/.thunderbird/				: rw
 ~/.cache/thunderbird/			: rw
 

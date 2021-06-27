@@ -349,7 +349,6 @@ parse_directive(struct parser *par, char *p)
 {
 	char *dir, *dir_end;
 	unsigned unsafe_level;
-	assert(*p == '.');
 	dir = p = skip_spaces(p + 1);
 	dir_end = p = skip_word(p, "!");
 	unsafe_level = 0;
@@ -516,12 +515,12 @@ parse_line(struct parser *par)
 	 * Parse everything at least once to report syntax errors.
 	 *
 	 * Note that directives may need to be re-processed even in sections
-	 * known to already have been applied to re-process .include directives
+	 * known to already have been applied to re-process "include" directives
 	 * in case there are sections in included files for newly enabled tags.
 	 */
 	if (!par->matched && par->visited)
 		return;
-	if (p[0] == '.' && p[1] != '/')
+	if (p[0] == '@')
 		return (parse_directive(par, p));
 	if (par->skip && par->visited)
 		return;
