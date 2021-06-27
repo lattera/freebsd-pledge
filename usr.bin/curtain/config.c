@@ -371,6 +371,54 @@ parse_directive(struct parser *par, char *p)
 	parse_error(par, "unknown directive");
 }
 
+static int
+match_section_pred_cwd_cb(void *ctx, char *path)
+{
+	int r;
+	r = cwd_is_within(path);
+	if (r < 0) {
+		if (errno != ENOENT && errno != EACCES)
+			warn("%s", path);
+	} else if (r > 0) {
+		*(bool *)ctx = true;
+		return (-1); /* stop searching */
+	}
+	return (0);
+}
+
+static void
+match_section_pred_cwd(struct parser *par,
+    bool *matched, bool *visited,
+    char *name, char *name_end)
+{
+	char buf[PATH_MAX], c;
+	const char *error;
+	*matched = *visited = false;
+	c = *name_end;
+	*name_end = '\0';
+	error = NULL;
+	pathexp(name, buf, sizeof buf, &error, match_section_pred_cwd_cb, matched);
+	*name_end = c;
+	if (error)
+		parse_error(par, error);
+}
+
+static void
+match_section_pred_tag(struct parser *par,
+    bool *matched, bool *visited,
+    char *name, char *name_end)
+{
+	*matched = *visited = false;
+	for (const struct config_tag *tag = par->cfg->tags_current; tag; tag = tag->chain) {
+		if (tag == par->cfg->tags_visited)
+			*visited = true;
+		if (strmemcmp(tag->name, name, name_end - name) == 0) {
+			*matched = true;
+			break;
+		}
+	}
+}
+
 static char *
 parse_section_pred(struct parser *par, char *p)
 {
@@ -386,9 +434,8 @@ parse_section_pred(struct parser *par, char *p)
 		 * XXX Negations are dodgy because a section won't be unapplied
 		 * if it matched due to a negated tag that later gets set.
 		 */
+		bool branched, finished, negated, matched, visited;
 		char *name, *name_end;
-		struct config_tag *tag;
-		bool branched, finished, negated, visited;
 
 		branched = false;
 		while (*(p = skip_spaces(p)) == ',')
@@ -420,13 +467,11 @@ parse_section_pred(struct parser *par, char *p)
 		}
 		empty = false;
 
-		for (visited = false, tag = par->cfg->tags_current; tag; tag = tag->chain) {
-			if (tag == par->cfg->tags_visited)
-				visited = true;
-			if (strmemcmp(tag->name, name, name_end - name) == 0)
-				break;
-		}
-		if (!tag != negated)
+		if (strchr(name, '/'))
+			match_section_pred_cwd(par, &matched, &visited, name, name_end);
+		else
+			match_section_pred_tag(par, &matched, &visited, name, name_end);
+		if (!matched != negated)
 			and_matched = false;
 		if (!visited)
 			and_visited = false;
@@ -629,5 +674,11 @@ config_load_tags(struct config *cfg)
 		cfg->tags_visited = cfg->tags_current;
 
 	} while (cfg->tags_current != cfg->tags_pending);
+}
+
+void
+config_init(struct config *cfg)
+{
+	*cfg = (struct config){ 0 };
 }
 

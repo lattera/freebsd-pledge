@@ -4,7 +4,7 @@
 
 PACKAGE=	runtime
 PROG=		curtain
-SRCS=		curtain.c config.c pathexp.c
+SRCS=		curtain.c config.c pathexp.c utils.c
 LIBADD=		curtain util
 MAN=
 CFLAGS+=	-I${.CURDIR}

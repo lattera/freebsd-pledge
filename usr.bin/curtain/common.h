@@ -18,7 +18,11 @@ struct config_tag {
 	char name[];
 };
 
+int cwd_is_within(const char *path);
+
 int parse_unveil_perms(unveil_perms *, const char *);
+
+void config_init(struct config *);
 
 struct config_tag *config_tag_push_mem(struct config *, const char *buf, size_t len);
 

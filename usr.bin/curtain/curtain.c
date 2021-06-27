@@ -509,7 +509,7 @@ main(int argc, char *argv[])
 	bool do_exec, pty_wrap;
 	int status;
 
-	cfg = (struct config){ 0 };
+	config_init(&cfg);
 
 	curtain_enable((main_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 	curtain_enable((unveils_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
