@@ -103,6 +103,13 @@ config_tag_push_mem(struct config *cfg, const char *buf, size_t len)
 
 
 static void
+need_slot(struct parser *par)
+{
+	if (!par->slot)
+		curtain_enable((par->slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
+}
+
+static void
 parse_error(struct parser *par, const char *error)
 {
 	par->error = true;
@@ -380,6 +387,8 @@ parse_directive(struct parser *par, char *p)
 			 */
 			if (!apply && par->visited)
 				return;
+			if (apply)
+				need_slot(par);
 			return (directives[i].func(par, p, apply));
 		}
 	parse_error(par, "unknown directive");
@@ -505,6 +514,7 @@ parse_section_pred(struct parser *par, char *p)
 static void
 parse_section(struct parser *par, char *p)
 {
+	par->slot = NULL;
 	par->last_matched_section_path = NULL;
 	p = parse_section_pred(par, p + 1);
 	if (par->cfg->verbose && par->matched)
@@ -545,6 +555,8 @@ parse_line(struct parser *par)
 		return (parse_directive(par, p));
 	if (par->skip && par->visited)
 		return;
+	if (!par->skip)
+		need_slot(par);
 	return (parse_unveil(par, p, !par->skip));
 }
 
@@ -568,7 +580,6 @@ process_file(struct config *cfg, const char *path)
 		.visited = cfg->tags_visited,
 	};
 	int saved_errno;
-	curtain_enable((par.slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 	par.file = fopen(path, "r");
 	if (!par.file) {
 		if (errno != ENOENT)
