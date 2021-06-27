@@ -29,6 +29,8 @@ struct parser {
 	bool error;
 	struct curtain_slot *slot;
 	unveil_perms uperms;
+	char *last_matched_section_path;
+	size_t section_path_offset;
 };
 
 static const struct {
@@ -190,6 +192,8 @@ static int
 do_unveil_callback(void *ctx, char *path)
 {
 	struct parser *par = ctx;
+	if (path[0] && path[0] != '/' && par->last_matched_section_path)
+		path -= par->section_path_offset;
 	curtain_unveil(par->slot, path, CURTAIN_UNVEIL_INSPECT, par->uperms);
 	return (0);
 }
@@ -197,10 +201,21 @@ do_unveil_callback(void *ctx, char *path)
 static void
 do_unveil(struct parser *par, const char *pattern)
 {
-	char buf[PATH_MAX];
+	char buf[PATH_MAX*2];
+	size_t n;
 	int r;
 	const char *error;
-	r = pathexp(pattern, buf, sizeof buf, &error, do_unveil_callback, par);
+	if (par->last_matched_section_path) {
+		n = strlen(par->last_matched_section_path);
+		if (n >= PATH_MAX)
+			abort();
+		memcpy(buf, par->last_matched_section_path, n);
+		if (!n || buf[n - 1] != '/')
+			buf[n++] = '/';
+		par->section_path_offset = n;
+	} else
+		n = 0;
+	r = pathexp(pattern, buf + n, PATH_MAX, &error, do_unveil_callback, par);
 	if (r < 0)
 		parse_error(par, error);
 }
@@ -373,13 +388,16 @@ parse_directive(struct parser *par, char *p)
 static int
 match_section_pred_cwd_cb(void *ctx, char *path)
 {
+	struct parser *par = ctx;
 	int r;
 	r = cwd_is_within(path);
 	if (r < 0) {
 		if (errno != ENOENT && errno != EACCES)
 			warn("%s", path);
 	} else if (r > 0) {
-		*(bool *)ctx = true;
+		par->last_matched_section_path = strdup(path);
+		if (!par->last_matched_section_path)
+			err(EX_TEMPFAIL, "strdup");
 		return (-1); /* stop searching */
 	}
 	return (0);
@@ -395,11 +413,14 @@ match_section_pred_cwd(struct parser *par,
 	*matched = *visited = false;
 	c = *name_end;
 	*name_end = '\0';
+	par->last_matched_section_path = NULL;
 	error = NULL;
-	pathexp(name, buf, sizeof buf, &error, match_section_pred_cwd_cb, matched);
+	pathexp(name, buf, sizeof buf, &error, match_section_pred_cwd_cb, par);
 	*name_end = c;
 	if (error)
 		parse_error(par, error);
+	else if (par->last_matched_section_path)
+		*matched = true;
 }
 
 static void
@@ -484,7 +505,7 @@ parse_section_pred(struct parser *par, char *p)
 static void
 parse_section(struct parser *par, char *p)
 {
-	assert(*p == '[');
+	par->last_matched_section_path = NULL;
 	p = parse_section_pred(par, p + 1);
 	if (par->cfg->verbose && par->matched)
 		fprintf(stderr, "%s: %s:%zu: matched section%s\n",
