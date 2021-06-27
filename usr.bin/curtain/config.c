@@ -374,26 +374,66 @@ parse_directive(struct parser *par, char *p)
 static char *
 parse_section_pred(struct parser *par, char *p)
 {
-	char *name, *name_end;
-	name = p = skip_spaces(p);
-	name_end = p = skip_word(p, ":]");
-	if (name == name_end) {
-		/* [] restores initial state */
-		par->matched = true;
-		par->skip = par->visited;
-	} else {
-		/* Determine if the section has already been processed before. */
+	/* [a !b c, d e, f] -> (a && !b && c) || (d && e) || f */
+	bool empty, or_matched, or_visited, and_matched, and_visited;
+	empty = true;
+	or_matched = or_visited = false;
+	and_matched = and_visited = true;
+	do {
+		/*
+		 * XXX The same tag names escaped differently will not match.
+		 *
+		 * XXX Negations are dodgy because a section won't be unapplied
+		 * if it matched due to a negated tag that later gets set.
+		 */
+		char *name, *name_end;
 		struct config_tag *tag;
-		bool visited;
+		bool branched, finished, negated, visited;
+
+		branched = false;
+		while (*(p = skip_spaces(p)) == ',')
+			p++, branched = true;
+
+		negated = false;
+		while (*(p = skip_spaces(p)) == '!')
+			p++, negated = !negated;
+
+		name = p = skip_spaces(p);
+		name_end = p = skip_word(p, ",:]");
+		finished = name == name_end;
+
+		if (finished || branched) {
+			if (!empty && and_matched) {
+				or_matched = true;
+				if (and_visited)
+					or_visited = true;
+			}
+			and_matched = and_visited = true;
+			if (finished) {
+				if (empty) {
+					/* [] restores initial state */
+					or_matched = true;
+					or_visited = par->visited;
+				}
+				break;
+			}
+		}
+		empty = false;
+
 		for (visited = false, tag = par->cfg->tags_current; tag; tag = tag->chain) {
 			if (tag == par->cfg->tags_visited)
 				visited = true;
 			if (strmemcmp(tag->name, name, name_end - name) == 0)
 				break;
 		}
-		par->matched = tag;
-		par->skip = !tag || visited;
-	}
+		if (!tag != negated)
+			and_matched = false;
+		if (!visited)
+			and_visited = false;
+	} while (true);
+
+	par->matched = or_matched;
+	par->skip = !or_matched || or_visited;
 	return (p);
 }
 
@@ -402,6 +442,10 @@ parse_section(struct parser *par, char *p)
 {
 	assert(*p == '[');
 	p = parse_section_pred(par, p + 1);
+	if (par->cfg->verbose && par->matched)
+		fprintf(stderr, "%s: %s:%zu: matched section%s\n",
+		    getprogname(), par->file_name, (uintmax_t)par->line_no,
+		    par->skip ? ", already applied" : "");
 	if (*(p = skip_spaces(p)) == ':') {
 		p++;
 		p = parse_merge_tags(par, p, par->matched);
@@ -467,7 +511,7 @@ process_file(struct config *cfg, const char *path)
 		return (-1);
 	}
 	if (cfg->verbose) {
-		fprintf(stderr, "%s: processing \"%s\" with tags [", getprogname(), path);
+		fprintf(stderr, "%s: %s: processing with tags [", getprogname(), path);
 		for (const struct config_tag *tag = cfg->tags_current; tag; tag = tag->chain)
 			fprintf(stderr, "%s%s", tag->name,
 			    !tag->chain ? "" : tag->chain == cfg->tags_visited ? "; " : ", ");
