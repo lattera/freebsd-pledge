@@ -7,10 +7,12 @@ BEGIN {
 }
 /^[[:space:]]*#[[:space:]]*define[[:space:]]+_?PRIV_/ {
 	if ($2 == "_PRIV_HIGHEST")
-		nextfile;
+		nextfile
 	if (substr($2, 1, 1) == "_")
-		next;
-	print "\t{ " "\"" tolower(substr($2, 6)) "\"" ", " $2 " },";
+		next
+	print "#ifdef " $2
+	print "\t{ " "\"" tolower(substr($2, 6)) "\"" ", " $2 " },"
+	print "#endif"
 }
 END {
 	print "\t{ NULL, -1 }"

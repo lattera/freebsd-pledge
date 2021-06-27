@@ -7,8 +7,12 @@ BEGIN {
 }
 /^[[:space:]]*#[[:space:]]*define[[:space:]]+SYSFIL_/ {
 	if ($2 == "SYSFIL_LAST")
-		nextfile;
-	print "\t{ " "\"" tolower(substr($2, 8)) "\"" ", " $2 " },";
+		nextfile
+	if (substr($2, 8, 1) == "_")
+		next
+	print "#ifdef " $2
+	print "\t{ " "\"" tolower(substr($2, 8)) "\"" ", " $2 " },"
+	print "#endif"
 }
 END {
 	print "\t{ NULL, -1 }"

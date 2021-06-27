@@ -9,8 +9,10 @@ BEGIN {
 }
 /^[[:space:]]*#[[:space:]]*define[[:space:]]+IPPROTO_/ {
 	if ($2 == "IPPROTO_SPACER")
-		nextfile;
-	print "\t{ " "\"" tolower(substr($2, 9)) "\"" ", " $2 " },";
+		nextfile
+	print "#ifdef " $2
+	print "\t{ " "\"" tolower(substr($2, 9)) "\"" ", " $2 " },"
+	print "#endif"
 }
 END {
 	print "\t{ NULL, -1 }"
