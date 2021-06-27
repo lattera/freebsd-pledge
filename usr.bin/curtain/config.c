@@ -378,17 +378,34 @@ parse_directive(struct parser *par, char *p)
 		p++, unsafe_level++;
 	for (size_t i = 0; i < nitems(directives); i++)
 		if (strmemcmp(directives[i].name, dir, dir_end - dir) == 0) {
-			bool apply = unsafe_level <= par->cfg->unsafe_level &&
-			    (directives[i].func == parse_include ?
-			     par->matched : !par->skip);
-			/*
-			 * Only parse unnecessarily the first time a file is
-			 * being processed to report syntax errors to the user.
-			 */
-			if (!apply && par->visited)
-				return;
-			if (apply)
-				need_slot(par);
+			bool apply = unsafe_level <= par->cfg->unsafe_level;
+			if (directives[i].func == parse_include) {
+				/*
+				 * Only process included files when they are in
+				 * a matched section.  Never skip processing
+				 * them even if the section already had been
+				 * applied before because the file may contain
+				 * sections that haven't been processed yet.
+				 */
+				if (!par->matched)
+					apply = false;
+				if (!apply)
+					return;
+			} else {
+				if (par->skip) /* already applied before */
+					apply = false;
+				if (!apply) {
+					/*
+					 * If the file hasn't been processed at
+					 * least once, still parse the
+					 * directive without applying it to
+					 * report syntax errors to the user.
+					 */
+					if (par->visited)
+						return;
+				} else
+					need_slot(par);
+			}
 			return (directives[i].func(par, p, apply));
 		}
 	parse_error(par, "unknown directive");
