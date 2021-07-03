@@ -113,7 +113,7 @@ static void
 parse_error(struct parser *par, const char *error)
 {
 	par->error = true;
-	warnx("%s:%zu: %s", par->file_name, (uintmax_t)par->line_no, error);
+	warnx("%s:%ju: %s", par->file_name, (uintmax_t)par->line_no, error);
 }
 
 static inline char *
@@ -577,7 +577,7 @@ parse_section(struct parser *par, char *p)
 	par->last_matched_section_path = NULL;
 	p = parse_section_pred(par, p + 1);
 	if (par->cfg->verbose && par->matched)
-		fprintf(stderr, "%s: %s:%zu: matched section%s\n",
+		fprintf(stderr, "%s: %s:%ju: matched section%s\n",
 		    getprogname(), par->file_name, (uintmax_t)par->line_no,
 		    par->skip ? ", already applied" : "");
 	if (*(p = skip_spaces(p)) == ':') {
