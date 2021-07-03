@@ -547,7 +547,6 @@ static const int sysfils_expand[][2] = {
 	{ SYSFIL_CPATH,		SYSFIL_PATH		},
 	{ SYSFIL_DPATH,		SYSFIL_PATH		},
 	{ SYSFIL_PROT_EXEC,	SYSFIL_PROT_EXEC_LOOSE	},
-	{ SYSFIL_INET_RAW,	SYSFIL_NET		},
 	{ SYSFIL_UNIX,		SYSFIL_NET		},
 	{ SYSFIL_CPUSET,	SYSFIL_SCHED		},
 	{ SYSFIL_ANY_PROCESS,	SYSFIL_SAME_SESSION	},
@@ -933,10 +932,6 @@ sysfil_priv_check(struct ucred *cr, int priv)
 	case PRIV_NETINET_SETHDROPTS:
 #endif
 		return (0);
-	case PRIV_NETINET_RAW:
-		if (sysfil_check_cred(cr, SYSFIL_INET_RAW) == 0)
-			return (0);
-		break;
 #if 0
 	case PRIV_NETINET_GETCRED:
 		return (0);
