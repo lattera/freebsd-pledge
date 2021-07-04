@@ -82,13 +82,21 @@ strmemcmp(const char *s, const char *b, size_t n)
 	return (n ? -1 : *s ? 1 : 0);
 }
 
-struct curtain_config_tag *
-curtain_config_tag_push_mem(struct curtain_config *cfg, const char *buf, size_t len)
+static struct curtain_config_tag *
+curtain_config_tag_find_mem(struct curtain_config *cfg, const char *buf, size_t len)
 {
 	struct curtain_config_tag *tag;
 	for (tag = cfg->tags_pending; tag; tag = tag->chain)
 		if (strmemcmp(tag->name, buf, len) == 0)
 			break;
+	return (tag);
+}
+
+struct curtain_config_tag *
+curtain_config_tag_push_mem(struct curtain_config *cfg, const char *buf, size_t len)
+{
+	struct curtain_config_tag *tag;
+	tag = curtain_config_tag_find_mem(cfg, buf, len);
 	if (tag)
 		return (tag);
 	tag = malloc(sizeof *tag + len + 1);
@@ -176,7 +184,7 @@ parse_include(struct parser *par, char *p, bool apply)
 
 
 static char *
-parse_merge_tags(struct parser *par, char *p, bool apply)
+parse_push_tags(struct parser *par, char *p, bool apply)
 {
 	do {
 		char *tag, *tag_end;
@@ -191,11 +199,30 @@ parse_merge_tags(struct parser *par, char *p, bool apply)
 }
 
 static void
-parse_merge(struct parser *par, char *p, bool apply)
+parse_push(struct parser *par, char *p, bool apply)
 {
-	p = parse_merge_tags(par, p, apply);
+	p = parse_push_tags(par, p, apply);
 	if (!p)
 		return;
+	return (expect_eol(par, p));
+}
+
+static void
+parse_drop(struct parser *par, char *p, bool apply)
+{
+	do {
+		char *name, *name_end;
+		name = p = skip_spaces(p);
+		name_end = p = skip_word(p, ":]");
+		if (name == name_end)
+			break;
+		if (apply) {
+			struct curtain_config_tag *tag;
+			tag = curtain_config_tag_find_mem(par->cfg, name, name_end - name);
+			if (tag)
+				tag->dropped = true;
+		}
+	} while (true);
 	return (expect_eol(par, p));
 }
 
@@ -401,7 +428,9 @@ static const struct {
 	void (*func)(struct parser *par, char *p, bool apply);
 } directives[] = {
 	{ "include", parse_include },
-	{ "merge", parse_merge },
+	{ "merge", parse_push },
+	{ "push", parse_push },
+	{ "drop", parse_drop },
 	{ "unveil", parse_unveil },
 	{ "sysfil", parse_sysfil },
 	{ "sysctl", parse_sysctl },
@@ -504,7 +533,8 @@ match_section_pred_tag(struct parser *par,
 	for (const struct curtain_config_tag *tag = par->cfg->tags_current; tag; tag = tag->chain) {
 		if (tag == par->cfg->tags_visited)
 			*visited = true;
-		if (strmemcmp(tag->name, name, name_end - name) == 0) {
+		if (!tag->dropped &&
+		    strmemcmp(tag->name, name, name_end - name) == 0) {
 			*matched = true;
 			break;
 		}
@@ -586,7 +616,7 @@ parse_section(struct parser *par, char *p)
 		    par->skip ? ", already applied" : "");
 	if (*(p = skip_spaces(p)) == ':') {
 		p++;
-		p = parse_merge_tags(par, p, par->matched);
+		p = parse_push_tags(par, p, par->matched);
 		if (!p)
 			return;
 	}
@@ -751,19 +781,19 @@ curtain_config_load_tags(struct curtain_config *cfg)
 	do {
 		cfg->tags_current = cfg->tags_pending;
 
-		process_file(cfg, _PATH_ETC "/curtain.conf");
-		process_file(cfg, _PATH_LOCALBASE "/etc/curtain.conf");
 		if (home) {
 			pathfmt(path, "%s/.curtain.conf", home);
 			process_file(cfg, path);
 		}
+		process_file(cfg, _PATH_LOCALBASE "/etc/curtain.conf");
+		process_file(cfg, _PATH_ETC "/curtain.conf");
 
-		config_load_tags_d(cfg, _PATH_ETC "/curtain.d");
-		config_load_tags_d(cfg, _PATH_LOCALBASE "/etc/curtain.d");
 		if (home) {
 			pathfmt(path, "%s/.curtain.d", home);
 			config_load_tags_d(cfg, path);
 		}
+		config_load_tags_d(cfg, _PATH_LOCALBASE "/etc/curtain.d");
+		config_load_tags_d(cfg, _PATH_ETC "/curtain.d");
 
 		cfg->tags_visited = cfg->tags_current;
 

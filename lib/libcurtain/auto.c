@@ -20,6 +20,7 @@ auto_curtain_setup(const char *name)
 	auto_curtain_cfg = cfg = curtain_config_new();
 	cfg->unsafe_level = 1; /* XXX */
 	cfg->on_exec = false;
+	curtain_config_tag_push(cfg, "_default");
 	curtain_config_tag_push(cfg, "_auto");
 	curtain_config_tag_push(cfg, "_prot_exec");
 	curtain_config_tag_push(cfg, "_network");

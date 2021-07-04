@@ -5,6 +5,7 @@
 
 struct curtain_config_tag {
 	struct curtain_config_tag *chain;
+	bool dropped;
 	char name[];
 };
 

@@ -38,14 +38,14 @@
 ~/Templates/				: rw
 
 [_browser]
-@merge _audio
+@push _audio
 ~/Downloads/				: rw
 
 [_p2p]
 ~/Downloads/				: rw
 
 [_player]
-@merge _audio
+@push _audio
 ~/Music/				: r
 ~/Videos/				: r
 
@@ -57,21 +57,21 @@
 ~/.{n,}exrc				: r
 /etc/vi.exrc				: r
 # recovery handling needs to be able to read the user database
-@merge! _pwddb
+@push! _pwddb
 @unveil! /var/tmp/vi.recover/		: rw
 
 [git]
 ~/.gitconfig				: r
 
 [tcpdump]
-@merge _bpf
+@push _bpf
 
 [wireshark]
-@merge _bpf
+@push _bpf
 ~/.config/wireshark/			: rw
 
 [emacs : _editor]
-@merge! _pwddb
+@push! _pwddb
 ~/.emacs/
 ~/.emacs.d/				: rw
 ~/.config/emacs/			: rw
@@ -90,7 +90,7 @@
 ~/.config/inkscape/			: rw
 
 [libreoffice : _editor]
-@merge! _pwddb
+@push! _pwddb
 @unveil!! /tmp				: rwu
 @reprotect!!
 ~/.config/libreoffice/			: rw

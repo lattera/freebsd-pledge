@@ -385,6 +385,7 @@ main(int argc, char *argv[])
 	argv += optind;
 	argc -= optind;
 
+	curtain_config_tag_push(cfg, "_default");
 	if (!signaling)
 		curtain_default(main_slot, CURTAIN_DENY);
 	if (!no_protexec)
