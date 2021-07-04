@@ -7,7 +7,7 @@
 #include "common.h"
 
 int
-cwd_is_within(const char *path)
+curtain_cwd_is_within(const char *path)
 {
 	int check_fd, up_fd;
 	struct stat check_st, up_st;

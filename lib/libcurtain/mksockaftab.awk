@@ -3,7 +3,7 @@ BEGIN {
 	print "#include <sys/socket.h>"
 	print "#include \"common.h\""
 	print
-	print "const struct sockafent sockaftab[] = {"
+	print "const struct sockafent curtain_sockaftab[] = {"
 }
 
 /^[[:space:]]*#[[:space:]]*define[[:space:]]+AF_/ {

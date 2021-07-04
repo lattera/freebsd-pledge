@@ -1,6 +1,7 @@
 #ifndef __LIBCURTAIN_H__
 #define __LIBCURTAIN_H__
 
+#include <string.h>
 #include <sys/sysfil.h>
 #include <sys/unveil.h>
 
@@ -53,6 +54,7 @@ int curtain_unveil(struct curtain_slot *,
 int curtain_unveils_limit(struct curtain_slot *, unveil_perms uperms);
 int curtain_unveils_reset_all(void);
 
+
 extern const unsigned long curtain_ioctls_tty_basic[];
 extern const unsigned long curtain_ioctls_tty_pts[];
 extern const unsigned long curtain_ioctls_net_basic[];
@@ -60,5 +62,36 @@ extern const unsigned long curtain_ioctls_net_route[];
 extern const unsigned long curtain_ioctls_oss[];
 extern const unsigned long curtain_ioctls_cryptodev[];
 extern const unsigned long curtain_ioctls_bpf_all[];
+
+
+struct curtain_config;
+
+struct curtain_config { /* TODO: make private */
+	struct curtain_config_tag *tags_pending, *tags_current, *tags_visited;
+	unsigned unsafe_level;
+	bool on_exec;
+	bool verbose;
+	bool need_reprotect;
+	bool x11, x11_trusted;
+	bool wayland;
+};
+
+int curtain_parse_unveil_perms(unveil_perms *, const char *);
+
+struct curtain_config *curtain_config_new(void);
+
+struct curtain_config_tag *curtain_config_tag_push_mem(struct curtain_config *, const char *buf, size_t len);
+
+static inline struct curtain_config_tag *
+curtain_config_tag_push(struct curtain_config *cfg, const char *name)
+{
+	return (curtain_config_tag_push_mem(cfg, name, strlen(name)));
+}
+
+void curtain_config_load_tags(struct curtain_config *);
+
+int curtain_config_gui(struct curtain_config *);
+int curtain_config_reprotect(struct curtain_config *);
+int curtain_config_tmpdir(struct curtain_config *, bool separate);
 
 #endif

@@ -24,238 +24,6 @@
 #include <termios.h>
 #include <unistd.h>
 
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-
-#include "common.h"
-
-static const char *old_tmpdir = NULL;
-
-static void
-pathfmt(char *path, const char *fmt, ...)
-{
-	int r;
-	va_list ap;
-	va_start(ap, fmt);
-	r = vsnprintf(path, PATH_MAX, fmt, ap);
-	va_end(ap);
-	if (r < 0)
-		err(EX_TEMPFAIL, "snprintf");
-}
-
-static void
-reprotect_1(struct curtain_slot *slot)
-{
-	const char *tmux_tmpdir;
-	char path[PATH_MAX];
-
-	/* TODO: This should be moved to a config file. */
-
-	pathfmt(path, "%s/krb5cc_%u", old_tmpdir, geteuid());
-	curtain_unveil(slot, path, 0, UPERM_NONE);
-
-	if (!(tmux_tmpdir = getenv("TMUX_TMPDIR")))
-		tmux_tmpdir = old_tmpdir;
-	pathfmt(path, "%s/tmux-%u", tmux_tmpdir, geteuid());
-	curtain_unveil(slot, path, 0, UPERM_NONE);
-}
-
-static void
-reprotect(void)
-{
-	/*
-	 * Re-apply another layer of unveils to hide potentially dangerous
-	 * files that might allow to escape the sandbox.
-	 */
-	struct curtain_slot *slot;
-	int r;
-	curtain_unveils_reset_all();
-	curtain_enable((slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
-	curtain_unveil(slot, "/", 0, UPERM_ALL);
-	reprotect_1(slot);
-	r = curtain_enforce();
-	if (r < 0)
-		err(EX_NOPERM, "curtain_enforce");
-}
-
-
-static char *new_tmpdir = NULL;
-
-static void
-cleanup_tmpdir(void)
-{
-	int r;
-	r = rmdir(new_tmpdir);
-	if (r < 0)
-		warn("%s", new_tmpdir);
-	free(new_tmpdir);
-}
-
-static void
-prepare_tmpdir(struct curtain_slot *slot)
-{
-	char *p;
-	int r;
-	p = getenv("TMPDIR");
-	r = asprintf(&p, "%s/%s.tmpdir.XXXXXXXXXXXX",
-	    p && *p ? p : _PATH_TMP, getprogname());
-	if (r < 0)
-		err(EX_TEMPFAIL, "snprintf");
-	new_tmpdir = mkdtemp(p);
-	if (!new_tmpdir)
-		err(EX_OSERR, "%s", p);
-	atexit(cleanup_tmpdir);
-	r = setenv("TMPDIR", new_tmpdir, 1);
-	if (r < 0)
-		err(EX_OSERR, "setenv");
-	r = curtain_unveil(slot, new_tmpdir, CURTAIN_UNVEIL_INSPECT,
-	    UPERM_READ | UPERM_WRITE | UPERM_SETATTR |
-	    UPERM_CREATE | UPERM_DELETE | UPERM_UNIX |
-	    UPERM_EXECUTE);
-	if (r < 0)
-		err(EX_OSERR, "%s", new_tmpdir);
-}
-
-
-static char *tmp_xauth_file = NULL;
-static char *display_unix_socket = NULL;
-
-static void
-cleanup_x11(void)
-{
-	int r;
-	if (tmp_xauth_file) {
-		r = unlink(tmp_xauth_file);
-		if (r < 0)
-			warn("%s", tmp_xauth_file);
-		free(tmp_xauth_file);
-		tmp_xauth_file = NULL;
-	}
-	if (display_unix_socket) {
-		free(display_unix_socket);
-		display_unix_socket = NULL;
-	}
-}
-
-static void
-prepare_x11(struct curtain_slot *slot, bool trusted)
-{
-	int r;
-	char *p, *display;
-	pid_t pid;
-	int status;
-
-	p = getenv("DISPLAY");
-	if (!p || !*p) {
-		warnx("DISPLAY environment variable not set");
-		return;
-	}
-	display = p;
-	if (display[0] == ':')
-		p = display + 1;
-	else if (strncmp(display, "unix:", 5) == 0)
-		p = display + 5;
-	else
-		p = NULL;
-	if (p) {
-		r = asprintf(&display_unix_socket, "%s/X%.*s",
-		    "/tmp/.X11-unix", (unsigned)strspn(p, "0123456789"), p);
-		if (r < 0)
-			err(EX_TEMPFAIL, "asprintf");
-	}
-
-	p = getenv("TMPDIR");
-	r = asprintf(&p, "%s/%s.xauth.XXXXXXXXXXXX",
-	    p && *p ? p : "/tmp", getprogname());
-	if (r < 0)
-		err(EX_TEMPFAIL, "asprintf");
-	r = mkstemp(p);
-	if (r < 0)
-		err(EX_OSERR, "mkstemp");
-	r = close(r);
-	if (r < 0)
-		warn("%s", p);
-	tmp_xauth_file = p;
-	atexit(cleanup_x11);
-
-	pid = vfork();
-	if (pid < 0)
-		err(EX_TEMPFAIL, "fork");
-	if (pid == 0) {
-		err_set_exit(_exit);
-		if (trusted)
-			execlp("xauth", "xauth",
-			    "extract", tmp_xauth_file, display, NULL);
-		else
-			execlp("xauth", "xauth", "-f", tmp_xauth_file,
-			    "generate", display, ".", "untrusted",
-			    "timeout", "0", NULL);
-		err(EX_OSERR, "xauth");
-	}
-	err_set_exit(NULL);
-
-	r = waitpid(pid, &status, 0);
-	if (r < 0)
-		err(EX_OSERR, "waitpid");
-	if (!(WIFEXITED(status) && WEXITSTATUS(status) == 0)) {
-		if (WIFSIGNALED(status))
-			errx(EX_UNAVAILABLE, "xauth terminated with signal %d",
-			    WTERMSIG(status));
-		errx(EX_UNAVAILABLE, "xauth exited with code %d", WEXITSTATUS(status));
-	}
-
-	r = setenv("XAUTHORITY", tmp_xauth_file, 1);
-	if (r < 0)
-		err(EX_TEMPFAIL, "setenv");
-
-	if (display_unix_socket) {
-		r = curtain_unveil(slot, display_unix_socket,
-		    CURTAIN_UNVEIL_INSPECT, UPERM_CONNECT|UPERM_INSPECT);
-		if (r < 0)
-			err(EX_OSERR, "%s", display_unix_socket);
-	}
-	if (tmp_xauth_file) {
-		r = curtain_unveil(slot, tmp_xauth_file,
-		    CURTAIN_UNVEIL_INSPECT, UPERM_READ);
-		if (r < 0)
-			err(EX_OSERR, "%s", tmp_xauth_file);
-	}
-}
-
-
-static void
-prepare_wayland(struct curtain_slot *slot)
-{
-	const char *display;
-	char *socket;
-	int r;
-	display = getenv("WAYLAND_DISPLAY");
-	if (!display)
-		display = "wayland-0";
-	if (display[0] == '/') {
-		socket = strdup(display);
-		if (!socket)
-			err(EX_TEMPFAIL, "strdup");
-	} else {
-		char *rundir;
-		rundir = getenv("XDG_RUNTIME_DIR");
-		if (!rundir) {
-			warnx("XDG_RUNTIME_DIR environment variable not set");
-			return;
-		}
-		r = asprintf(&socket, "%s/%s", rundir, display);
-		if (r < 0)
-			err(EX_TEMPFAIL, "asprintf");
-	}
-	r = curtain_unveil(slot, socket,
-	    CURTAIN_UNVEIL_INSPECT, UPERM_CONNECT|UPERM_INSPECT);
-	if (r < 0)
-		err(EX_OSERR, "%s", socket);
-	free(socket);
-}
-
-
 static const char dbus_cmd_name[] = "dbus-daemon";
 static char *session_dbus_socket = NULL;
 static pid_t session_dbus_pid = -1;
@@ -504,12 +272,13 @@ main(int argc, char *argv[])
 	char *cmd_arg0 = NULL;
 	char abspath[PATH_MAX];
 	size_t abspath_len = 0;
-	struct config cfg;
+	struct curtain_config *cfg;
 	struct curtain_slot *unveils_slot, *main_slot;
 	bool do_exec, pty_wrap;
 	int status;
 
-	config_init(&cfg);
+	cfg = curtain_config_new();
+	cfg->on_exec = true;
 
 	curtain_enable((main_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 	curtain_enable((unveils_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
@@ -517,7 +286,7 @@ main(int argc, char *argv[])
 	while ((ch = getopt(argc, argv, "vfkgenaA!t:p:u:0:SslXYWD")) != -1)
 		switch (ch) {
 		case 'v':
-			cfg.verbose = verbose = true;
+			cfg->verbose = verbose = true;
 			break;
 		case 'k':
 			signaling = true;
@@ -541,7 +310,7 @@ main(int argc, char *argv[])
 			unsafe_level++;
 			break;
 		case 't':
-			config_tag_push(&cfg, optarg);
+			curtain_config_tag_push(cfg, optarg);
 			break;
 		case 'p':
 			for (char *p = optarg; *p; p++)
@@ -571,7 +340,7 @@ main(int argc, char *argv[])
 					errc(EX_OSFILE, ENAMETOOLONG, "%s", path);
 				path = abspath;
 			}
-			r = parse_unveil_perms(&uperms, perms);
+			r = curtain_parse_unveil_perms(&uperms, perms);
 			if (r < 0)
 				errx(EX_USAGE, "invalid unveil permissions: %s", perms);
 			r = curtain_unveil(unveils_slot, path,
@@ -619,41 +388,32 @@ main(int argc, char *argv[])
 	if (!signaling)
 		curtain_default(main_slot, CURTAIN_DENY);
 	if (!no_protexec)
-		curtain_sysfil(main_slot, SYSFIL_PROT_EXEC, 0);
-	if (!no_network) {
-		config_tag_push(&cfg, "_network");
-	}
-	if (new_session) {
-		curtain_sysfil(main_slot, SYSFIL_SAME_SESSION, 0);
-		config_tag_push(&cfg, "_session");
-	}
-	if (run_shell) {
-		config_tag_push(&cfg, "_shell");
-	}
-	if (new_pgrp) {
-		curtain_sysfil(main_slot, SYSFIL_SAME_PGRP, 0);
-		if (getpgid(0) != getpid()) {
-			r = setpgid(0, 0);
-			if (r < 0)
-				err(EX_OSERR, "setpgid");
-		}
-	}
+		curtain_config_tag_push(cfg, "_prot_exec");
+	if (!no_network)
+		curtain_config_tag_push(cfg, "_network");
+	if (new_session)
+		curtain_config_tag_push(cfg, "_session");
+	if (run_shell)
+		curtain_config_tag_push(cfg, "_shell");
+	if (new_pgrp)
+		curtain_config_tag_push(cfg, "_pgrp");
 	if (x11_mode != X11_NONE) {
 		if (no_fork)
 			errx(EX_USAGE, "X11 mode incompatible with -f");
-		config_tag_push(&cfg, "_x11");
-		config_tag_push(&cfg, "_gui");
-		prepare_x11(main_slot, x11_mode == X11_TRUSTED);
+		curtain_config_tag_push(cfg, "_x11");
+		curtain_config_tag_push(cfg, "_gui");
+		cfg->x11 = true;
+		cfg->x11_trusted = x11_mode == X11_TRUSTED;
 	};
 	if (wayland) {
-		config_tag_push(&cfg, "_wayland");
-		config_tag_push(&cfg, "_gui");
-		prepare_wayland(main_slot);
+		curtain_config_tag_push(cfg, "_wayland");
+		curtain_config_tag_push(cfg, "_gui");
+		cfg->wayland = true;
 	}
 	if (dbus) {
 		if (no_fork)
 			errx(EX_USAGE, "-D incompatible with -f");
-		config_tag_push(&cfg, "_dbus");
+		curtain_config_tag_push(cfg, "_dbus");
 		/*
 		 * XXX dbus-daemon currently being run unsandboxed.
 		 */
@@ -661,35 +421,11 @@ main(int argc, char *argv[])
 	}
 
 	if (autotag && argc)
-		config_tag_push(&cfg, argv[0]);
-	cfg.unsafe_level = unsafe_level;
-	config_load_tags(&cfg);
-
-	if (!(old_tmpdir = getenv("TMPDIR")))
-		old_tmpdir = _PATH_TMP;
-
-	if (!no_fork) {
-		prepare_tmpdir(main_slot);
-	} else {
-		/*
-		 * XXX This can be very unsafe.  UPERM_TMPDIR disallows many
-		 * operations on the temporary directory like listing the
-		 * files, accessing subdirectories, or creating/connecting to
-		 * local domain sockets, etc.  Files securely created with
-		 * randomized filenames should be safe from other sandboxed
-		 * processes using the same temporary directory.  But files
-		 * with known or predictable filenames are not.  KRB5's
-		 * krb5cc_<uid> is a pretty bad example of this.
-		 */
-		const char *tmpdir;
-		if (!(tmpdir = getenv("TMPDIR")))
-			tmpdir = _PATH_TMP;
-		r = curtain_unveil(main_slot, tmpdir,
-		    CURTAIN_UNVEIL_INSPECT, UPERM_TMPDIR);
-		if (r < 0)
-			warn("%s", tmpdir);
-		cfg.need_reprotect = true;
-	}
+		curtain_config_tag_push(cfg, argv[0]);
+	cfg->unsafe_level = unsafe_level;
+	curtain_config_tmpdir(cfg, !no_fork);
+	curtain_config_load_tags(cfg);
+	curtain_config_gui(cfg);
 
 	if (promises) {
 		r = pledge(NULL, promises);
@@ -704,8 +440,7 @@ main(int argc, char *argv[])
 			err(EX_NOPERM, "curtain_enforce");
 	}
 
-	if (cfg.need_reprotect)
-		reprotect();
+	curtain_config_reprotect(cfg);
 
 
 	if (argc == 0) {
@@ -779,6 +514,10 @@ main(int argc, char *argv[])
 				r = setsid();
 				if (r < 0)
 					err(EX_OSERR, "setsid");
+			} else if (new_pgrp && getpgid(0) != getpid()) {
+				r = setpgid(0, 0);
+				if (r < 0)
+					err(EX_OSERR, "setpgid");
 			}
 		} else {
 			err_set_exit(NULL);

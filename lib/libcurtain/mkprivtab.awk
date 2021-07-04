@@ -3,7 +3,7 @@ BEGIN {
 	print "#include <sys/priv.h>"
 	print "#include \"common.h\""
 	print
-	print "const struct privent privtab[] = {"
+	print "const struct privent curtain_privtab[] = {"
 }
 /^[[:space:]]*#[[:space:]]*define[[:space:]]+_?PRIV_/ {
 	if ($2 == "_PRIV_HIGHEST")

@@ -17,7 +17,7 @@
 #include "pathexp.h"
 
 struct parser {
-	struct config *cfg;
+	struct curtain_config *cfg;
 	FILE *file;
 	const char *file_name;
 	off_t line_no;
@@ -48,7 +48,7 @@ static const struct {
 
 
 int
-parse_unveil_perms(unveil_perms *uperms, const char *s)
+curtain_parse_unveil_perms(unveil_perms *uperms, const char *s)
 {
 	*uperms = UPERM_NONE;
 	while (*s)
@@ -82,10 +82,10 @@ strmemcmp(const char *s, const char *b, size_t n)
 	return (n ? -1 : *s ? 1 : 0);
 }
 
-struct config_tag *
-config_tag_push_mem(struct config *cfg, const char *buf, size_t len)
+struct curtain_config_tag *
+curtain_config_tag_push_mem(struct curtain_config *cfg, const char *buf, size_t len)
 {
-	struct config_tag *tag;
+	struct curtain_config_tag *tag;
 	for (tag = cfg->tags_pending; tag; tag = tag->chain)
 		if (strmemcmp(tag->name, buf, len) == 0)
 			break;
@@ -94,7 +94,7 @@ config_tag_push_mem(struct config *cfg, const char *buf, size_t len)
 	tag = malloc(sizeof *tag + len + 1);
 	if (!tag)
 		err(EX_TEMPFAIL, "malloc");
-	*tag = (struct config_tag){ .chain = cfg->tags_pending };
+	*tag = (struct curtain_config_tag){ .chain = cfg->tags_pending };
 	memcpy(tag->name, buf, len);
 	tag->name[len] = '\0';
 	cfg->tags_pending = tag;
@@ -105,8 +105,12 @@ config_tag_push_mem(struct config *cfg, const char *buf, size_t len)
 static void
 need_slot(struct parser *par)
 {
-	if (!par->slot)
-		curtain_enable((par->slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
+	if (!par->slot) {
+		if (par->cfg->on_exec)
+			curtain_enable((par->slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
+		else
+			par->slot = curtain_slot();
+	}
 }
 
 static void
@@ -150,7 +154,7 @@ expect_eol(struct parser *par, char *p)
 }
 
 
-static int process_file(struct config *, const char *path);
+static int process_file(struct curtain_config *, const char *path);
 
 static void
 parse_include(struct parser *par, char *p, bool apply)
@@ -181,7 +185,7 @@ parse_merge_tags(struct parser *par, char *p, bool apply)
 		if (tag == tag_end)
 			break;
 		if (apply)
-			config_tag_push_mem(par->cfg, tag, tag_end - tag);
+			curtain_config_tag_push_mem(par->cfg, tag, tag_end - tag);
 	} while (true);
 	return (p);
 }
@@ -250,7 +254,7 @@ parse_unveil(struct parser *par, char *p, bool apply)
 			return (parse_error(par, "empty pattern"));
 
 		*perms_end = '\0';
-		r = parse_unveil_perms(&par->uperms, perms);
+		r = curtain_parse_unveil_perms(&par->uperms, perms);
 		if (r < 0)
 			return (parse_error(par, "invalid unveil permissions"));
 	} else {
@@ -272,7 +276,7 @@ parse_sysfil(struct parser *par, char *p, bool apply)
 		p = skip_word((w = p), "");
 		if (w == p)
 			break;
-		for (e = sysfiltab; e->name; e++)
+		for (e = curtain_sysfiltab; e->name; e++)
 			if (strmemcmp(e->name, w, p - w) == 0)
 				break;
 		if (!e->name)
@@ -310,7 +314,7 @@ parse_priv(struct parser *par, char *p, bool apply)
 		p = skip_word((w = p), "");
 		if (w == p)
 			break;
-		for (e = privtab; e->name; e++)
+		for (e = curtain_privtab; e->name; e++)
 			if (strmemcmp(e->name, w, p - w) == 0)
 				break;
 		if (!e->name)
@@ -353,7 +357,7 @@ parse_sockaf(struct parser *par, char *p, bool apply)
 		p = skip_word((w = p), "");
 		if (w == p)
 			break;
-		for (e = sockaftab; e->name; e++)
+		for (e = curtain_sockaftab; e->name; e++)
 			if (strmemcmp(e->name, w, p - w) == 0)
 				break;
 		if (!e->name)
@@ -373,7 +377,7 @@ parse_socklvl(struct parser *par, char *p, bool apply)
 		p = skip_word((w = p), "");
 		if (w == p)
 			break;
-		for (e = socklvltab; e->name; e++)
+		for (e = curtain_socklvltab; e->name; e++)
 			if (strmemcmp(e->name, w, p - w) == 0)
 				break;
 		if (!e->name)
@@ -458,7 +462,7 @@ match_section_pred_cwd_cb(void *ctx, char *path)
 {
 	struct parser *par = ctx;
 	int r;
-	r = cwd_is_within(path);
+	r = curtain_cwd_is_within(path);
 	if (r < 0) {
 		if (errno != ENOENT && errno != EACCES)
 			warn("%s", path);
@@ -497,7 +501,7 @@ match_section_pred_tag(struct parser *par,
     char *name, char *name_end)
 {
 	*matched = *visited = false;
-	for (const struct config_tag *tag = par->cfg->tags_current; tag; tag = tag->chain) {
+	for (const struct curtain_config_tag *tag = par->cfg->tags_current; tag; tag = tag->chain) {
 		if (tag == par->cfg->tags_visited)
 			*visited = true;
 		if (strmemcmp(tag->name, name, name_end - name) == 0) {
@@ -629,7 +633,7 @@ parse_config(struct parser *par)
 }
 
 static int
-process_file(struct config *cfg, const char *path)
+process_file(struct curtain_config *cfg, const char *path)
 {
 	struct parser par = {
 		.cfg = cfg,
@@ -647,7 +651,7 @@ process_file(struct config *cfg, const char *path)
 	}
 	if (cfg->verbose) {
 		fprintf(stderr, "%s: %s: processing with tags [", getprogname(), path);
-		for (const struct config_tag *tag = cfg->tags_current; tag; tag = tag->chain)
+		for (const struct curtain_config_tag *tag = cfg->tags_current; tag; tag = tag->chain)
 			fprintf(stderr, "%s%s", tag->name,
 			    !tag->chain ? "" : tag->chain == cfg->tags_visited ? "; " : ", ");
 		fprintf(stderr, "]\n");
@@ -673,7 +677,7 @@ pathfmt(char *path, const char *fmt, ...)
 }
 
 static void
-config_load_tag(struct config *cfg, struct config_tag *tag, const char *base)
+config_load_tag(struct curtain_config *cfg, struct curtain_config_tag *tag, const char *base)
 {
 	char path[PATH_MAX];
 	DIR *dir;
@@ -707,11 +711,11 @@ config_load_tag(struct config *cfg, struct config_tag *tag, const char *base)
 }
 
 static void
-config_load_tags_d(struct config *cfg, const char *base)
+config_load_tags_d(struct curtain_config *cfg, const char *base)
 {
 	bool visited = false;
-	for (struct config_tag *tag = cfg->tags_current; tag; tag = tag->chain) {
-		struct config_tag *saved_tags_visited = cfg->tags_visited;
+	for (struct curtain_config_tag *tag = cfg->tags_current; tag; tag = tag->chain) {
+		struct curtain_config_tag *saved_tags_visited = cfg->tags_visited;
 		if (tag == cfg->tags_visited)
 			visited = true;
 		/* Don't skip anything in files that haven't been visited yet. */
@@ -724,7 +728,7 @@ config_load_tags_d(struct config *cfg, const char *base)
 }
 
 void
-config_load_tags(struct config *cfg)
+curtain_config_load_tags(struct curtain_config *cfg)
 {
 	char path[PATH_MAX];
 	const char *home;
@@ -766,9 +770,20 @@ config_load_tags(struct config *cfg)
 	} while (cfg->tags_current != cfg->tags_pending);
 }
 
-void
-config_init(struct config *cfg)
+static void
+config_init(struct curtain_config *cfg)
 {
-	*cfg = (struct config){ 0 };
+	*cfg = (struct curtain_config){ 0 };
+}
+
+struct curtain_config *
+curtain_config_new(void)
+{
+	struct curtain_config *cfg;
+	cfg = malloc(sizeof *cfg);
+	if (!cfg)
+		err(EX_TEMPFAIL, "malloc");
+	config_init(cfg);
+	return (cfg);
 }
 

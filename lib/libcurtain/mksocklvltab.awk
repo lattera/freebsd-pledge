@@ -4,7 +4,7 @@ BEGIN {
 	print "#include <netinet/in.h>"
 	print "#include \"common.h\""
 	print
-	print "const struct socklvlent socklvltab[] = {"
+	print "const struct socklvlent curtain_socklvltab[] = {"
 	print "\t{ \"socket\", SOL_SOCKET },"
 }
 /^[[:space:]]*#[[:space:]]*define[[:space:]]+IPPROTO_/ {

@@ -3,7 +3,7 @@ BEGIN {
 	print "#include <sys/sysfil.h>"
 	print "#include \"common.h\""
 	print
-	print "const struct sysfilent sysfiltab[] = {"
+	print "const struct sysfilent curtain_sysfiltab[] = {"
 }
 /^[[:space:]]*#[[:space:]]*define[[:space:]]+SYSFIL_/ {
 	if ($2 == "SYSFIL_LAST")
