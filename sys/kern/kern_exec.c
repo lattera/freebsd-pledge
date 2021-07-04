@@ -399,6 +399,7 @@ do_execve(struct thread *td, struct image_args *args, struct mac *mac_p,
 #endif
 	int error, i, orig_osrel;
 	uint32_t orig_fctl0;
+	Elf_Brandinfo *orig_brandinfo;
 	static const char fexecv_proc_title[] = "(fexecv)";
 	cap_rights_t execat_rights;
 
@@ -430,6 +431,7 @@ do_execve(struct thread *td, struct image_args *args, struct mac *mac_p,
 	oldcred = p->p_ucred;
 	orig_osrel = p->p_osrel;
 	orig_fctl0 = p->p_fctl0;
+	orig_brandinfo = p->p_elf_brandinfo;
 
 #ifdef SYSFIL
 	error = sysfil_require(td, SYSFIL_EXEC);
@@ -509,6 +511,7 @@ interpret:
 
 	imgp->proc->p_osrel = 0;
 	imgp->proc->p_fctl0 = 0;
+	imgp->proc->p_elf_brandinfo = NULL;
 
 	/*
 	 * Implement image setuid/setgid.
@@ -812,8 +815,9 @@ interpret:
 		signotify(td);
 	}
 
-	if (imgp->sysent->sv_setid_allowed != NULL &&
-	    !(*imgp->sysent->sv_setid_allowed)(td, imgp))
+	if ((imgp->sysent->sv_setid_allowed != NULL &&
+	    !(*imgp->sysent->sv_setid_allowed)(td, imgp)) ||
+	    (p->p_flag2 & P2_NO_NEW_PRIVS) != 0)
 		execve_nosetid(imgp);
 
 	/*
@@ -929,6 +933,7 @@ exec_fail_dealloc:
 	if (error != 0) {
 		p->p_osrel = orig_osrel;
 		p->p_fctl0 = orig_fctl0;
+		p->p_elf_brandinfo = orig_brandinfo;
 	}
 
 	if (imgp->firstpage != NULL)

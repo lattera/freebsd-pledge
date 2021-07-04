@@ -39,6 +39,7 @@
 #include <sys/filedesc.h>
 #include <sys/queue.h>
 #include <sys/_unveil.h>
+#include <sys/_seqc.h>
 #include <sys/_uio.h>
 
 enum nameiop { LOOKUP, CREATE, DELETE, RENAME };
@@ -115,6 +116,12 @@ struct nameidata {
 #if defined(UNVEIL)
 	struct unveil_traversal ni_unveil;
 #endif
+	/*
+	 * Private helper data for UFS, must be at the end.  See
+	 * NDINIT_PREFILL().
+	 */
+	seqc_t	ni_dvp_seqc;
+	seqc_t	ni_vp_seqc;
 };
 
 #ifdef _KERNEL
@@ -229,7 +236,8 @@ int	cache_fplookup(struct nameidata *ndp, enum cache_fpl_status *status,
  * Note the constant pattern may *hide* bugs.
  */
 #ifdef INVARIANTS
-#define NDINIT_PREFILL(arg)	memset(arg, 0xff, sizeof(*arg))
+#define NDINIT_PREFILL(arg)	memset(arg, 0xff, offsetof(struct nameidata,	\
+    ni_dvp_seqc))
 #define NDINIT_DBG(arg)		{ (arg)->ni_debugflags = NAMEI_DBG_INITED; }
 #define NDREINIT_DBG(arg)	{						\
 	if (((arg)->ni_debugflags & NAMEI_DBG_INITED) == 0)			\
@@ -277,6 +285,11 @@ do {										\
 	NDREINIT_DBG(_ndp);							\
 	_ndp->ni_resflags = 0;							\
 	_ndp->ni_startdir = NULL;						\
+} while (0)
+
+#define	NDPREINIT(ndp) do {							\
+	(ndp)->ni_dvp_seqc = SEQC_MOD;						\
+	(ndp)->ni_vp_seqc = SEQC_MOD;						\
 } while (0)
 
 #define NDF_NO_DVP_RELE		0x00000001

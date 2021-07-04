@@ -4584,12 +4584,10 @@ pfsync_state_export(struct pfsync_state *sp, struct pf_state *st)
 	else
 		sp->nat_rule = htonl(st->nat_rule.ptr->nr);
 
-	pf_state_counter_hton(counter_u64_fetch(st->packets[0]),
-	    sp->packets[0]);
-	pf_state_counter_hton(counter_u64_fetch(st->packets[1]),
-	    sp->packets[1]);
-	pf_state_counter_hton(counter_u64_fetch(st->bytes[0]), sp->bytes[0]);
-	pf_state_counter_hton(counter_u64_fetch(st->bytes[1]), sp->bytes[1]);
+	pf_state_counter_hton(st->packets[0], sp->packets[0]);
+	pf_state_counter_hton(st->packets[1], sp->packets[1]);
+	pf_state_counter_hton(st->bytes[0], sp->bytes[0]);
+	pf_state_counter_hton(st->bytes[1], sp->bytes[1]);
 
 }
 
@@ -5056,10 +5054,19 @@ pf_getstates(struct pfioc_nv *nv)
 	for (int i = 0; i < pf_hashmask; i++) {
 		struct pf_idhash *ih = &V_pf_idhash[i];
 
+		/* Avoid taking the lock if there are no states in the row. */
+		if (LIST_EMPTY(&ih->states))
+			continue;
+
 		PF_HASHROW_LOCK(ih);
 		LIST_FOREACH(s, &ih->states, entry) {
 			if (s->timeout == PFTM_UNLINKED)
 				continue;
+
+			if (SIGPENDING(curthread)) {
+				PF_HASHROW_UNLOCK(ih);
+				ERROUT(EINTR);
+			}
 
 			nvls = pf_state_to_nvstate(s);
 			if (nvls == NULL) {
