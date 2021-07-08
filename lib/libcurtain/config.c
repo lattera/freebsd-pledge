@@ -512,35 +512,19 @@ parse_directive(struct parser *par, char *p)
 		p++, unsafe_level++;
 	for (size_t i = 0; i < nitems(directives); i++)
 		if (strmemcmp(directives[i].name, dir, dir_end - dir) == 0) {
-			bool apply = unsafe_level <= par->cfg->unsafe_level;
-			if (directives[i].func == parse_include) {
-				/*
-				 * Only process included files when they are in
-				 * a matched section.  Never skip processing
-				 * them even if the section already had been
-				 * applied before because the file may contain
-				 * sections that haven't been processed yet.
-				 */
-				if (!par->matched)
-					apply = false;
-				if (!apply)
-					return;
-			} else {
-				if (par->skip) /* already applied before */
-					apply = false;
-				if (!apply) {
-					/*
-					 * If the file hasn't been processed at
-					 * least once, still parse the
-					 * directive without applying it to
-					 * report syntax errors to the user.
-					 */
-					if (par->visited)
-						return;
-				} else
-					need_slot(par);
-			}
-			return (directives[i].func(par, p, apply));
+			if (unsafe_level > par->cfg->unsafe_level)
+				return;
+			/*
+			 * Always process included files (when the include
+			 * directive is in a matched section) even if they
+			 * already have been processed before because the file
+			 * could contain sections for newly enabled tags that
+			 * haven't been applied yet.
+			 */
+			if (directives[i].func == parse_include ? !par->matched : par->skip)
+				return;
+			need_slot(par);
+			return (directives[i].func(par, p, true));
 		}
 	parse_error(par, "unknown directive");
 }
@@ -689,27 +673,21 @@ static void
 parse_line(struct parser *par)
 {
 	char *p;
-	p = skip_spaces(par->line);
-	if (!*p)
+	p = par->line;
+	while (isspace(*p))
+		p++;
+	if (!*p || *p == '#')
 		return;
 	if (*p == '[')
 		return (parse_section(par, p));
-	/*
-	 * Parse everything at least once to report syntax errors.
-	 *
-	 * Note that directives may need to be re-processed even in sections
-	 * known to already have been applied to re-process "include" directives
-	 * in case there are sections in included files for newly enabled tags.
-	 */
-	if (!par->matched && par->visited)
+	if (!par->matched)
 		return;
 	if (p[0] == '@')
 		return (parse_directive(par, p));
-	if (par->skip && par->visited)
+	if (par->skip)
 		return;
-	if (!par->skip)
-		need_slot(par);
-	return (parse_unveil(par, p, !par->skip));
+	need_slot(par);
+	return (parse_unveil(par, p, true));
 }
 
 static void
