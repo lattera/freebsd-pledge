@@ -166,20 +166,37 @@ expect_eol(struct parser *par, char *p)
 
 
 static int process_file(struct curtain_config *, const char *path);
+static void process_dir(struct curtain_config *, const char *path);
+
+static int
+do_include_callback(void *ctx, char *path)
+{
+	struct parser *par = ctx;
+	if (*path && path[strlen(path) - 1] == '/')
+		process_dir(par->cfg, path);
+	else
+		process_file(par->cfg, path);
+	return (0);
+}
 
 static void
 parse_include(struct parser *par, char *p, bool apply)
 {
 	while (*(p = skip_spaces(p))) {
-		char *w, c;
+		char *w;
 		p = skip_word((w = p), "");
 		if (w == p)
 			break;
 		if (apply) {
+			char path[PATH_MAX], c;
+			const char *error;
+			int r;
 			c = *p;
 			*p = '\0';
-			process_file(par->cfg, w);
+			r = pathexp(w, path, sizeof path, &error, do_include_callback, par);
 			*p = c;
+			if (r < 0)
+				parse_error(par, error);
 		}
 	}
 	return (expect_eol(par, p));
@@ -765,7 +782,7 @@ config_load_tag(struct curtain_config *cfg, struct curtain_config_tag *tag, cons
 }
 
 static void
-config_load_tags_d(struct curtain_config *cfg, const char *base)
+process_dir(struct curtain_config *cfg, const char *base)
 {
 	bool visited = false;
 	for (struct curtain_config_tag *tag = cfg->tags_current; tag; tag = tag->chain) {
@@ -808,17 +825,17 @@ curtain_config_load_tags(struct curtain_config *cfg)
 		cfg->config_level = 0;
 		if (home) {
 			pathfmt(path, "%s/.curtain.d", home);
-			config_load_tags_d(cfg, path);
+			process_dir(cfg, path);
 			pathfmt(path, "%s/.curtain.conf", home);
 			process_file(cfg, path);
 		}
 
 		cfg->config_level++;
-		config_load_tags_d(cfg, _PATH_LOCALBASE "/etc/curtain.d");
+		process_dir(cfg, _PATH_LOCALBASE "/etc/curtain.d");
 		process_file(cfg, _PATH_LOCALBASE "/etc/curtain.conf");
 
 		cfg->config_level++;
-		config_load_tags_d(cfg, _PATH_ETC "/curtain.d");
+		process_dir(cfg, _PATH_ETC "/curtain.d");
 		process_file(cfg, _PATH_ETC "/curtain.conf");
 
 		cfg->tags_visited = cfg->tags_current;
