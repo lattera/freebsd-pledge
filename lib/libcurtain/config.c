@@ -748,7 +748,7 @@ pathfmt(char *path, const char *fmt, ...)
 }
 
 static void
-config_load_tag(struct curtain_config *cfg, struct curtain_config_tag *tag, const char *base)
+process_dir_tag(struct curtain_config *cfg, struct curtain_config_tag *tag, const char *base)
 {
 	char path[PATH_MAX];
 	DIR *dir;
@@ -792,7 +792,7 @@ process_dir(struct curtain_config *cfg, const char *base)
 		/* Don't skip anything in files that haven't been visited yet. */
 		if (!visited)
 			cfg->tags_visited = NULL;
-		config_load_tag(cfg, tag, base);
+		process_dir_tag(cfg, tag, base);
 		if (!visited)
 			cfg->tags_visited = saved_tags_visited;
 	}
@@ -858,5 +858,23 @@ curtain_config_new(void)
 		err(EX_TEMPFAIL, "malloc");
 	config_init(cfg);
 	return (cfg);
+}
+
+void
+curtain_config_tags_from_env(struct curtain_config *cfg)
+{
+	char *p, *q;
+	p = getenv("CURTAIN_TAGS");
+	if ((q = p))
+		do {
+			if (!*q || isspace(*q)) {
+				if (p != q)
+					curtain_config_tag_push_mem(cfg, p, q - p);
+				if (!*q)
+					break;
+				p = ++q;
+			} else
+				q++;
+		} while (true);
 }
 
