@@ -1352,7 +1352,7 @@ static int
 readhash(FILE *f, int flags)
 {
 	int i, t, space;
-	int sum;
+	unsigned sum;
 
 	sum = 1;
 	space = 0;
