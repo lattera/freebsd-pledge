@@ -1,11 +1,13 @@
 #ifndef	_CURTAIN_COMMON_H
 #define	_CURTAIN_COMMON_H
 
+#include <stddef.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 struct curtain_config_tag {
 	struct curtain_config_tag *chain;
-	bool dropped;
+	uint8_t dropped_level;
 	char name[];
 };
 

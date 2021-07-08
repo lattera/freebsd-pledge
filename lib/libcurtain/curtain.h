@@ -1,7 +1,9 @@
 #ifndef __LIBCURTAIN_H__
 #define __LIBCURTAIN_H__
 
+#include <stddef.h>
 #include <string.h>
+#include <stdint.h>
 #include <sys/sysfil.h>
 #include <sys/unveil.h>
 
@@ -68,7 +70,8 @@ struct curtain_config;
 
 struct curtain_config { /* TODO: make private */
 	struct curtain_config_tag *tags_pending, *tags_current, *tags_visited;
-	unsigned unsafe_level;
+	uint8_t unsafe_level;
+	uint8_t config_level;
 	bool on_exec;
 	bool verbose;
 	bool need_reprotect;

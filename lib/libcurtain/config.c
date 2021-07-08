@@ -102,7 +102,10 @@ curtain_config_tag_push_mem(struct curtain_config *cfg, const char *buf, size_t 
 	tag = malloc(sizeof *tag + len + 1);
 	if (!tag)
 		err(EX_TEMPFAIL, "malloc");
-	*tag = (struct curtain_config_tag){ .chain = cfg->tags_pending };
+	*tag = (struct curtain_config_tag){
+		.chain = cfg->tags_pending,
+		.dropped_level = -1,
+	};
 	memcpy(tag->name, buf, len);
 	tag->name[len] = '\0';
 	cfg->tags_pending = tag;
@@ -220,7 +223,27 @@ parse_drop(struct parser *par, char *p, bool apply)
 			struct curtain_config_tag *tag;
 			tag = curtain_config_tag_find_mem(par->cfg, name, name_end - name);
 			if (tag)
-				tag->dropped = true;
+				tag->dropped_level = 0;
+		}
+	} while (true);
+	return (expect_eol(par, p));
+}
+
+static void
+parse_last(struct parser *par, char *p, bool apply)
+{
+	do {
+		char *name, *name_end;
+		name = p = skip_spaces(p);
+		name_end = p = skip_word(p, ":]");
+		if (name == name_end)
+			break;
+		if (apply) {
+			struct curtain_config_tag *tag;
+			tag = curtain_config_tag_find_mem(par->cfg, name, name_end - name);
+			if (tag)
+				tag->dropped_level = MIN(par->cfg->config_level + 1,
+				    tag->dropped_level);
 		}
 	} while (true);
 	return (expect_eol(par, p));
@@ -431,6 +454,7 @@ static const struct {
 	{ "merge", parse_push },
 	{ "push", parse_push },
 	{ "drop", parse_drop },
+	{ "last", parse_last },
 	{ "unveil", parse_unveil },
 	{ "sysfil", parse_sysfil },
 	{ "sysctl", parse_sysctl },
@@ -533,7 +557,7 @@ match_section_pred_tag(struct parser *par,
 	for (const struct curtain_config_tag *tag = par->cfg->tags_current; tag; tag = tag->chain) {
 		if (tag == par->cfg->tags_visited)
 			*visited = true;
-		if (!tag->dropped &&
+		if (par->cfg->config_level < tag->dropped_level &&
 		    strmemcmp(tag->name, name, name_end - name) == 0) {
 			*matched = true;
 			break;
@@ -781,19 +805,21 @@ curtain_config_load_tags(struct curtain_config *cfg)
 	do {
 		cfg->tags_current = cfg->tags_pending;
 
-		if (home) {
-			pathfmt(path, "%s/.curtain.conf", home);
-			process_file(cfg, path);
-		}
-		process_file(cfg, _PATH_LOCALBASE "/etc/curtain.conf");
-		process_file(cfg, _PATH_ETC "/curtain.conf");
-
+		cfg->config_level = 0;
 		if (home) {
 			pathfmt(path, "%s/.curtain.d", home);
 			config_load_tags_d(cfg, path);
+			pathfmt(path, "%s/.curtain.conf", home);
+			process_file(cfg, path);
 		}
+
+		cfg->config_level++;
 		config_load_tags_d(cfg, _PATH_LOCALBASE "/etc/curtain.d");
+		process_file(cfg, _PATH_LOCALBASE "/etc/curtain.conf");
+
+		cfg->config_level++;
 		config_load_tags_d(cfg, _PATH_ETC "/curtain.d");
+		process_file(cfg, _PATH_ETC "/curtain.conf");
 
 		cfg->tags_visited = cfg->tags_current;
 
