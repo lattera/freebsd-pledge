@@ -421,8 +421,14 @@ main(int argc, char *argv[])
 		prepare_dbus(main_slot);
 	}
 
-	if (autotag && argc)
-		curtain_config_tag_push(cfg, argv[0]);
+	if (autotag && argc) {
+		char *p;
+		if ((p = strrchr(argv[0], '/')))
+			p = p + 1;
+		else
+			p = argv[0];
+		curtain_config_tag_push(cfg, p);
+	}
 	cfg->unsafe_level = unsafe_level;
 	curtain_config_tmpdir(cfg, !no_fork);
 	curtain_config_load_tags(cfg);
