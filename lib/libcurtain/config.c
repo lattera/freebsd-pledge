@@ -838,6 +838,9 @@ curtain_config_load_tags(struct curtain_config *cfg)
 		process_dir(cfg, _PATH_ETC "/curtain.d");
 		process_file(cfg, _PATH_ETC "/curtain.conf");
 
+		cfg->config_level++;
+		process_file(cfg, _PATH_ETC "/defaults/curtain.conf");
+
 		cfg->tags_visited = cfg->tags_current;
 
 	} while (cfg->tags_current != cfg->tags_pending);

@@ -8,9 +8,9 @@ SRCS=		curtain.c pledge.c ioctls.c config.c pathexp.c utils.c auto.c tmpdir.c gu
 INCS=		curtain.h pledge.h
 CFLAGS+=	-I${.CURDIR}
 
-CONFGROUPS=	BASECONF GUICONF
-BASECONFDIR=	/etc
-BASECONF=	curtain.conf
+CONFGROUPS=	DEFCONF GUICONF
+DEFCONFDIR=	/etc/defaults
+DEFCONF=	curtain.conf
 GUICONFDIR=	/etc/curtain.d/_gui.d
 GUICONF=	fontconfig.conf
 .if ${MK_EXAMPLES} != "no"
