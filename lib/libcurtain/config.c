@@ -270,9 +270,27 @@ static int
 do_unveil_callback(void *ctx, char *path)
 {
 	struct parser *par = ctx;
+	bool follow;
+	/*
+	 * Do not follow symlinks on the final path component of the unveil
+	 * (thus unveiling symlinks themselves rather than their targets) when
+	 * the path could be a symlink created by the sandboxed application.
+	 *
+	 * When the path ends with '/', the unveil target will necessarily be
+	 * an existing directory.  The directory can be deleted by the
+	 * application, but since directory unveils are associated directly
+	 * with the directory vnode (and not its name in the parent directory),
+	 * the application will not be allowed to replace it with a symlink.
+	 */
+	if (path[0] && path[strlen(path) - 1] == '/')
+		follow = true;
+	else
+		follow = !(par->uperms & UPERM_CREATE);
 	if (path[0] && path[0] != '/' && par->last_matched_section_path)
 		path -= par->section_path_offset;
-	curtain_unveil(par->slot, path, CURTAIN_UNVEIL_INSPECT, par->uperms);
+	curtain_unveil(par->slot, path,
+	    CURTAIN_UNVEIL_INSPECT | (follow ? 0 : CURTAIN_UNVEIL_NOFOLLOW),
+	    par->uperms);
 	return (0);
 }
 

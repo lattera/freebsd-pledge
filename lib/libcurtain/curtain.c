@@ -653,6 +653,7 @@ curtain_unveil(struct curtain_slot *slot,
 	unveil_index tev[UNVEILREG_MAX_TE][2];
 	struct unveilreg reg = {
 		.atfd = AT_FDCWD,
+		.atflags = flags & CURTAIN_UNVEIL_NOFOLLOW ? AT_SYMLINK_NOFOLLOW : 0,
 		.path = path,
 		.tec = UNVEILREG_MAX_TE,
 		.tev = tev,
