@@ -70,6 +70,7 @@ struct curtain_config;
 
 struct curtain_config { /* TODO: make private */
 	struct curtain_config_tag *tags_pending, *tags_current, *tags_visited;
+	const char *old_tmpdir;
 	uint8_t unsafe_level;
 	uint8_t config_level;
 	bool on_exec;

@@ -56,9 +56,8 @@ prepare_x11(struct curtain_config *cfg)
 		return;
 	}
 
-	p = getenv("TMPDIR");
 	r = asprintf(&p, "%s/%s.xauth.XXXXXXXXXXXX",
-	    p && *p ? p : "/tmp", getprogname());
+	    cfg->old_tmpdir, getprogname());
 	if (r < 0)
 		err(EX_TEMPFAIL, "asprintf");
 	r = mkstemp(p);
@@ -80,12 +79,15 @@ prepare_x11(struct curtain_config *cfg)
 	} else if (pid == 0) {
 		err_set_exit(_exit);
 		if (cfg->x11_trusted)
-			execlp("xauth", "xauth",
-			    "extract", tmp_xauth_file, display, NULL);
+			execlp("xauth", "xauth", "-ni",
+			    "extract", tmp_xauth_file, display,
+			    NULL);
 		else
-			execlp("xauth", "xauth", "-f", tmp_xauth_file,
+			execlp("xauth", "xauth", "-ni",
+			    "-f", tmp_xauth_file,
 			    "generate", display, ".", "untrusted",
-			    "timeout", "0", NULL);
+			    "timeout", "0",
+			    NULL);
 		err(EX_OSERR, "xauth");
 	}
 	err_set_exit(NULL);
@@ -126,7 +128,8 @@ prepare_x11(struct curtain_config *cfg)
 		    CURTAIN_UNVEIL_INSPECT, UPERM_CONNECT|UPERM_INSPECT);
 	if (tmp_xauth_file)
 		curtain_unveil(slot, tmp_xauth_file,
-		    CURTAIN_UNVEIL_INSPECT, UPERM_READ);
+		    CURTAIN_UNVEIL_INSPECT,
+		    UPERM_READ | (cfg->on_exec ? UPERM_NONE : UPERM_DELETE));
 }
 
 

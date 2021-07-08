@@ -850,6 +850,8 @@ static void
 config_init(struct curtain_config *cfg)
 {
 	*cfg = (struct curtain_config){ 0 };
+	if (!(cfg->old_tmpdir = getenv("TMPDIR")))
+		cfg->old_tmpdir = _PATH_TMP;
 }
 
 struct curtain_config *
