@@ -31,6 +31,7 @@ struct parser {
 	unveil_perms uperms;
 	char *last_matched_section_path;
 	size_t section_path_offset;
+	bool unveil_create;
 };
 
 static const struct {
@@ -271,10 +272,10 @@ parse_last(struct parser *par, struct word *w)
 }
 
 static int
-do_unveil_callback(void *ctx, char *path)
+do_unveil(struct parser *par, const char *path)
 {
-	struct parser *par = ctx;
-	bool follow;
+	int flags;
+	flags = CURTAIN_UNVEIL_INSPECT;
 	/*
 	 * Do not follow symlinks on the final path component of the unveil
 	 * (thus unveiling symlinks themselves rather than their targets) when
@@ -286,20 +287,30 @@ do_unveil_callback(void *ctx, char *path)
 	 * with the directory vnode (and not its name in the parent directory),
 	 * the application will not be allowed to replace it with a symlink.
 	 */
-	if (path[0] && path[strlen(path) - 1] == '/')
-		follow = true;
-	else
-		follow = !(par->uperms & UPERM_CREATE);
+	if (par->uperms & UPERM_CREATE && !(path[0] && path[strlen(path) - 1] == '/'))
+		flags |= CURTAIN_UNVEIL_NOFOLLOW;
+	return (curtain_unveil(par->slot, path, flags, par->uperms));
+}
+
+static int
+do_unveil_callback(void *ctx, char *path)
+{
+	struct parser *par = ctx;
+	int r;
 	if (path[0] && path[0] != '/' && par->last_matched_section_path)
 		path -= par->section_path_offset;
-	curtain_unveil(par->slot, path,
-	    CURTAIN_UNVEIL_INSPECT | (follow ? 0 : CURTAIN_UNVEIL_NOFOLLOW),
-	    par->uperms);
+	if (par->unveil_create) {
+		/* TODO: make intermediate dirs */
+		r = curtain_make_file_or_dir(path);
+		if (r < 0)
+			warn("%s", path);
+	}
+	do_unveil(par, path);
 	return (0);
 }
 
 static void
-do_unveil(struct parser *par, const char *pattern)
+do_unveils(struct parser *par, const char *pattern)
 {
 	char buf[PATH_MAX*2];
 	size_t n;
@@ -324,12 +335,14 @@ static void
 parse_unveil(struct parser *par, struct word *w)
 {
 	struct word *patterns, *patterns_end;
+	int r;
 	patterns = w;
 	patterns_end = NULL;
+	par->unveil_create = false;
 	par->uperms = UPERM_READ;
 	while (w) {
-		if (w->len == 1 && w->ptr[0] == ':') {
-			int r;
+		if (w->len == 1 && (w->ptr[0] == ':' ||
+		    (par->unveil_create = w->ptr[0] == '!'))) {
 			patterns_end = w;
 			if (!(w = w->next))
 				break;
@@ -345,7 +358,7 @@ parse_unveil(struct parser *par, struct word *w)
 		return (parse_error(par, "unexpected word"));
 	if (par->apply)
 		while (patterns != patterns_end) {
-			do_unveil(par, patterns->ptr);
+			do_unveils(par, patterns->ptr);
 			patterns = patterns->next;
 		}
 }
