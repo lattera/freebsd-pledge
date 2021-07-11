@@ -385,6 +385,32 @@ main(int argc, char *argv[])
 	argv += optind;
 	argc -= optind;
 
+	if (argc == 0) {
+		char *shell;
+		if (!run_shell)
+			usage();
+		shell = getenv("SHELL");
+		if (!shell) {
+			struct passwd *pw;
+			errno = 0;
+			pw = getpwuid(getuid());
+			if (pw) {
+				if (pw->pw_shell && *pw->pw_shell)
+					shell = pw->pw_shell;
+			} else if (errno)
+				err(EX_OSERR, "getpwuid");
+			shell = strdup(shell ? shell : _PATH_BSHELL);
+			if (!shell)
+				err(EX_TEMPFAIL, "strdup");
+			endpwent();
+		}
+		sh_argv[0] = shell;
+		sh_argv[1] = NULL;
+		argv = sh_argv;
+		argc = 1;
+	}
+
+
 	curtain_config_tags_from_env(cfg);
 	curtain_config_tag_push(cfg, "_default");
 	if (!signaling)
@@ -397,6 +423,8 @@ main(int argc, char *argv[])
 		curtain_config_tag_push(cfg, "_session");
 	if (run_shell)
 		curtain_config_tag_push(cfg, "_shell");
+	if (login_shell)
+		curtain_config_tag_push(cfg, "_login_shell");
 	if (new_pgrp)
 		curtain_config_tag_push(cfg, "_pgrp");
 	if (x11_mode != X11_NONE) {
@@ -450,31 +478,6 @@ main(int argc, char *argv[])
 
 	curtain_config_reprotect(cfg);
 
-
-	if (argc == 0) {
-		char *shell;
-		if (!run_shell)
-			usage();
-		shell = getenv("SHELL");
-		if (!shell) {
-			struct passwd *pw;
-			errno = 0;
-			pw = getpwuid(getuid());
-			if (pw) {
-				if (pw->pw_shell && *pw->pw_shell)
-					shell = pw->pw_shell;
-			} else if (errno)
-				err(EX_OSERR, "getpwuid");
-			shell = strdup(shell ? shell : _PATH_BSHELL);
-			if (!shell)
-				err(EX_TEMPFAIL, "strdup");
-			endpwent();
-		}
-		sh_argv[0] = shell;
-		sh_argv[1] = NULL;
-		argv = sh_argv;
-		argc = 1;
-	}
 
 	if (login_shell) { /* prefix arg0 with "-" */
 		char *p, *q;
