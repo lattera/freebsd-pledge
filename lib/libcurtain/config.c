@@ -23,6 +23,7 @@ struct parser {
 	off_t line_no;
 	char *line;
 	size_t line_size;
+	bool apply;
 	bool skip;
 	bool matched;
 	bool visited;
@@ -180,14 +181,14 @@ do_include_callback(void *ctx, char *path)
 }
 
 static void
-parse_include(struct parser *par, char *p, bool apply)
+parse_include(struct parser *par, char *p)
 {
 	while (*(p = skip_spaces(p))) {
 		char *w;
 		p = skip_word((w = p), "");
 		if (w == p)
 			break;
-		if (apply) {
+		if (par->apply) {
 			char path[PATH_MAX], c;
 			const char *error;
 			int r;
@@ -202,33 +203,22 @@ parse_include(struct parser *par, char *p, bool apply)
 	return (expect_eol(par, p));
 }
 
-
-static char *
-parse_push_tags(struct parser *par, char *p, bool apply)
-{
-	do {
-		char *tag, *tag_end;
-		tag = p = skip_spaces(p);
-		tag_end = p = skip_word(p, ":]");
-		if (tag == tag_end)
-			break;
-		if (apply)
-			curtain_config_tag_push_mem(par->cfg, tag, tag_end - tag);
-	} while (true);
-	return (p);
-}
-
 static void
-parse_push(struct parser *par, char *p, bool apply)
+parse_push(struct parser *par, char *p)
 {
-	p = parse_push_tags(par, p, apply);
-	if (!p)
-		return;
+	while (*(p = skip_spaces(p))) {
+		char *w;
+		p = skip_word((w = p), "");
+		if (w == p)
+			break;
+		if (par->apply)
+			curtain_config_tag_push_mem(par->cfg, w, p - w);
+	}
 	return (expect_eol(par, p));
 }
 
 static void
-parse_drop(struct parser *par, char *p, bool apply)
+parse_drop(struct parser *par, char *p)
 {
 	do {
 		char *name, *name_end;
@@ -236,7 +226,7 @@ parse_drop(struct parser *par, char *p, bool apply)
 		name_end = p = skip_word(p, ":]");
 		if (name == name_end)
 			break;
-		if (apply) {
+		if (par->apply) {
 			struct curtain_config_tag *tag;
 			tag = curtain_config_tag_find_mem(par->cfg, name, name_end - name);
 			if (tag)
@@ -247,7 +237,7 @@ parse_drop(struct parser *par, char *p, bool apply)
 }
 
 static void
-parse_last(struct parser *par, char *p, bool apply)
+parse_last(struct parser *par, char *p)
 {
 	do {
 		char *name, *name_end;
@@ -255,7 +245,7 @@ parse_last(struct parser *par, char *p, bool apply)
 		name_end = p = skip_word(p, ":]");
 		if (name == name_end)
 			break;
-		if (apply) {
+		if (par->apply) {
 			struct curtain_config_tag *tag;
 			tag = curtain_config_tag_find_mem(par->cfg, name, name_end - name);
 			if (tag)
@@ -317,7 +307,7 @@ do_unveil(struct parser *par, const char *pattern)
 }
 
 static void
-parse_unveil(struct parser *par, char *p, bool apply)
+parse_unveil(struct parser *par, char *p)
 {
 	char *pattern, *pattern_end, *perms, *perms_end;
 
@@ -349,11 +339,11 @@ parse_unveil(struct parser *par, char *p, bool apply)
 		par->uperms = UPERM_READ;
 	}
 
-	return (apply ? do_unveil(par, pattern) : 0);
+	return (par->apply ? do_unveil(par, pattern) : 0);
 }
 
 static void
-parse_sysfil(struct parser *par, char *p, bool apply)
+parse_sysfil(struct parser *par, char *p)
 {
 	while (*(p = skip_spaces(p))) {
 		char *w;
@@ -366,21 +356,21 @@ parse_sysfil(struct parser *par, char *p, bool apply)
 				break;
 		if (!e->name)
 			parse_error(par, "unknown sysfil");
-		else if (apply)
+		else if (par->apply)
 			curtain_sysfil(par->slot, e->sysfil, 0);
 	}
 	return (expect_eol(par, p));
 }
 
 static void
-parse_sysctl(struct parser *par, char *p, bool apply)
+parse_sysctl(struct parser *par, char *p)
 {
 	while (*(p = skip_spaces(p))) {
 		char *w, c;
 		p = skip_word((w = p), "");
 		if (w == p)
 			break;
-		if (apply) {
+		if (par->apply) {
 			c = *p;
 			*p = '\0';
 			curtain_sysctl(par->slot, w, 0);
@@ -391,7 +381,7 @@ parse_sysctl(struct parser *par, char *p, bool apply)
 }
 
 static void
-parse_priv(struct parser *par, char *p, bool apply)
+parse_priv(struct parser *par, char *p)
 {
 	while (*(p = skip_spaces(p))) {
 		char *w;
@@ -404,14 +394,14 @@ parse_priv(struct parser *par, char *p, bool apply)
 				break;
 		if (!e->name)
 			parse_error(par, "unknown privilege");
-		else if (apply)
+		else if (par->apply)
 			curtain_priv(par->slot, e->priv, 0);
 	}
 	return (expect_eol(par, p));
 }
 
 static void
-parse_ioctls(struct parser *par, char *p, bool apply)
+parse_ioctls(struct parser *par, char *p)
 {
 	while (*(p = skip_spaces(p))) {
 		char *w;
@@ -427,14 +417,14 @@ parse_ioctls(struct parser *par, char *p, bool apply)
 			}
 		if (!bundle)
 			parse_error(par, "unknown ioctl bundle");
-		else if (apply)
+		else if (par->apply)
 			curtain_ioctls(par->slot, bundle, 0);
 	}
 	return (expect_eol(par, p));
 }
 
 static void
-parse_sockaf(struct parser *par, char *p, bool apply)
+parse_sockaf(struct parser *par, char *p)
 {
 	while (*(p = skip_spaces(p))) {
 		char *w;
@@ -447,14 +437,14 @@ parse_sockaf(struct parser *par, char *p, bool apply)
 				break;
 		if (!e->name)
 			parse_error(par, "unknown address family");
-		else if (apply)
+		else if (par->apply)
 			curtain_sockaf(par->slot, e->sockaf, 0);
 	}
 	return (expect_eol(par, p));
 }
 
 static void
-parse_socklvl(struct parser *par, char *p, bool apply)
+parse_socklvl(struct parser *par, char *p)
 {
 	while (*(p = skip_spaces(p))) {
 		char *w;
@@ -467,23 +457,23 @@ parse_socklvl(struct parser *par, char *p, bool apply)
 				break;
 		if (!e->name)
 			parse_error(par, "unknown socket level");
-		else if (apply)
+		else if (par->apply)
 			curtain_socklvl(par->slot, e->socklvl, 0);
 	}
 	return (expect_eol(par, p));
 }
 
 static void
-parse_reprotect(struct parser *par, char *p, bool apply)
+parse_reprotect(struct parser *par, char *p)
 {
-	if (apply)
+	if (par->apply)
 		par->cfg->need_reprotect = true;
 	return (expect_eol(par, p));
 }
 
 static const struct {
 	const char name[16];
-	void (*func)(struct parser *par, char *p, bool apply);
+	void (*func)(struct parser *par, char *p);
 } directives[] = {
 	{ "include", parse_include },
 	{ "merge", parse_push },
@@ -524,7 +514,7 @@ parse_directive(struct parser *par, char *p)
 			if (directives[i].func == parse_include ? !par->matched : par->skip)
 				return;
 			need_slot(par);
-			return (directives[i].func(par, p, true));
+			return (directives[i].func(par, p));
 		}
 	parse_error(par, "unknown directive");
 }
@@ -659,9 +649,14 @@ parse_section(struct parser *par, char *p)
 		    par->skip ? ", already applied" : "");
 	if (*(p = skip_spaces(p)) == ':') {
 		p++;
-		p = parse_push_tags(par, p, par->matched);
-		if (!p)
-			return;
+		while (*(p = skip_spaces(p))) {
+			char *w;
+			p = skip_word((w = p), ":]");
+			if (w == p)
+				break;
+			if (par->matched)
+				curtain_config_tag_push_mem(par->cfg, w, p - w);
+		}
 	}
 	if (*p++ != ']')
 		return (parse_error(par, "expected closing bracket"));
@@ -687,7 +682,7 @@ parse_line(struct parser *par)
 	if (par->skip)
 		return;
 	need_slot(par);
-	return (parse_unveil(par, p, true));
+	return (parse_unveil(par, p));
 }
 
 static void
@@ -706,6 +701,7 @@ process_file(struct curtain_config *cfg, const char *path)
 		.cfg = cfg,
 		.file_name = path,
 		.matched = true,
+		.apply = true,
 		.skip = cfg->tags_visited,
 		.visited = cfg->tags_visited,
 	};
