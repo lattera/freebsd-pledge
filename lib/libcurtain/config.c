@@ -158,16 +158,45 @@ skip_word(char *p, const char *brk)
 	return (p);
 }
 
-static void
-expect_eol(struct parser *par, char *p)
-{
-	if (*(p = skip_spaces(p)))
-		parse_error(par, "unexpected characters at end of line");
-}
-
 
 static int process_file(struct curtain_config *, const char *path);
 static void process_dir(struct curtain_config *, const char *path);
+
+struct word {
+	struct word *next;
+	char *ptr;
+	size_t len;
+};
+
+static void
+parse_words_1(struct parser *par, char *p,
+    struct word **head, struct word **link,
+    void (*fin)(struct parser *, struct word *))
+{
+	if (*(p = skip_spaces(p))) {
+		char *q;
+		struct word w;
+		q = skip_word(p, "");
+		if (q == p)
+			return (parse_error(par, "invalid word"));
+		w.ptr = p;
+		w.len = q - p;
+		if (*q)
+			*q++ = '\0';
+		*link = &w;
+		return (parse_words_1(par, q, head, &w.next, fin));
+	}
+	*link = NULL;
+	return (fin(par, *head));
+}
+
+static void
+parse_words(struct parser *par, char *p,
+    void (*fin)(struct parser *, struct word *))
+{
+	struct word *list;
+	return (parse_words_1(par, p, &list, &list, fin));
+}
 
 static int
 do_include_callback(void *ctx, char *path)
@@ -181,79 +210,59 @@ do_include_callback(void *ctx, char *path)
 }
 
 static void
-parse_include(struct parser *par, char *p)
+parse_include(struct parser *par, struct word *w)
 {
-	while (*(p = skip_spaces(p))) {
-		char *w;
-		p = skip_word((w = p), "");
-		if (w == p)
-			break;
+	while (w) {
 		if (par->apply) {
-			char path[PATH_MAX], c;
+			char path[PATH_MAX];
 			const char *error;
 			int r;
-			c = *p;
-			*p = '\0';
-			r = pathexp(w, path, sizeof path, &error, do_include_callback, par);
-			*p = c;
+			r = pathexp(w->ptr, path, sizeof path,
+			    &error, do_include_callback, par);
 			if (r < 0)
 				parse_error(par, error);
 		}
+		w = w->next;
 	}
-	return (expect_eol(par, p));
 }
 
 static void
-parse_push(struct parser *par, char *p)
+parse_push(struct parser *par, struct word *w)
 {
-	while (*(p = skip_spaces(p))) {
-		char *w;
-		p = skip_word((w = p), "");
-		if (w == p)
-			break;
+	while (w) {
 		if (par->apply)
-			curtain_config_tag_push_mem(par->cfg, w, p - w);
+			curtain_config_tag_push_mem(par->cfg, w->ptr, w->len);
+		w = w->next;
 	}
-	return (expect_eol(par, p));
 }
 
 static void
-parse_drop(struct parser *par, char *p)
+parse_drop(struct parser *par, struct word *w)
 {
-	do {
-		char *name, *name_end;
-		name = p = skip_spaces(p);
-		name_end = p = skip_word(p, ":]");
-		if (name == name_end)
-			break;
+	while (w) {
 		if (par->apply) {
 			struct curtain_config_tag *tag;
-			tag = curtain_config_tag_find_mem(par->cfg, name, name_end - name);
+			tag = curtain_config_tag_find_mem(par->cfg, w->ptr, w->len);
 			if (tag)
 				tag->dropped_level = 0;
 		}
-	} while (true);
-	return (expect_eol(par, p));
+		w = w->next;
+	}
 }
 
 static void
-parse_last(struct parser *par, char *p)
+parse_last(struct parser *par, struct word *w)
 {
-	do {
-		char *name, *name_end;
-		name = p = skip_spaces(p);
-		name_end = p = skip_word(p, ":]");
-		if (name == name_end)
-			break;
+	while (w) {
 		if (par->apply) {
 			struct curtain_config_tag *tag;
-			tag = curtain_config_tag_find_mem(par->cfg, name, name_end - name);
+			tag = curtain_config_tag_find_mem(par->cfg, w->ptr, w->len);
 			if (tag)
 				tag->dropped_level = MIN(par->cfg->config_level + 1,
 				    tag->dropped_level);
 		}
-	} while (true);
-	return (expect_eol(par, p));
+		w = w->next;
+	}
 }
 
 static int
@@ -307,111 +316,85 @@ do_unveil(struct parser *par, const char *pattern)
 }
 
 static void
-parse_unveil(struct parser *par, char *p)
+parse_unveil(struct parser *par, struct word *w)
 {
-	char *pattern, *pattern_end, *perms, *perms_end;
-
-	pattern = p = skip_spaces(p);
-	pattern_end = p = skip_word(p, "");
-
-	if (*(p = skip_spaces(p)) == ':') {
-		int r;
-		p = skip_spaces(++p);
-		perms = p;
-		while (*p && !isspace(*p))
-			p++;
-		perms_end = p;
-		if (*(p = skip_spaces(p)))
-			return (parse_error(par, "unexpected characters at end of line"));
-
-		*pattern_end = '\0';
-		if (!*pattern)
-			return (parse_error(par, "empty pattern"));
-
-		*perms_end = '\0';
-		r = curtain_parse_unveil_perms(&par->uperms, perms);
-		if (r < 0)
-			return (parse_error(par, "invalid unveil permissions"));
-	} else {
-		if (*p)
-			return (parse_error(par, "unexpected characters at end of line"));
-		*pattern_end = '\0';
-		par->uperms = UPERM_READ;
+	struct word *patterns, *patterns_end;
+	patterns = w;
+	patterns_end = NULL;
+	par->uperms = UPERM_READ;
+	while (w) {
+		if (w->len == 1 && w->ptr[0] == ':') {
+			int r;
+			patterns_end = w;
+			if (!(w = w->next))
+				break;
+			r = curtain_parse_unveil_perms(&par->uperms, w->ptr);
+			if (r < 0)
+				return (parse_error(par, "invalid unveil permissions"));
+			w = w->next;
+			break;
+		}
+		w = w->next;
 	}
-
-	return (par->apply ? do_unveil(par, pattern) : 0);
+	if (w)
+		return (parse_error(par, "unexpected word"));
+	if (par->apply)
+		while (patterns != patterns_end) {
+			do_unveil(par, patterns->ptr);
+			patterns = patterns->next;
+		}
 }
 
 static void
-parse_sysfil(struct parser *par, char *p)
+parse_sysfil(struct parser *par, struct word *w)
 {
-	while (*(p = skip_spaces(p))) {
-		char *w;
+	while (w) {
 		const struct sysfilent *e;
-		p = skip_word((w = p), "");
-		if (w == p)
-			break;
 		for (e = curtain_sysfiltab; e->name; e++)
-			if (strmemcmp(e->name, w, p - w) == 0)
+			if (strmemcmp(e->name, w->ptr, w->len) == 0)
 				break;
 		if (!e->name)
 			parse_error(par, "unknown sysfil");
 		else if (par->apply)
 			curtain_sysfil(par->slot, e->sysfil, 0);
+		w = w->next;
 	}
-	return (expect_eol(par, p));
 }
 
 static void
-parse_sysctl(struct parser *par, char *p)
+parse_sysctl(struct parser *par, struct word *w)
 {
-	while (*(p = skip_spaces(p))) {
-		char *w, c;
-		p = skip_word((w = p), "");
-		if (w == p)
-			break;
-		if (par->apply) {
-			c = *p;
-			*p = '\0';
-			curtain_sysctl(par->slot, w, 0);
-			*p = c;
-		}
+	while (w) {
+		if (par->apply)
+			curtain_sysctl(par->slot, w->ptr, 0);
+		w = w->next;
 	}
-	return (expect_eol(par, p));
 }
 
 static void
-parse_priv(struct parser *par, char *p)
+parse_priv(struct parser *par, struct word *w)
 {
-	while (*(p = skip_spaces(p))) {
-		char *w;
+	while (w) {
 		const struct privent *e;
-		p = skip_word((w = p), "");
-		if (w == p)
-			break;
 		for (e = curtain_privtab; e->name; e++)
-			if (strmemcmp(e->name, w, p - w) == 0)
+			if (strmemcmp(e->name, w->ptr, w->len) == 0)
 				break;
 		if (!e->name)
 			parse_error(par, "unknown privilege");
 		else if (par->apply)
 			curtain_priv(par->slot, e->priv, 0);
+		w = w->next;
 	}
-	return (expect_eol(par, p));
 }
 
 static void
-parse_ioctls(struct parser *par, char *p)
+parse_ioctls(struct parser *par, struct word *w)
 {
-	while (*(p = skip_spaces(p))) {
-		char *w;
+	while (w) {
 		const unsigned long *bundle;
-		p = skip_word((w = p), "");
-		if (w == p)
-			break;
 		bundle = NULL;
 		for (size_t i = 0; i < nitems(ioctls_bundles); i++)
-			if (strmemcmp(ioctls_bundles[i].name, w, p - w) == 0) {
+			if (strmemcmp(ioctls_bundles[i].name, w->ptr, w->len) == 0) {
 				bundle = ioctls_bundles[i].ioctls;
 				break;
 			}
@@ -419,61 +402,54 @@ parse_ioctls(struct parser *par, char *p)
 			parse_error(par, "unknown ioctl bundle");
 		else if (par->apply)
 			curtain_ioctls(par->slot, bundle, 0);
+		w = w->next;
 	}
-	return (expect_eol(par, p));
 }
 
 static void
-parse_sockaf(struct parser *par, char *p)
+parse_sockaf(struct parser *par, struct word *w)
 {
-	while (*(p = skip_spaces(p))) {
-		char *w;
+	while (w) {
 		const struct sockafent *e;
-		p = skip_word((w = p), "");
-		if (w == p)
-			break;
 		for (e = curtain_sockaftab; e->name; e++)
-			if (strmemcmp(e->name, w, p - w) == 0)
+			if (strmemcmp(e->name, w->ptr, w->len) == 0)
 				break;
 		if (!e->name)
 			parse_error(par, "unknown address family");
 		else if (par->apply)
 			curtain_sockaf(par->slot, e->sockaf, 0);
+		w = w->next;
 	}
-	return (expect_eol(par, p));
 }
 
 static void
-parse_socklvl(struct parser *par, char *p)
+parse_socklvl(struct parser *par, struct word *w)
 {
-	while (*(p = skip_spaces(p))) {
-		char *w;
+	while (w) {
 		const struct socklvlent *e;
-		p = skip_word((w = p), "");
-		if (w == p)
-			break;
 		for (e = curtain_socklvltab; e->name; e++)
-			if (strmemcmp(e->name, w, p - w) == 0)
+			if (strmemcmp(e->name, w->ptr, w->len) == 0)
 				break;
 		if (!e->name)
 			parse_error(par, "unknown socket level");
 		else if (par->apply)
 			curtain_socklvl(par->slot, e->socklvl, 0);
+		w = w->next;
 	}
-	return (expect_eol(par, p));
 }
 
 static void
-parse_reprotect(struct parser *par, char *p)
+parse_reprotect(struct parser *par, struct word *w)
 {
 	if (par->apply)
 		par->cfg->need_reprotect = true;
-	return (expect_eol(par, p));
+	if (w)
+		return (parse_error(par, "unexpected word"));
 }
 
 static const struct {
 	const char name[16];
-	void (*func)(struct parser *par, char *p);
+	void (*func)(struct parser *, struct word *);
 } directives[] = {
 	{ "include", parse_include },
 	{ "merge", parse_push },
@@ -514,7 +490,7 @@ parse_directive(struct parser *par, char *p)
 			if (directives[i].func == parse_include ? !par->matched : par->skip)
 				return;
 			need_slot(par);
-			return (directives[i].func(par, p));
+			return (parse_words(par, p, directives[i].func));
 		}
 	parse_error(par, "unknown directive");
 }
@@ -682,7 +658,7 @@ parse_line(struct parser *par)
 	if (par->skip)
 		return;
 	need_slot(par);
-	return (parse_unveil(par, p));
+	return (parse_words(par, p, parse_unveil));
 }
 
 static void
