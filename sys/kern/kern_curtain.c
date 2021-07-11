@@ -398,6 +398,49 @@ curtain_check_cred(const struct ucred *cr, enum curtain_type type, union curtain
 	return (sysfil_check_cred(cr, sysfil_for_type(type)));
 }
 
+static bool
+curtain_is_restricted(const struct curtain *ct, bool on_self, bool on_exec)
+{
+	const struct curtain_item *item;
+	for (int sf = 0; sf <= SYSFIL_LAST; sf++) {
+		if (on_self &&
+		    (ct->ct_sysfils[sf].on_self     != CURTAINLVL_PASS ||
+		     ct->ct_sysfils[sf].on_self_max != CURTAINLVL_PASS))
+			return (true);
+		if (on_exec &&
+		    (ct->ct_sysfils[sf].on_exec     != CURTAINLVL_PASS ||
+		     ct->ct_sysfils[sf].on_exec_max != CURTAINLVL_PASS))
+			return (true);
+	}
+	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
+		if (item->type != 0) {
+			if (on_self &&
+			    (item->mode.on_self     != CURTAINLVL_PASS ||
+			     item->mode.on_self_max != CURTAINLVL_PASS))
+				return (true);
+			if (on_exec &&
+			    (item->mode.on_exec     != CURTAINLVL_PASS ||
+			     item->mode.on_exec_max != CURTAINLVL_PASS))
+				return (true);
+		}
+	return (false);
+}
+
+static void
+curtain_exec_switch(struct curtain *ct)
+{
+	struct curtain_item *item;
+	for (int sf = 0; sf <= SYSFIL_LAST; sf++) {
+		ct->ct_sysfils[sf].on_self     = ct->ct_sysfils[sf].on_exec;
+		ct->ct_sysfils[sf].on_self_max = ct->ct_sysfils[sf].on_exec_max;
+	}
+	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
+		if (item->type != 0) {
+			item->mode.on_self     = item->mode.on_exec;
+			item->mode.on_self_max = item->mode.on_exec_max;
+		}
+}
+
 static void
 curtain_harden(struct curtain *ct)
 {
@@ -977,26 +1020,13 @@ curtain_cred_need_exec_switch(const struct ucred *cr)
 bool
 curtain_cred_exec_restricted(const struct ucred *cr)
 {
-	struct curtain *ct = cr->cr_curtain;
-	struct curtain_item *item;
-	if (!ct)
-		return (false);
-	for (int sf = 0; sf <= SYSFIL_LAST; sf++)
-		if (ct->ct_sysfils[sf].on_exec != CURTAINLVL_PASS ||
-		    ct->ct_sysfils[sf].on_exec_max != CURTAINLVL_PASS)
-			return (true);
-	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
-		if (item->type != 0 &&
-		    (item->mode.on_exec != CURTAINLVL_PASS ||
-		     item->mode.on_exec_max != CURTAINLVL_PASS))
-			return (true);
-	return (false);
+	const struct curtain *ct = cr->cr_curtain;
+	return (ct && curtain_is_restricted(ct, false, true));
 }
 
 void
 curtain_cred_exec_switch(struct ucred *cr)
 {
-	struct curtain_item *item;
 	struct curtain *ct;
 	KASSERT(cr->cr_ref == 1, ("modifying shared ucred"));
 	if (!(ct = cr->cr_curtain))
@@ -1009,20 +1039,12 @@ curtain_cred_exec_switch(struct ucred *cr)
 	}
 
 	ct = curtain_dup(ct);
+	curtain_exec_switch(ct);
 	BIT_ZERO(SYSFILSET_BITS, &cr->cr_sysfilset);
-	for (int sf = 0; sf <= SYSFIL_LAST; sf++) {
-		ct->ct_sysfils[sf].on_self     = ct->ct_sysfils[sf].on_exec;
-		ct->ct_sysfils[sf].on_self_max = ct->ct_sysfils[sf].on_exec_max;
+	for (int sf = 0; sf <= SYSFIL_LAST; sf++)
 		if (ct->ct_sysfils[sf].on_self == CURTAINLVL_PASS)
 			BIT_SET(SYSFILSET_BITS, sf, &cr->cr_sysfilset);
-	}
 	MPASS(SYSFILSET_IS_RESTRICTED(&cr->cr_sysfilset));
-	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
-		if (item->type != 0) {
-			item->mode.on_self     = item->mode.on_exec;
-			item->mode.on_self_max = item->mode.on_exec_max;
-		}
-
 	curtain_free(cr->cr_curtain);
 	cr->cr_curtain = ct;
 	MPASS(CRED_IN_RESTRICTED_MODE(cr));
