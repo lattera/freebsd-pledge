@@ -35,7 +35,7 @@ SDT_PROBE_DEFINE3(curtain,, curtain_build, begin,
 SDT_PROBE_DEFINE1(curtain,, curtain_build, harden, "struct curtain *");
 SDT_PROBE_DEFINE1(curtain,, curtain_build, done, "struct curtain *");
 SDT_PROBE_DEFINE0(curtain,, curtain_build, failed);
-SDT_PROBE_DEFINE1(curtain,, do_curtainctl, limit, "struct curtain *");
+SDT_PROBE_DEFINE1(curtain,, do_curtainctl, mask, "struct curtain *");
 SDT_PROBE_DEFINE1(curtain,, do_curtainctl, compact, "struct curtain *");
 SDT_PROBE_DEFINE1(curtain,, do_curtainctl, assign, "struct curtain *");
 
@@ -86,7 +86,7 @@ mode_set(struct curtain_mode *mode, enum curtain_level lvl)
 }
 
 static inline void
-mode_limit(struct curtain_mode *dst, const struct curtain_mode *src)
+mode_mask(struct curtain_mode *dst, const struct curtain_mode *src)
 {
 	dst->on_self_max = MAX(src->on_self_max, dst->on_self_max);
 	dst->on_exec_max = MAX(src->on_exec_max, dst->on_exec_max);
@@ -99,7 +99,7 @@ mode_cap(struct curtain_mode *mode, enum curtain_level lvl)
 {
 	struct curtain_mode cap;
 	mode_set(&cap, lvl);
-	mode_limit(mode, &cap);
+	mode_mask(mode, &cap);
 }
 
 static inline void
@@ -453,7 +453,7 @@ curtain_harden(struct curtain *ct)
 }
 
 static void
-curtain_limit_sysfils(struct curtain *ct, const sysfilset_t *sfs)
+curtain_mask_sysfils(struct curtain *ct, const sysfilset_t *sfs)
 {
 	struct curtain_item *item;
 	KASSERT(ct->ct_ref == 1, ("modifying shared curtain"));
@@ -467,7 +467,7 @@ curtain_limit_sysfils(struct curtain *ct, const sysfilset_t *sfs)
 }
 
 static void
-curtain_limit_item(struct curtain_mode *mode,
+curtain_mask_item(struct curtain_mode *mode,
     enum curtain_type type, union curtain_key key, const struct curtain *ct)
 {
 	const struct curtain_item *item;
@@ -475,12 +475,12 @@ curtain_limit_item(struct curtain_mode *mode,
 	if (!item && type == CURTAINTYP_SOCKOPT)
 		item = curtain_lookup(ct, CURTAINTYP_SOCKLVL,
 		    (union curtain_key){ .socklvl = key.sockopt.level });
-	mode_limit(mode, item ? &item->mode :
+	mode_mask(mode, item ? &item->mode :
 	    &ct->ct_sysfils[sysfil_for_type(type)]);
 }
 
 static void
-curtain_limit(struct curtain *dst, const struct curtain *src)
+curtain_mask(struct curtain *dst, const struct curtain *src)
 {
 	struct curtain_item *di;
 	const struct curtain_item *si;
@@ -488,16 +488,16 @@ curtain_limit(struct curtain *dst, const struct curtain *src)
 	for (si = src->ct_slots; si < &src->ct_slots[src->ct_nslots]; si++)
 		if (si->type != 0 && !curtain_lookup(dst, si->type, si->key)) {
 			struct curtain_mode mode = si->mode;
-			curtain_limit_item(&mode, si->type, si->key, dst);
+			curtain_mask_item(&mode, si->type, si->key, dst);
 			di = curtain_search(dst, si->type, si->key);
 			if (di)
 				di->mode = mode;
 		}
 	for (di = dst->ct_slots; di < &dst->ct_slots[dst->ct_nslots]; di++)
 		if (di->type != 0)
-			curtain_limit_item(&di->mode, di->type, di->key, src);
+			curtain_mask_item(&di->mode, di->type, di->key, src);
 	for (int sf = 0; sf <= SYSFIL_LAST; sf++)
-		mode_limit(&dst->ct_sysfils[sf], &src->ct_sysfils[sf]);
+		mode_mask(&dst->ct_sysfils[sf], &src->ct_sysfils[sf]);
 }
 
 /* Some sysfils shouldn't be disabled via curtainctl(2). */
@@ -1112,12 +1112,12 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 		PROC_LOCK(p);
 		old_cr = crcopysafe(p, cr);
 		if (cr->cr_curtain)
-			curtain_limit(ct, cr->cr_curtain);
+			curtain_mask(ct, cr->cr_curtain);
 		else
-			curtain_limit_sysfils(ct, &cr->cr_sysfilset);
+			curtain_mask_sysfils(ct, &cr->cr_sysfilset);
 		crhold(old_cr);
 		PROC_UNLOCK(p);
-		SDT_PROBE1(curtain,, do_curtainctl, limit, ct);
+		SDT_PROBE1(curtain,, do_curtainctl, mask, ct);
 		if (cr->cr_curtain)
 			curtain_free(cr->cr_curtain);
 		curtain_compact(&ct);
