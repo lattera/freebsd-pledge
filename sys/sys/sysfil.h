@@ -1,17 +1,9 @@
 #ifndef _SYS_SYSFIL_H_
 #define	_SYS_SYSFIL_H_
 
-#include <sys/types.h>
 #ifdef _KERNEL
-#include <sys/systm.h>
-#include <sys/bitset.h>
+#include <sys/types.h>
 #include <sys/_sysfil.h>
-#include <sys/ucred.h>
-#include <sys/proc.h>
-#include <sys/mutex.h>
-#include <sys/lock.h>
-#include <sys/mman.h>
-#include <sys/capsicum.h>
 #endif
 
 /*

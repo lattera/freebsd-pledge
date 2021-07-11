@@ -53,6 +53,8 @@ int curtainctl(int flags, size_t reqc, struct curtainreq *reqv);
 #include <sys/sysfil.h>
 #include <sys/ucred.h>
 #include <sys/sysctl.h>
+#include <sys/proc.h>
+#include <sys/mman.h>
 
 struct curtain_mode {
 	uint8_t on_self     : 2;
