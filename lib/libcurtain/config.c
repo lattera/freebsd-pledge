@@ -1,5 +1,4 @@
 #include <assert.h>
-#include <ctype.h>
 #include <curtain.h>
 #include <dirent.h>
 #include <err.h>
@@ -132,10 +131,16 @@ parse_error(struct parser *par, const char *error)
 	warnx("%s:%ju: %s", par->file_name, (uintmax_t)par->line_no, error);
 }
 
+static inline bool
+is_space(char c)
+{
+	return (c && strchr(" \t\n\r\f\v", c));
+}
+
 static inline char *
 skip_spaces(char *p)
 {
-	while (isspace(*p))
+	while (is_space(*p))
 		p++;
 	if (*p == '#')
 		do p++;
@@ -151,7 +156,7 @@ skip_word(char *p, const char *brk)
 			p++;
 			if (!*p)
 				break;
-		} else if (isspace(*p) || strchr(brk, *p))
+		} else if (is_space(*p) || strchr(brk, *p))
 			break;
 		p++;
 	}
@@ -645,7 +650,7 @@ parse_line(struct parser *par)
 {
 	char *p;
 	p = par->line;
-	while (isspace(*p))
+	while (is_space(*p))
 		p++;
 	if (!*p || *p == '#')
 		return;
@@ -840,7 +845,7 @@ curtain_config_tags_from_env(struct curtain_config *cfg)
 	p = getenv("CURTAIN_TAGS");
 	if ((q = p))
 		do {
-			if (!*q || isspace(*q)) {
+			if (!*q || is_space(*q)) {
 				if (p != q)
 					curtain_config_tag_push_mem(cfg, p, q - p);
 				if (!*q)
