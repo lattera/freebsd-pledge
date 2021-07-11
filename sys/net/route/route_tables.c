@@ -50,6 +50,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/sx.h>
 #include <sys/domain.h>
 #include <sys/sysproto.h>
+#include <sys/curtain.h>
 
 #include <net/vnet.h>
 #include <net/route.h>
@@ -151,6 +152,12 @@ int
 sys_setfib(struct thread *td, struct setfib_args *uap)
 {
 	int error = 0;
+
+#ifdef SYSFIL
+	error = sysfil_require_sockopt(td, SOL_SOCKET, SO_SETFIB);
+	if (error)
+		return (error);
+#endif
 
 	CURVNET_SET(TD_TO_VNET(td));
 	if (uap->fibnum >= 0 && uap->fibnum < V_rt_numfibs)

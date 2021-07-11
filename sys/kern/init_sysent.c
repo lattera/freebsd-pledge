@@ -231,7 +231,7 @@ struct sysent sysent[] = {
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 172 = reserved for local use */
 	{ compat6(AS(freebsd6_pread_args),pread), .sy_auevent = AUE_PREAD, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 173 = freebsd6 pread */
 	{ compat6(AS(freebsd6_pwrite_args),pwrite), .sy_auevent = AUE_PWRITE, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 174 = freebsd6 pwrite */
-	{ .sy_narg = AS(setfib_args), .sy_call = (sy_call_t *)sys_setfib, .sy_auevent = AUE_SETFIB, .sy_flags = (SYSFIL_SETFIB << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 175 = setfib */
+	{ .sy_narg = AS(setfib_args), .sy_call = (sy_call_t *)sys_setfib, .sy_auevent = AUE_SETFIB, .sy_flags = (SYSFIL_NET << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 175 = setfib */
 	{ .sy_narg = AS(ntp_adjtime_args), .sy_call = (sy_call_t *)sys_ntp_adjtime, .sy_auevent = AUE_NTP_ADJTIME, .sy_flags = (SYSFIL_SETTIME << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 176 = ntp_adjtime */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 177 = reserved for local use */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 178 = reserved for local use */
