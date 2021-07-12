@@ -35,14 +35,11 @@ struct curtainreq {
 int curtainctl(int flags, size_t reqc, struct curtainreq *reqv);
 
 #define	CURTAINCTL_VERSION_MASK	(0xff << 24)
-#define	CURTAINCTL_VERSION	(3 << 24)
+#define	CURTAINCTL_VERSION	(4 << 24)
 
 #define	CURTAINCTL_ENGAGE	(1 <<  0 | CURTAINCTL_VERSION)
 #define	CURTAINCTL_REQUIRE	(1 <<  1 | CURTAINCTL_VERSION)
 #define	CURTAINCTL_ENFORCE	(1 <<  2 | CURTAINCTL_VERSION)
-
-#define	CURTAINCTL_ON_SELF	(1 << 16)
-#define	CURTAINCTL_ON_EXEC	(1 << 17)
 
 #define	CURTAINREQ_ON_SELF	(1 << 16)
 #define	CURTAINREQ_ON_EXEC	(1 << 17)

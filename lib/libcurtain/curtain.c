@@ -851,18 +851,13 @@ curtain_reinit(void)
 	curtain_slots = NULL;
 }
 
-static const int curtainctl_flags[CURTAIN_ON_COUNT] = {
-	[CURTAIN_ON_SELF] = CURTAINCTL_ON_SELF,
-	[CURTAIN_ON_EXEC] = CURTAINCTL_ON_EXEC,
-};
-
 static const int curtainreq_flags[CURTAIN_ON_COUNT] = {
 	[CURTAIN_ON_SELF] = CURTAINREQ_ON_SELF,
 	[CURTAIN_ON_EXEC] = CURTAINREQ_ON_EXEC,
 };
 
 static int
-curtain_submit_1(int flags, enum curtain_state min_state)
+curtain_submit_1(int flags, bool neutral_on[CURTAIN_ON_COUNT], enum curtain_state min_state)
 {
 	struct curtainreq reqv[1 + 2 * CURTAIN_ON_COUNT + nitems(simple_types) * CURTAIN_ON_COUNT * CURTAIN_LEVEL_COUNT], *reqp = reqv;
 	enum curtain_level levels_on[CURTAIN_ON_COUNT];
@@ -895,36 +890,37 @@ curtain_submit_1(int flags, enum curtain_state min_state)
 		unveils_p[on] = unveils_v[on];
 	fill_unveils(unveils_p, min_state);
 
-	for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++)
-		if (flags & curtainctl_flags[on]) {
-			*reqp++ = (struct curtainreq){
-				.type = CURTAINTYP_DEFAULT,
-				.flags = curtainreq_flags[on],
-				.level = levels_on[on],
-			};
-			for (size_t i = 0; i < nitems(simple_types); i++) {
-				for (enum curtain_level lvl = 0; lvl < CURTAIN_LEVEL_COUNT; lvl++) {
-					size_t filled = (char *)fill_ptrs[i][on][lvl] -
-					                (char *)base_ptrs[i][on][lvl];
-					if (filled)
-						*reqp++ = (struct curtainreq){
-							.type = simple_types[i]->type,
-							.flags = curtainreq_flags[on],
-							.level = lvl,
-							.data = base_ptrs[i][on][lvl],
-							.size = filled,
-						};
-				}
+	for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++) {
+		*reqp++ = (struct curtainreq){
+			.type = CURTAINTYP_DEFAULT,
+			.flags = curtainreq_flags[on],
+			.level = neutral_on[on] ? CURTAINLVL_PASS : levels_on[on],
+		};
+		if (neutral_on[on])
+			continue;
+		for (size_t i = 0; i < nitems(simple_types); i++) {
+			for (enum curtain_level lvl = 0; lvl < CURTAIN_LEVEL_COUNT; lvl++) {
+				size_t filled = (char *)fill_ptrs[i][on][lvl] -
+						(char *)base_ptrs[i][on][lvl];
+				if (filled)
+					*reqp++ = (struct curtainreq){
+						.type = simple_types[i]->type,
+						.flags = curtainreq_flags[on],
+						.level = lvl,
+						.data = base_ptrs[i][on][lvl],
+						.size = filled,
+					};
 			}
-			size_t unveils_c;
-			if ((unveils_c = unveils_p[on] - unveils_v[on]) != 0)
-				*reqp++ = (struct curtainreq){
-					.type = CURTAINTYP_UNVEIL,
-					.flags = curtainreq_flags[on],
-					.data = unveils_v[on],
-					.size = unveils_c * sizeof **unveils_v,
-				};
 		}
+		size_t unveils_c;
+		if ((unveils_c = unveils_p[on] - unveils_v[on]) != 0)
+			*reqp++ = (struct curtainreq){
+				.type = CURTAINTYP_UNVEIL,
+				.flags = curtainreq_flags[on],
+				.data = unveils_v[on],
+				.size = unveils_c * sizeof **unveils_v,
+			};
+	}
 
 	return (curtainctl(flags, reqp - reqv, reqv));
 }
@@ -932,38 +928,37 @@ curtain_submit_1(int flags, enum curtain_state min_state)
 static int
 curtain_submit(bool enforce)
 {
-	bool neutral_on[CURTAIN_ON_COUNT], neutral, reserve;
+	bool neutral_on[CURTAIN_ON_COUNT], has_reserve;
 	int r, flags;
 
-	neutral = true, reserve = false;
+	has_reserve = false;
 	for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++)
 		neutral_on[on] = true;
 	for (struct curtain_slot *slot = curtain_slots; slot; slot = slot->next) {
+		bool has_neutral = false;
 		for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++) {
 			if (slot->state_on[on] > CURTAIN_NEUTRAL)
-				neutral = neutral_on[on] = false;
+				neutral_on[on] = false;
+			else if (neutral_on[on])
+				has_neutral = true;
 			if (slot->state_on[on] == CURTAIN_RESERVED)
-				reserve = true;
+				has_reserve = true;
 		}
-		if (!neutral && reserve)
+		if (!has_neutral && has_reserve)
 			break;
 	}
 
-	flags = 0;
-	for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++)
-		if (!neutral_on[on])
-			flags |= curtainctl_flags[on];
-	flags |= CURTAINCTL_ENGAGE;
+	flags = CURTAINCTL_ENGAGE;
 	if (enforce) {
 		int flags1 = flags | CURTAINCTL_ENFORCE;
-		if (reserve) {
-			r = curtain_submit_1(flags1, CURTAIN_RESERVED);
+		if (has_reserve) {
+			r = curtain_submit_1(flags1, neutral_on, CURTAIN_RESERVED);
 			if (r < 0 && errno != ENOSYS)
 				err(EX_OSERR, "curtainctl");
 		} else
 			flags = flags1;
 	}
-	r = curtain_submit_1(flags, CURTAIN_ENABLED);
+	r = curtain_submit_1(flags, neutral_on, CURTAIN_ENABLED);
 	if (r < 0 && errno != ENOSYS)
 		err(EX_OSERR, "curtainctl");
 	return (r);

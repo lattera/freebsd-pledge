@@ -399,30 +399,34 @@ curtain_check_cred(const struct ucred *cr, enum curtain_type type, union curtain
 }
 
 static bool
-curtain_is_restricted(const struct curtain *ct, bool on_self, bool on_exec)
+curtain_is_restricted_on_self(const struct curtain *ct)
 {
 	const struct curtain_item *item;
-	for (int sf = 0; sf <= SYSFIL_LAST; sf++) {
-		if (on_self &&
-		    (ct->ct_sysfils[sf].on_self     != CURTAINLVL_PASS ||
-		     ct->ct_sysfils[sf].on_self_max != CURTAINLVL_PASS))
+	for (int sf = 0; sf <= SYSFIL_LAST; sf++)
+		if (ct->ct_sysfils[sf].on_self     != CURTAINLVL_PASS ||
+		    ct->ct_sysfils[sf].on_self_max != CURTAINLVL_PASS)
 			return (true);
-		if (on_exec &&
-		    (ct->ct_sysfils[sf].on_exec     != CURTAINLVL_PASS ||
-		     ct->ct_sysfils[sf].on_exec_max != CURTAINLVL_PASS))
-			return (true);
-	}
 	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
-		if (item->type != 0) {
-			if (on_self &&
-			    (item->mode.on_self     != CURTAINLVL_PASS ||
-			     item->mode.on_self_max != CURTAINLVL_PASS))
+		if (item->type != 0)
+			if (item->mode.on_self     != CURTAINLVL_PASS ||
+			    item->mode.on_self_max != CURTAINLVL_PASS)
 				return (true);
-			if (on_exec &&
-			    (item->mode.on_exec     != CURTAINLVL_PASS ||
-			     item->mode.on_exec_max != CURTAINLVL_PASS))
+	return (false);
+}
+
+static bool
+curtain_is_restricted_on_exec(const struct curtain *ct)
+{
+	const struct curtain_item *item;
+	for (int sf = 0; sf <= SYSFIL_LAST; sf++)
+		if (ct->ct_sysfils[sf].on_exec     != CURTAINLVL_PASS ||
+		    ct->ct_sysfils[sf].on_exec_max != CURTAINLVL_PASS)
+			return (true);
+	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
+		if (item->type != 0)
+			if (item->mode.on_exec     != CURTAINLVL_PASS ||
+			    item->mode.on_exec_max != CURTAINLVL_PASS)
 				return (true);
-		}
 	return (false);
 }
 
@@ -515,6 +519,7 @@ static const int sysfils_expand[][2] = {
 	{ SYSFIL_SAME_SESSION,	SYSFIL_SAME_PGRP	},
 	{ SYSFIL_SAME_PGRP,	SYSFIL_CHILD_PROCESS	},
 };
+/* Make sure dependencies get handled in a single pass. */
 CTASSERT(SYSFIL_SAME_SESSION > SYSFIL_ANY_PROCESS);
 CTASSERT(SYSFIL_SAME_PGRP > SYSFIL_SAME_SESSION);
 CTASSERT(SYSFIL_CHILD_PROCESS > SYSFIL_SAME_PGRP);
@@ -525,19 +530,15 @@ curtain_build(int flags, size_t reqc, const struct curtainreq *reqv)
 	struct curtain *ct;
 	const struct curtainreq *req;
 	enum curtain_level def_on_self, def_on_exec;
-	bool on_self, on_exec;
 
 	SDT_PROBE3(curtain,, curtain_build, begin, flags, reqc, reqv);
-
-	on_self = flags & CURTAINCTL_ON_SELF;
-	on_exec = flags & CURTAINCTL_ON_EXEC;
 
 	ct = curtain_make(CURTAINCTL_MAX_ITEMS);
 
 	def_on_self = def_on_exec = CURTAINLVL_DENY;
 	for (req = reqv; req < &reqv[reqc]; req++) {
-		bool req_on_self = on_self && req->flags & CURTAINREQ_ON_SELF;
-		bool req_on_exec = on_exec && req->flags & CURTAINREQ_ON_EXEC;
+		bool req_on_self = req->flags & CURTAINREQ_ON_SELF;
+		bool req_on_exec = req->flags & CURTAINREQ_ON_EXEC;
 		if (req->type == CURTAINTYP_DEFAULT) {
 			if (req_on_self)
 				def_on_self = req->level;
@@ -546,25 +547,17 @@ curtain_build(int flags, size_t reqc, const struct curtainreq *reqv)
 		}
 	}
 	for (int sf = 0; sf <= SYSFIL_LAST; sf++) {
-		if (on_self)
-			ct->ct_sysfils[sf].on_self = def_on_self;
-		if (on_exec)
-			ct->ct_sysfils[sf].on_exec = def_on_exec;
+		ct->ct_sysfils[sf].on_self = def_on_self;
+		ct->ct_sysfils[sf].on_exec = def_on_exec;
 	}
-	if (on_self)
-		ct->ct_sysfils[SYSFIL_DEFAULT].on_self = MAX(CURTAINLVL_DENY, def_on_self);
-	if (on_exec)
-		ct->ct_sysfils[SYSFIL_DEFAULT].on_exec = MAX(CURTAINLVL_DENY, def_on_exec);
 	for (size_t i = 0; i < nitems(sysfils_always); i++) {
-		if (on_self)
-			ct->ct_sysfils[sysfils_always[i]].on_self = CURTAINLVL_PASS;
-		if (on_exec)
-			ct->ct_sysfils[sysfils_always[i]].on_exec = CURTAINLVL_PASS;
+		ct->ct_sysfils[sysfils_always[i]].on_self = CURTAINLVL_PASS;
+		ct->ct_sysfils[sysfils_always[i]].on_exec = CURTAINLVL_PASS;
 	}
 
 	for (req = reqv; req < &reqv[reqc]; req++) {
-		bool req_on_self = on_self && req->flags & CURTAINREQ_ON_SELF;
-		bool req_on_exec = on_exec && req->flags & CURTAINREQ_ON_EXEC;
+		bool req_on_self = req->flags & CURTAINREQ_ON_SELF;
+		bool req_on_exec = req->flags & CURTAINREQ_ON_EXEC;
 		switch (req->type) {
 		case CURTAINTYP_DEFAULT:
 			break; /* handled earlier */
@@ -704,20 +697,22 @@ curtain_build(int flags, size_t reqc, const struct curtainreq *reqv)
 		goto fail;
 
 	for (size_t i = 0; i < nitems(sysfils_expand); i++) {
-		if (on_self)
-			ct->ct_sysfils[sysfils_expand[i][1]].on_self =
-			    MIN(ct->ct_sysfils[sysfils_expand[i][0]].on_self,
-			        ct->ct_sysfils[sysfils_expand[i][1]].on_self);
-		if (on_exec)
-			ct->ct_sysfils[sysfils_expand[i][1]].on_exec =
-			    MIN(ct->ct_sysfils[sysfils_expand[i][0]].on_exec,
-			        ct->ct_sysfils[sysfils_expand[i][1]].on_exec);
+		ct->ct_sysfils[sysfils_expand[i][1]].on_self =
+		    MIN(ct->ct_sysfils[sysfils_expand[i][0]].on_self,
+		        ct->ct_sysfils[sysfils_expand[i][1]].on_self);
+		ct->ct_sysfils[sysfils_expand[i][1]].on_exec =
+		    MIN(ct->ct_sysfils[sysfils_expand[i][0]].on_exec,
+		        ct->ct_sysfils[sysfils_expand[i][1]].on_exec);
 	}
-	if (on_exec)
-		ct->ct_sysfils[SYSFIL_PROT_EXEC_LOOSE].on_exec =
-		    MIN(MIN(ct->ct_sysfils[SYSFIL_EXEC].on_self,
-		            ct->ct_sysfils[SYSFIL_EXEC].on_exec),
-		        ct->ct_sysfils[SYSFIL_PROT_EXEC_LOOSE].on_exec);
+	ct->ct_sysfils[SYSFIL_PROT_EXEC_LOOSE].on_exec =
+	    MIN(MIN(ct->ct_sysfils[SYSFIL_EXEC].on_self,
+	            ct->ct_sysfils[SYSFIL_EXEC].on_exec),
+		ct->ct_sysfils[SYSFIL_PROT_EXEC_LOOSE].on_exec);
+
+	if (curtain_is_restricted_on_self(ct))
+		ct->ct_sysfils[SYSFIL_DEFAULT].on_self = MAX(CURTAINLVL_DENY, def_on_self);
+	if (curtain_is_restricted_on_exec(ct))
+		ct->ct_sysfils[SYSFIL_DEFAULT].on_exec = MAX(CURTAINLVL_DENY, def_on_exec);
 
 	if (flags & CURTAINCTL_ENFORCE) {
 		SDT_PROBE1(curtain,, curtain_build, harden, ct);
@@ -1021,7 +1016,7 @@ bool
 curtain_cred_exec_restricted(const struct ucred *cr)
 {
 	const struct curtain *ct = cr->cr_curtain;
-	return (ct && curtain_is_restricted(ct, false, true));
+	return (ct && curtain_is_restricted_on_exec(ct));
 }
 
 void
@@ -1035,6 +1030,7 @@ curtain_cred_exec_switch(struct ucred *cr)
 	if (!curtain_cred_exec_restricted(cr)) {
 		curtain_free(ct);
 		sysfil_cred_init(cr);
+		MPASS(!CRED_IN_RESTRICTED_MODE(cr));
 		return;
 	}
 
@@ -1079,9 +1075,6 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 	if (!sysfil_enabled)
 		return (ENOSYS);
 
-	on_self = flags & CURTAINCTL_ON_SELF;
-	on_exec = flags & CURTAINCTL_ON_EXEC;
-
 #ifdef UNVEIL
 	unveil_base_write_begin(base);
 
@@ -1106,6 +1099,9 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 		error = EINVAL;
 		goto out2;
 	}
+
+	on_self = curtain_is_restricted_on_self(ct);
+	on_exec = curtain_is_restricted_on_exec(ct);
 
 	do {
 		cr = crget();
@@ -1138,13 +1134,17 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 		goto out1;
 	}
 
-	if (flags & CURTAINCTL_ON_SELF) {
+	if (curtain_is_restricted_on_self(ct)) {
 		BIT_ZERO(SYSFILSET_BITS, &cr->cr_sysfilset);
 		for (int sf = 0; sf <= SYSFIL_LAST; sf++)
 			if (ct->ct_sysfils[sf].on_self == CURTAINLVL_PASS)
 				BIT_SET(SYSFILSET_BITS, sf, &cr->cr_sysfilset);
 		MPASS(SYSFILSET_IS_RESTRICTED(&cr->cr_sysfilset));
 		MPASS(CRED_IN_RESTRICTED_MODE(cr));
+	} else {
+		BIT_FILL(SYSFILSET_BITS, &cr->cr_sysfilset);
+		MPASS(!SYSFILSET_IS_RESTRICTED(&cr->cr_sysfilset));
+		MPASS(!CRED_IN_RESTRICTED_MODE(cr));
 	}
 
 	if (!(flags & (CURTAINCTL_ENFORCE | CURTAINCTL_ENGAGE)))
@@ -1152,15 +1152,15 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 
 	proc_set_cred(p, cr);
 	crfree(old_cr);
-	if (on_self && !PROC_IN_RESTRICTED_MODE(p))
+	if (CRED_IN_RESTRICTED_MODE(cr) != PROC_IN_RESTRICTED_MODE(p))
 		panic("PROC_IN_RESTRICTED_MODE() bogus");
 	PROC_UNLOCK(p);
 	SDT_PROBE1(curtain,, do_curtainctl, assign, ct);
 
 #ifdef UNVEIL
 	for (req = reqv; req < &reqv[reqc]; req++) {
-		bool req_on_self = on_self && req->flags & CURTAINREQ_ON_SELF;
-		bool req_on_exec = on_exec && req->flags & CURTAINREQ_ON_EXEC;
+		bool req_on_self = req->flags & CURTAINREQ_ON_SELF;
+		bool req_on_exec = req->flags & CURTAINREQ_ON_EXEC;
 		if (req->type == CURTAINTYP_UNVEIL) {
 			struct curtainent_unveil *entp = req->data;
 			size_t entc = req->size / sizeof *entp;
