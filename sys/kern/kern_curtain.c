@@ -343,9 +343,9 @@ curtain_dup_compact(const struct curtain *src)
 	struct curtain *dst;
 	dst = curtain_make(src->ct_nitems);
 	dst->ct_overflowed = src->ct_overflowed;
+	if ((dst->ct_cache_valid = src->ct_cache_valid))
+		dst->ct_cached = src->ct_cached;
 	memcpy(dst->ct_sysfils, src->ct_sysfils, sizeof dst->ct_sysfils);
-	dst->ct_cache_valid = src->ct_cache_valid;
-	dst->ct_cached = src->ct_cached;
 	for (si = src->ct_slots; si < &src->ct_slots[src->ct_nslots]; si++)
 		if (si->type != 0) {
 			di = curtain_search(dst, si->type, si->key);
@@ -457,16 +457,22 @@ curtain_is_restricted_on_exec(const struct curtain *ct)
 	return (false);
 }
 
+static void
+curtain_to_sysfilset(const struct curtain *ct, sysfilset_t *sfs)
+{
+	BIT_ZERO(SYSFILSET_BITS, sfs);
+	for (int sf = 0; sf <= SYSFIL_LAST; sf++)
+		if (ct->ct_sysfils[sf].on_self == CURTAINLVL_PASS)
+			BIT_SET(SYSFILSET_BITS, sf, sfs);
+}
+
 static void fill_sysfil_rights(const sysfilset_t *, cap_rights_t *);
 
 static void
 curtain_cache_update(struct curtain *ct)
 {
 	sysfilset_t sfs;
-	BIT_ZERO(SYSFILSET_BITS, &sfs);
-	for (int sf = 0; sf <= SYSFIL_LAST; sf++)
-		if (ct->ct_sysfils[sf].on_self == CURTAINLVL_PASS)
-			BIT_SET(SYSFILSET_BITS, sf, &sfs);
+	curtain_to_sysfilset(ct, &sfs);
 	fill_sysfil_rights(&sfs, &ct->ct_cached.sysfil_rights);
 	ct->ct_cached.need_exec_switch = curtain_need_exec_switch(ct);
 	ct->ct_cached.is_restricted_on_self = curtain_is_restricted_on_self(ct);
@@ -478,10 +484,7 @@ static void
 curtain_cred_sysfil_update(struct ucred *cr, const struct curtain *ct)
 {
 	if (curtain_is_restricted_on_self(ct)) {
-		BIT_ZERO(SYSFILSET_BITS, &cr->cr_sysfilset);
-		for (int sf = 0; sf <= SYSFIL_LAST; sf++)
-			if (ct->ct_sysfils[sf].on_self == CURTAINLVL_PASS)
-				BIT_SET(SYSFILSET_BITS, sf, &cr->cr_sysfilset);
+		curtain_to_sysfilset(ct, &cr->cr_sysfilset);
 		MPASS(SYSFILSET_IS_RESTRICTED(&cr->cr_sysfilset));
 		MPASS(CRED_IN_RESTRICTED_MODE(cr));
 	} else {
