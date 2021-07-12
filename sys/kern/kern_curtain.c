@@ -431,6 +431,23 @@ curtain_is_restricted_on_exec(const struct curtain *ct)
 }
 
 static void
+curtain_cred_sysfil_update(struct ucred *cr, const struct curtain *ct)
+{
+	if (curtain_is_restricted_on_self(ct)) {
+		BIT_ZERO(SYSFILSET_BITS, &cr->cr_sysfilset);
+		for (int sf = 0; sf <= SYSFIL_LAST; sf++)
+			if (ct->ct_sysfils[sf].on_self == CURTAINLVL_PASS)
+				BIT_SET(SYSFILSET_BITS, sf, &cr->cr_sysfilset);
+		MPASS(SYSFILSET_IS_RESTRICTED(&cr->cr_sysfilset));
+		MPASS(CRED_IN_RESTRICTED_MODE(cr));
+	} else {
+		BIT_FILL(SYSFILSET_BITS, &cr->cr_sysfilset);
+		MPASS(!SYSFILSET_IS_RESTRICTED(&cr->cr_sysfilset));
+		MPASS(!CRED_IN_RESTRICTED_MODE(cr));
+	}
+}
+
+static void
 curtain_exec_switch(struct curtain *ct)
 {
 	struct curtain_item *item;
@@ -1022,11 +1039,7 @@ curtain_cred_exec_switch(struct ucred *cr)
 
 	ct = curtain_dup(ct);
 	curtain_exec_switch(ct);
-	BIT_ZERO(SYSFILSET_BITS, &cr->cr_sysfilset);
-	for (int sf = 0; sf <= SYSFIL_LAST; sf++)
-		if (ct->ct_sysfils[sf].on_self == CURTAINLVL_PASS)
-			BIT_SET(SYSFILSET_BITS, sf, &cr->cr_sysfilset);
-	MPASS(SYSFILSET_IS_RESTRICTED(&cr->cr_sysfilset));
+	curtain_cred_sysfil_update(cr, ct);
 	curtain_free(cr->cr_curtain);
 	cr->cr_curtain = ct;
 	MPASS(CRED_IN_RESTRICTED_MODE(cr));
@@ -1120,18 +1133,7 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 		goto out1;
 	}
 
-	if (curtain_is_restricted_on_self(ct)) {
-		BIT_ZERO(SYSFILSET_BITS, &cr->cr_sysfilset);
-		for (int sf = 0; sf <= SYSFIL_LAST; sf++)
-			if (ct->ct_sysfils[sf].on_self == CURTAINLVL_PASS)
-				BIT_SET(SYSFILSET_BITS, sf, &cr->cr_sysfilset);
-		MPASS(SYSFILSET_IS_RESTRICTED(&cr->cr_sysfilset));
-		MPASS(CRED_IN_RESTRICTED_MODE(cr));
-	} else {
-		BIT_FILL(SYSFILSET_BITS, &cr->cr_sysfilset);
-		MPASS(!SYSFILSET_IS_RESTRICTED(&cr->cr_sysfilset));
-		MPASS(!CRED_IN_RESTRICTED_MODE(cr));
-	}
+	curtain_cred_sysfil_update(cr, ct);
 
 	if (!(flags & (CURTAINCTL_ENFORCE | CURTAINCTL_ENGAGE)))
 		goto out1;
