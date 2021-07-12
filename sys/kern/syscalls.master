@@ -108,7 +108,7 @@
 		    size_t nbyte
 		);
 	}
-5	AUE_OPEN_RWTC	STD|SYSFIL_PATH {
+5	AUE_OPEN_RWTC	STD|SYSFIL_VFS_MISC {
 		int open(
 		    _In_z_ const char *path,
 		    int flags,
@@ -130,35 +130,35 @@
 		    _Out_opt_ struct rusage *rusage
 		);
 	}
-8	AUE_CREAT	COMPAT|SYSFIL_WPATH {
+8	AUE_CREAT	COMPAT|SYSFIL_VFS_WRITE {
 		int creat(
 		    _In_z_ const char *path,
 		    int mode
 		);
 	}
-9	AUE_LINK	STD|SYSFIL_CPATH {
+9	AUE_LINK	STD|SYSFIL_VFS_CREATE {
 		int link(
 		    _In_z_ const char *path,
 		    _In_z_ const char *link
 		);
 	}
-10	AUE_UNLINK	STD|SYSFIL_CPATH {
+10	AUE_UNLINK	STD|SYSFIL_VFS_DELETE {
 		int unlink(
 		    _In_z_ const char *path
 		);
 	}
 11	AUE_NULL	OBSOL	execv
-12	AUE_CHDIR	STD|SYSFIL_RPATH {
+12	AUE_CHDIR	STD|SYSFIL_VFS_READ {
 		int chdir(
 		    _In_z_ const char *path
 		);
 	}
-13	AUE_FCHDIR	STD|SYSFIL_PATH {
+13	AUE_FCHDIR	STD|SYSFIL_VFS_MISC {
 		int fchdir(
 		    int fd
 		);
 	}
-14	AUE_MKNOD	COMPAT11|SYSFIL_DPATH {
+14	AUE_MKNOD	COMPAT11|SYSFIL_VFS_CREATE {
 		int mknod(
 		    _In_z_ const char *path,
 		    int mode,
@@ -183,7 +183,7 @@
 		    _In_ char *nsize
 		);
 	}
-18	AUE_GETFSSTAT	COMPAT4|SYSFIL_RPATH {
+18	AUE_GETFSSTAT	COMPAT4|SYSFIL_VFS_READ {
 		int getfsstat(
 		    _Out_writes_bytes_opt_(bufsize) struct ostatfs *buf,
 		    long bufsize,
@@ -278,7 +278,7 @@
 		    _Inout_ __socklen_t *alen
 		);
 	}
-33	AUE_ACCESS	STD|SYSFIL_PATH {
+33	AUE_ACCESS	STD|SYSFIL_VFS_MISC {
 		int access(
 		    _In_z_ const char *path,
 		    int amode
@@ -305,7 +305,7 @@
 		    int signum
 		);
 	}
-38	AUE_STAT	COMPAT|SYSFIL_RPATH {
+38	AUE_STAT	COMPAT|SYSFIL_VFS_READ {
 		int stat(
 		    _In_z_ const char *path,
 		    _Out_ struct ostat *ub
@@ -314,7 +314,7 @@
 39	AUE_GETPPID	STD|SYSFIL_STDIO {
 		pid_t getppid(void);
 	}
-40	AUE_LSTAT	COMPAT|SYSFIL_RPATH {
+40	AUE_LSTAT	COMPAT|SYSFIL_VFS_READ {
 		int lstat(
 		    _In_z_ const char *path,
 		    _Out_ struct ostat *ub
@@ -408,13 +408,13 @@
 		    _In_z_ const char *path
 		);
 	}
-57	AUE_SYMLINK	STD|SYSFIL_CPATH {
+57	AUE_SYMLINK	STD|SYSFIL_VFS_CREATE {
 		int symlink(
 		    _In_z_ const char *path,
 		    _In_z_ const char *link
 		);
 	}
-58	AUE_READLINK	STD|SYSFIL_RPATH {
+58	AUE_READLINK	STD|SYSFIL_VFS_READ {
 		ssize_t readlink(
 		    _In_z_ const char *path,
 		    _Out_writes_z_(count) char *buf,
@@ -810,13 +810,13 @@
 		    int egid
 		);
 	}
-128	AUE_RENAME	STD|SYSFIL_CPATH {
+128	AUE_RENAME	STD|SYSFIL_VFS_CREATE {
 		int rename(
 		    _In_z_ const char *from,
 		    _In_z_ const char *to
 		);
 	}
-129	AUE_TRUNCATE	COMPAT|SYSFIL_WPATH {
+129	AUE_TRUNCATE	COMPAT|SYSFIL_VFS_WRITE {
 		int truncate(
 		    _In_z_ const char *path,
 		    long length
@@ -834,7 +834,7 @@
 		    int how
 		);
 	}
-132	AUE_MKFIFO	STD|SYSFIL_DPATH {
+132	AUE_MKFIFO	STD|SYSFIL_MKFIFO {
 		int mkfifo(
 		    _In_z_ const char *path,
 		    mode_t mode
@@ -864,13 +864,13 @@
 		    _Out_writes_(2) int *rsv
 		);
 	}
-136	AUE_MKDIR	STD|SYSFIL_CPATH {
+136	AUE_MKDIR	STD|SYSFIL_VFS_CREATE {
 		int mkdir(
 		    _In_z_ const char *path,
 		    mode_t mode
 		);
 	}
-137	AUE_RMDIR	STD|SYSFIL_CPATH {
+137	AUE_RMDIR	STD|SYSFIL_VFS_DELETE {
 		int rmdir(
 		    _In_z_ const char *path
 		);
@@ -960,7 +960,7 @@
 		    _In_ void *argp
 		);
 	}
-156	AUE_GETDIRENTRIES	COMPAT|SYSFIL_RPATH {
+156	AUE_GETDIRENTRIES	COMPAT|SYSFIL_VFS_READ {
 		int getdirentries(
 		    int fd,
 		    _Out_writes_bytes_(count) char *buf,
@@ -968,13 +968,13 @@
 		    _Out_ long *basep
 		);
 	}
-157	AUE_STATFS	COMPAT4|SYSFIL_RPATH {
+157	AUE_STATFS	COMPAT4|SYSFIL_VFS_READ {
 		int statfs(
 		    _In_z_ const char *path,
 		    _Out_ struct ostatfs *buf
 		);
 	}
-158	AUE_FSTATFS	COMPAT4|SYSFIL_RPATH {
+158	AUE_FSTATFS	COMPAT4|SYSFIL_VFS_READ {
 		int fstatfs(
 		    int fd,
 		    _Out_ struct ostatfs *buf
@@ -1103,7 +1103,7 @@
 185	AUE_NULL	OBSOL	lfs_markv
 186	AUE_NULL	OBSOL	lfs_segclean
 187	AUE_NULL	OBSOL	lfs_segwait
-188	AUE_STAT	COMPAT11|SYSFIL_RPATH {
+188	AUE_STAT	COMPAT11|SYSFIL_VFS_READ {
 		int stat(
 		    _In_z_ const char *path,
 		    _Out_ struct freebsd11_stat *ub
@@ -1115,13 +1115,13 @@
 		    _Out_ struct freebsd11_stat *sb
 		);
 	}
-190	AUE_LSTAT	COMPAT11|SYSFIL_RPATH {
+190	AUE_LSTAT	COMPAT11|SYSFIL_VFS_READ {
 		int lstat(
 		    _In_z_ const char *path,
 		    _Out_ struct freebsd11_stat *ub
 		);
 	}
-191	AUE_PATHCONF	STD|SYSFIL_PATH {
+191	AUE_PATHCONF	STD|SYSFIL_VFS_MISC {
 		int pathconf(
 		    _In_z_ const char *path,
 		    int name
@@ -1146,7 +1146,7 @@
 		    _In_ struct rlimit *rlp
 		);
 	} setrlimit __setrlimit_args int
-196	AUE_GETDIRENTRIES	COMPAT11|SYSFIL_RPATH {
+196	AUE_GETDIRENTRIES	COMPAT11|SYSFIL_VFS_READ {
 		int getdirentries(
 		    int fd,
 		    _Out_writes_bytes_(count) char *buf,
@@ -1176,7 +1176,7 @@
 		    int whence
 		);
 	}
-200	AUE_TRUNCATE	COMPAT6|SYSFIL_WPATH {
+200	AUE_TRUNCATE	COMPAT6|SYSFIL_VFS_WRITE {
 		int truncate(
 		    _In_z_ const char *path,
 		    int pad,
@@ -1212,7 +1212,7 @@
 		    size_t len
 		);
 	}
-205	AUE_UNDELETE	STD|SYSFIL_CPATH {
+205	AUE_UNDELETE	STD|SYSFIL_VFS_CREATE {
 		int undelete(
 		    _In_z_ const char *path
 		);
@@ -1463,7 +1463,7 @@
 		);
 	}
 258-271	AUE_NULL	RESERVED
-272	AUE_O_GETDENTS	COMPAT11|SYSFIL_RPATH {
+272	AUE_O_GETDENTS	COMPAT11|SYSFIL_VFS_READ {
 		int getdents(
 		    int fd,
 		    _Out_writes_bytes_(count) char *buf,
@@ -1485,7 +1485,7 @@
 		);
 	}
 277	AUE_NULL	OBSOL	netbsd_msync
-278	AUE_STAT	COMPAT11|SYSFIL_RPATH {
+278	AUE_STAT	COMPAT11|SYSFIL_VFS_READ {
 		int nstat(
 		    _In_z_ const char *path,
 		    _Out_ struct nstat *ub
@@ -1497,7 +1497,7 @@
 		    _Out_ struct nstat *sb
 		);
 	}
-280	AUE_LSTAT	COMPAT11|SYSFIL_RPATH {
+280	AUE_LSTAT	COMPAT11|SYSFIL_VFS_READ {
 		int nlstat(
 		    _In_z_ const char *path,
 		    _Out_ struct nstat *ub
@@ -1664,7 +1664,7 @@
 	}
 325	AUE_MUNLOCKALL	STD|SYSFIL_MLOCK {
 		int munlockall(void); }
-326	AUE_GETCWD	STD|SYSFIL_PATH {
+326	AUE_GETCWD	STD|SYSFIL_VFS_MISC {
 		int __getcwd(
 		    _Out_writes_z_(buflen) char *buf,
 		    size_t buflen
@@ -1952,7 +1952,7 @@
 		);
 	}
 375	AUE_NULL	OBSOL	nfsclnt
-376	AUE_EACCESS	STD|SYSFIL_PATH {
+376	AUE_EACCESS	STD|SYSFIL_VFS_MISC {
 		int eaccess(
 		    _In_z_ const char *path,
 		    int amode
@@ -2053,20 +2053,20 @@
 		    _In_opt_ void *arg
 		);
 	}
-395	AUE_GETFSSTAT	COMPAT11|SYSFIL_RPATH {
+395	AUE_GETFSSTAT	COMPAT11|SYSFIL_VFS_READ {
 		int getfsstat(
 		    _Out_writes_bytes_opt_(bufsize) struct freebsd11_statfs *buf,
 		    long bufsize,
 		    int mode
 		);
 	}
-396	AUE_STATFS	COMPAT11|SYSFIL_RPATH {
+396	AUE_STATFS	COMPAT11|SYSFIL_VFS_READ {
 		int statfs(
 		    _In_z_ const char *path,
 		    _Out_ struct freebsd11_statfs *buf
 		);
 	}
-397	AUE_FSTATFS	COMPAT11|SYSFIL_RPATH {
+397	AUE_FSTATFS	COMPAT11|SYSFIL_VFS_READ {
 		int fstatfs(
 		    int fd,
 		    _Out_ struct freebsd11_statfs *buf
@@ -2553,7 +2553,7 @@
 		    int whence
 		);
 	}
-479	AUE_TRUNCATE	STD|SYSFIL_WPATH {
+479	AUE_TRUNCATE	STD|SYSFIL_VFS_WRITE {
 		int truncate(
 		    _In_z_ const char *path,
 		    off_t length
@@ -2622,7 +2622,7 @@
 		    _Out_ const cpuset_t *mask
 		);
 	}
-489	AUE_FACCESSAT	STD|SYSFIL_PATH {
+489	AUE_FACCESSAT	STD|SYSFIL_VFS_MISC {
 		int faccessat(
 		    int fd,
 		    _In_z_ const char *path,
@@ -2654,7 +2654,7 @@
 		    _In_ char **envv
 		);
 	}
-493	AUE_FSTATAT	COMPAT11|SYSFIL_RPATH {
+493	AUE_FSTATAT	COMPAT11|SYSFIL_VFS_READ {
 		int fstatat(
 		    int fd,
 		    _In_z_ const char *path,
@@ -2669,7 +2669,7 @@
 		    _In_reads_(2) struct timeval *times
 		);
 	}
-495	AUE_LINKAT	STD|SYSFIL_CPATH {
+495	AUE_LINKAT	STD|SYSFIL_VFS_CREATE {
 		int linkat(
 		    int fd1,
 		    _In_z_ const char *path1,
@@ -2678,21 +2678,21 @@
 		    int flag
 		);
 	}
-496	AUE_MKDIRAT	STD|SYSFIL_CPATH {
+496	AUE_MKDIRAT	STD|SYSFIL_VFS_CREATE {
 		int mkdirat(
 		    int fd,
 		    _In_z_ const char *path,
 		    mode_t mode
 		);
 	}
-497	AUE_MKFIFOAT	STD|SYSFIL_DPATH {
+497	AUE_MKFIFOAT	STD|SYSFIL_MKFIFO {
 		int mkfifoat(
 		    int fd,
 		    _In_z_ const char *path,
 		    mode_t mode
 		);
 	}
-498	AUE_MKNODAT	COMPAT11|SYSFIL_DPATH {
+498	AUE_MKNODAT	COMPAT11|SYSFIL_VFS_CREATE {
 		int mknodat(
 		    int fd,
 		    _In_z_ const char *path,
@@ -2701,7 +2701,7 @@
 		);
 	}
 ; XXX: see the comment for open
-499	AUE_OPENAT_RWTC	STD|SYSFIL_PATH {
+499	AUE_OPENAT_RWTC	STD|SYSFIL_VFS_MISC {
 		int openat(
 		    int fd,
 		    _In_z_ const char *path,
@@ -2709,7 +2709,7 @@
 		    mode_t mode
 		);
 	}
-500	AUE_READLINKAT	STD|SYSFIL_RPATH {
+500	AUE_READLINKAT	STD|SYSFIL_VFS_READ {
 		ssize_t readlinkat(
 		    int fd,
 		    _In_z_ const char *path,
@@ -2717,7 +2717,7 @@
 		    size_t bufsize
 		);
 	}
-501	AUE_RENAMEAT	STD|SYSFIL_CPATH {
+501	AUE_RENAMEAT	STD|SYSFIL_VFS_CREATE {
 		int renameat(
 		    int oldfd,
 		    _In_z_ const char *old,
@@ -2725,14 +2725,14 @@
 		    _In_z_ const char *new
 		);
 	}
-502	AUE_SYMLINKAT	STD|SYSFIL_CPATH {
+502	AUE_SYMLINKAT	STD|SYSFIL_VFS_CREATE {
 		int symlinkat(
 		    _In_z_ const char *path1,
 		    int fd,
 		    _In_z_ const char *path2
 		);
 	}
-503	AUE_UNLINKAT	STD|SYSFIL_CPATH {
+503	AUE_UNLINKAT	STD|SYSFIL_VFS_DELETE {
 		int unlinkat(
 		    int fd,
 		    _In_z_ const char *path,
@@ -2796,7 +2796,7 @@
 		    _Inout_opt_ struct shmid_ds *buf
 		);
 	}
-513	AUE_LPATHCONF	STD|SYSFIL_PATH {
+513	AUE_LPATHCONF	STD|SYSFIL_VFS_MISC {
 		int lpathconf(
 		    _In_z_ const char *path,
 		    int name
@@ -3041,7 +3041,7 @@
 		    _Out_ struct stat *sb
 		);
 	}
-552	AUE_FSTATAT	STD|SYSFIL_RPATH {
+552	AUE_FSTATAT	STD|SYSFIL_VFS_READ {
 		int fstatat(
 		    int fd,
 		    _In_z_ const char *path,
@@ -3055,7 +3055,7 @@
 		    _Out_ struct stat *sb
 		);
 	}
-554	AUE_GETDIRENTRIES STD|SYSFIL_RPATH {
+554	AUE_GETDIRENTRIES STD|SYSFIL_VFS_READ {
 		ssize_t getdirentries(
 		    int fd,
 		    _Out_writes_bytes_(count) char *buf,
@@ -3063,19 +3063,19 @@
 		    _Out_ off_t *basep
 		);
 	}
-555	AUE_STATFS	STD|SYSFIL_RPATH {
+555	AUE_STATFS	STD|SYSFIL_VFS_READ {
 		int statfs(
 		    _In_z_ const char *path,
 		    _Out_ struct statfs *buf
 		);
 	}
-556	AUE_FSTATFS	STD|SYSFIL_RPATH {
+556	AUE_FSTATFS	STD|SYSFIL_VFS_READ {
 		int fstatfs(
 		    int fd,
 		    _Out_ struct statfs *buf
 		);
 	}
-557	AUE_GETFSSTAT	STD|SYSFIL_RPATH {
+557	AUE_GETFSSTAT	STD|SYSFIL_VFS_READ {
 		int getfsstat(
 		    _Out_writes_bytes_opt_(bufsize) struct statfs *buf,
 		    long bufsize,
@@ -3088,7 +3088,7 @@
 		    _Out_ struct statfs *buf
 		);
 	}
-559	AUE_MKNODAT	STD|SYSFIL_DPATH {
+559	AUE_MKNODAT	STD|SYSFIL_VFS_CREATE {
 		int mknodat(
 		    int fd,
 		    _In_z_ const char *path,
@@ -3161,7 +3161,7 @@
 		    size_t bufsize
 		);
 	}
-568	AUE_UNLINKAT	STD|SYSFIL_CPATH {
+568	AUE_UNLINKAT	STD|SYSFIL_VFS_DELETE {
 		int funlinkat(
 		    int dfd,
 		    _In_z_ const char *path,

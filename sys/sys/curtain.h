@@ -35,7 +35,7 @@ struct curtainreq {
 int curtainctl(int flags, size_t reqc, struct curtainreq *reqv);
 
 #define	CURTAINCTL_VERSION_MASK	(0xff << 24)
-#define	CURTAINCTL_VERSION	(4 << 24)
+#define	CURTAINCTL_VERSION	(5 << 24)
 
 #define	CURTAINCTL_ENGAGE	(1 <<  0 | CURTAINCTL_VERSION)
 #define	CURTAINCTL_REQUIRE	(1 <<  1 | CURTAINCTL_VERSION)

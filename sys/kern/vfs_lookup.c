@@ -813,10 +813,10 @@ sysfil_lookup_check(struct nameidata *ndp)
 	if (ndp->ni_vp) {
 		/* Kludge for directory O_SEARCH opens. */
 		if (ndp->ni_vp->v_type == VDIR &&
-		    sysfil_check(td, SYSFIL_RPATH) == 0)
+		    sysfil_check(td, SYSFIL_VFS_READ) == 0)
 			cap_rights_set(&haverights, CAP_FEXECVE, CAP_EXECAT);
 		/* Kludge for O_CREAT opens. */
-		if (sysfil_check(td, SYSFIL_WPATH) == 0)
+		if (sysfil_check(td, SYSFIL_VFS_WRITE) == 0)
 			cap_rights_set(&haverights, CAP_CREATE);
 	}
 	if (cap_rights_contains(&haverights, needrights))

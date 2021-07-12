@@ -61,20 +61,20 @@ struct sysent sysent[] = {
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)sys_fork, .sy_auevent = AUE_FORK, .sy_flags = (SYSFIL_PROC << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 2 = fork */
 	{ .sy_narg = AS(read_args), .sy_call = (sy_call_t *)sys_read, .sy_auevent = AUE_READ, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 3 = read */
 	{ .sy_narg = AS(write_args), .sy_call = (sy_call_t *)sys_write, .sy_auevent = AUE_WRITE, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 4 = write */
-	{ .sy_narg = AS(open_args), .sy_call = (sy_call_t *)sys_open, .sy_auevent = AUE_OPEN_RWTC, .sy_flags = (SYSFIL_PATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 5 = open */
+	{ .sy_narg = AS(open_args), .sy_call = (sy_call_t *)sys_open, .sy_auevent = AUE_OPEN_RWTC, .sy_flags = (SYSFIL_VFS_MISC << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 5 = open */
 	{ .sy_narg = AS(close_args), .sy_call = (sy_call_t *)sys_close, .sy_auevent = AUE_CLOSE, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 6 = close */
 	{ .sy_narg = AS(wait4_args), .sy_call = (sy_call_t *)sys_wait4, .sy_auevent = AUE_WAIT4, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 7 = wait4 */
-	{ compat(AS(ocreat_args),creat), .sy_auevent = AUE_CREAT, .sy_flags = (SYSFIL_WPATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 8 = old creat */
-	{ .sy_narg = AS(link_args), .sy_call = (sy_call_t *)sys_link, .sy_auevent = AUE_LINK, .sy_flags = (SYSFIL_CPATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 9 = link */
-	{ .sy_narg = AS(unlink_args), .sy_call = (sy_call_t *)sys_unlink, .sy_auevent = AUE_UNLINK, .sy_flags = (SYSFIL_CPATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 10 = unlink */
+	{ compat(AS(ocreat_args),creat), .sy_auevent = AUE_CREAT, .sy_flags = (SYSFIL_VFS_WRITE << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 8 = old creat */
+	{ .sy_narg = AS(link_args), .sy_call = (sy_call_t *)sys_link, .sy_auevent = AUE_LINK, .sy_flags = (SYSFIL_VFS_CREATE << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 9 = link */
+	{ .sy_narg = AS(unlink_args), .sy_call = (sy_call_t *)sys_unlink, .sy_auevent = AUE_UNLINK, .sy_flags = (SYSFIL_VFS_DELETE << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 10 = unlink */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 11 = obsolete execv */
-	{ .sy_narg = AS(chdir_args), .sy_call = (sy_call_t *)sys_chdir, .sy_auevent = AUE_CHDIR, .sy_flags = (SYSFIL_RPATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 12 = chdir */
-	{ .sy_narg = AS(fchdir_args), .sy_call = (sy_call_t *)sys_fchdir, .sy_auevent = AUE_FCHDIR, .sy_flags = (SYSFIL_PATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 13 = fchdir */
-	{ compat11(AS(freebsd11_mknod_args),mknod), .sy_auevent = AUE_MKNOD, .sy_flags = (SYSFIL_DPATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 14 = freebsd11 mknod */
+	{ .sy_narg = AS(chdir_args), .sy_call = (sy_call_t *)sys_chdir, .sy_auevent = AUE_CHDIR, .sy_flags = (SYSFIL_VFS_READ << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 12 = chdir */
+	{ .sy_narg = AS(fchdir_args), .sy_call = (sy_call_t *)sys_fchdir, .sy_auevent = AUE_FCHDIR, .sy_flags = (SYSFIL_VFS_MISC << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 13 = fchdir */
+	{ compat11(AS(freebsd11_mknod_args),mknod), .sy_auevent = AUE_MKNOD, .sy_flags = (SYSFIL_VFS_CREATE << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 14 = freebsd11 mknod */
 	{ .sy_narg = AS(chmod_args), .sy_call = (sy_call_t *)sys_chmod, .sy_auevent = AUE_CHMOD, .sy_flags = (SYSFIL_FATTR << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 15 = chmod */
 	{ .sy_narg = AS(chown_args), .sy_call = (sy_call_t *)sys_chown, .sy_auevent = AUE_CHOWN, .sy_flags = (SYSFIL_CHOWN_CHECKED << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 16 = chown */
 	{ .sy_narg = AS(break_args), .sy_call = (sy_call_t *)sys_break, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 17 = break */
-	{ compat4(AS(freebsd4_getfsstat_args),getfsstat), .sy_auevent = AUE_GETFSSTAT, .sy_flags = (SYSFIL_RPATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 18 = freebsd4 getfsstat */
+	{ compat4(AS(freebsd4_getfsstat_args),getfsstat), .sy_auevent = AUE_GETFSSTAT, .sy_flags = (SYSFIL_VFS_READ << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 18 = freebsd4 getfsstat */
 	{ compat(AS(olseek_args),lseek), .sy_auevent = AUE_LSEEK, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 19 = old lseek */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)sys_getpid, .sy_auevent = AUE_GETPID, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 20 = getpid */
 	{ .sy_narg = AS(mount_args), .sy_call = (sy_call_t *)sys_mount, .sy_auevent = AUE_MOUNT, .sy_flags = (SYSFIL_MOUNT << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 21 = mount */
@@ -89,14 +89,14 @@ struct sysent sysent[] = {
 	{ .sy_narg = AS(accept_args), .sy_call = (sy_call_t *)sys_accept, .sy_auevent = AUE_ACCEPT, .sy_flags = (SYSFIL_NET << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 30 = accept */
 	{ .sy_narg = AS(getpeername_args), .sy_call = (sy_call_t *)sys_getpeername, .sy_auevent = AUE_GETPEERNAME, .sy_flags = (SYSFIL_NET << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 31 = getpeername */
 	{ .sy_narg = AS(getsockname_args), .sy_call = (sy_call_t *)sys_getsockname, .sy_auevent = AUE_GETSOCKNAME, .sy_flags = (SYSFIL_NET << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 32 = getsockname */
-	{ .sy_narg = AS(access_args), .sy_call = (sy_call_t *)sys_access, .sy_auevent = AUE_ACCESS, .sy_flags = (SYSFIL_PATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 33 = access */
+	{ .sy_narg = AS(access_args), .sy_call = (sy_call_t *)sys_access, .sy_auevent = AUE_ACCESS, .sy_flags = (SYSFIL_VFS_MISC << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 33 = access */
 	{ .sy_narg = AS(chflags_args), .sy_call = (sy_call_t *)sys_chflags, .sy_auevent = AUE_CHFLAGS, .sy_flags = (SYSFIL_FATTR << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 34 = chflags */
 	{ .sy_narg = AS(fchflags_args), .sy_call = (sy_call_t *)sys_fchflags, .sy_auevent = AUE_FCHFLAGS, .sy_flags = (SYSFIL_FATTR << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 35 = fchflags */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)sys_sync, .sy_auevent = AUE_SYNC, .sy_flags = SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 36 = sync */
 	{ .sy_narg = AS(kill_args), .sy_call = (sy_call_t *)sys_kill, .sy_auevent = AUE_KILL, .sy_flags = (SYSFIL_PROC_CHECKED << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 37 = kill */
-	{ compat(AS(ostat_args),stat), .sy_auevent = AUE_STAT, .sy_flags = (SYSFIL_RPATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 38 = old stat */
+	{ compat(AS(ostat_args),stat), .sy_auevent = AUE_STAT, .sy_flags = (SYSFIL_VFS_READ << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 38 = old stat */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)sys_getppid, .sy_auevent = AUE_GETPPID, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 39 = getppid */
-	{ compat(AS(olstat_args),lstat), .sy_auevent = AUE_LSTAT, .sy_flags = (SYSFIL_RPATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 40 = old lstat */
+	{ compat(AS(olstat_args),lstat), .sy_auevent = AUE_LSTAT, .sy_flags = (SYSFIL_VFS_READ << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 40 = old lstat */
 	{ .sy_narg = AS(dup_args), .sy_call = (sy_call_t *)sys_dup, .sy_auevent = AUE_DUP, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 41 = dup */
 	{ compat10(0,pipe), .sy_auevent = AUE_PIPE, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 42 = freebsd10 pipe */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)sys_getegid, .sy_auevent = AUE_GETEGID, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 43 = getegid */
@@ -113,8 +113,8 @@ struct sysent sysent[] = {
 	{ .sy_narg = AS(ioctl_args), .sy_call = (sy_call_t *)sys_ioctl, .sy_auevent = AUE_IOCTL, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 54 = ioctl */
 	{ .sy_narg = AS(reboot_args), .sy_call = (sy_call_t *)sys_reboot, .sy_auevent = AUE_REBOOT, .sy_flags = 0, .sy_thrcnt = SY_THR_STATIC },	/* 55 = reboot */
 	{ .sy_narg = AS(revoke_args), .sy_call = (sy_call_t *)sys_revoke, .sy_auevent = AUE_REVOKE, .sy_flags = (SYSFIL_TTY << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 56 = revoke */
-	{ .sy_narg = AS(symlink_args), .sy_call = (sy_call_t *)sys_symlink, .sy_auevent = AUE_SYMLINK, .sy_flags = (SYSFIL_CPATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 57 = symlink */
-	{ .sy_narg = AS(readlink_args), .sy_call = (sy_call_t *)sys_readlink, .sy_auevent = AUE_READLINK, .sy_flags = (SYSFIL_RPATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 58 = readlink */
+	{ .sy_narg = AS(symlink_args), .sy_call = (sy_call_t *)sys_symlink, .sy_auevent = AUE_SYMLINK, .sy_flags = (SYSFIL_VFS_CREATE << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 57 = symlink */
+	{ .sy_narg = AS(readlink_args), .sy_call = (sy_call_t *)sys_readlink, .sy_auevent = AUE_READLINK, .sy_flags = (SYSFIL_VFS_READ << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 58 = readlink */
 	{ .sy_narg = AS(execve_args), .sy_call = (sy_call_t *)sys_execve, .sy_auevent = AUE_EXECVE, .sy_flags = (SYSFIL_EXEC << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 59 = execve */
 	{ .sy_narg = AS(umask_args), .sy_call = (sy_call_t *)sys_umask, .sy_auevent = AUE_UMASK, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 60 = umask */
 	{ .sy_narg = AS(chroot_args), .sy_call = (sy_call_t *)sys_chroot, .sy_auevent = AUE_CHROOT, .sy_flags = (SYSFIL_CHROOT << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 61 = chroot */
@@ -184,16 +184,16 @@ struct sysent sysent[] = {
 	{ compat(AS(recvfrom_args),recvfrom), .sy_auevent = AUE_RECVFROM, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 125 = old recvfrom */
 	{ .sy_narg = AS(setreuid_args), .sy_call = (sy_call_t *)sys_setreuid, .sy_auevent = AUE_SETREUID, .sy_flags = (SYSFIL_ID << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 126 = setreuid */
 	{ .sy_narg = AS(setregid_args), .sy_call = (sy_call_t *)sys_setregid, .sy_auevent = AUE_SETREGID, .sy_flags = (SYSFIL_ID << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 127 = setregid */
-	{ .sy_narg = AS(rename_args), .sy_call = (sy_call_t *)sys_rename, .sy_auevent = AUE_RENAME, .sy_flags = (SYSFIL_CPATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 128 = rename */
-	{ compat(AS(otruncate_args),truncate), .sy_auevent = AUE_TRUNCATE, .sy_flags = (SYSFIL_WPATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 129 = old truncate */
+	{ .sy_narg = AS(rename_args), .sy_call = (sy_call_t *)sys_rename, .sy_auevent = AUE_RENAME, .sy_flags = (SYSFIL_VFS_CREATE << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 128 = rename */
+	{ compat(AS(otruncate_args),truncate), .sy_auevent = AUE_TRUNCATE, .sy_flags = (SYSFIL_VFS_WRITE << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 129 = old truncate */
 	{ compat(AS(oftruncate_args),ftruncate), .sy_auevent = AUE_FTRUNCATE, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 130 = old ftruncate */
 	{ .sy_narg = AS(flock_args), .sy_call = (sy_call_t *)sys_flock, .sy_auevent = AUE_FLOCK, .sy_flags = (SYSFIL_FLOCK << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 131 = flock */
-	{ .sy_narg = AS(mkfifo_args), .sy_call = (sy_call_t *)sys_mkfifo, .sy_auevent = AUE_MKFIFO, .sy_flags = (SYSFIL_DPATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 132 = mkfifo */
+	{ .sy_narg = AS(mkfifo_args), .sy_call = (sy_call_t *)sys_mkfifo, .sy_auevent = AUE_MKFIFO, .sy_flags = (SYSFIL_MKFIFO << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 132 = mkfifo */
 	{ .sy_narg = AS(sendto_args), .sy_call = (sy_call_t *)sys_sendto, .sy_auevent = AUE_SENDTO, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 133 = sendto */
 	{ .sy_narg = AS(shutdown_args), .sy_call = (sy_call_t *)sys_shutdown, .sy_auevent = AUE_SHUTDOWN, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 134 = shutdown */
 	{ .sy_narg = AS(socketpair_args), .sy_call = (sy_call_t *)sys_socketpair, .sy_auevent = AUE_SOCKETPAIR, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 135 = socketpair */
-	{ .sy_narg = AS(mkdir_args), .sy_call = (sy_call_t *)sys_mkdir, .sy_auevent = AUE_MKDIR, .sy_flags = (SYSFIL_CPATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 136 = mkdir */
-	{ .sy_narg = AS(rmdir_args), .sy_call = (sy_call_t *)sys_rmdir, .sy_auevent = AUE_RMDIR, .sy_flags = (SYSFIL_CPATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 137 = rmdir */
+	{ .sy_narg = AS(mkdir_args), .sy_call = (sy_call_t *)sys_mkdir, .sy_auevent = AUE_MKDIR, .sy_flags = (SYSFIL_VFS_CREATE << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 136 = mkdir */
+	{ .sy_narg = AS(rmdir_args), .sy_call = (sy_call_t *)sys_rmdir, .sy_auevent = AUE_RMDIR, .sy_flags = (SYSFIL_VFS_DELETE << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 137 = rmdir */
 	{ .sy_narg = AS(utimes_args), .sy_call = (sy_call_t *)sys_utimes, .sy_auevent = AUE_UTIMES, .sy_flags = (SYSFIL_FATTR << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 138 = utimes */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 139 = obsolete 4.2 sigreturn */
 	{ .sy_narg = AS(adjtime_args), .sy_call = (sy_call_t *)sys_adjtime, .sy_auevent = AUE_ADJTIME, .sy_flags = (SYSFIL_SETTIME_CHECKED << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 140 = adjtime */
@@ -212,9 +212,9 @@ struct sysent sysent[] = {
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 153 = reserved for local use */
 	{ .sy_narg = AS(nlm_syscall_args), .sy_call = (sy_call_t *)lkmressys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },	/* 154 = nlm_syscall */
 	{ .sy_narg = AS(nfssvc_args), .sy_call = (sy_call_t *)lkmressys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },	/* 155 = nfssvc */
-	{ compat(AS(ogetdirentries_args),getdirentries), .sy_auevent = AUE_GETDIRENTRIES, .sy_flags = (SYSFIL_RPATH << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 156 = old getdirentries */
-	{ compat4(AS(freebsd4_statfs_args),statfs), .sy_auevent = AUE_STATFS, .sy_flags = (SYSFIL_RPATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 157 = freebsd4 statfs */
-	{ compat4(AS(freebsd4_fstatfs_args),fstatfs), .sy_auevent = AUE_FSTATFS, .sy_flags = (SYSFIL_RPATH << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 158 = freebsd4 fstatfs */
+	{ compat(AS(ogetdirentries_args),getdirentries), .sy_auevent = AUE_GETDIRENTRIES, .sy_flags = (SYSFIL_VFS_READ << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 156 = old getdirentries */
+	{ compat4(AS(freebsd4_statfs_args),statfs), .sy_auevent = AUE_STATFS, .sy_flags = (SYSFIL_VFS_READ << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 157 = freebsd4 statfs */
+	{ compat4(AS(freebsd4_fstatfs_args),fstatfs), .sy_auevent = AUE_FSTATFS, .sy_flags = (SYSFIL_VFS_READ << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 158 = freebsd4 fstatfs */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 159 = reserved for local use */
 	{ .sy_narg = AS(lgetfh_args), .sy_call = (sy_call_t *)sys_lgetfh, .sy_auevent = AUE_LGETFH, .sy_flags = (SYSFIL_FH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 160 = lgetfh */
 	{ .sy_narg = AS(getfh_args), .sy_call = (sy_call_t *)sys_getfh, .sy_auevent = AUE_NFS_GETFH, .sy_flags = (SYSFIL_FH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 161 = getfh */
@@ -244,24 +244,24 @@ struct sysent sysent[] = {
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 185 = obsolete lfs_markv */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 186 = obsolete lfs_segclean */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 187 = obsolete lfs_segwait */
-	{ compat11(AS(freebsd11_stat_args),stat), .sy_auevent = AUE_STAT, .sy_flags = (SYSFIL_RPATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 188 = freebsd11 stat */
+	{ compat11(AS(freebsd11_stat_args),stat), .sy_auevent = AUE_STAT, .sy_flags = (SYSFIL_VFS_READ << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 188 = freebsd11 stat */
 	{ compat11(AS(freebsd11_fstat_args),fstat), .sy_auevent = AUE_FSTAT, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 189 = freebsd11 fstat */
-	{ compat11(AS(freebsd11_lstat_args),lstat), .sy_auevent = AUE_LSTAT, .sy_flags = (SYSFIL_RPATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 190 = freebsd11 lstat */
-	{ .sy_narg = AS(pathconf_args), .sy_call = (sy_call_t *)sys_pathconf, .sy_auevent = AUE_PATHCONF, .sy_flags = (SYSFIL_PATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 191 = pathconf */
+	{ compat11(AS(freebsd11_lstat_args),lstat), .sy_auevent = AUE_LSTAT, .sy_flags = (SYSFIL_VFS_READ << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 190 = freebsd11 lstat */
+	{ .sy_narg = AS(pathconf_args), .sy_call = (sy_call_t *)sys_pathconf, .sy_auevent = AUE_PATHCONF, .sy_flags = (SYSFIL_VFS_MISC << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 191 = pathconf */
 	{ .sy_narg = AS(fpathconf_args), .sy_call = (sy_call_t *)sys_fpathconf, .sy_auevent = AUE_FPATHCONF, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 192 = fpathconf */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 193 = reserved for local use */
 	{ .sy_narg = AS(__getrlimit_args), .sy_call = (sy_call_t *)sys_getrlimit, .sy_auevent = AUE_GETRLIMIT, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 194 = getrlimit */
 	{ .sy_narg = AS(__setrlimit_args), .sy_call = (sy_call_t *)sys_setrlimit, .sy_auevent = AUE_SETRLIMIT, .sy_flags = (SYSFIL_RLIMIT << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 195 = setrlimit */
-	{ compat11(AS(freebsd11_getdirentries_args),getdirentries), .sy_auevent = AUE_GETDIRENTRIES, .sy_flags = (SYSFIL_RPATH << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 196 = freebsd11 getdirentries */
+	{ compat11(AS(freebsd11_getdirentries_args),getdirentries), .sy_auevent = AUE_GETDIRENTRIES, .sy_flags = (SYSFIL_VFS_READ << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 196 = freebsd11 getdirentries */
 	{ compat6(AS(freebsd6_mmap_args),mmap), .sy_auevent = AUE_MMAP, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 197 = freebsd6 mmap */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_STATIC },		/* 198 = __syscall */
 	{ compat6(AS(freebsd6_lseek_args),lseek), .sy_auevent = AUE_LSEEK, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 199 = freebsd6 lseek */
-	{ compat6(AS(freebsd6_truncate_args),truncate), .sy_auevent = AUE_TRUNCATE, .sy_flags = (SYSFIL_WPATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 200 = freebsd6 truncate */
+	{ compat6(AS(freebsd6_truncate_args),truncate), .sy_auevent = AUE_TRUNCATE, .sy_flags = (SYSFIL_VFS_WRITE << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 200 = freebsd6 truncate */
 	{ compat6(AS(freebsd6_ftruncate_args),ftruncate), .sy_auevent = AUE_FTRUNCATE, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 201 = freebsd6 ftruncate */
 	{ .sy_narg = AS(sysctl_args), .sy_call = (sy_call_t *)sys___sysctl, .sy_auevent = AUE_SYSCTL, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 202 = __sysctl */
 	{ .sy_narg = AS(mlock_args), .sy_call = (sy_call_t *)sys_mlock, .sy_auevent = AUE_MLOCK, .sy_flags = (SYSFIL_MLOCK << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 203 = mlock */
 	{ .sy_narg = AS(munlock_args), .sy_call = (sy_call_t *)sys_munlock, .sy_auevent = AUE_MUNLOCK, .sy_flags = (SYSFIL_MLOCK << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 204 = munlock */
-	{ .sy_narg = AS(undelete_args), .sy_call = (sy_call_t *)sys_undelete, .sy_auevent = AUE_UNDELETE, .sy_flags = (SYSFIL_CPATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 205 = undelete */
+	{ .sy_narg = AS(undelete_args), .sy_call = (sy_call_t *)sys_undelete, .sy_auevent = AUE_UNDELETE, .sy_flags = (SYSFIL_VFS_CREATE << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 205 = undelete */
 	{ .sy_narg = AS(futimes_args), .sy_call = (sy_call_t *)sys_futimes, .sy_auevent = AUE_FUTIMES, .sy_flags = (SYSFIL_FATTR << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 206 = futimes */
 	{ .sy_narg = AS(getpgid_args), .sy_call = (sy_call_t *)sys_getpgid, .sy_auevent = AUE_GETPGID, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 207 = getpgid */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 208 = reserved for local use */
@@ -328,15 +328,15 @@ struct sysent sysent[] = {
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 269 = reserved for local use */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 270 = reserved for local use */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 271 = reserved for local use */
-	{ compat11(AS(freebsd11_getdents_args),getdents), .sy_auevent = AUE_O_GETDENTS, .sy_flags = (SYSFIL_RPATH << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 272 = freebsd11 getdents */
+	{ compat11(AS(freebsd11_getdents_args),getdents), .sy_auevent = AUE_O_GETDENTS, .sy_flags = (SYSFIL_VFS_READ << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 272 = freebsd11 getdents */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 273 = reserved for local use */
 	{ .sy_narg = AS(lchmod_args), .sy_call = (sy_call_t *)sys_lchmod, .sy_auevent = AUE_LCHMOD, .sy_flags = (SYSFIL_FATTR << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 274 = lchmod */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 275 = obsolete netbsd_lchown */
 	{ .sy_narg = AS(lutimes_args), .sy_call = (sy_call_t *)sys_lutimes, .sy_auevent = AUE_LUTIMES, .sy_flags = (SYSFIL_FATTR << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 276 = lutimes */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 277 = obsolete netbsd_msync */
-	{ compat11(AS(freebsd11_nstat_args),nstat), .sy_auevent = AUE_STAT, .sy_flags = (SYSFIL_RPATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 278 = freebsd11 nstat */
+	{ compat11(AS(freebsd11_nstat_args),nstat), .sy_auevent = AUE_STAT, .sy_flags = (SYSFIL_VFS_READ << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 278 = freebsd11 nstat */
 	{ compat11(AS(freebsd11_nfstat_args),nfstat), .sy_auevent = AUE_FSTAT, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 279 = freebsd11 nfstat */
-	{ compat11(AS(freebsd11_nlstat_args),nlstat), .sy_auevent = AUE_LSTAT, .sy_flags = (SYSFIL_RPATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 280 = freebsd11 nlstat */
+	{ compat11(AS(freebsd11_nlstat_args),nlstat), .sy_auevent = AUE_LSTAT, .sy_flags = (SYSFIL_VFS_READ << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 280 = freebsd11 nlstat */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 281 = reserved for local use */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 282 = reserved for local use */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 283 = reserved for local use */
@@ -382,7 +382,7 @@ struct sysent sysent[] = {
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 323 = obsolete thr_wakeup */
 	{ .sy_narg = AS(mlockall_args), .sy_call = (sy_call_t *)sys_mlockall, .sy_auevent = AUE_MLOCKALL, .sy_flags = (SYSFIL_MLOCK << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 324 = mlockall */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)sys_munlockall, .sy_auevent = AUE_MUNLOCKALL, .sy_flags = (SYSFIL_MLOCK << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 325 = munlockall */
-	{ .sy_narg = AS(__getcwd_args), .sy_call = (sy_call_t *)sys___getcwd, .sy_auevent = AUE_GETCWD, .sy_flags = (SYSFIL_PATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 326 = __getcwd */
+	{ .sy_narg = AS(__getcwd_args), .sy_call = (sy_call_t *)sys___getcwd, .sy_auevent = AUE_GETCWD, .sy_flags = (SYSFIL_VFS_MISC << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 326 = __getcwd */
 	{ .sy_narg = AS(sched_setparam_args), .sy_call = (sy_call_t *)sys_sched_setparam, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_POSIXRT << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 327 = sched_setparam */
 	{ .sy_narg = AS(sched_getparam_args), .sy_call = (sy_call_t *)sys_sched_getparam, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_POSIXRT << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 328 = sched_getparam */
 	{ .sy_narg = AS(sched_setscheduler_args), .sy_call = (sy_call_t *)sys_sched_setscheduler, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_POSIXRT << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 329 = sched_setscheduler */
@@ -432,7 +432,7 @@ struct sysent sysent[] = {
 	{ .sy_narg = AS(extattr_delete_fd_args), .sy_call = (sy_call_t *)sys_extattr_delete_fd, .sy_auevent = AUE_EXTATTR_DELETE_FD, .sy_flags = (SYSFIL_EXTATTR << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 373 = extattr_delete_fd */
 	{ .sy_narg = AS(__setugid_args), .sy_call = (sy_call_t *)sys___setugid, .sy_auevent = AUE_SETUGID, .sy_flags = (SYSFIL_ID << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 374 = __setugid */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 375 = obsolete nfsclnt */
-	{ .sy_narg = AS(eaccess_args), .sy_call = (sy_call_t *)sys_eaccess, .sy_auevent = AUE_EACCESS, .sy_flags = (SYSFIL_PATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 376 = eaccess */
+	{ .sy_narg = AS(eaccess_args), .sy_call = (sy_call_t *)sys_eaccess, .sy_auevent = AUE_EACCESS, .sy_flags = (SYSFIL_VFS_MISC << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 376 = eaccess */
 	{ .sy_narg = AS(afs3_syscall_args), .sy_call = (sy_call_t *)lkmressys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },	/* 377 = afs3_syscall */
 	{ .sy_narg = AS(nmount_args), .sy_call = (sy_call_t *)sys_nmount, .sy_auevent = AUE_NMOUNT, .sy_flags = (SYSFIL_MOUNT << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 378 = nmount */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 379 = obsolete kse_exit */
@@ -451,9 +451,9 @@ struct sysent sysent[] = {
 	{ .sy_narg = AS(uuidgen_args), .sy_call = (sy_call_t *)sys_uuidgen, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 392 = uuidgen */
 	{ .sy_narg = AS(sendfile_args), .sy_call = (sy_call_t *)sys_sendfile, .sy_auevent = AUE_SENDFILE, .sy_flags = (SYSFIL_SENDFILE << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 393 = sendfile */
 	{ .sy_narg = AS(mac_syscall_args), .sy_call = (sy_call_t *)sys_mac_syscall, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_STATIC },	/* 394 = mac_syscall */
-	{ compat11(AS(freebsd11_getfsstat_args),getfsstat), .sy_auevent = AUE_GETFSSTAT, .sy_flags = (SYSFIL_RPATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 395 = freebsd11 getfsstat */
-	{ compat11(AS(freebsd11_statfs_args),statfs), .sy_auevent = AUE_STATFS, .sy_flags = (SYSFIL_RPATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 396 = freebsd11 statfs */
-	{ compat11(AS(freebsd11_fstatfs_args),fstatfs), .sy_auevent = AUE_FSTATFS, .sy_flags = (SYSFIL_RPATH << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 397 = freebsd11 fstatfs */
+	{ compat11(AS(freebsd11_getfsstat_args),getfsstat), .sy_auevent = AUE_GETFSSTAT, .sy_flags = (SYSFIL_VFS_READ << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 395 = freebsd11 getfsstat */
+	{ compat11(AS(freebsd11_statfs_args),statfs), .sy_auevent = AUE_STATFS, .sy_flags = (SYSFIL_VFS_READ << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 396 = freebsd11 statfs */
+	{ compat11(AS(freebsd11_fstatfs_args),fstatfs), .sy_auevent = AUE_FSTATFS, .sy_flags = (SYSFIL_VFS_READ << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 397 = freebsd11 fstatfs */
 	{ compat11(AS(freebsd11_fhstatfs_args),fhstatfs), .sy_auevent = AUE_FHSTATFS, .sy_flags = (SYSFIL_FH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 398 = freebsd11 fhstatfs */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 399 = reserved for local use */
 	{ .sy_narg = AS(ksem_close_args), .sy_call = (sy_call_t *)lkmressys, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_POSIXIPC << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_ABSENT },	/* 400 = ksem_close */
@@ -535,7 +535,7 @@ struct sysent sysent[] = {
 	{ .sy_narg = AS(pwrite_args), .sy_call = (sy_call_t *)sys_pwrite, .sy_auevent = AUE_PWRITE, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 476 = pwrite */
 	{ .sy_narg = AS(mmap_args), .sy_call = (sy_call_t *)sys_mmap, .sy_auevent = AUE_MMAP, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 477 = mmap */
 	{ .sy_narg = AS(lseek_args), .sy_call = (sy_call_t *)sys_lseek, .sy_auevent = AUE_LSEEK, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 478 = lseek */
-	{ .sy_narg = AS(truncate_args), .sy_call = (sy_call_t *)sys_truncate, .sy_auevent = AUE_TRUNCATE, .sy_flags = (SYSFIL_WPATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 479 = truncate */
+	{ .sy_narg = AS(truncate_args), .sy_call = (sy_call_t *)sys_truncate, .sy_auevent = AUE_TRUNCATE, .sy_flags = (SYSFIL_VFS_WRITE << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 479 = truncate */
 	{ .sy_narg = AS(ftruncate_args), .sy_call = (sy_call_t *)sys_ftruncate, .sy_auevent = AUE_FTRUNCATE, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 480 = ftruncate */
 	{ .sy_narg = AS(thr_kill2_args), .sy_call = (sy_call_t *)sys_thr_kill2, .sy_auevent = AUE_THR_KILL2, .sy_flags = (SYSFIL_THREAD << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 481 = thr_kill2 */
 	{ compat12(AS(freebsd12_shm_open_args),shm_open), .sy_auevent = AUE_SHMOPEN, .sy_flags = (SYSFIL_POSIXIPC_CHECKED << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 482 = freebsd12 shm_open */
@@ -545,21 +545,21 @@ struct sysent sysent[] = {
 	{ .sy_narg = AS(cpuset_getid_args), .sy_call = (sy_call_t *)sys_cpuset_getid, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_CPUSET << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 486 = cpuset_getid */
 	{ .sy_narg = AS(cpuset_getaffinity_args), .sy_call = (sy_call_t *)sys_cpuset_getaffinity, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_CPUSET_CHECKED << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 487 = cpuset_getaffinity */
 	{ .sy_narg = AS(cpuset_setaffinity_args), .sy_call = (sy_call_t *)sys_cpuset_setaffinity, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_CPUSET_CHECKED << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 488 = cpuset_setaffinity */
-	{ .sy_narg = AS(faccessat_args), .sy_call = (sy_call_t *)sys_faccessat, .sy_auevent = AUE_FACCESSAT, .sy_flags = (SYSFIL_PATH << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 489 = faccessat */
+	{ .sy_narg = AS(faccessat_args), .sy_call = (sy_call_t *)sys_faccessat, .sy_auevent = AUE_FACCESSAT, .sy_flags = (SYSFIL_VFS_MISC << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 489 = faccessat */
 	{ .sy_narg = AS(fchmodat_args), .sy_call = (sy_call_t *)sys_fchmodat, .sy_auevent = AUE_FCHMODAT, .sy_flags = (SYSFIL_FATTR << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 490 = fchmodat */
 	{ .sy_narg = AS(fchownat_args), .sy_call = (sy_call_t *)sys_fchownat, .sy_auevent = AUE_FCHOWNAT, .sy_flags = (SYSFIL_CHOWN_CHECKED << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 491 = fchownat */
 	{ .sy_narg = AS(fexecve_args), .sy_call = (sy_call_t *)sys_fexecve, .sy_auevent = AUE_FEXECVE, .sy_flags = (SYSFIL_EXEC << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 492 = fexecve */
-	{ compat11(AS(freebsd11_fstatat_args),fstatat), .sy_auevent = AUE_FSTATAT, .sy_flags = (SYSFIL_RPATH << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 493 = freebsd11 fstatat */
+	{ compat11(AS(freebsd11_fstatat_args),fstatat), .sy_auevent = AUE_FSTATAT, .sy_flags = (SYSFIL_VFS_READ << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 493 = freebsd11 fstatat */
 	{ .sy_narg = AS(futimesat_args), .sy_call = (sy_call_t *)sys_futimesat, .sy_auevent = AUE_FUTIMESAT, .sy_flags = (SYSFIL_FATTR << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 494 = futimesat */
-	{ .sy_narg = AS(linkat_args), .sy_call = (sy_call_t *)sys_linkat, .sy_auevent = AUE_LINKAT, .sy_flags = (SYSFIL_CPATH << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 495 = linkat */
-	{ .sy_narg = AS(mkdirat_args), .sy_call = (sy_call_t *)sys_mkdirat, .sy_auevent = AUE_MKDIRAT, .sy_flags = (SYSFIL_CPATH << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 496 = mkdirat */
-	{ .sy_narg = AS(mkfifoat_args), .sy_call = (sy_call_t *)sys_mkfifoat, .sy_auevent = AUE_MKFIFOAT, .sy_flags = (SYSFIL_DPATH << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 497 = mkfifoat */
-	{ compat11(AS(freebsd11_mknodat_args),mknodat), .sy_auevent = AUE_MKNODAT, .sy_flags = (SYSFIL_DPATH << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 498 = freebsd11 mknodat */
-	{ .sy_narg = AS(openat_args), .sy_call = (sy_call_t *)sys_openat, .sy_auevent = AUE_OPENAT_RWTC, .sy_flags = (SYSFIL_PATH << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 499 = openat */
-	{ .sy_narg = AS(readlinkat_args), .sy_call = (sy_call_t *)sys_readlinkat, .sy_auevent = AUE_READLINKAT, .sy_flags = (SYSFIL_RPATH << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 500 = readlinkat */
-	{ .sy_narg = AS(renameat_args), .sy_call = (sy_call_t *)sys_renameat, .sy_auevent = AUE_RENAMEAT, .sy_flags = (SYSFIL_CPATH << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 501 = renameat */
-	{ .sy_narg = AS(symlinkat_args), .sy_call = (sy_call_t *)sys_symlinkat, .sy_auevent = AUE_SYMLINKAT, .sy_flags = (SYSFIL_CPATH << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 502 = symlinkat */
-	{ .sy_narg = AS(unlinkat_args), .sy_call = (sy_call_t *)sys_unlinkat, .sy_auevent = AUE_UNLINKAT, .sy_flags = (SYSFIL_CPATH << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 503 = unlinkat */
+	{ .sy_narg = AS(linkat_args), .sy_call = (sy_call_t *)sys_linkat, .sy_auevent = AUE_LINKAT, .sy_flags = (SYSFIL_VFS_CREATE << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 495 = linkat */
+	{ .sy_narg = AS(mkdirat_args), .sy_call = (sy_call_t *)sys_mkdirat, .sy_auevent = AUE_MKDIRAT, .sy_flags = (SYSFIL_VFS_CREATE << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 496 = mkdirat */
+	{ .sy_narg = AS(mkfifoat_args), .sy_call = (sy_call_t *)sys_mkfifoat, .sy_auevent = AUE_MKFIFOAT, .sy_flags = (SYSFIL_MKFIFO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 497 = mkfifoat */
+	{ compat11(AS(freebsd11_mknodat_args),mknodat), .sy_auevent = AUE_MKNODAT, .sy_flags = (SYSFIL_VFS_CREATE << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 498 = freebsd11 mknodat */
+	{ .sy_narg = AS(openat_args), .sy_call = (sy_call_t *)sys_openat, .sy_auevent = AUE_OPENAT_RWTC, .sy_flags = (SYSFIL_VFS_MISC << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 499 = openat */
+	{ .sy_narg = AS(readlinkat_args), .sy_call = (sy_call_t *)sys_readlinkat, .sy_auevent = AUE_READLINKAT, .sy_flags = (SYSFIL_VFS_READ << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 500 = readlinkat */
+	{ .sy_narg = AS(renameat_args), .sy_call = (sy_call_t *)sys_renameat, .sy_auevent = AUE_RENAMEAT, .sy_flags = (SYSFIL_VFS_CREATE << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 501 = renameat */
+	{ .sy_narg = AS(symlinkat_args), .sy_call = (sy_call_t *)sys_symlinkat, .sy_auevent = AUE_SYMLINKAT, .sy_flags = (SYSFIL_VFS_CREATE << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 502 = symlinkat */
+	{ .sy_narg = AS(unlinkat_args), .sy_call = (sy_call_t *)sys_unlinkat, .sy_auevent = AUE_UNLINKAT, .sy_flags = (SYSFIL_VFS_DELETE << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 503 = unlinkat */
 	{ .sy_narg = AS(posix_openpt_args), .sy_call = (sy_call_t *)sys_posix_openpt, .sy_auevent = AUE_POSIX_OPENPT, .sy_flags = (SYSFIL_TTY << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 504 = posix_openpt */
 	{ .sy_narg = AS(gssd_syscall_args), .sy_call = (sy_call_t *)lkmressys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },	/* 505 = gssd_syscall */
 	{ .sy_narg = AS(jail_get_args), .sy_call = (sy_call_t *)sys_jail_get, .sy_auevent = AUE_JAIL_GET, .sy_flags = (SYSFIL_JAIL << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 506 = jail_get */
@@ -569,7 +569,7 @@ struct sysent sysent[] = {
 	{ .sy_narg = AS(__semctl_args), .sy_call = (sy_call_t *)lkmressys, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_SYSVIPC << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_ABSENT },	/* 510 = __semctl */
 	{ .sy_narg = AS(msgctl_args), .sy_call = (sy_call_t *)lkmressys, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_SYSVIPC << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_ABSENT },	/* 511 = msgctl */
 	{ .sy_narg = AS(shmctl_args), .sy_call = (sy_call_t *)lkmressys, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_SYSVIPC << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_ABSENT },	/* 512 = shmctl */
-	{ .sy_narg = AS(lpathconf_args), .sy_call = (sy_call_t *)sys_lpathconf, .sy_auevent = AUE_LPATHCONF, .sy_flags = (SYSFIL_PATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 513 = lpathconf */
+	{ .sy_narg = AS(lpathconf_args), .sy_call = (sy_call_t *)sys_lpathconf, .sy_auevent = AUE_LPATHCONF, .sy_flags = (SYSFIL_VFS_MISC << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 513 = lpathconf */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 514 = obsolete cap_new */
 	{ .sy_narg = AS(__cap_rights_get_args), .sy_call = (sy_call_t *)sys___cap_rights_get, .sy_auevent = AUE_CAP_RIGHTS_GET, .sy_flags = (SYSFIL_CAPCOMPAT << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 515 = __cap_rights_get */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)sys_cap_enter, .sy_auevent = AUE_CAP_ENTER, .sy_flags = (SYSFIL_ALWAYS << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 516 = cap_enter */
@@ -608,14 +608,14 @@ struct sysent sysent[] = {
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 549 = obsolete numa_setaffinity */
 	{ .sy_narg = AS(fdatasync_args), .sy_call = (sy_call_t *)sys_fdatasync, .sy_auevent = AUE_FSYNC, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 550 = fdatasync */
 	{ .sy_narg = AS(fstat_args), .sy_call = (sy_call_t *)sys_fstat, .sy_auevent = AUE_FSTAT, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 551 = fstat */
-	{ .sy_narg = AS(fstatat_args), .sy_call = (sy_call_t *)sys_fstatat, .sy_auevent = AUE_FSTATAT, .sy_flags = (SYSFIL_RPATH << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 552 = fstatat */
+	{ .sy_narg = AS(fstatat_args), .sy_call = (sy_call_t *)sys_fstatat, .sy_auevent = AUE_FSTATAT, .sy_flags = (SYSFIL_VFS_READ << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 552 = fstatat */
 	{ .sy_narg = AS(fhstat_args), .sy_call = (sy_call_t *)sys_fhstat, .sy_auevent = AUE_FHSTAT, .sy_flags = (SYSFIL_FH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 553 = fhstat */
-	{ .sy_narg = AS(getdirentries_args), .sy_call = (sy_call_t *)sys_getdirentries, .sy_auevent = AUE_GETDIRENTRIES, .sy_flags = (SYSFIL_RPATH << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 554 = getdirentries */
-	{ .sy_narg = AS(statfs_args), .sy_call = (sy_call_t *)sys_statfs, .sy_auevent = AUE_STATFS, .sy_flags = (SYSFIL_RPATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 555 = statfs */
-	{ .sy_narg = AS(fstatfs_args), .sy_call = (sy_call_t *)sys_fstatfs, .sy_auevent = AUE_FSTATFS, .sy_flags = (SYSFIL_RPATH << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 556 = fstatfs */
-	{ .sy_narg = AS(getfsstat_args), .sy_call = (sy_call_t *)sys_getfsstat, .sy_auevent = AUE_GETFSSTAT, .sy_flags = (SYSFIL_RPATH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 557 = getfsstat */
+	{ .sy_narg = AS(getdirentries_args), .sy_call = (sy_call_t *)sys_getdirentries, .sy_auevent = AUE_GETDIRENTRIES, .sy_flags = (SYSFIL_VFS_READ << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 554 = getdirentries */
+	{ .sy_narg = AS(statfs_args), .sy_call = (sy_call_t *)sys_statfs, .sy_auevent = AUE_STATFS, .sy_flags = (SYSFIL_VFS_READ << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 555 = statfs */
+	{ .sy_narg = AS(fstatfs_args), .sy_call = (sy_call_t *)sys_fstatfs, .sy_auevent = AUE_FSTATFS, .sy_flags = (SYSFIL_VFS_READ << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 556 = fstatfs */
+	{ .sy_narg = AS(getfsstat_args), .sy_call = (sy_call_t *)sys_getfsstat, .sy_auevent = AUE_GETFSSTAT, .sy_flags = (SYSFIL_VFS_READ << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 557 = getfsstat */
 	{ .sy_narg = AS(fhstatfs_args), .sy_call = (sy_call_t *)sys_fhstatfs, .sy_auevent = AUE_FHSTATFS, .sy_flags = (SYSFIL_FH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 558 = fhstatfs */
-	{ .sy_narg = AS(mknodat_args), .sy_call = (sy_call_t *)sys_mknodat, .sy_auevent = AUE_MKNODAT, .sy_flags = (SYSFIL_DPATH << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 559 = mknodat */
+	{ .sy_narg = AS(mknodat_args), .sy_call = (sy_call_t *)sys_mknodat, .sy_auevent = AUE_MKNODAT, .sy_flags = (SYSFIL_VFS_CREATE << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 559 = mknodat */
 	{ .sy_narg = AS(kevent_args), .sy_call = (sy_call_t *)sys_kevent, .sy_auevent = AUE_KEVENT, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 560 = kevent */
 	{ .sy_narg = AS(cpuset_getdomain_args), .sy_call = (sy_call_t *)sys_cpuset_getdomain, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_CPUSET_CHECKED << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 561 = cpuset_getdomain */
 	{ .sy_narg = AS(cpuset_setdomain_args), .sy_call = (sy_call_t *)sys_cpuset_setdomain, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_CPUSET_CHECKED << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 562 = cpuset_setdomain */
@@ -624,7 +624,7 @@ struct sysent sysent[] = {
 	{ .sy_narg = AS(fhlink_args), .sy_call = (sy_call_t *)sys_fhlink, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_FH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 565 = fhlink */
 	{ .sy_narg = AS(fhlinkat_args), .sy_call = (sy_call_t *)sys_fhlinkat, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_FH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 566 = fhlinkat */
 	{ .sy_narg = AS(fhreadlink_args), .sy_call = (sy_call_t *)sys_fhreadlink, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_FH << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 567 = fhreadlink */
-	{ .sy_narg = AS(funlinkat_args), .sy_call = (sy_call_t *)sys_funlinkat, .sy_auevent = AUE_UNLINKAT, .sy_flags = (SYSFIL_CPATH << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 568 = funlinkat */
+	{ .sy_narg = AS(funlinkat_args), .sy_call = (sy_call_t *)sys_funlinkat, .sy_auevent = AUE_UNLINKAT, .sy_flags = (SYSFIL_VFS_DELETE << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 568 = funlinkat */
 	{ .sy_narg = AS(copy_file_range_args), .sy_call = (sy_call_t *)sys_copy_file_range, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 569 = copy_file_range */
 	{ .sy_narg = AS(__sysctlbyname_args), .sy_call = (sy_call_t *)sys___sysctlbyname, .sy_auevent = AUE_SYSCTL, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 570 = __sysctlbyname */
 	{ .sy_narg = AS(shm_open2_args), .sy_call = (sy_call_t *)sys_shm_open2, .sy_auevent = AUE_SHMOPEN, .sy_flags = (SYSFIL_POSIXIPC_CHECKED << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 571 = shm_open2 */

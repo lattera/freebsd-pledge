@@ -178,10 +178,12 @@ static const struct promise_sysfil {
 } sysfils_table[] = {
 	{ PROMISE_BASIC,		SYSFIL_STDIO },
 	{ PROMISE_STDIO,		SYSFIL_STDIO },
-	{ PROMISE_RPATH,		SYSFIL_RPATH },
-	{ PROMISE_WPATH,		SYSFIL_WPATH },
-	{ PROMISE_CPATH,		SYSFIL_CPATH },
-	{ PROMISE_DPATH,		SYSFIL_DPATH },
+	{ PROMISE_RPATH,		SYSFIL_VFS_READ },
+	{ PROMISE_WPATH,		SYSFIL_VFS_WRITE },
+	{ PROMISE_CPATH,		SYSFIL_VFS_CREATE },
+	{ PROMISE_CPATH,		SYSFIL_VFS_DELETE },
+	{ PROMISE_DPATH,		SYSFIL_MKFIFO },
+	{ PROMISE_DPATH,		SYSFIL_MAKEDEV },
 	{ PROMISE_FLOCK,		SYSFIL_FLOCK },
 	{ PROMISE_FATTR,		SYSFIL_FATTR },
 	{ PROMISE_CHOWN,		SYSFIL_CHOWN },
@@ -465,12 +467,13 @@ static void
 sysfils_for_uperms(struct curtain_slot *slot, unveil_perms uperms)
 {
 	if (uperms & UPERM_READ)
-		curtain_sysfil(slot, SYSFIL_RPATH, 0);
-	/* Note that UPERM_WRITE does not imply SYSFIL_FATTR. */
+		curtain_sysfil(slot, SYSFIL_VFS_READ, 0);
 	if (uperms & UPERM_WRITE)
-		curtain_sysfil(slot, SYSFIL_WPATH, 0);
-	if (uperms & (UPERM_CREATE | UPERM_DELETE))
-		curtain_sysfil(slot, SYSFIL_CPATH, 0);
+		curtain_sysfil(slot, SYSFIL_VFS_WRITE, 0);
+	if (uperms & UPERM_CREATE)
+		curtain_sysfil(slot, SYSFIL_VFS_CREATE, 0);
+	if (uperms & UPERM_DELETE)
+		curtain_sysfil(slot, SYSFIL_VFS_DELETE, 0);
 	if (uperms & UPERM_EXECUTE)
 		curtain_sysfil(slot, SYSFIL_EXEC, 0);
 	if (uperms & UPERM_SETATTR)
@@ -478,9 +481,10 @@ sysfils_for_uperms(struct curtain_slot *slot, unveil_perms uperms)
 	if (uperms & UPERM_UNIX)
 		curtain_sysfil(slot, SYSFIL_UNIX, 0);
 	if (uperms & UPERM_TMPDIR) {
-		curtain_sysfil(slot, SYSFIL_RPATH, 0);
-		curtain_sysfil(slot, SYSFIL_WPATH, 0);
-		curtain_sysfil(slot, SYSFIL_CPATH, 0);
+		curtain_sysfil(slot, SYSFIL_VFS_READ, 0);
+		curtain_sysfil(slot, SYSFIL_VFS_WRITE, 0);
+		curtain_sysfil(slot, SYSFIL_VFS_CREATE, 0);
+		curtain_sysfil(slot, SYSFIL_VFS_DELETE, 0);
 	}
 }
 
