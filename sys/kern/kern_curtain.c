@@ -524,6 +524,15 @@ CTASSERT(SYSFIL_SAME_SESSION > SYSFIL_ANY_PROCESS);
 CTASSERT(SYSFIL_SAME_PGRP > SYSFIL_SAME_SESSION);
 CTASSERT(SYSFIL_CHILD_PROCESS > SYSFIL_SAME_PGRP);
 
+static inline void
+mode_update(struct curtain_mode *mode, int flags, enum curtain_level lvl)
+{
+	if (flags & CURTAINREQ_ON_SELF)
+		mode->on_self = lvl;
+	if (flags & CURTAINREQ_ON_EXEC)
+		mode->on_exec = lvl;
+}
+
 static struct curtain *
 curtain_build(int flags, size_t reqc, const struct curtainreq *reqv)
 {
@@ -536,16 +545,13 @@ curtain_build(int flags, size_t reqc, const struct curtainreq *reqv)
 	ct = curtain_make(CURTAINCTL_MAX_ITEMS);
 
 	def_on_self = def_on_exec = CURTAINLVL_DENY;
-	for (req = reqv; req < &reqv[reqc]; req++) {
-		bool req_on_self = req->flags & CURTAINREQ_ON_SELF;
-		bool req_on_exec = req->flags & CURTAINREQ_ON_EXEC;
+	for (req = reqv; req < &reqv[reqc]; req++)
 		if (req->type == CURTAINTYP_DEFAULT) {
-			if (req_on_self)
+			if (req->flags & CURTAINREQ_ON_SELF)
 				def_on_self = req->level;
-			if (req_on_exec)
+			if (req->flags & CURTAINREQ_ON_EXEC)
 				def_on_exec = req->level;
 		}
-	}
 	for (int sf = 0; sf <= SYSFIL_LAST; sf++) {
 		ct->ct_sysfils[sf].on_self = def_on_self;
 		ct->ct_sysfils[sf].on_exec = def_on_exec;
@@ -555,9 +561,7 @@ curtain_build(int flags, size_t reqc, const struct curtainreq *reqv)
 		ct->ct_sysfils[sysfils_always[i]].on_exec = CURTAINLVL_PASS;
 	}
 
-	for (req = reqv; req < &reqv[reqc]; req++) {
-		bool req_on_self = req->flags & CURTAINREQ_ON_SELF;
-		bool req_on_exec = req->flags & CURTAINREQ_ON_EXEC;
+	for (req = reqv; req < &reqv[reqc]; req++)
 		switch (req->type) {
 		case CURTAINTYP_DEFAULT:
 			break; /* handled earlier */
@@ -568,10 +572,7 @@ curtain_build(int flags, size_t reqc, const struct curtainreq *reqv)
 				int sf = *sfp++;
 				if (!SYSFIL_USER_VALID(sf))
 					goto fail;
-				if (req_on_self)
-					ct->ct_sysfils[sf].on_self = req->level;
-				if (req_on_exec)
-					ct->ct_sysfils[sf].on_exec = req->level;
+				mode_update(&ct->ct_sysfils[sf], req->flags, req->level);
 			}
 			break;
 		}
@@ -586,10 +587,7 @@ curtain_build(int flags, size_t reqc, const struct curtainreq *reqv)
 				    (union curtain_key){ .ioctl = *p++ });
 				if (!item)
 					goto fail;
-				if (req_on_self)
-					item->mode.on_self = req->level;
-				if (req_on_exec)
-					item->mode.on_exec = req->level;
+				mode_update(&item->mode, req->flags, req->level);
 			}
 			break;
 		}
@@ -602,10 +600,7 @@ curtain_build(int flags, size_t reqc, const struct curtainreq *reqv)
 				    (union curtain_key){ .sockaf = *p++ });
 				if (!item)
 					goto fail;
-				if (req_on_self)
-					item->mode.on_self = req->level;
-				if (req_on_exec)
-					item->mode.on_exec = req->level;
+				mode_update(&item->mode, req->flags, req->level);
 			}
 			break;
 		}
@@ -618,10 +613,7 @@ curtain_build(int flags, size_t reqc, const struct curtainreq *reqv)
 				    (union curtain_key){ .socklvl = *p++ });
 				if (!item)
 					goto fail;
-				if (req_on_self)
-					item->mode.on_self = req->level;
-				if (req_on_exec)
-					item->mode.on_exec = req->level;
+				mode_update(&item->mode, req->flags, req->level);
 			}
 			break;
 		}
@@ -635,10 +627,7 @@ curtain_build(int flags, size_t reqc, const struct curtainreq *reqv)
 				p++;
 				if (!item)
 					goto fail;
-				if (req_on_self)
-					item->mode.on_self = req->level;
-				if (req_on_exec)
-					item->mode.on_exec = req->level;
+				mode_update(&item->mode, req->flags, req->level);
 			}
 			break;
 		}
@@ -651,10 +640,7 @@ curtain_build(int flags, size_t reqc, const struct curtainreq *reqv)
 				    (union curtain_key){ .priv = *p++ });
 				if (!item)
 					goto fail;
-				if (req_on_self)
-					item->mode.on_self = req->level;
-				if (req_on_exec)
-					item->mode.on_exec = req->level;
+				mode_update(&item->mode, req->flags, req->level);
 			}
 			break;
 		}
@@ -681,17 +667,13 @@ curtain_build(int flags, size_t reqc, const struct curtainreq *reqv)
 				    });
 				if (!item)
 					goto fail;
-				if (req_on_self)
-					item->mode.on_self = req->level;
-				if (req_on_exec)
-					item->mode.on_exec = req->level;
+				mode_update(&item->mode, req->flags, req->level);
 			}
 			break;
 		}
 		default:
 			goto fail;
 		}
-	}
 
 	if (ct->ct_nitems > CURTAINCTL_MAX_ITEMS)
 		goto fail;

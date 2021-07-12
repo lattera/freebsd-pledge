@@ -43,6 +43,7 @@ int curtainctl(int flags, size_t reqc, struct curtainreq *reqv);
 
 #define	CURTAINREQ_ON_SELF	(1 << 16)
 #define	CURTAINREQ_ON_EXEC	(1 << 17)
+#define	CURTAINREQ_ON_BOTH	(CURTAINREQ_ON_SELF | CURTAINREQ_ON_EXEC)
 
 #ifdef _KERNEL
 
