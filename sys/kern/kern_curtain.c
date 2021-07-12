@@ -1280,15 +1280,90 @@ curtain_cap_enter(struct thread *td)
 	crfree(old_cr);
 }
 
-static cap_rights_t __read_mostly cap_sysfil_vfs_read_rights;
-static cap_rights_t __read_mostly cap_sysfil_vfs_write_rights;
-static cap_rights_t __read_mostly cap_sysfil_vfs_create_rights;
-static cap_rights_t __read_mostly cap_sysfil_vfs_delete_rights;
-static cap_rights_t __read_mostly cap_sysfil_vfs_create_delete_rights;
-static cap_rights_t __read_mostly cap_sysfil_exec_rights;
-static cap_rights_t __read_mostly cap_sysfil_fattr_rights;
-static cap_rights_t __read_mostly cap_sysfil_mkfifo_rights;
-static cap_rights_t __read_mostly cap_sysfil_unix_rights;
+static void
+fill_sysfil_rights(const sysfilset_t *sfs, cap_rights_t *rights)
+{
+	CAP_NONE(rights);
+	if (BIT_ISSET(SYSFILSET_BITS, SYSFIL_VFS_READ, sfs))
+		cap_rights_set(rights,
+		    CAP_LOOKUP,
+		    CAP_FPATHCONF,
+		    CAP_FLOCK,
+		    CAP_READ,
+		    CAP_SEEK,
+		    CAP_MMAP,
+		    CAP_FCHDIR,
+		    CAP_FSTAT,
+		    CAP_FSTATAT,
+		    CAP_FSTATFS,
+		    CAP_MAC_GET,
+		    CAP_EXTATTR_GET,
+		    CAP_EXTATTR_LIST);
+	if (BIT_ISSET(SYSFILSET_BITS, SYSFIL_VFS_WRITE, sfs))
+		cap_rights_set(rights,
+		    CAP_LOOKUP,
+		    CAP_FPATHCONF,
+		    CAP_FLOCK,
+		    CAP_WRITE,
+		    CAP_SEEK,
+		    CAP_MMAP,
+		    CAP_FSYNC,
+		    CAP_FTRUNCATE);
+	if (BIT_ISSET(SYSFILSET_BITS, SYSFIL_VFS_CREATE, sfs))
+		cap_rights_set(rights,
+		    CAP_LOOKUP,
+		    CAP_FPATHCONF,
+		    CAP_CREATE,
+		    CAP_LINKAT_SOURCE,
+		    CAP_LINKAT_TARGET,
+		    CAP_MKDIRAT,
+		    CAP_MKFIFOAT,
+		    CAP_MKNODAT,
+		    CAP_SYMLINKAT,
+		    CAP_UNDELETEAT);
+	if (BIT_ISSET(SYSFILSET_BITS, SYSFIL_VFS_DELETE, sfs))
+		cap_rights_set(rights,
+		    CAP_LOOKUP,
+		    CAP_FPATHCONF,
+		    CAP_UNLINKAT);
+	if (BIT_ISSET(SYSFILSET_BITS, SYSFIL_VFS_CREATE, sfs) &&
+	    BIT_ISSET(SYSFILSET_BITS, SYSFIL_VFS_DELETE, sfs))
+		cap_rights_set(rights,
+		    CAP_LOOKUP,
+		    CAP_FPATHCONF,
+		    CAP_RENAMEAT_SOURCE,
+		    CAP_RENAMEAT_TARGET);
+	if (BIT_ISSET(SYSFILSET_BITS, SYSFIL_EXEC, sfs))
+		cap_rights_set(rights,
+		    CAP_LOOKUP,
+		    CAP_FEXECVE,
+		    CAP_EXECAT);
+	if (BIT_ISSET(SYSFILSET_BITS, SYSFIL_FATTR, sfs))
+		/* XXX there are related sysfils for some of those */
+		cap_rights_set(rights,
+		    CAP_LOOKUP,
+		    CAP_FCHFLAGS,
+		    CAP_CHFLAGSAT,
+		    CAP_FCHMOD,
+		    CAP_FCHMODAT,
+		    CAP_FCHOWN,
+		    CAP_FCHOWNAT,
+		    CAP_FUTIMES,
+		    CAP_FUTIMESAT,
+		    CAP_MAC_SET,
+		    CAP_REVOKEAT,
+		    CAP_EXTATTR_SET,
+		    CAP_EXTATTR_DELETE);
+	if (BIT_ISSET(SYSFILSET_BITS, SYSFIL_MKFIFO, sfs))
+		cap_rights_set(rights,
+		    CAP_LOOKUP,
+		    CAP_MKFIFOAT);
+	if (BIT_ISSET(SYSFILSET_BITS, SYSFIL_UNIX, sfs))
+		cap_rights_set(rights,
+		    CAP_LOOKUP,
+		    CAP_BINDAT,
+		    CAP_CONNECTAT);
+}
 
 void
 sysfil_cred_rights(struct ucred *cr, cap_rights_t *rights)
@@ -1297,103 +1372,8 @@ sysfil_cred_rights(struct ucred *cr, cap_rights_t *rights)
 		CAP_ALL(rights);
 		return;
 	}
-	CAP_NONE(rights);
-	if (sysfil_match_cred(cr, SYSFIL_VFS_READ))
-		cap_rights_merge(rights, &cap_sysfil_vfs_read_rights);
-	if (sysfil_match_cred(cr, SYSFIL_VFS_WRITE))
-		cap_rights_merge(rights, &cap_sysfil_vfs_write_rights);
-	if (sysfil_match_cred(cr, SYSFIL_VFS_CREATE))
-		cap_rights_merge(rights, &cap_sysfil_vfs_create_rights);
-	if (sysfil_match_cred(cr, SYSFIL_VFS_DELETE))
-		cap_rights_merge(rights, &cap_sysfil_vfs_delete_rights);
-	if (sysfil_match_cred(cr, SYSFIL_VFS_CREATE) &&
-	    sysfil_match_cred(cr, SYSFIL_VFS_DELETE))
-		cap_rights_merge(rights, &cap_sysfil_vfs_create_delete_rights);
-	if (sysfil_match_cred(cr, SYSFIL_EXEC))
-		cap_rights_merge(rights, &cap_sysfil_exec_rights);
-	if (sysfil_match_cred(cr, SYSFIL_FATTR))
-		cap_rights_merge(rights, &cap_sysfil_fattr_rights);
-	if (sysfil_match_cred(cr, SYSFIL_MKFIFO))
-		cap_rights_merge(rights, &cap_sysfil_mkfifo_rights);
-	if (sysfil_match_cred(cr, SYSFIL_UNIX))
-		cap_rights_merge(rights, &cap_sysfil_unix_rights);
+	/* XXX This may restrict Capsicum programs more than before. */
+	fill_sysfil_rights(&cr->cr_sysfilset, rights);
 }
-
-static void
-sysfil_sysinit(void *arg)
-{
-	/* Note: Some of those rights are further restricted by other sysfils. */
-	cap_rights_init(&cap_sysfil_vfs_read_rights,
-	    CAP_LOOKUP,
-	    CAP_FPATHCONF,
-	    CAP_FLOCK,
-	    CAP_READ,
-	    CAP_SEEK,
-	    CAP_MMAP,
-	    CAP_FCHDIR,
-	    CAP_FSTAT,
-	    CAP_FSTATAT,
-	    CAP_FSTATFS,
-	    CAP_MAC_GET,
-	    CAP_EXTATTR_GET,
-	    CAP_EXTATTR_LIST);
-	cap_rights_init(&cap_sysfil_vfs_write_rights,
-	    CAP_LOOKUP,
-	    CAP_FPATHCONF,
-	    CAP_FLOCK,
-	    CAP_WRITE,
-	    CAP_SEEK,
-	    CAP_MMAP,
-	    CAP_FSYNC,
-	    CAP_FTRUNCATE);
-	cap_rights_init(&cap_sysfil_vfs_create_rights,
-	    CAP_LOOKUP,
-	    CAP_FPATHCONF,
-	    CAP_CREATE,
-	    CAP_LINKAT_SOURCE,
-	    CAP_LINKAT_TARGET,
-	    CAP_MKDIRAT,
-	    CAP_MKFIFOAT,
-	    CAP_MKNODAT,
-	    CAP_SYMLINKAT,
-	    CAP_UNDELETEAT);
-	cap_rights_init(&cap_sysfil_vfs_delete_rights,
-	    CAP_LOOKUP,
-	    CAP_FPATHCONF,
-	    CAP_UNLINKAT);
-	cap_rights_init(&cap_sysfil_vfs_create_delete_rights,
-	    CAP_LOOKUP,
-	    CAP_FPATHCONF,
-	    CAP_RENAMEAT_SOURCE,
-	    CAP_RENAMEAT_TARGET);
-	cap_rights_init(&cap_sysfil_exec_rights,
-	    CAP_LOOKUP,
-	    CAP_FEXECVE,
-	    CAP_EXECAT);
-	/* XXX there are related sysfils for some of those */
-	cap_rights_init(&cap_sysfil_fattr_rights,
-	    CAP_LOOKUP,
-	    CAP_FCHFLAGS,
-	    CAP_CHFLAGSAT,
-	    CAP_FCHMOD,
-	    CAP_FCHMODAT,
-	    CAP_FCHOWN,
-	    CAP_FCHOWNAT,
-	    CAP_FUTIMES,
-	    CAP_FUTIMESAT,
-	    CAP_MAC_SET,
-	    CAP_REVOKEAT,
-	    CAP_EXTATTR_SET,
-	    CAP_EXTATTR_DELETE);
-	cap_rights_init(&cap_sysfil_mkfifo_rights,
-	    CAP_LOOKUP,
-	    CAP_MKFIFOAT);
-	cap_rights_init(&cap_sysfil_unix_rights,
-	    CAP_LOOKUP,
-	    CAP_BINDAT,
-	    CAP_CONNECTAT);
-}
-
-SYSINIT(sysfil_sysinit, SI_SUB_COPYRIGHT, SI_ORDER_ANY, sysfil_sysinit, NULL);
 
 #endif /* SYSFIL */
