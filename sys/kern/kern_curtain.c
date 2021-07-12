@@ -176,6 +176,12 @@ curtain_dup(const struct curtain *src)
 	return (dst);
 }
 
+static inline void
+curtain_dirty(struct curtain *ct)
+{
+	ct->ct_cache_valid = false;
+}
+
 #define CURTAIN_KEY_INVALID_TYPE_CASES	\
 	case CURTAINTYP_DEFAULT:	\
 	case CURTAINTYP_SYSFIL:		\
@@ -314,14 +320,17 @@ curtain_search(struct curtain *ct, enum curtain_type type, union curtain_key key
 		prev = NULL;
 	if (!item) {
 		ct->ct_overflowed = true;
-	} else if (item->type == 0) {
-		ct->ct_nitems++;
-		item->type = type;
-		item->key = key;
-		curtain_hash_init(ct, item);
-		if (prev)
-			curtain_hash_link(ct, prev, item);
-		mode_set(&item->mode, CURTAINLVL_PASS);
+	} else {
+		curtain_dirty(ct);
+		if (item->type == 0) {
+			ct->ct_nitems++;
+			item->type = type;
+			item->key = key;
+			curtain_hash_init(ct, item);
+			if (prev)
+				curtain_hash_link(ct, prev, item);
+			mode_set(&item->mode, CURTAINLVL_PASS);
+		}
 	}
 	return (item);
 }
@@ -335,6 +344,8 @@ curtain_dup_compact(const struct curtain *src)
 	dst = curtain_make(src->ct_nitems);
 	dst->ct_overflowed = src->ct_overflowed;
 	memcpy(dst->ct_sysfils, src->ct_sysfils, sizeof dst->ct_sysfils);
+	dst->ct_cache_valid = src->ct_cache_valid;
+	dst->ct_cached = src->ct_cached;
 	for (si = src->ct_slots; si < &src->ct_slots[src->ct_nslots]; si++)
 		if (si->type != 0) {
 			di = curtain_search(dst, si->type, si->key);
@@ -399,6 +410,22 @@ curtain_check_cred(const struct ucred *cr, enum curtain_type type, union curtain
 }
 
 static bool
+curtain_need_exec_switch(const struct curtain *ct)
+{
+	const struct curtain_item *item;
+	for (int sf = 0; sf <= SYSFIL_LAST; sf++)
+		if (ct->ct_sysfils[sf].on_self != ct->ct_sysfils[sf].on_exec ||
+		    ct->ct_sysfils[sf].on_self_max != ct->ct_sysfils[sf].on_exec_max)
+			return (true);
+	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
+		if (item->type != 0 &&
+		    (item->mode.on_self != item->mode.on_exec ||
+		     item->mode.on_self_max != item->mode.on_exec_max))
+			return (true);
+	return (false);
+}
+
+static bool
 curtain_is_restricted_on_self(const struct curtain *ct)
 {
 	const struct curtain_item *item;
@@ -428,6 +455,23 @@ curtain_is_restricted_on_exec(const struct curtain *ct)
 			    item->mode.on_exec_max != CURTAINLVL_PASS)
 				return (true);
 	return (false);
+}
+
+static void fill_sysfil_rights(const sysfilset_t *, cap_rights_t *);
+
+static void
+curtain_cache_update(struct curtain *ct)
+{
+	sysfilset_t sfs;
+	BIT_ZERO(SYSFILSET_BITS, &sfs);
+	for (int sf = 0; sf <= SYSFIL_LAST; sf++)
+		if (ct->ct_sysfils[sf].on_self == CURTAINLVL_PASS)
+			BIT_SET(SYSFILSET_BITS, sf, &sfs);
+	fill_sysfil_rights(&sfs, &ct->ct_cached.sysfil_rights);
+	ct->ct_cached.need_exec_switch = curtain_need_exec_switch(ct);
+	ct->ct_cached.is_restricted_on_self = curtain_is_restricted_on_self(ct);
+	ct->ct_cached.is_restricted_on_exec = curtain_is_restricted_on_exec(ct);
+	ct->ct_cache_valid = true;
 }
 
 static void
@@ -460,6 +504,7 @@ curtain_exec_switch(struct curtain *ct)
 			item->mode.on_self     = item->mode.on_exec;
 			item->mode.on_self_max = item->mode.on_exec_max;
 		}
+	curtain_dirty(ct);
 }
 
 static void
@@ -485,6 +530,7 @@ curtain_mask_sysfils(struct curtain *ct, const sysfilset_t *sfs)
 		if (item->type != 0)
 			if (!BIT_ISSET(SYSFILSET_BITS, sysfil_for_type(item->type), sfs))
 				mode_cap(&item->mode, CURTAINLVL_DENY);
+	curtain_dirty(ct);
 }
 
 static void
@@ -519,6 +565,7 @@ curtain_mask(struct curtain *dst, const struct curtain *src)
 			curtain_mask_item(&di->mode, di->type, di->key, src);
 	for (int sf = 0; sf <= SYSFIL_LAST; sf++)
 		mode_mask(&dst->ct_sysfils[sf], &src->ct_sysfils[sf]);
+	curtain_dirty(dst);
 }
 
 /* Some sysfils shouldn't be disabled via curtainctl(2). */
@@ -999,27 +1046,21 @@ curtain_sysctl_req_amend(struct sysctl_req *req, const struct sysctl_oid *oid)
 bool
 curtain_cred_need_exec_switch(const struct ucred *cr)
 {
-	struct curtain *ct = cr->cr_curtain;
-	struct curtain_item *item;
-	if (!ct)
+	const struct curtain *ct;
+	if (!(ct = cr->cr_curtain))
 		return (false);
-	for (int sf = 0; sf <= SYSFIL_LAST; sf++)
-		if (ct->ct_sysfils[sf].on_self != ct->ct_sysfils[sf].on_exec ||
-		    ct->ct_sysfils[sf].on_self_max != ct->ct_sysfils[sf].on_exec_max)
-			return (true);
-	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
-		if (item->type != 0 &&
-		    (item->mode.on_self != item->mode.on_exec ||
-		     item->mode.on_self_max != item->mode.on_exec_max))
-			return (true);
-	return (false);
+	return (ct->ct_cache_valid ? ct->ct_cached.need_exec_switch
+	                           : curtain_need_exec_switch(ct));
 }
 
 bool
 curtain_cred_exec_restricted(const struct ucred *cr)
 {
-	const struct curtain *ct = cr->cr_curtain;
-	return (ct && curtain_is_restricted_on_exec(ct));
+	const struct curtain *ct;
+	if (!(ct = cr->cr_curtain))
+		return (CRED_IN_RESTRICTED_MODE(cr));
+	return (ct->ct_cache_valid ? ct->ct_cached.is_restricted_on_exec
+	                           : curtain_is_restricted_on_exec(ct));
 }
 
 void
@@ -1039,6 +1080,7 @@ curtain_cred_exec_switch(struct ucred *cr)
 
 	ct = curtain_dup(ct);
 	curtain_exec_switch(ct);
+	curtain_cache_update(ct);
 	curtain_cred_sysfil_update(cr, ct);
 	curtain_free(cr->cr_curtain);
 	cr->cr_curtain = ct;
@@ -1116,6 +1158,7 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 		if (cr->cr_curtain)
 			curtain_free(cr->cr_curtain);
 		curtain_compact(&ct);
+		curtain_cache_update(ct);
 		SDT_PROBE1(curtain,, do_curtainctl, compact, ct);
 		cr->cr_curtain = ct;
 		PROC_LOCK(p);
@@ -1372,6 +1415,10 @@ sysfil_cred_rights(struct ucred *cr, cap_rights_t *rights)
 {
 	if (!CRED_IN_RESTRICTED_MODE(cr)) {
 		CAP_ALL(rights);
+		return;
+	}
+	if (cr->cr_curtain && cr->cr_curtain->ct_cache_valid) {
+		*rights = cr->cr_curtain->ct_cached.sysfil_rights;
 		return;
 	}
 	/* XXX This may restrict Capsicum programs more than before. */

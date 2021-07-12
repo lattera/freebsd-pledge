@@ -53,6 +53,7 @@ int curtainctl(int flags, size_t reqc, struct curtainreq *reqv);
 #include <sys/sysctl.h>
 #include <sys/proc.h>
 #include <sys/mman.h>
+#include <sys/caprights.h>
 
 struct curtain_mode {
 	uint8_t on_self     : 2;
@@ -94,6 +95,13 @@ struct curtain {
 	curtain_index ct_modulo;
 	curtain_index ct_cellar;
 	bool ct_overflowed;
+	bool ct_cache_valid;
+	struct {
+		cap_rights_t sysfil_rights;
+		bool need_exec_switch;
+		bool is_restricted_on_self;
+		bool is_restricted_on_exec;
+	} ct_cached;
 	struct curtain_mode ct_sysfils[SYSFIL_COUNT];
 	struct curtain_item ct_slots[];
 };
