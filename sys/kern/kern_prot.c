@@ -1438,6 +1438,10 @@ cr_cansee(struct ucred *u1, struct ucred *u2)
 
 	if ((error = prison_check(u1, u2)))
 		return (error);
+#ifdef SYSFIL
+	if ((error = sysfil_cred_check_visibility(u1, u2)))
+		return (error);
+#endif
 #ifdef MAC
 	if ((error = mac_cred_check_visible(u1, u2)))
 		return (error);
@@ -1448,38 +1452,6 @@ cr_cansee(struct ucred *u1, struct ucred *u2)
 		return (error);
 	if ((error = cr_canseejailproc(u1, u2)))
 		return (error);
-	return (0);
-}
-
-static inline int
-p_sysfil_check(struct thread *td, struct proc *p)
-{
-	if (IN_RESTRICTED_MODE(td) && td->td_proc != p) {
-		int error;
-		error = sysfil_check(td, SYSFIL_PROC);
-		if (error)
-			return (error);
-		if (td->td_proc == p->p_pptr) {
-			/*
-			 * Allow visibility on child processes no matter what
-			 * session or process group they might be in.
-			 *
-			 * XXX Tracing interferes with this check since it
-			 * reparents processes.
-			 */
-			if (sysfil_check(td, SYSFIL_CHILD_PROCESS) == 0)
-				return (0);
-		}
-		if (td->td_proc->p_session != p->p_session) {
-			error = sysfil_check(td, SYSFIL_ANY_PROCESS);
-		} else if (td->td_proc->p_pgrp != p->p_pgrp) {
-			error = sysfil_check(td, SYSFIL_SAME_SESSION);
-		} else {
-			error = sysfil_check(td, SYSFIL_SAME_PGRP);
-		}
-		if (error)
-			return (error);
-	}
 	return (0);
 }
 
@@ -1498,9 +1470,11 @@ p_cansee(struct thread *td, struct proc *p)
 	/* Wrap cr_cansee() for all functionality. */
 	KASSERT(td == curthread, ("%s: td not curthread", __func__));
 	PROC_LOCK_ASSERT(p, MA_OWNED);
-	error = p_sysfil_check(td, p);
-	if (error)
-		return (error);
+	if (td->td_proc != p) {
+		error = sysfil_check(td, SYSFIL_PROC);
+		if (error)
+			return (error);
+	}
 	return (cr_cansee(td->td_ucred, p->p_ucred));
 }
 
@@ -1537,6 +1511,10 @@ cr_cansignal(struct ucred *cred, struct proc *proc, int signum)
 	error = prison_check(cred, proc->p_ucred);
 	if (error)
 		return (error);
+#ifdef SYSFIL
+	if ((error = sysfil_cred_check_visibility(cred, proc->p_ucred)))
+		return (error);
+#endif
 #ifdef MAC
 	if ((error = mac_proc_check_signal(cred, proc, signum)))
 		return (error);
@@ -1611,6 +1589,9 @@ p_cansignal(struct thread *td, struct proc *p, int signum)
 	PROC_LOCK_ASSERT(p, MA_OWNED);
 	if (td->td_proc == p)
 		return (0);
+	error = sysfil_check(td, SYSFIL_PROC);
+	if (error)
+		return (error);
 
 	/*
 	 * UNIX signalling semantics require that processes in the same
@@ -1633,9 +1614,11 @@ p_cansignal(struct thread *td, struct proc *p, int signum)
 	    signum < SIGTHR + 4 && td->td_proc->p_leader == p->p_leader)
 		return (0);
 
-	error = p_sysfil_check(td, p);
-	if (error)
-		return (error);
+	if (td->td_proc != p) {
+		error = sysfil_check(td, SYSFIL_PROC);
+		if (error)
+			return (error);
+	}
 
 	return (cr_cansignal(td->td_ucred, p, signum));
 }
@@ -1661,8 +1644,11 @@ p_cansched(struct thread *td, struct proc *p)
 		return (error);
 	if ((error = sysfil_check(td, SYSFIL_SCHED)))
 		return (error);
-	if ((error = p_sysfil_check(td, p)))
-		return (error);
+	if (td->td_proc != p) {
+		error = sysfil_check(td, SYSFIL_PROC);
+		if (error)
+			return (error);
+	}
 #ifdef MAC
 	if ((error = mac_proc_check_sched(td->td_ucred, p)))
 		return (error);

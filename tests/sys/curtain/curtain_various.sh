@@ -76,9 +76,9 @@ sh_bg_wait_body() {
 
 atf_test_case ps_visibility
 ps_visibility_body() {
-	atf_check -s exit:0 -o not-empty curtain sh -c 'exec ps -p $$'
-	atf_check -s exit:0 -o not-empty curtain sh -c 'ps -p $$'
-	atf_check -s not-exit:0 -o empty -e not-empty curtain ps -p $$
+	atf_check -s exit:0 -o not-empty curtain sh -c 'exec ps -o pid= -p $$'
+	atf_check -s exit:0 -o not-empty curtain sh -c 'ps -o pid= -p $$'
+	atf_check -s not-exit:0 -o empty curtain ps -o pid= -p $$
 }
 
 atf_test_case session_with_non_tty

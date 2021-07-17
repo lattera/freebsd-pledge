@@ -53,6 +53,7 @@ int curtainctl(int flags, size_t reqc, struct curtainreq *reqv);
 #include <sys/sysctl.h>
 #include <sys/proc.h>
 #include <sys/mman.h>
+#include <sys/queue.h>
 #include <sys/caprights.h>
 
 struct curtain_mode {
@@ -89,6 +90,10 @@ struct curtain_item {
 CTASSERT(sizeof(struct curtain_item) <= 12);
 
 struct curtain {
+	struct curtain *ct_parent;
+	LIST_HEAD(, curtain) ct_children;
+	LIST_ENTRY(curtain) ct_sibling;
+	size_t ct_nchildren;
 	volatile int ct_ref;
 	curtain_index ct_nslots;
 	curtain_index ct_nitems;
@@ -102,6 +107,7 @@ struct curtain {
 		bool is_restricted_on_self;
 		bool is_restricted_on_exec;
 	} ct_cached;
+	bool ct_barrier, ct_barrier_on_exec;
 	struct curtain_mode ct_sysfils[SYSFIL_COUNT];
 	struct curtain_item ct_slots[];
 };
@@ -180,6 +186,8 @@ sysfil_cred_init(struct ucred *cr)
 }
 
 void sysfil_cred_rights(struct ucred *, cap_rights_t *);
+
+int sysfil_cred_check_visibility(const struct ucred *, const struct ucred *);
 
 int sysfil_require_vm_prot(struct thread *, vm_prot_t prot, bool loose);
 int sysfil_require_ioctl(struct thread *, u_long com);

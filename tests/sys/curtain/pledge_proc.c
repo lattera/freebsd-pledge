@@ -51,6 +51,7 @@ ATF_TC_BODY(can_signal_child, tc)
 {
 	pid_t pid;
 	int fds[2], status;
+	ATF_REQUIRE(pledge("stdio error proc_barrier", "") >= 0);
 	ATF_REQUIRE(pipe(fds) >= 0);
 	ATF_REQUIRE((pid = fork()) >= 0);
 	if (pid == 0) {
@@ -60,7 +61,6 @@ ATF_TC_BODY(can_signal_child, tc)
 		ATF_REQUIRE(close(fds[0]) >= 0);
 		_exit(1);
 	}
-	ATF_REQUIRE(pledge("stdio error proc_child", "") >= 0);
 	ATF_CHECK(close(fds[0]) >= 0);
 	ATF_CHECK(kill(pid, SIGHUP) >= 0);
 	ATF_CHECK(close(fds[1]) >= 0);
@@ -77,8 +77,8 @@ ATF_TC_BODY(cannot_signal_parent, tc)
 	ATF_REQUIRE(pipe(fds) >= 0);
 	ATF_REQUIRE((pid = fork()) >= 0);
 	if (pid == 0) {
-		ATF_REQUIRE(pledge("stdio error proc_child", "") >= 0);
-		ATF_REQUIRE_ERRNO(EPERM, kill(getppid(), SIGHUP) < 0);
+		ATF_REQUIRE(pledge("stdio error proc_barrier", "") >= 0);
+		ATF_REQUIRE_ERRNO(ESRCH, kill(getppid(), SIGHUP) < 0);
 		ATF_REQUIRE(close(fds[0]) >= 0);
 		ATF_REQUIRE(close(fds[1]) >= 0);
 		_exit(0);

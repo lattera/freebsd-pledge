@@ -19,6 +19,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/mman.h>
 #include <sys/counter.h>
 #include <sys/sdt.h>
+#include <sys/rwlock.h>
 #include <sys/conf.h>
 #include <sys/sysfil.h>
 #include <sys/unveil.h>
@@ -118,6 +119,10 @@ curtain_init(struct curtain *ct, size_t nslots)
 	/* NOTE: zeroization leads to all levels being set to CURTAINLVL_PASS */
 	*ct = (struct curtain){
 		.ct_ref = 1,
+		.ct_parent = NULL,
+		.ct_children = SLIST_HEAD_INITIALIZER(ct.ct_children),
+		.ct_nchildren = 0,
+		.ct_cache_valid = false,
 		.ct_nitems = 0,
 		.ct_nslots = nslots,
 		.ct_modulo = nslots,
@@ -125,6 +130,24 @@ curtain_init(struct curtain *ct, size_t nslots)
 	};
 	for (curtain_index i = 0; i < nslots; i++)
 		ct->ct_slots[i].type = 0;
+}
+
+static void
+curtain_invariants(const struct curtain *ct)
+{
+	MPASS(ct);
+	MPASS(ct->ct_parent != ct);
+	MPASS(ct->ct_ref > 0);
+	MPASS(ct->ct_nslots >= ct->ct_nitems);
+	MPASS(ct->ct_nslots >= ct->ct_modulo);
+	MPASS(ct->ct_nslots >= ct->ct_cellar);
+}
+
+static void
+curtain_invariants_sync(const struct curtain *ct)
+{
+	curtain_invariants(ct);
+	MPASS(LIST_EMPTY(&ct->ct_children) == (ct->ct_nchildren == 0));
 }
 
 static struct curtain *
@@ -144,8 +167,11 @@ curtain_make(size_t nitems)
 	ct = curtain_alloc(nslots);
 	curtain_init(ct, nslots);
 	ct->ct_modulo = nitems + nitems/16;
+	curtain_invariants_sync(ct);
 	return (ct);
 }
+
+static struct rwlock __exclusive_cache_line curtain_tree_lock;
 
 void
 curtain_hold(struct curtain *ct)
@@ -153,11 +179,90 @@ curtain_hold(struct curtain *ct)
 	refcount_acquire(&ct->ct_ref);
 }
 
+static void
+curtain_link(struct curtain *child, struct curtain *parent)
+{
+	rw_wlock(&curtain_tree_lock);
+	curtain_invariants_sync(child);
+#ifdef INVARIANTS
+	if (parent)
+		for (const struct curtain *iter = child; iter; iter = iter->ct_parent)
+			MPASS(iter != parent);
+#endif
+	if ((child->ct_parent = parent)) {
+		curtain_invariants_sync(parent);
+		parent->ct_nchildren++;
+		MPASS(parent->ct_nchildren != 0);
+		LIST_INSERT_HEAD(&parent->ct_children, child, ct_sibling);
+		curtain_invariants_sync(parent);
+	} else {
+#ifdef INVARIANTS
+		memset(&child->ct_sibling, -1, sizeof child->ct_sibling);
+#endif
+	}
+	curtain_invariants_sync(child);
+	rw_wunlock(&curtain_tree_lock);
+}
+
+static void
+curtain_unlink(struct curtain *victim)
+{
+	struct curtain *child;
+	rw_wlock(&curtain_tree_lock);
+	MPASS(LIST_EMPTY(&victim->ct_children) == (victim->ct_nchildren == 0));
+	if (victim->ct_parent) {
+		curtain_invariants_sync(victim->ct_parent);
+		LIST_REMOVE(victim, ct_sibling);
+		MPASS(victim->ct_parent->ct_nchildren != 0);
+		victim->ct_parent->ct_nchildren--;
+		curtain_invariants_sync(victim->ct_parent);
+	}
+	while (!LIST_EMPTY(&victim->ct_children)) {
+		child = LIST_FIRST(&victim->ct_children);
+		MPASS(child->ct_parent == victim);
+		curtain_invariants_sync(child);
+		MPASS(victim->ct_nchildren != 0);
+		victim->ct_nchildren--;
+		LIST_REMOVE(child, ct_sibling);
+		if ((child->ct_parent = victim->ct_parent)) {
+			LIST_INSERT_HEAD(&child->ct_parent->ct_children, child, ct_sibling);
+			child->ct_parent->ct_nchildren++;
+			MPASS(child->ct_parent->ct_nchildren != 0);
+		}
+		if (victim->ct_barrier)
+			child->ct_barrier = child->ct_barrier_on_exec = true;
+		curtain_invariants_sync(child);
+	}
+	MPASS(victim->ct_nchildren == 0);
+	victim->ct_parent = NULL;
+	rw_wunlock(&curtain_tree_lock);
+}
+
 void
 curtain_free(struct curtain *ct)
 {
-	if (refcount_release(&ct->ct_ref))
+	curtain_invariants(ct);
+	if (refcount_release(&ct->ct_ref)) {
+		curtain_unlink(ct);
 		free(ct, M_CURTAIN);
+	}
+}
+
+static bool
+curtain_visible(const struct curtain *subject, const struct curtain *target)
+{
+	/*
+	 * NOTE: One or both of subject and target may be NULL (indicating
+	 * uncurtained credentials).
+	 */
+	rw_rlock(&curtain_tree_lock);
+	while (subject && !subject->ct_barrier)
+		subject = subject->ct_parent;
+	while (target && subject != target)
+		target = target->ct_parent;
+	rw_runlock(&curtain_tree_lock);
+	return (subject == target);
+
 }
 
 static void
@@ -165,14 +270,24 @@ curtain_copy(struct curtain *dst, const struct curtain *src)
 {
 	memcpy(dst, src, sizeof *src + src->ct_nslots * sizeof *src->ct_slots);
 	dst->ct_ref = 1;
+	dst->ct_parent = NULL;
+	dst->ct_nchildren = 0;
+	LIST_INIT(&dst->ct_children);
+#ifdef INVARIANTS
+	memset(&dst->ct_sibling, -1, sizeof dst->ct_sibling);
+#endif
+	curtain_invariants_sync(dst);
 }
 
 static struct curtain *
 curtain_dup(const struct curtain *src)
 {
 	struct curtain *dst;
+	curtain_invariants(src);
 	dst = curtain_alloc(src->ct_nslots);
 	curtain_copy(dst, src);
+	curtain_link(dst, src->ct_parent);
+	curtain_invariants_sync(dst);
 	return (dst);
 }
 
@@ -341,10 +456,13 @@ curtain_dup_compact(const struct curtain *src)
 	struct curtain_item *di;
 	const struct curtain_item *si;
 	struct curtain *dst;
+	curtain_invariants(src);
 	dst = curtain_make(src->ct_nitems);
 	dst->ct_overflowed = src->ct_overflowed;
 	if ((dst->ct_cache_valid = src->ct_cache_valid))
 		dst->ct_cached = src->ct_cached;
+	dst->ct_barrier = src->ct_barrier;
+	dst->ct_barrier_on_exec = src->ct_barrier_on_exec;
 	memcpy(dst->ct_sysfils, src->ct_sysfils, sizeof dst->ct_sysfils);
 	for (si = src->ct_slots; si < &src->ct_slots[src->ct_nslots]; si++)
 		if (si->type != 0) {
@@ -360,6 +478,8 @@ curtain_dup_compact(const struct curtain *src)
 			MPASS(memcmp(&di->mode, &si->mode, sizeof di->mode) == 0);
 		}
 #endif
+	curtain_link(dst, src->ct_parent);
+	curtain_invariants_sync(dst);
 	return (dst);
 }
 
@@ -422,6 +542,8 @@ curtain_need_exec_switch(const struct curtain *ct)
 		    (item->mode.on_self != item->mode.on_exec ||
 		     item->mode.on_self_max != item->mode.on_exec_max))
 			return (true);
+	if (ct->ct_barrier != ct->ct_barrier_on_exec)
+		return (true);
 	return (false);
 }
 
@@ -507,6 +629,7 @@ curtain_exec_switch(struct curtain *ct)
 			item->mode.on_self     = item->mode.on_exec;
 			item->mode.on_self_max = item->mode.on_exec_max;
 		}
+	ct->ct_barrier = ct->ct_barrier_on_exec;
 	curtain_dirty(ct);
 }
 
@@ -533,6 +656,8 @@ curtain_mask_sysfils(struct curtain *ct, const sysfilset_t *sfs)
 		if (item->type != 0)
 			if (!BIT_ISSET(SYSFILSET_BITS, sysfil_for_type(item->type), sfs))
 				mode_cap(&item->mode, CURTAINLVL_DENY);
+	if (!BIT_ISSET(SYSFILSET_BITS, SYSFIL_ANY_PROCESS, sfs))
+		ct->ct_barrier = ct->ct_barrier_on_exec = true;
 	curtain_dirty(ct);
 }
 
@@ -554,6 +679,7 @@ curtain_mask(struct curtain *dst, const struct curtain *src)
 {
 	struct curtain_item *di;
 	const struct curtain_item *si;
+	curtain_invariants(src);
 	KASSERT(dst->ct_ref == 1, ("modifying shared curtain"));
 	for (si = src->ct_slots; si < &src->ct_slots[src->ct_nslots]; si++)
 		if (si->type != 0 && !curtain_lookup(dst, si->type, si->key)) {
@@ -569,12 +695,14 @@ curtain_mask(struct curtain *dst, const struct curtain *src)
 	for (int sf = 0; sf <= SYSFIL_LAST; sf++)
 		mode_mask(&dst->ct_sysfils[sf], &src->ct_sysfils[sf]);
 	curtain_dirty(dst);
+	curtain_invariants(dst);
 }
 
 /* Some sysfils shouldn't be disabled via curtainctl(2). */
 static const int sysfils_always[] = { SYSFIL_ALWAYS, SYSFIL_UNCAPSICUM };
 /* Some sysfils don't make much sense without some others. */
 static const int sysfils_expand[][2] = {
+	/* NOTE: Make sure dependencies can be handled in a single pass! */
 	{ SYSFIL_VFS_READ,	SYSFIL_VFS_MISC		},
 	{ SYSFIL_VFS_WRITE,	SYSFIL_VFS_MISC		},
 	{ SYSFIL_VFS_CREATE,	SYSFIL_VFS_MISC		},
@@ -583,14 +711,7 @@ static const int sysfils_expand[][2] = {
 	{ SYSFIL_PROT_EXEC,	SYSFIL_PROT_EXEC_LOOSE	},
 	{ SYSFIL_UNIX,		SYSFIL_NET		},
 	{ SYSFIL_CPUSET,	SYSFIL_SCHED		},
-	{ SYSFIL_ANY_PROCESS,	SYSFIL_SAME_SESSION	},
-	{ SYSFIL_SAME_SESSION,	SYSFIL_SAME_PGRP	},
-	{ SYSFIL_SAME_PGRP,	SYSFIL_CHILD_PROCESS	},
 };
-/* Make sure dependencies get handled in a single pass. */
-CTASSERT(SYSFIL_SAME_SESSION > SYSFIL_ANY_PROCESS);
-CTASSERT(SYSFIL_SAME_PGRP > SYSFIL_SAME_SESSION);
-CTASSERT(SYSFIL_CHILD_PROCESS > SYSFIL_SAME_PGRP);
 
 static inline void
 mode_update(struct curtain_mode *mode, int flags, enum curtain_level lvl)
@@ -746,6 +867,9 @@ curtain_build(int flags, size_t reqc, const struct curtainreq *reqv)
 	if (ct->ct_nitems > CURTAINCTL_MAX_ITEMS)
 		goto fail;
 
+	ct->ct_barrier         = ct->ct_sysfils[SYSFIL_ANY_PROCESS].on_self != CURTAINLVL_PASS;
+	ct->ct_barrier_on_exec = ct->ct_sysfils[SYSFIL_ANY_PROCESS].on_exec != CURTAINLVL_PASS;
+
 	for (size_t i = 0; i < nitems(sysfils_expand); i++) {
 		ct->ct_sysfils[sysfils_expand[i][1]].on_self =
 		    MIN(ct->ct_sysfils[sysfils_expand[i][0]].on_self,
@@ -770,6 +894,7 @@ curtain_build(int flags, size_t reqc, const struct curtainreq *reqv)
 	}
 
 	SDT_PROBE1(curtain,, curtain_build, done, ct);
+	curtain_invariants_sync(ct);
 	return (ct);
 
 fail:	SDT_PROBE0(curtain,, curtain_build, failed);
@@ -780,6 +905,16 @@ fail:	SDT_PROBE0(curtain,, curtain_build, failed);
 #endif /* SYSFIL */
 
 
+int
+sysfil_cred_check_visibility(const struct ucred *subject, const struct ucred *target)
+{
+#ifdef SYSFIL
+	return (curtain_visible(subject->cr_curtain, target->cr_curtain) ? 0 : ESRCH);
+#else
+	return (0);
+#endif
+}
+
 int
 sysfil_require_vm_prot(struct thread *td, vm_prot_t prot, bool loose)
 {
@@ -1158,11 +1293,13 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 		crhold(old_cr);
 		PROC_UNLOCK(p);
 		SDT_PROBE1(curtain,, do_curtainctl, mask, ct);
-		if (cr->cr_curtain)
-			curtain_free(cr->cr_curtain);
 		curtain_compact(&ct);
 		curtain_cache_update(ct);
 		SDT_PROBE1(curtain,, do_curtainctl, compact, ct);
+		if (cr->cr_curtain) {
+			curtain_link(ct, cr->cr_curtain);
+			curtain_free(cr->cr_curtain);
+		}
 		cr->cr_curtain = ct;
 		PROC_LOCK(p);
 		if (old_cr == p->p_ucred) {
@@ -1170,6 +1307,8 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 			break;
 		}
 		PROC_UNLOCK(p);
+		curtain_unlink(ct);
+		curtain_hold(ct);
 		crfree(old_cr);
 		crfree(cr);
 	} while (true);
@@ -1301,7 +1440,8 @@ curtain_cap_enter(struct thread *td)
 		crhold(old_cr);
 		PROC_UNLOCK(p);
 		ct = curtain_dup(cr->cr_curtain);
-		curtain_free(cr->cr_curtain);
+		if (cr->cr_curtain)
+			curtain_free(cr->cr_curtain);
 		cr->cr_curtain = ct;
 		PROC_LOCK(p);
 		if (old_cr == p->p_ucred) {
@@ -1427,5 +1567,13 @@ sysfil_cred_rights(struct ucred *cr, cap_rights_t *rights)
 	/* XXX This may restrict Capsicum programs more than before. */
 	fill_sysfil_rights(&cr->cr_sysfilset, rights);
 }
+
+static void
+sysfil_sysinit(void *arg)
+{
+	rw_init(&curtain_tree_lock, "curtain_tree");
+}
+
+SYSINIT(sysfil_sysinit, SI_SUB_COPYRIGHT, SI_ORDER_ANY, sysfil_sysinit, NULL);
 
 #endif /* SYSFIL */
