@@ -259,6 +259,12 @@ typedef	struct __siginfo {
 			int _sysfil;
 		} _sysfil;
 		struct {
+			int	_syscall;	/* Syscall number for signals
+						 * delivered as a result of
+						 * system calls denied by
+						 * Capsicum. */
+		} _capsicum;
+		struct {
 			long	__spare1__;
 			int	__spare2__[7];
 		} __spare__;
@@ -271,6 +277,7 @@ typedef	struct __siginfo {
 #define si_mqd		_reason._mesgq._mqd
 #define si_band		_reason._poll._band
 #define	si_sysfil	_reason._sysfil._sysfil
+#define si_syscall	_reason._capsicum._syscall
 
 #if defined(_WANT_LWPINFO32) || (defined(_KERNEL) && defined(__LP64__))
 struct siginfo32 {

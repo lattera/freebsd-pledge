@@ -1870,6 +1870,8 @@ _pmap_alloc_l3(pmap_t pmap, vm_pindex_t ptepindex, struct rwlock **lockp)
 
 		l0index = ptepindex - (NUL2E + NUL1E);
 		l0 = &pmap->pm_l0[l0index];
+		KASSERT((pmap_load(l0) & ATTR_DESCR_VALID) == 0,
+		    ("%s: L0 entry %#lx is valid", __func__, pmap_load(l0)));
 		pmap_store(l0, VM_PAGE_TO_PHYS(m) | L0_TABLE);
 	} else if (ptepindex >= NUL2E) {
 		vm_pindex_t l0index, l1index;
@@ -1896,6 +1898,8 @@ _pmap_alloc_l3(pmap_t pmap, vm_pindex_t ptepindex, struct rwlock **lockp)
 
 		l1 = (pd_entry_t *)PHYS_TO_DMAP(pmap_load(l0) & ~ATTR_MASK);
 		l1 = &l1[ptepindex & Ln_ADDR_MASK];
+		KASSERT((pmap_load(l1) & ATTR_DESCR_VALID) == 0,
+		    ("%s: L1 entry %#lx is valid", __func__, pmap_load(l1)));
 		pmap_store(l1, VM_PAGE_TO_PHYS(m) | L1_TABLE);
 	} else {
 		vm_pindex_t l0index, l1index;
@@ -1938,6 +1942,8 @@ _pmap_alloc_l3(pmap_t pmap, vm_pindex_t ptepindex, struct rwlock **lockp)
 
 		l2 = (pd_entry_t *)PHYS_TO_DMAP(pmap_load(l1) & ~ATTR_MASK);
 		l2 = &l2[ptepindex & Ln_ADDR_MASK];
+		KASSERT((pmap_load(l2) & ATTR_DESCR_VALID) == 0,
+		    ("%s: L2 entry %#lx is valid", __func__, pmap_load(l2)));
 		pmap_store(l2, VM_PAGE_TO_PHYS(m) | L2_TABLE);
 	}
 
@@ -4035,7 +4041,7 @@ pmap_enter_2mpage(pmap_t pmap, vm_offset_t va, vm_page_t m, vm_prot_t prot,
 	if (pmap != kernel_pmap)
 		new_l2 |= ATTR_S1_nG;
 	return (pmap_enter_l2(pmap, va, new_l2, PMAP_ENTER_NOSLEEP |
-	    PMAP_ENTER_NOREPLACE | PMAP_ENTER_NORECLAIM, NULL, lockp) ==
+	    PMAP_ENTER_NOREPLACE | PMAP_ENTER_NORECLAIM, m, lockp) ==
 	    KERN_SUCCESS);
 }
 
@@ -4065,8 +4071,6 @@ pmap_every_pte_zero(vm_paddr_t pa)
  * KERN_RESOURCE_SHORTAGE if PMAP_ENTER_NOSLEEP was specified and a page table
  * page allocation failed.  Returns KERN_RESOURCE_SHORTAGE if
  * PMAP_ENTER_NORECLAIM was specified and a PV entry allocation failed.
- *
- * The parameter "m" is only used when creating a managed, writeable mapping.
  */
 static int
 pmap_enter_l2(pmap_t pmap, vm_offset_t va, pd_entry_t new_l2, u_int flags,
@@ -4152,6 +4156,16 @@ pmap_enter_l2(pmap_t pmap, vm_offset_t va, pd_entry_t new_l2, u_int flags,
 	if ((new_l2 & ATTR_SW_WIRED) != 0)
 		pmap->pm_stats.wired_count += L2_SIZE / PAGE_SIZE;
 	pmap->pm_stats.resident_count += L2_SIZE / PAGE_SIZE;
+
+	/*
+	 * Conditionally sync the icache.  See pmap_enter() for details.
+	 */
+	if ((new_l2 & ATTR_S1_XN) == 0 && ((new_l2 & ~ATTR_MASK) !=
+	    (old_l2 & ~ATTR_MASK) || (old_l2 & ATTR_S1_XN) != 0) &&
+	    pmap != kernel_pmap && m->md.pv_memattr == VM_MEMATTR_WRITE_BACK) {
+		cpu_icache_sync_range(PHYS_TO_DMAP(new_l2 & ~ATTR_MASK),
+		    L2_SIZE);
+	}
 
 	/*
 	 * Map the superpage.
@@ -4557,6 +4571,9 @@ pmap_copy(pmap_t dst_pmap, pmap_t src_pmap, vm_offset_t dst_addr, vm_size_t len,
 		if (srcptepaddr == 0)
 			continue;
 		if ((srcptepaddr & ATTR_DESCR_MASK) == L2_BLOCK) {
+			/*
+			 * We can only virtual copy whole superpages.
+			 */
 			if ((addr & L2_OFFSET) != 0 ||
 			    addr + L2_SIZE > end_addr)
 				continue;
@@ -4567,8 +4584,19 @@ pmap_copy(pmap_t dst_pmap, pmap_t src_pmap, vm_offset_t dst_addr, vm_size_t len,
 			    ((srcptepaddr & ATTR_SW_MANAGED) == 0 ||
 			    pmap_pv_insert_l2(dst_pmap, addr, srcptepaddr,
 			    PMAP_ENTER_NORECLAIM, &lock))) {
-				mask = ATTR_SW_WIRED;
-				pmap_store(l2, srcptepaddr & ~mask);
+				/*
+				 * We leave the dirty bit unchanged because
+				 * managed read/write superpage mappings are
+				 * required to be dirty.  However, managed
+				 * superpage mappings are not required to
+				 * have their accessed bit set, so we clear
+				 * it because we don't know if this mapping
+				 * will be used.
+				 */
+				srcptepaddr &= ~ATTR_SW_WIRED;
+				if ((srcptepaddr & ATTR_SW_MANAGED) != 0)
+					srcptepaddr &= ~ATTR_AF;
+				pmap_store(l2, srcptepaddr);
 				pmap_resident_count_inc(dst_pmap, L2_SIZE /
 				    PAGE_SIZE);
 				atomic_add_long(&pmap_l2_mappings, 1);
@@ -4951,6 +4979,16 @@ pmap_remove_pages(pmap_t pmap)
 					continue;
 				}
 
+				/* Mark free */
+				pc->pc_map[field] |= bitmask;
+
+				/*
+				 * Because this pmap is not active on other
+				 * processors, the dirty bit cannot have
+				 * changed state since we last loaded pte.
+				 */
+				pmap_clear(pte);
+
 				pa = tpte & ~ATTR_MASK;
 
 				m = PHYS_TO_VM_PAGE(pa);
@@ -4963,13 +5001,6 @@ pmap_remove_pages(pmap_t pmap)
 				    m < &vm_page_array[vm_page_array_size],
 				    ("pmap_remove_pages: bad pte %#jx",
 				    (uintmax_t)tpte));
-
-				/*
-				 * Because this pmap is not active on other
-				 * processors, the dirty bit cannot have
-				 * changed state since we last loaded pte.
-				 */
-				pmap_clear(pte);
 
 				/*
 				 * Update the vm_page_t clean/reference bits.
@@ -4988,8 +5019,6 @@ pmap_remove_pages(pmap_t pmap)
 
 				CHANGE_PV_LIST_LOCK_TO_VM_PAGE(&lock, m);
 
-				/* Mark free */
-				pc->pc_map[field] |= bitmask;
 				switch (lvl) {
 				case 1:
 					pmap_resident_count_dec(pmap,
