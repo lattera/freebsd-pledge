@@ -99,22 +99,32 @@ struct pfi_dynaddr {
 #define	PF_HASHROW_LOCK(h)	mtx_lock(&(h)->lock)
 #define	PF_HASHROW_UNLOCK(h)	mtx_unlock(&(h)->lock)
 
+#ifdef INVARIANTS
 #define	PF_STATE_LOCK(s)						\
 	do {								\
-		struct pf_idhash *_ih = &V_pf_idhash[PF_IDHASH(s)];	\
-		PF_HASHROW_LOCK(_ih);					\
+		struct pf_kstate *_s = (s);				\
+		struct pf_idhash *_ih = &V_pf_idhash[PF_IDHASH(_s)];	\
+		MPASS(_s->lock == &_ih->lock);				\
+		mtx_lock(_s->lock);					\
 	} while (0)
-
 #define	PF_STATE_UNLOCK(s)						\
 	do {								\
-		struct pf_idhash *_ih = &V_pf_idhash[PF_IDHASH((s))];	\
-		PF_HASHROW_UNLOCK(_ih);					\
+		struct pf_kstate *_s = (s);				\
+		struct pf_idhash *_ih = &V_pf_idhash[PF_IDHASH(_s)];	\
+		MPASS(_s->lock == &_ih->lock);				\
+		mtx_unlock(_s->lock);					\
 	} while (0)
+#else
+#define	PF_STATE_LOCK(s)	mtx_lock(s->lock)
+#define	PF_STATE_UNLOCK(s)	mtx_unlock(s->lock)
+#endif
 
 #ifdef INVARIANTS
 #define	PF_STATE_LOCK_ASSERT(s)						\
 	do {								\
-		struct pf_idhash *_ih = &V_pf_idhash[PF_IDHASH(s)];	\
+		struct pf_kstate *_s = (s);				\
+		struct pf_idhash *_ih = &V_pf_idhash[PF_IDHASH(_s)];	\
+		MPASS(_s->lock == &_ih->lock);				\
 		PF_HASHROW_ASSERT(_ih);					\
 	} while (0)
 #else /* !INVARIANTS */
@@ -602,6 +612,7 @@ struct pf_kstate {
 	u_int8_t		 sync_state; /* PFSYNC_S_x */
 	u_int8_t		 sync_updates; /* XXX */
 	u_int			 refs;
+	struct mtx		*lock;
 	TAILQ_ENTRY(pf_kstate)	 sync_list;
 	TAILQ_ENTRY(pf_kstate)	 key_list[2];
 	LIST_ENTRY(pf_kstate)	 entry;
@@ -1138,6 +1149,7 @@ enum pf_syncookies_mode {
 	PF_SYNCOOKIES_MODE_MAX = PF_SYNCOOKIES_ALWAYS
 };
 
+#ifdef _KERNEL
 struct pf_kstatus {
 	counter_u64_t	counters[PFRES_MAX]; /* reason for passing/dropping */
 	counter_u64_t	lcounters[LCNT_MAX]; /* limit counters */
@@ -1155,6 +1167,7 @@ struct pf_kstatus {
 	enum pf_syncookies_mode	syncookies_mode;
 	bool		syncookies_active;
 };
+#endif
 
 struct pf_divert {
 	union {
@@ -1841,6 +1854,7 @@ void		 pf_send_tcp(const struct pf_krule *, sa_family_t,
 			    u_int16_t);
 
 void			 pf_syncookies_init(void);
+void			 pf_syncookies_cleanup(void);
 int			 pf_get_syncookies(struct pfioc_nv *);
 int			 pf_set_syncookies(struct pfioc_nv *);
 int			 pf_synflood_check(struct pf_pdesc *);
