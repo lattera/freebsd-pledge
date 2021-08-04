@@ -860,6 +860,23 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		*n_args = 3;
 		break;
 	}
+	/* curtainctl */
+	case 167: {
+		struct curtainctl_args *p = params;
+		iarg[0] = p->flags; /* int */
+		uarg[1] = p->reqc; /* size_t */
+		uarg[2] = (intptr_t)p->reqv; /* struct curtainreq * */
+		*n_args = 3;
+		break;
+	}
+	/* unveilreg */
+	case 168: {
+		struct unveilreg_args *p = params;
+		iarg[0] = p->flags; /* int */
+		uarg[1] = (intptr_t)p->reg; /* struct unveilreg * */
+		*n_args = 2;
+		break;
+	}
 	/* semsys */
 	case 169: {
 		struct semsys_args *p = params;
@@ -2206,23 +2223,6 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		struct thr_kill_args *p = params;
 		iarg[0] = p->id; /* long */
 		iarg[1] = p->sig; /* int */
-		*n_args = 2;
-		break;
-	}
-	/* curtainctl */
-	case 434: {
-		struct curtainctl_args *p = params;
-		iarg[0] = p->flags; /* int */
-		uarg[1] = p->reqc; /* size_t */
-		uarg[2] = (intptr_t)p->reqv; /* struct curtainreq * */
-		*n_args = 3;
-		break;
-	}
-	/* unveilreg */
-	case 435: {
-		struct unveilreg_args *p = params;
-		iarg[0] = p->flags; /* int */
-		uarg[1] = (intptr_t)p->reg; /* struct unveilreg * */
 		*n_args = 2;
 		break;
 	}
@@ -4794,6 +4794,35 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
+	/* curtainctl */
+	case 167:
+		switch (ndx) {
+		case 0:
+			p = "int";
+			break;
+		case 1:
+			p = "size_t";
+			break;
+		case 2:
+			p = "userland struct curtainreq *";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* unveilreg */
+	case 168:
+		switch (ndx) {
+		case 0:
+			p = "int";
+			break;
+		case 1:
+			p = "userland struct unveilreg *";
+			break;
+		default:
+			break;
+		};
+		break;
 	/* semsys */
 	case 169:
 		switch (ndx) {
@@ -6972,35 +7001,6 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		case 1:
 			p = "int";
-			break;
-		default:
-			break;
-		};
-		break;
-	/* curtainctl */
-	case 434:
-		switch (ndx) {
-		case 0:
-			p = "int";
-			break;
-		case 1:
-			p = "size_t";
-			break;
-		case 2:
-			p = "userland struct curtainreq *";
-			break;
-		default:
-			break;
-		};
-		break;
-	/* unveilreg */
-	case 435:
-		switch (ndx) {
-		case 0:
-			p = "int";
-			break;
-		case 1:
-			p = "userland struct unveilreg *";
 			break;
 		default:
 			break;
@@ -9636,6 +9636,16 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
+	/* curtainctl */
+	case 167:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* unveilreg */
+	case 168:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
 	/* semsys */
 	case 169:
 		if (ndx == 0 || ndx == 1)
@@ -10425,16 +10435,6 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		break;
 	/* thr_kill */
 	case 433:
-		if (ndx == 0 || ndx == 1)
-			p = "int";
-		break;
-	/* curtainctl */
-	case 434:
-		if (ndx == 0 || ndx == 1)
-			p = "int";
-		break;
-	/* unveilreg */
-	case 435:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;

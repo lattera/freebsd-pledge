@@ -111,6 +111,8 @@ MIASM =  \
 	getfh.o \
 	sysarch.o \
 	rtprio.o \
+	curtainctl.o \
+	unveilreg.o \
 	semsys.o \
 	msgsys.o \
 	shmsys.o \
@@ -286,8 +288,8 @@ MIASM =  \
 	thr_exit.o \
 	thr_self.o \
 	thr_kill.o \
-	curtainctl.o \
-	unveilreg.o \
+	freebsd10__umtx_lock.o \
+	freebsd10__umtx_unlock.o \
 	jail_attach.o \
 	extattr_list_fd.o \
 	extattr_list_file.o \

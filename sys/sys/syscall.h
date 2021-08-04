@@ -165,6 +165,8 @@
 				/* 164 is freebsd4 uname */
 #define	SYS_sysarch	165
 #define	SYS_rtprio	166
+#define	SYS_curtainctl	167
+#define	SYS_unveilreg	168
 #define	SYS_semsys	169
 #define	SYS_msgsys	170
 #define	SYS_shmsys	171
@@ -376,8 +378,8 @@
 #define	SYS_thr_exit	431
 #define	SYS_thr_self	432
 #define	SYS_thr_kill	433
-#define	SYS_curtainctl	434
-#define	SYS_unveilreg	435
+#define	SYS_freebsd10__umtx_lock	434
+#define	SYS_freebsd10__umtx_unlock	435
 #define	SYS_jail_attach	436
 #define	SYS_extattr_list_fd	437
 #define	SYS_extattr_list_file	438

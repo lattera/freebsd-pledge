@@ -59,7 +59,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysctl.h>
 #include <sys/sysent.h>
 #include <sys/time.h>
-#include <sys/umtx.h>
+#include <sys/umtxvar.h>
 #include <sys/curtain.h>
 
 #include <vm/vm.h>

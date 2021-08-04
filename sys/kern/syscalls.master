@@ -1023,7 +1023,20 @@
 		    _Inout_ struct rtprio *rtp
 		);
 	}
-167-168	AUE_NULL	RESERVED
+;167-168	AUE_NULL	RESERVED
+167	AUE_CURTAINCTL	STD|SYSFIL_CURTAIN {
+		int curtainctl(
+		    int flags,
+		    size_t reqc,
+		    struct curtainreq *reqv
+		);
+	}
+168	AUE_UNVEILREG	STD|SYSFIL_CURTAIN {
+		int unveilreg(
+		    int flags,
+		    struct unveilreg *reg
+		);
+	}
 169	AUE_SEMSYS	NOSTD|SYSFIL_SYSVIPC {
 		int semsys(
 		    int which,
@@ -2271,20 +2284,20 @@
 		    int sig
 		);
 	}
-434	AUE_CURTAINCTL	STD|SYSFIL_CURTAIN {
-		int curtainctl(
-		    int flags,
-		    size_t reqc,
-		    struct curtainreq *reqv
+
+434	AUE_NULL	COMPAT10|SYSFIL_STDIO {
+		int _umtx_lock(
+		    _Inout_ struct umtx *umtx
 		);
 	}
-435	AUE_UNVEILREG	STD|SYSFIL_CURTAIN {
-		int unveilreg(
-		    int flags,
-		    struct unveilreg *reg
+
+435	AUE_NULL	COMPAT10|SYSFIL_STDIO {
+		int _umtx_unlock(
+		    _Inout_ struct umtx *umtx
 		);
 	}
-436	AUE_JAIL_ATTACH	STD|SYSFIL_JAIL {
+
+436	AUE_JAIL_ATTACH	STD {
 		int jail_attach(
 		    int jid
 		);
