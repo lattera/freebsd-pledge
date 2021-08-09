@@ -3810,7 +3810,6 @@ kern/kern_cons.c		standard
 kern/kern_cpu.c			standard
 kern/kern_cpuset.c		standard
 kern/kern_context.c		standard
-kern/kern_curtain.c		standard
 kern/kern_descrip.c		standard
 kern/kern_dtrace.c		optional kdtrace_hooks
 kern/kern_dump.c		standard
@@ -4004,7 +4003,6 @@ kern/vfs_mount.c		standard
 kern/vfs_mountroot.c		standard
 kern/vfs_subr.c			standard
 kern/vfs_syscalls.c		standard
-kern/vfs_unveil.c		standard
 kern/vfs_vnops.c		standard
 #
 # Kernel GSS-API

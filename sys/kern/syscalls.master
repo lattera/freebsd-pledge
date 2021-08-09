@@ -1024,14 +1024,14 @@
 		);
 	}
 ;167-168	AUE_NULL	RESERVED
-167	AUE_CURTAINCTL	STD|SYSFIL_CURTAIN {
+167	AUE_CURTAINCTL	NOSTD|SYSFIL_CURTAIN {
 		int curtainctl(
 		    int flags,
 		    size_t reqc,
 		    struct curtainreq *reqv
 		);
 	}
-168	AUE_UNVEILREG	STD|SYSFIL_CURTAIN {
+168	AUE_UNVEILREG	NOSTD|SYSFIL_CURTAIN {
 		int unveilreg(
 		    int flags,
 		    struct unveilreg *reg

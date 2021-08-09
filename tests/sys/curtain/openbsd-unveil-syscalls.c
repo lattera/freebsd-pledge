@@ -30,6 +30,8 @@
 #include <sys/mount.h>
 #ifdef __FreeBSD__
 #include <pledge.h>
+#include <string.h>
+#include <paths.h>
 #endif
 
 pid_t child;
@@ -861,11 +863,25 @@ test_bypassunveil(int do_uv)
 		printf("testing BYPASSUNVEIL\n");
 		do_unveil2();
 	}
+#ifdef	__FreeBSD__
+	/* The pledge() makes /tmp unaccessible if $TMPDIR is set. */
+	char filename3[PATH_MAX] = "";
+	char *tmpdir;
+	if (!(tmpdir = getenv("TMPDIR")))
+		tmpdir = _PATH_TMP;
+	strlcat(filename3, tmpdir, sizeof filename3);
+	strlcat(filename3, "/", sizeof filename3);
+	strlcat(filename3, "nukeme.XXXXXX", sizeof filename3);
+#else
 	char filename3[] = "/tmp/nukeme.XXXXXX";
+#endif
 
 	UV_SHOULD_SUCCEED((pledge("stdio tmppath", NULL) == -1), "pledge");
 	UV_SHOULD_SUCCEED((mkstemp(filename3) == -1), "mkstemp");
 
+#ifdef __FreeBSD__
+	UV_SHOULD_SUCCEED((unlink(filename3) == -1), "unlink");
+#endif
 	return 0;
 }
 
@@ -916,8 +932,12 @@ test_pathdiscover(int do_uv)
 	}
 	UV_SHOULD_SUCCEED((lstat("/usr/share/man", &sb) == -1), "lstat");
 	UV_SHOULD_SUCCEED((lstat("/usr/share/man/../../share/man", &sb) == -1), "lstat");
+#ifdef __FreeBSD__
+	UV_SHOULD_ENOENT((lstat("/usr/share/man/../../local/../share/man", &sb) == -1), "lstat");
+#else
 	/* XXX XXX XXX This should fail */
 	UV_SHOULD_SUCCEED((lstat("/usr/share/man/../../local/../share/man", &sb) == -1), "lstat");
+#endif
 	return 0;
 }
 

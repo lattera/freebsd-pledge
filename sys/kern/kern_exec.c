@@ -39,7 +39,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/acct.h>
 #include <sys/asan.h>
 #include <sys/capsicum.h>
-#include <sys/curtain.h>
+#include <sys/sysfil.h>
 #include <sys/compressor.h>
 #include <sys/eventhandler.h>
 #include <sys/exec.h>
@@ -549,14 +549,16 @@ interpret:
 		imgp->proc->p_pdeathsig = 0;
 
 	if (credential_changing &&
+#ifdef SYSFIL
+#ifdef MAC
+	    !mac_sysfil_exec_restricted(td, oldcred) &&
+#else
+	    !CRED_IN_RESTRICTED_MODE(oldcred) &&
+#endif
+#else
 #ifdef CAPABILITY_MODE
 	    !CRED_IN_CAPABILITY_MODE(oldcred) &&
 #endif
-#ifdef SYSFIL
-	    !curtain_cred_exec_restricted(oldcred) &&
-#endif
-#ifdef UNVEIL
-	    !unveil_exec_is_active(td) &&
 #endif
 	    (imgp->vp->v_mount->mnt_flag & MNT_NOSUID) == 0 &&
 	    (p->p_flag & P_TRACED) == 0) {
@@ -601,17 +603,6 @@ interpret:
 			change_svgid(imgp->newcred, imgp->newcred->cr_gid);
 		}
 	}
-
-#ifdef SYSFIL
-	/*
-	 * Switch pending cred to its on-exec sysfils.
-	 */
-	if (curtain_cred_need_exec_switch(oldcred)) {
-		if (!imgp->newcred)
-			imgp->newcred = crdup(oldcred);
-		curtain_cred_exec_switch(imgp->newcred);
-	}
-#endif
 
 	/* The new credentials are installed into the process later. */
 
@@ -749,9 +740,6 @@ interpret:
 		pdunshare(td);
 		/* close files on exec */
 		fdcloseexec(td);
-#ifdef UNVEIL
-		unveil_proc_exec_switch(td);
-#endif
 	}
 
 	/*
@@ -775,6 +763,20 @@ interpret:
 		newsigacts = sigacts_alloc();
 		sigacts_copy(newsigacts, oldsigacts);
 	}
+
+	if ((imgp->sysent->sv_setid_allowed != NULL &&
+	    !(*imgp->sysent->sv_setid_allowed)(td, imgp)) ||
+	    (p->p_flag2 & P2_NO_NEW_PRIVS) != 0)
+		execve_nosetid(imgp);
+
+#if defined(SYSFIL) && defined(MAC)
+	if (mac_sysfil_need_exec_adjust(td,
+	    imgp->newcred ? imgp->newcred : oldcred)) {
+		if (!imgp->newcred)
+			imgp->newcred = crdup(oldcred);
+		mac_sysfil_exec_adjust(td, imgp->newcred);
+	}
+#endif
 
 	vn_lock(imgp->vp, LK_SHARED | LK_RETRY);
 
@@ -814,11 +816,6 @@ interpret:
 		/* STOPs are no longer ignored, arrange for AST */
 		signotify(td);
 	}
-
-	if ((imgp->sysent->sv_setid_allowed != NULL &&
-	    !(*imgp->sysent->sv_setid_allowed)(td, imgp)) ||
-	    (p->p_flag2 & P2_NO_NEW_PRIVS) != 0)
-		execve_nosetid(imgp);
 
 	/*
 	 * Implement image setuid/setgid installation.
@@ -867,7 +864,6 @@ interpret:
 		crfree(oldcred);
 		oldcred = NULL;
 	}
-
 
 	/*
 	 * Store the vp for use in procfs.  This vnode was referenced by namei

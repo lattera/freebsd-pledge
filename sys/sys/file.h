@@ -189,8 +189,9 @@ struct file {
 	/*
 	 *  DTYPE_VNODE specific fields.
 	 */
-#ifdef UNVEIL
+#ifdef UNVEIL_SUPPORT
 	unveil_perms	f_uperms;	/* unveil permissions when opened */
+	uint64_t	f_uldgen;	/* unveil lockdown generation number */
 #endif
 	union {
 		int16_t	f_seqcount[2];	/* (a) Count of seq. reads and writes. */

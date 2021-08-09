@@ -227,7 +227,7 @@ UMTX_CHAINS	opt_global.h
 VERBOSE_SYSINIT
 ZSTDIO		opt_zstdio.h
 SYSFIL		opt_global.h
-UNVEIL		opt_global.h
+UNVEIL_SUPPORT	opt_global.h
 
 # Sanitizers
 COVERAGE	opt_global.h

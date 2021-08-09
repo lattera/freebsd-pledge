@@ -177,10 +177,10 @@ ATF_TC_BODY(open_empty_path_regain_preopened_none, tc)
 	ATF_REQUIRE(try_creat("f") >= 0);
 	ATF_REQUIRE((fd = open("f", O_PATH)) >= 0);
 	ATF_REQUIRE(unveil(NULL, NULL) >= 0);
-	ATF_CHECK_ERRNO(EACCES, openat(fd, "", O_EMPTY_PATH | O_RDONLY) < 0);
-	ATF_CHECK_ERRNO(EACCES, openat(fd, "", O_EMPTY_PATH | O_WRONLY) < 0);
-	ATF_CHECK_ERRNO(EACCES, openat(fd, "", O_EMPTY_PATH | O_RDWR) < 0);
-	ATF_CHECK_ERRNO(EACCES, openat(fd, "", O_EMPTY_PATH | O_EXEC) < 0);
+	ATF_CHECK_ERRNO(ENOENT, openat(fd, "", O_EMPTY_PATH | O_RDONLY) < 0);
+	ATF_CHECK_ERRNO(ENOENT, openat(fd, "", O_EMPTY_PATH | O_WRONLY) < 0);
+	ATF_CHECK_ERRNO(ENOENT, openat(fd, "", O_EMPTY_PATH | O_RDWR) < 0);
+	ATF_CHECK_ERRNO(ENOENT, openat(fd, "", O_EMPTY_PATH | O_EXEC) < 0);
 }
 
 ATF_TC_WITHOUT_HEAD(open_empty_path_regain_preopened_read);

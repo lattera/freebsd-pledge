@@ -4,6 +4,11 @@
 #ifdef _KERNEL
 #include <sys/types.h>
 #include <sys/_sysfil.h>
+#include <sys/proc.h>
+#include <sys/ucred.h>
+#include <sys/lock.h>
+#include <sys/mutex.h>
+#include <security/mac/mac_framework.h>
 #endif
 
 /*
@@ -121,5 +126,63 @@ CTASSERT(SYSFIL_LAST < SYSFIL_SIZE);
 
 #define	SYSFIL_VALID(i)		((i) >= 0 && (i) <= SYSFIL_LAST)
 #define	SYSFIL_USER_VALID(i)	(SYSFIL_VALID(i) && (i) >= SYSFIL_STDIO)
+
+
+#ifdef _KERNEL
+
+#define	SYSFIL_FAILED_ERRNO	EPERM
+
+static inline int
+sysfil_match_cred(const struct ucred *cr, int sf) {
+#ifdef SYSFIL
+	return (BIT_ISSET(SYSFILSET_BITS, sf, &cr->cr_sysfilset));
+#else
+	return (1);
+#endif
+}
+
+static inline int
+sysfil_check_cred(const struct ucred *cr, int sf)
+{
+	if (__predict_false(!SYSFIL_VALID(sf)))
+		return (EINVAL);
+	if (__predict_false(!sysfil_match_cred(cr, sf)))
+		return (SYSFIL_FAILED_ERRNO);
+	return (0);
+}
+
+static inline int
+sysfil_check(const struct thread *td, int sf)
+{
+	return (sysfil_check_cred(td->td_ucred, sf));
+}
+
+/*
+ * Note: sysfil_require() may acquire the PROC_LOCK to send a violation signal.
+ * Thus it must not be called with the PROC_LOCK (or any other incompatible
+ * lock) currently being held.
+ */
+static inline int
+sysfil_require(struct thread *td, int sf)
+{
+	int error;
+	PROC_LOCK_ASSERT(td->td_proc, MA_NOTOWNED);
+	error = sysfil_check(td, sf);
+#ifdef MAC
+	if (__predict_false(error))
+		mac_sysfil_violation(td, sf, error);
+#endif
+	return (error);
+}
+
+static inline void
+sysfil_cred_init(struct ucred *cr)
+{
+#ifdef SYSFIL
+	BIT_FILL(SYSFILSET_BITS, &cr->cr_sysfilset);
+#endif
+}
+
+#endif
 
 #endif

@@ -2891,19 +2891,25 @@ cache_purge_vgone(struct vnode *vp)
 	VNPASS(VN_IS_DOOMED(vp), vp);
 	if (cache_has_entries(vp)) {
 		cache_purge_impl(vp);
-		return;
+	} else {
+		/*
+		 * Serialize against a potential thread doing cache_purge.
+		 */
+		vlp = VP2VNODELOCK(vp);
+		mtx_wait_unlocked(vlp);
+		if (cache_has_entries(vp)) {
+			cache_purge_impl(vp);
+		}
 	}
-
+#ifdef UNVEIL_SUPPORT
 	/*
-	 * Serialize against a potential thread doing cache_purge.
+	 * The unveil support (ab)uses v_nchash to detect when a vnode has been
+	 * reclaimed (and thus could refer to a different file).  v_nchash is
+	 * incremented on each reclaim so that it can be used as a sort of
+	 * generation counter.
 	 */
-	vlp = VP2VNODELOCK(vp);
-	mtx_wait_unlocked(vlp);
-	if (cache_has_entries(vp)) {
-		cache_purge_impl(vp);
-		return;
-	}
-	return;
+	vp->v_nchash++;
+#endif
 }
 
 /*
@@ -4231,8 +4237,8 @@ cache_can_fplookup(struct cache_fpl *fpl)
 		cache_fpl_aborted_early(fpl);
 		return (false);
 	}
-#ifdef UNVEIL
-	if (unveil_namei_enabled(ndp)) {
+#ifdef UNVEIL_SUPPORT
+	if (unveil_active(td) || ndp->ni_unveil) {
 		cache_fpl_aborted_early(fpl);
 		return (false);
 	}

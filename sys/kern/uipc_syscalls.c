@@ -42,7 +42,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/capsicum.h>
-#include <sys/curtain.h>
 #include <sys/kernel.h>
 #include <sys/lock.h>
 #include <sys/mutex.h>
@@ -147,12 +146,10 @@ kern_socket(struct thread *td, int domain, int type, int protocol)
 		fflag |= FNONBLOCK;
 	}
 
-#ifdef SYSFIL
-	error = sysfil_require_sockaf(td, domain);
+#ifdef MAC
+	error = mac_sysfil_require_sockaf(td, domain);
 	if (error)
 		return (error);
-#endif
-#ifdef MAC
 	error = mac_socket_check_create(td->td_ucred, domain, type, protocol);
 	if (error != 0)
 		return (error);
@@ -691,9 +688,11 @@ sendit(struct thread *td, int s, struct msghdr *mp, int flags)
 			to = NULL;
 			goto bad;
 		}
-		error = sysfil_require_sockaf(td, to->sa_family);
+#ifdef MAC
+		error = mac_sysfil_require_sockaf(td, to->sa_family);
 		if (error)
 			goto bad;
+#endif
 		mp->msg_name = to;
 	} else {
 		to = NULL;
@@ -1276,7 +1275,9 @@ kern_setsockopt(struct thread *td, int s, int level, int name, const void *val,
 	    &fp, NULL, NULL);
 	if (error == 0) {
 		so = fp->f_data;
-		error = sysfil_require_sockopt(td, sopt.sopt_level, sopt.sopt_name);
+#ifdef MAC
+		error = mac_sysfil_require_sockopt(td, sopt.sopt_level, sopt.sopt_name);
+#endif
 		if (error == 0)
 			error = sosetopt(so, &sopt);
 		fdrop(fp, td);
@@ -1343,7 +1344,9 @@ kern_getsockopt(struct thread *td, int s, int level, int name, void *val,
 	    &fp, NULL, NULL);
 	if (error == 0) {
 		so = fp->f_data;
-		error = sysfil_require_sockopt(td, sopt.sopt_level, sopt.sopt_name);
+#ifdef MAC
+		error = mac_sysfil_require_sockopt(td, sopt.sopt_level, sopt.sopt_name);
+#endif
 		if (error == 0) {
 			error = sogetopt(so, &sopt);
 			*valsize = sopt.sopt_valsize;

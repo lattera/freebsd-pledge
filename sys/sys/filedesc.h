@@ -45,9 +45,6 @@
 #include <sys/sx.h>
 #include <sys/_smr.h>
 #include <sys/smr_types.h>
-#ifndef _KERNEL
-#include <stdbool.h>
-#endif
 
 #include <machine/_limits.h>
 
@@ -55,7 +52,6 @@ struct filecaps {
 	cap_rights_t	 fc_rights;	/* per-descriptor capability rights */
 	u_long		*fc_ioctls;	/* per-descriptor allowed ioctls */
 	int16_t		 fc_nioctls;	/* fc_ioctls array size */
-	bool		 fc_noreopen:1;
 	uint32_t	 fc_fcntls;	/* per-descriptor allowed fcntls */
 };
 
@@ -230,7 +226,6 @@ filecaps_init(struct filecaps *fcaps)
 bool	filecaps_copy(const struct filecaps *src, struct filecaps *dst,
 	    bool locked);
 void	filecaps_move(struct filecaps *src, struct filecaps *dst);
-void	filecaps_fill(struct filecaps *fcaps);
 void	filecaps_free(struct filecaps *fcaps);
 
 int	closef(struct file *fp, struct thread *td);
@@ -271,8 +266,6 @@ struct filedesc_to_leader *
 int	getvnode(struct thread *td, int fd, cap_rights_t *rightsp,
 	    struct file **fpp);
 int	getvnode_path(struct thread *td, int fd, cap_rights_t *rightsp,
-	    struct file **fpp);
-int	getvnode_nosetattr(struct thread *td, int fd, cap_rights_t *rightsp,
 	    struct file **fpp);
 void	mountcheckdirs(struct vnode *olddp, struct vnode *newdp);
 

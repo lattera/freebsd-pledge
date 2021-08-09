@@ -43,7 +43,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/syscallsubr.h>
 #include <sys/sysproto.h>
 #include <sys/wait.h>
-#include <sys/curtain.h>
+#include <sys/sysfil.h>
 
 #include <vm/vm.h>
 #include <vm/pmap.h>
@@ -719,6 +719,7 @@ sys_procctl(struct thread *td, struct procctl_args *uap)
 static int
 kern_procctl_single(struct thread *td, struct proc *p, int com, void *data)
 {
+
 	PROC_LOCK_ASSERT(p, MA_OWNED);
 	switch (com) {
 	case PROC_ASLR_CTL:

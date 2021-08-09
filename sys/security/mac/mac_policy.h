@@ -65,6 +65,7 @@
  */
 #include <sys/acl.h>	/* XXX acl_type_t */
 #include <sys/types.h>	/* XXX accmode_t */
+#include <vm/vm.h>	/* vm_prot_t */
 
 struct acl;
 struct auditinfo;
@@ -670,6 +671,22 @@ typedef int	(*mpo_vnode_setlabel_extattr_t)(struct ucred *cred,
 		    struct vnode *vp, struct label *vplabel,
 		    struct label *intlabel);
 
+typedef void	(*mpo_sysfil_violation_t)(struct thread *td, int sf, int error);
+typedef bool	(*mpo_sysfil_exec_restricted_t)(struct thread *td,
+		    struct ucred *cred);
+typedef bool	(*mpo_sysfil_need_exec_adjust_t)(struct thread *td,
+		    struct ucred *cred);
+typedef void	(*mpo_sysfil_exec_adjust_t)(struct thread *td,
+		    struct ucred *cred);
+typedef int	(*mpo_sysfil_update_mask_t)(struct ucred *newcred);
+
+typedef int	(*mpo_sysfil_check_vm_prot_t)(struct ucred *cred,
+		    vm_prot_t prot, bool loose);
+typedef int	(*mpo_sysfil_check_ioctl_t)(struct ucred *, u_long com);
+typedef int	(*mpo_sysfil_check_sockaf_t)(struct ucred *, int af);
+typedef int	(*mpo_sysfil_check_sockopt_t)(struct ucred *,
+		    int level, int name);
+
 struct mac_policy_ops {
 	/*
 	 * Policy module operations.
@@ -962,6 +979,15 @@ struct mac_policy_ops {
 	mpo_vnode_internalize_label_t		mpo_vnode_internalize_label;
 	mpo_vnode_relabel_t			mpo_vnode_relabel;
 	mpo_vnode_setlabel_extattr_t		mpo_vnode_setlabel_extattr;
+	mpo_sysfil_violation_t			mpo_sysfil_violation;
+	mpo_sysfil_exec_restricted_t		mpo_sysfil_exec_restricted;
+	mpo_sysfil_need_exec_adjust_t		mpo_sysfil_need_exec_adjust;
+	mpo_sysfil_exec_adjust_t		mpo_sysfil_exec_adjust;
+	mpo_sysfil_update_mask_t		mpo_sysfil_update_mask;
+	mpo_sysfil_check_vm_prot_t		mpo_sysfil_check_vm_prot;
+	mpo_sysfil_check_ioctl_t		mpo_sysfil_check_ioctl;
+	mpo_sysfil_check_sockaf_t		mpo_sysfil_check_sockaf;
+	mpo_sysfil_check_sockopt_t		mpo_sysfil_check_sockopt;
 };
 
 /*

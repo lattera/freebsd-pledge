@@ -64,6 +64,8 @@ __FBSDID("$FreeBSD$");
 #include <sys/file.h>
 #include <sys/namei.h>
 #include <sys/sysctl.h>
+#include <sys/sysfil.h>
+#include <sys/curtain.h>
 
 #include <vm/vm.h>
 #include <vm/pmap.h>
@@ -431,3 +433,153 @@ mac_proc_check_wait(struct ucred *cred, struct proc *p)
 
 	return (error);
 }
+
+void
+mac_sysfil_violation(struct thread *td, int sf, int error)
+{
+
+#ifdef SYSFIL
+	MAC_POLICY_PERFORM(sysfil_violation, td, sf, error);
+#endif
+}
+
+bool
+mac_sysfil_exec_restricted(struct thread *td, struct ucred *cred)
+{
+	bool result;
+
+	result = false;
+#ifdef SYSFIL
+	MAC_POLICY_BOOLEAN_NOSLEEP(sysfil_exec_restricted, ||, td, cred);
+#endif
+
+	return (result);
+}
+
+bool
+mac_sysfil_need_exec_adjust(struct thread *td, struct ucred *cred)
+{
+	bool result;
+
+	result = false;
+#ifdef SYSFIL
+	MAC_POLICY_BOOLEAN_NOSLEEP(sysfil_need_exec_adjust, ||, td, cred);
+#endif
+
+	return (result);
+}
+
+void
+mac_sysfil_exec_adjust(struct thread *td, struct ucred *newcred)
+{
+#ifdef SYSFIL
+	MAC_POLICY_PERFORM(sysfil_exec_adjust, td, newcred);
+#endif
+}
+
+int
+mac_sysfil_update_mask(struct thread *td, const sysfilset_t *mask_sfs)
+{
+#ifdef SYSFIL
+	struct proc *p = td->td_proc;
+	struct ucred *cr, *old_cr;
+
+	do {
+		int error;
+		cr = crget();
+		PROC_LOCK(p);
+		old_cr = crcopysafe(p, cr);
+		BIT_AND(SYSFILSET_BITS, &cr->cr_sysfilset, mask_sfs);
+		crhold(old_cr);
+		PROC_UNLOCK(p);
+		MAC_POLICY_CHECK(sysfil_update_mask, cr);
+		if (error != 0) {
+			crfree(old_cr);
+			crfree(cr);
+			return (error);
+		}
+		PROC_LOCK(p);
+		if (old_cr == p->p_ucred) {
+			crfree(old_cr);
+			break;
+		}
+		/* retry if the process' ucred was replaced */
+		PROC_UNLOCK(p);
+		crfree(old_cr);
+		crfree(cr);
+	} while (true);
+	crfree(old_cr);
+	proc_set_cred(p, cr);
+	PROC_UNLOCK(p);
+#endif
+	return (0);
+}
+
+int
+mac_sysfil_require_vm_prot(struct thread *td, vm_prot_t prot, bool loose)
+{
+	int error;
+
+#ifdef SYSFIL
+	MAC_POLICY_CHECK(sysfil_check_vm_prot, td->td_ucred, prot, loose);
+
+	if (error != 0)
+		mac_sysfil_violation(td, SYSFIL_PROT_EXEC, error);
+#else
+	error = 0;
+#endif
+
+	return (error);
+}
+
+int
+mac_sysfil_require_ioctl(struct thread *td, u_long com)
+{
+	int error;
+
+#ifdef SYSFIL
+	MAC_POLICY_CHECK(sysfil_check_ioctl, td->td_ucred, com);
+
+	if (error != 0)
+		mac_sysfil_violation(td, SYSFIL_ANY_IOCTL, error);
+#else
+	error = 0;
+#endif
+
+	return (error);
+}
+
+int
+mac_sysfil_require_sockaf(struct thread *td, int af)
+{
+	int error;
+
+#ifdef SYSFIL
+	MAC_POLICY_CHECK(sysfil_check_sockaf, td->td_ucred, af);
+
+	if (error != 0)
+		mac_sysfil_violation(td, SYSFIL_ANY_SOCKAF, error);
+#else
+	error = 0;
+#endif
+
+	return (error);
+}
+
+int
+mac_sysfil_require_sockopt(struct thread *td, int level, int name)
+{
+	int error;
+
+#ifdef SYSFIL
+	MAC_POLICY_CHECK(sysfil_check_sockopt, td->td_ucred, level, name);
+
+	if (error != 0)
+		mac_sysfil_violation(td, SYSFIL_ANY_SOCKOPT, error);
+#else
+	error = 0;
+#endif
+
+	return (error);
+}
+

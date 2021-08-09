@@ -45,7 +45,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/sdt.h>
 #include <sys/sysctl.h>
 #include <sys/systm.h>
-#include <sys/curtain.h>
 
 #include <security/mac/mac_framework.h>
 
@@ -168,13 +167,6 @@ priv_check_cred(struct ucred *cred, int priv)
 	 * privilege unilaterally.
 	 */
 	error = priv_check_cred_pre(cred, priv);
-	if (error)
-		goto out;
-
-	/*
-	 * Privileges may require certain abilities to be enabled.
-	 */
-	error = sysfil_priv_check(cred, priv);
 	if (error)
 		goto out;
 

@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <string.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <sys/sysfil.h>
 #include <sys/unveil.h>
 

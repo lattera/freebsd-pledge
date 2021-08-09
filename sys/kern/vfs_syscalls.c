@@ -74,7 +74,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/syscallsubr.h>
 #include <sys/sysctl.h>
 #include <sys/unveil.h>
-#include <sys/curtain.h>
+#include <sys/sysfil.h>
 #ifdef KTRACE
 #include <sys/ktrace.h>
 #endif
@@ -2121,10 +2121,6 @@ kern_accessat(struct thread *td, int fd, const char *path,
 	struct ucred *cred, *usecred;
 	struct vnode *vp;
 	struct nameidata nd;
-#ifdef UNVEIL
-	cap_rights_t rights;
-#endif
-	cap_rights_t *rightsp;
 	int error;
 
 	if ((flag & ~(AT_EACCESS | AT_RESOLVE_BENEATH | AT_EMPTY_PATH)) != 0)
@@ -2147,25 +2143,9 @@ kern_accessat(struct thread *td, int fd, const char *path,
 	} else
 		usecred = cred;
 	AUDIT_ARG_VALUE(amode);
-#ifdef UNVEIL
-	if (amode == F_OK) {
-		rightsp = &cap_fstat_rights;
-	} else {
-		cap_rights_init(&rights);
-		if (amode & R_OK)
-			cap_rights_set(&rights, CAP_READ);
-		if (amode & W_OK)
-			cap_rights_set(&rights, CAP_WRITE);
-		if (amode & X_OK)
-			cap_rights_set(&rights, CAP_EXECAT);
-		rightsp = &rights;
-	}
-#else
-	rightsp = &cap_fstat_rights;
-#endif
 	NDINIT_ATRIGHTS(&nd, LOOKUP, FOLLOW | LOCKSHARED | LOCKLEAF |
 	    AUDITVNODE1 | at2cnpflags(flag, AT_RESOLVE_BENEATH |
-	    AT_EMPTY_PATH), pathseg, path, fd, rightsp, td);
+	    AT_EMPTY_PATH), pathseg, path, fd, &cap_fstat_rights, td);
 	if ((error = namei(&nd)) != 0)
 		goto out;
 	vp = nd.ni_vp;
@@ -2973,6 +2953,7 @@ sys_fchmod(struct thread *td, struct fchmod_args *uap)
 
 	AUDIT_ARG_FD(uap->fd);
 	AUDIT_ARG_MODE(uap->mode);
+
 	error = fget(td, uap->fd, &cap_fchmod_rights, &fp);
 	if (error != 0)
 		return (error);
@@ -4188,7 +4169,7 @@ kern_getdirentries(struct thread *td, int fd, char *buf, size_t count,
 	if (count > IOSIZE_MAX)
 		return (EINVAL);
 	auio.uio_resid = count;
-	error = getvnode_nosetattr(td, fd, &cap_read_rights, &fp);
+	error = getvnode(td, fd, &cap_read_rights, &fp);
 	if (error != 0)
 		return (error);
 	if ((fp->f_flag & FREAD) == 0) {
@@ -4349,6 +4330,10 @@ getvnode_path(struct thread *td, int fd, cap_rights_t *rightsp,
 		return (EINVAL);
 	}
 
+#ifdef UNVEIL_SUPPORT
+	if (unveil_active(td))
+		unveil_ops->tracker_push_file(td, fp);
+#endif
 	*fpp = fp;
 	return (0);
 }
@@ -4359,7 +4344,7 @@ getvnode_path(struct thread *td, int fd, cap_rights_t *rightsp,
  * A reference on the file entry is held upon returning.
  */
 int
-getvnode_nosetattr(struct thread *td, int fd, cap_rights_t *rightsp, struct file **fpp)
+getvnode(struct thread *td, int fd, cap_rights_t *rightsp, struct file **fpp)
 {
 	int error;
 
@@ -4374,20 +4359,6 @@ getvnode_nosetattr(struct thread *td, int fd, cap_rights_t *rightsp, struct file
 		error = EBADF;
 	}
 
-	return (error);
-}
-
-int
-getvnode(struct thread *td, int fd, cap_rights_t *rightsp, struct file **fpp)
-{
-	int error;
-	error = getvnode_nosetattr(td, fd, rightsp, fpp);
-#ifdef UNVEIL
-	if (error == 0 && !((*fpp)->f_uperms & UPERM_SETATTR)) {
-		fdrop(*fpp, td);
-		error = EACCES;
-	}
-#endif
 	return (error);
 }
 

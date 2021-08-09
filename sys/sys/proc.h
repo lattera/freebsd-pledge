@@ -72,7 +72,6 @@
 #include <sys/_sysfil.h>
 #include <sys/types.h>
 #include <sys/_domainset.h>
-#include <sys/_unveil.h>
 
 #include <machine/proc.h>		/* Machine-dependent proc substruct. */
 #ifdef _KERNEL
@@ -382,6 +381,9 @@ struct thread {
 	off_t		td_ktr_io_lim;	/* (k) limit for ktrace file size */
 #ifdef EPOCH_TRACE
 	SLIST_HEAD(, epoch_tracker) td_epochs;
+#endif
+#ifdef UNVEIL_SUPPORT
+	struct unveil_tracker *td_unveil_tracker; /* (a) */
 #endif
 };
 
@@ -738,8 +740,8 @@ struct proc {
 
 	TAILQ_HEAD(, kq_timer_cb_data)	p_kqtim_stop;	/* (c) */
 
-#ifdef	UNVEIL
-	struct unveil_base p_unveils;
+#ifdef UNVEIL_SUPPORT
+	struct unveil_base *p_unveils;	/* (c) */
 #endif
 };
 

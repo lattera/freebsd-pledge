@@ -1128,6 +1128,11 @@ int vn_dir_check_exec(struct vnode *vp, struct componentname *cnp);
 	atomic_load_consume_ptr(&(_vp)->v_data);\
 })
 
+extern bool unveil_support;
+#ifdef UNVEIL_SUPPORT
+extern const struct unveil_ops *unveil_ops;
+#endif
+
 #endif /* _KERNEL */
 
 #endif /* !_SYS_VNODE_H_ */

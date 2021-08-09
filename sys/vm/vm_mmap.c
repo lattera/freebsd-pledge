@@ -51,7 +51,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/capsicum.h>
-#include <sys/curtain.h>
+#include <sys/sysfil.h>
 #include <sys/kernel.h>
 #include <sys/lock.h>
 #include <sys/mutex.h>
@@ -382,8 +382,8 @@ kern_mmap(struct thread *td, const struct mmap_req *mrp)
 		 *
 		 * This relies on VM_PROT_* matching PROT_*.
 		 */
-#ifdef SYSFIL
-		error = sysfil_require_vm_prot(td, prot, false);
+#ifdef MAC
+		error = mac_sysfil_require_vm_prot(td, prot, false);
 		if (error)
 			return (error);
 #endif
@@ -413,8 +413,8 @@ kern_mmap(struct thread *td, const struct mmap_req *mrp)
 			error = EINVAL;
 			goto done;
 		}
-#ifdef SYSFIL
-		error = sysfil_require_vm_prot(td, prot, fp->f_ops == &vnops);
+#ifdef MAC
+		error = mac_sysfil_require_vm_prot(td, prot, fp->f_ops == &vnops);
 		if (error)
 			goto done;
 #endif
@@ -667,7 +667,7 @@ kern_mprotect(struct thread *td, uintptr_t addr0, size_t size, int prot)
 	vm_size_t pageoff;
 	int vm_error, max_prot;
 	int flags;
-#ifdef SYSFIL
+#ifdef MAC
 	int error;
 #endif
 
@@ -689,8 +689,8 @@ kern_mprotect(struct thread *td, uintptr_t addr0, size_t size, int prot)
 	if (addr + size < addr)
 		return (EINVAL);
 
-#ifdef SYSFIL
-	error = sysfil_require_vm_prot(td, prot, false);
+#ifdef MAC
+	error = mac_sysfil_require_vm_prot(td, prot, false);
 	if (error)
 		return (error);
 #endif

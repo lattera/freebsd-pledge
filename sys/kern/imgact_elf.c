@@ -70,7 +70,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/syslog.h>
 #include <sys/eventhandler.h>
 #include <sys/user.h>
-#include <sys/curtain.h>
+#include <sys/sysfil.h>
 
 #include <vm/vm.h>
 #include <vm/vm_kern.h>

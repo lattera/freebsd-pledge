@@ -1,5 +1,5 @@
 ident	PLEDGE
 include	GENERIC
 options	SYSFIL
-options	UNVEIL
+options	UNVEIL_SUPPORT
 options	COMPAT_43

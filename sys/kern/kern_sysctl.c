@@ -49,7 +49,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/fail.h>
 #include <sys/systm.h>
 #include <sys/capsicum.h>
-#include <sys/curtain.h>
+#include <sys/sysfil.h>
 #include <sys/kernel.h>
 #include <sys/limits.h>
 #include <sys/sysctl.h>
@@ -2181,11 +2181,6 @@ sysctl_find_oid(int *name, u_int namelen, struct sysctl_oid **noid,
 		if (oid == NULL)
 			return (ENOENT);
 
-#ifdef SYSFIL
-		if (req && req->td && IN_RESTRICTED_MODE(req->td))
-			curtain_sysctl_req_amend(req, oid);
-#endif
-
 		indx++;
 		if ((oid->oid_kind & CTLTYPE) == CTLTYPE_NODE) {
 			if (oid->oid_handler != NULL || indx == namelen) {
@@ -2222,6 +2217,7 @@ sysctl_lookup(int *name, u_int namelen, struct sysctl_oid **noid,
 	SYSCTL_RLOCK(&tracker);
 	error = sysctl_find_oid(name, namelen, noid, nindx, req);
 	SYSCTL_RUNLOCK(&tracker);
+	/* XXX *noid may become invalid after unlocking */
 	return (error);
 }
 
@@ -2274,13 +2270,6 @@ sysctl_root(SYSCTL_HANDLER_ARGS)
 			error = EPERM;
 			goto out;
 		}
-	}
-#endif
-#ifdef SYSFIL
-	if (!(oid->oid_kind & (CTLFLAG_RESTRICT|CTLFLAG_CAPRW))) {
-		error = sysfil_require_sysctl_req(req);
-		if (error)
-			goto out;
 	}
 #endif
 

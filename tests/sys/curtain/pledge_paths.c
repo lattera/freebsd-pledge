@@ -187,8 +187,13 @@ ATF_TC_BODY(tmppath_allow, tc)
 	ATF_CHECK(try_open(path, O_RDONLY) >= 0);
 	ATF_CHECK(try_open(path, O_WRONLY) >= 0);
 	ATF_CHECK(try_open(path, O_RDWR) >= 0);
+	ATF_CHECK(unlink(path) >= 0);
 
-	ATF_REQUIRE(unlink(path) >= 0);
+	int fd;
+	ATF_REQUIRE(asprintf(&path, "%s/%s.XXXXXXXXXX", tmpdir, getprogname()) > 0);
+	ATF_REQUIRE((fd = mkstemp(path)) >= 0);
+	ATF_CHECK(close(fd) >= 0);
+	ATF_CHECK(unlink(path) >= 0);
 }
 
 ATF_TC_WITHOUT_HEAD(tmppath_deny);
@@ -199,27 +204,41 @@ ATF_TC_BODY(tmppath_deny, tc)
 	if (!tmpdir || !*tmpdir)
 		tmpdir = _PATH_TMP;
 
+	char *file1, *file2;
 	char *subdir, *subfile1, *subfile2;
 	ATF_REQUIRE(asprintf(&subdir, "%s/%s.XXXXXXXXXX", tmpdir, getprogname()) > 0);
 	ATF_REQUIRE((subdir = mktemp(subdir)));
+	ATF_REQUIRE(asprintf(&file1, "%s/file1", tmpdir));
+	ATF_REQUIRE(asprintf(&file2, "%s/file2", tmpdir));
+	ATF_REQUIRE(try_creat(file1) >= 0);
 	ATF_REQUIRE(mkdir(subdir, 0777) >= 0);
 	ATF_REQUIRE(asprintf(&subfile1, "%s/subfile1", subdir));
 	ATF_REQUIRE(asprintf(&subfile2, "%s/subfile2", subdir));
 	ATF_REQUIRE(try_creat(subfile1) >= 0);
 
 	ATF_REQUIRE(pledge("stdio error tmppath", "") >= 0);
-	check_access(tmpdir, "de");
 
-	ATF_CHECK_ERRNO(ENOENT, try_open(subdir, O_RDONLY) < 0);
-	ATF_CHECK_ERRNO(ENOENT, try_open(subfile1, O_RDONLY) < 0);
-	ATF_CHECK_ERRNO(ENOENT, try_creat(subfile2) < 0);
+	check_access(tmpdir, "de");
+	check_access(subdir, "d");
+	check_access(subfile1, "");
+	check_access(subfile2, "");
 
 	char *path;
 	ATF_REQUIRE(asprintf(&path, "%s/%s.XXXXXXXXXX", tmpdir, getprogname()) > 0);
 	ATF_REQUIRE((path = mktemp(path)));
 
-	ATF_CHECK_ERRNO(EACCES, mkdir(path, 0777) < 0);
-	ATF_CHECK_ERRNO(EACCES, symlink("symlink-test", path) < 0);
+	ATF_CHECK_ERRNO(ENOENT, mkdir(path, 0777) < 0);
+	ATF_CHECK_ERRNO(ENOENT, link(file1, path) < 0);
+	ATF_CHECK_ERRNO(ENOENT, link(file2, path) < 0);
+	ATF_CHECK_ERRNO(ENOENT, link(subfile1, path) < 0);
+	ATF_CHECK_ERRNO(ENOENT, link(subfile2, path) < 0);
+	ATF_CHECK_ERRNO(ENOENT, symlink("symlink-test", path) < 0);
+
+	ATF_CHECK_ERRNO(ENOENT, rmdir(subdir) < 0);
+	ATF_CHECK_ERRNO(ENOENT, unlink(subfile1) < 0);
+	ATF_CHECK_ERRNO(ENOENT, unlink(subfile2) < 0);
+	ATF_CHECK_ERRNO(ENOENT, link(subfile1, subfile2) < 0);
+	ATF_CHECK_ERRNO(ENOENT, symlink("symlink-test", subfile2) < 0);
 }
 
 ATF_TP_ADD_TCS(tp)

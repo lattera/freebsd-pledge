@@ -46,7 +46,7 @@
 __FBSDID("$FreeBSD$");
 
 #include <sys/capsicum.h>
-#include <sys/curtain.h>
+#include <sys/sysfil.h>
 #include <sys/ktr.h>
 #include <sys/vmmeter.h>
 #ifdef KTRACE
@@ -54,6 +54,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/ktrace.h>
 #endif
 #include <security/audit/audit.h>
+#include <sys/unveil.h> /* XXX */
 
 static inline void
 syscallenter(struct thread *td)
@@ -139,10 +140,15 @@ syscallenter(struct thread *td)
 	 */
 	sysfil = (se->sy_flags & SYF_SYSFIL_MASK) >> SYF_SYSFIL_SHIFT;
 	if (__predict_false(!sysfil_match_cred(td->td_ucred, sysfil))) {
-		td->td_errno = error = SYSFIL_FAILED_ERRNO;
-		sysfil_violation(td, sysfil, error);
+		td->td_errno = error = sysfil_require(td, sysfil);
+		MPASS(error != 0);
 		goto retval;
 	}
+#endif
+
+#ifdef UNVEIL_SUPPORT /* XXX find way to get rid of this */
+	if (unveil_ops && td->td_unveil_tracker)
+		unveil_ops->tracker_clear(td);
 #endif
 
 	/*

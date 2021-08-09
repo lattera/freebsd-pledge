@@ -52,9 +52,7 @@ int curtainctl(int flags, size_t reqc, struct curtainreq *reqv);
 #include <sys/ucred.h>
 #include <sys/sysctl.h>
 #include <sys/proc.h>
-#include <sys/mman.h>
 #include <sys/queue.h>
-#include <sys/caprights.h>
 
 struct curtain_mode {
 	uint8_t on_self     : 2;
@@ -102,7 +100,6 @@ struct curtain {
 	bool ct_overflowed;
 	bool ct_cache_valid;
 	struct {
-		cap_rights_t sysfil_rights;
 		bool need_exec_switch;
 		bool is_restricted_on_self;
 		bool is_restricted_on_exec;
@@ -112,90 +109,8 @@ struct curtain {
 	struct curtain_item ct_slots[];
 };
 
-void	curtain_hold(struct curtain *);
-void	curtain_free(struct curtain *);
-
-bool	curtain_cred_need_exec_switch(const struct ucred *);
-bool	curtain_cred_exec_restricted(const struct ucred *);
-void	curtain_cred_exec_switch(struct ucred *);
-void	curtain_cap_enter(struct thread *);
-
-bool	curtain_device_unveil_bypass(struct thread *, struct cdev *);
-void	curtain_sysctl_req_amend(struct sysctl_req *, const struct sysctl_oid *);
-
-
-#define	SYSFIL_FAILED_ERRNO	EPERM
-
-static inline int
-sysfil_match_cred(const struct ucred *cr, int sf) {
-#ifdef SYSFIL
-	return (BIT_ISSET(SYSFILSET_BITS, sf, &cr->cr_sysfilset));
-#else
-	return (1);
-#endif
-}
-
-static inline int
-sysfil_check_cred(const struct ucred *cr, int sf)
-{
-	if (__predict_false(!SYSFIL_VALID(sf)))
-		return (EINVAL);
-	if (__predict_false(!sysfil_match_cred(cr, sf)))
-		return (SYSFIL_FAILED_ERRNO);
-	return (0);
-}
-
-static inline int
-sysfil_check(const struct thread *td, int sf)
-{
-	return (sysfil_check_cred(td->td_ucred, sf));
-}
-
-void sysfil_violation(struct thread *, int sf, int error);
-
-/*
- * Note: sysfil_require() may acquire the PROC_LOCK to send a violation signal.
- * Thus it must not be called with the PROC_LOCK (or any other incompatible
- * lock) currently being held.
- */
-static inline int
-sysfil_require(struct thread *td, int sf)
-{
-	int error;
-	PROC_LOCK_ASSERT(td->td_proc, MA_NOTOWNED);
-	error = sysfil_check(td, sf);
-	if (__predict_false(error))
-		sysfil_violation(td, sf, error);
-	return (error);
-}
-
-static inline int
-sysfil_failed(struct thread *td, int sf)
-{
-	sysfil_violation(td, sf, SYSFIL_FAILED_ERRNO);
-	return (SYSFIL_FAILED_ERRNO);
-}
-
-static inline void
-sysfil_cred_init(struct ucred *cr)
-{
-#ifdef SYSFIL
-	BIT_FILL(SYSFILSET_BITS, &cr->cr_sysfilset);
-	cr->cr_curtain = NULL;
-#endif
-}
-
-void sysfil_cred_rights(struct ucred *, cap_rights_t *);
-
-int sysfil_cred_check_visibility(const struct ucred *, const struct ucred *);
-
-int sysfil_require_vm_prot(struct thread *, vm_prot_t prot, bool loose);
-int sysfil_require_ioctl(struct thread *, u_long com);
-int sysfil_require_sockaf(struct thread *, int af);
-int sysfil_require_sockopt(struct thread *, int level, int name);
-int sysfil_require_sysctl_req(struct sysctl_req *);
-
-int sysfil_priv_check(struct ucred *, int priv);
+bool	curtain_cred_visible(const struct ucred *subject, const struct ucred *target,
+	    bool strict);
 
 #endif
 

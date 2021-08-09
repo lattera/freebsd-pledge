@@ -91,6 +91,8 @@ struct vop_setlabel_args;
 
 #include <sys/acl.h>			/* XXX acl_type_t */
 #include <sys/types.h>			/* accmode_t */
+#include <vm/vm.h>			/* vm_prot_t */
+#include <sys/_sysfil.h>		/* sysfilset_t */
 
 /*
  * Entry points to the TrustedBSD MAC Framework from the remainder of the
@@ -684,5 +686,17 @@ void	mac_vnode_relabel(struct ucred *cred, struct vnode *vp,
  * their existing EA implementation.
  */
 int	vop_stdsetlabel_ea(struct vop_setlabel_args *ap);
+
+void	mac_sysfil_violation(struct thread *td, int sf, int error);
+
+bool	mac_sysfil_exec_restricted(struct thread *td, struct ucred *cred);
+bool	mac_sysfil_need_exec_adjust(struct thread *td, struct ucred *cred);
+void	mac_sysfil_exec_adjust(struct thread *td, struct ucred *newcred);
+int	mac_sysfil_update_mask(struct thread *td, const sysfilset_t *mask_sfs);
+
+int	mac_sysfil_require_vm_prot(struct thread *, vm_prot_t prot, bool loose);
+int	mac_sysfil_require_ioctl(struct thread *, u_long com);
+int	mac_sysfil_require_sockaf(struct thread *, int af);
+int	mac_sysfil_require_sockopt(struct thread *, int level, int name);
 
 #endif /* !_SECURITY_MAC_MAC_FRAMEWORK_H_ */

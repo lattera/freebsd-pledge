@@ -124,7 +124,7 @@ struct 	fileops vnops = {
 	.fo_fill_kinfo = vn_fill_kinfo,
 	.fo_mmap = vn_mmap,
 	.fo_fallocate = vn_fallocate,
-	.fo_flags = DFLAG_PASSABLE | DFLAG_SEEKABLE,
+	.fo_flags = DFLAG_PASSABLE | DFLAG_SEEKABLE
 };
 
 const u_int io_hold_cnt = 16;
@@ -279,6 +279,11 @@ restart:
 #endif
 				error = VOP_CREATE(ndp->ni_dvp, &ndp->ni_vp,
 				    &ndp->ni_cnd, vap);
+#ifdef UNVEIL_SUPPORT
+			if (error == 0 && unveil_active(td))
+				unveil_ops->tracker_substitute(td,
+				    ndp->ni_dvp, ndp->ni_vp);
+#endif
 			vp = ndp->ni_vp;
 			if (error == 0 && (fmode & O_EXCL) != 0 &&
 			    (fmode & (O_EXLOCK | O_SHLOCK)) != 0) {
@@ -327,11 +332,6 @@ restart:
 			return (error);
 		vp = ndp->ni_vp;
 	}
-#ifdef UNVEIL
-	if (fp)
-		fp->f_uperms = unveil_is_active(td) ?
-		    ndp->ni_unveil.effective_uperms : UPERM_ALL;
-#endif
 	error = vn_open_vnode(vp, fmode, cred, td, fp);
 	if (first_open) {
 		VI_LOCK(vp);
@@ -443,6 +443,10 @@ vn_open_vnode(struct vnode *vp, int fmode, struct ucred *cred,
 			error = VOP_ACCESS(vp, VREAD, cred, td);
 		if (error == 0)
 			fp->f_flag |= FKQALLOWED;
+#ifdef UNVEIL_SUPPORT
+		if (fp && unveil_ops)
+			unveil_ops->tracker_save_file(td, fp, vp);
+#endif
 		return (0);
 	}
 
@@ -495,6 +499,10 @@ vn_open_vnode(struct vnode *vp, int fmode, struct ucred *cred,
 	}
 
 	ASSERT_VOP_LOCKED(vp, "vn_open_vnode");
+#ifdef UNVEIL_SUPPORT
+	if (fp && unveil_ops)
+		unveil_ops->tracker_save_file(td, fp, vp);
+#endif
 	return (error);
 
 }
@@ -2411,9 +2419,9 @@ vn_chmod(struct file *fp, mode_t mode, struct ucred *active_cred,
 	AUDIT_ARG_VNODE1(vp);
 	VOP_UNLOCK(vp);
 #endif
-#ifdef UNVEIL
-	if (!(fp->f_uperms & UPERM_SETATTR))
-		return (EACCES);
+#ifdef UNVEIL_SUPPORT
+	if (unveil_active(td))
+		unveil_ops->tracker_push_file(td, fp);
 #endif
 	return (setfmode(td, active_cred, vp, mode));
 }
@@ -2430,9 +2438,9 @@ vn_chown(struct file *fp, uid_t uid, gid_t gid, struct ucred *active_cred,
 	AUDIT_ARG_VNODE1(vp);
 	VOP_UNLOCK(vp);
 #endif
-#ifdef UNVEIL
-	if (!(fp->f_uperms & UPERM_SETATTR))
-		return (EACCES);
+#ifdef UNVEIL_SUPPORT
+	if (unveil_active(td))
+		unveil_ops->tracker_push_file(td, fp);
 #endif
 	return (setfown(td, active_cred, vp, uid, gid));
 }

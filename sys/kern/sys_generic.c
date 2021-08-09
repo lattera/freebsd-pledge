@@ -75,9 +75,9 @@ __FBSDID("$FreeBSD$");
 #ifdef KTRACE
 #include <sys/ktrace.h>
 #endif
-#include <sys/curtain.h>
 
 #include <security/audit/audit.h>
+#include <security/mac/mac_framework.h>
 
 /*
  * The following macro defines how many bytes will be allocated from
@@ -773,8 +773,8 @@ kern_ioctl(struct thread *td, int fd, u_long com, caddr_t data)
 		goto out;
 	}
 #endif
-#ifdef SYSFIL
-	error = sysfil_require_ioctl(td, com);
+#ifdef MAC
+	error = mac_sysfil_require_ioctl(td, com);
 	if (error)
 		goto out;
 #endif

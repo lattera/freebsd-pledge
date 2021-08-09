@@ -223,8 +223,8 @@ struct sysent sysent[] = {
 	{ compat4(AS(freebsd4_uname_args),uname), .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 164 = freebsd4 uname */
 	{ .sy_narg = AS(sysarch_args), .sy_call = (sy_call_t *)sysarch, .sy_auevent = AUE_SYSARCH, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 165 = sysarch */
 	{ .sy_narg = AS(rtprio_args), .sy_call = (sy_call_t *)sys_rtprio, .sy_auevent = AUE_RTPRIO, .sy_flags = (SYSFIL_SCHED << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 166 = rtprio */
-	{ .sy_narg = AS(curtainctl_args), .sy_call = (sy_call_t *)sys_curtainctl, .sy_auevent = AUE_CURTAINCTL, .sy_flags = (SYSFIL_CURTAIN << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 167 = curtainctl */
-	{ .sy_narg = AS(unveilreg_args), .sy_call = (sy_call_t *)sys_unveilreg, .sy_auevent = AUE_UNVEILREG, .sy_flags = (SYSFIL_CURTAIN << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 168 = unveilreg */
+	{ .sy_narg = AS(curtainctl_args), .sy_call = (sy_call_t *)lkmressys, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_CURTAIN << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_ABSENT },	/* 167 = curtainctl */
+	{ .sy_narg = AS(unveilreg_args), .sy_call = (sy_call_t *)lkmressys, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_CURTAIN << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_ABSENT },	/* 168 = unveilreg */
 	{ .sy_narg = AS(semsys_args), .sy_call = (sy_call_t *)lkmressys, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_SYSVIPC << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_ABSENT },	/* 169 = semsys */
 	{ .sy_narg = AS(msgsys_args), .sy_call = (sy_call_t *)lkmressys, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_SYSVIPC << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_ABSENT },	/* 170 = msgsys */
 	{ .sy_narg = AS(shmsys_args), .sy_call = (sy_call_t *)lkmressys, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_SYSVIPC << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_ABSENT },	/* 171 = shmsys */

@@ -50,11 +50,12 @@ __FBSDID("$FreeBSD$");
 #include <sys/sx.h>
 #include <sys/domain.h>
 #include <sys/sysproto.h>
-#include <sys/curtain.h>
 
 #include <net/vnet.h>
 #include <net/route.h>
 #include <net/route/route_var.h>
+
+#include <security/mac/mac_framework.h>
 
 /* Kernel config default option. */
 #ifdef ROUTETABLES
@@ -153,8 +154,8 @@ sys_setfib(struct thread *td, struct setfib_args *uap)
 {
 	int error = 0;
 
-#ifdef SYSFIL
-	error = sysfil_require_sockopt(td, SOL_SOCKET, SO_SETFIB);
+#ifdef MAC
+	error = mac_sysfil_require_sockopt(td, SOL_SOCKET, SO_SETFIB);
 	if (error)
 		return (error);
 #endif

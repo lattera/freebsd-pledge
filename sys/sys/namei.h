@@ -113,8 +113,8 @@ struct nameidata {
 	 */
 	struct componentname ni_cnd;
 	struct nameicap_tracker_head ni_cap_tracker;
-#if defined(UNVEIL)
-	struct unveil_traversal ni_unveil;
+#ifdef UNVEIL_SUPPORT
+	struct unveil_traversal *ni_unveil;
 #endif
 	/*
 	 * Private helper data for UFS, must be at the end.  See
@@ -187,9 +187,9 @@ int	cache_fplookup(struct nameidata *ndp, enum cache_fpl_status *status,
 #define	AUDITVNODE1	0x00040000 /* audit the looked up vnode information */
 #define	AUDITVNODE2	0x00080000 /* audit the looked up vnode information */
 #define	NOCAPCHECK	0x00100000 /* do not perform capability checks */
-#define	NOUNVEILCHECK	0x00200000 /* do not enforce unveil restrictions */
+/* UNUSED		0x00200000 */
 /* UNUSED		0x00400000 */
-/* UNUSED		0x00800000 */
+#define	NOUNVEILCHECK	0x00800000 /* do not enforce unveil restrictions */
 #define	HASBUF		0x01000000 /* has allocated pathname buffer */
 #define	NOEXECCHECK	0x02000000 /* do not perform exec check on dir */
 #define	MAKEENTRY	0x04000000 /* entry is to be added to name cache */
@@ -218,7 +218,8 @@ int	cache_fplookup(struct nameidata *ndp, enum cache_fpl_status *status,
  */
 #define	NI_LCF_STRICTRELATIVE	0x0001	/* relative lookup only */
 #define	NI_LCF_CAP_DOTDOT	0x0002	/* ".." in strictrelative case */
-#define	NI_LCF_UNVEIL_ENABLED	0x0020	/* unveil restrictions being enforced */
+#define	NI_LCF_UNVEIL_TRAVERSE	0x0020	/* do unveil checks */
+#define	NI_LCF_UNVEIL_BYPASSED	0x0040	/* pretend that unveil checks passed */
 
 /*
  * Initialization of a nameidata structure.
@@ -252,9 +253,9 @@ int	cache_fplookup(struct nameidata *ndp, enum cache_fpl_status *status,
 #define NDREINIT_DBG(arg)	do { } while (0)
 #endif
 
-#ifdef UNVEIL
+#ifdef UNVEIL_SUPPORT
 #define	NDINIT_UNVEIL(_ndp) do { \
-	_ndp->ni_unveil.save = NULL; \
+	_ndp->ni_unveil = NULL; \
 } while (0)
 #else
 #define	NDINIT_UNVEIL(ndp) do { } while (0)

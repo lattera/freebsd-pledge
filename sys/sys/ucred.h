@@ -80,12 +80,10 @@ struct ucred {
 	struct loginclass	*cr_loginclass; /* login class */
 #ifdef SYSFIL
 	sysfilset_t	cr_sysfilset;
-	struct curtain	*cr_curtain;
-	void		*cr_pspare;	/* general use */
 #else
 	u_int		cr_flags;	/* credential flags */
-	void		*cr_pspare2[2];	/* general use 2 */
 #endif
+	void		*cr_pspare2[2];	/* general use 2 */
 #define	cr_endcopy	cr_label
 	struct label	*cr_label;	/* MAC label */
 	gid_t	*cr_groups;		/* groups */

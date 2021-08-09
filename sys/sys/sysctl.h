@@ -182,7 +182,6 @@ struct sysctl_req {
 	int		(*newfunc)(struct sysctl_req *, void *, size_t);
 	size_t		 validlen;
 	int		 flags;
-	uint64_t	 last_curtain_serial;
 };
 
 SLIST_HEAD(sysctl_oid_list, sysctl_oid);

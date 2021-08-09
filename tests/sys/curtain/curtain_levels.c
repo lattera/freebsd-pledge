@@ -103,6 +103,30 @@ ATF_TC_BODY(sysfil_raise_block, tc)
 }
 
 
+ATF_TC_WITHOUT_HEAD(unrestrict_unveils);
+ATF_TC_BODY(unrestrict_unveils, tc)
+{
+	struct curtain_slot *slot0, *slot1;
+	slot0 = curtain_slot();
+	slot1 = curtain_slot();
+	curtain_state(slot0, CURTAIN_ON_SELF, CURTAIN_RESERVED);
+	curtain_state(slot0, CURTAIN_ON_EXEC, CURTAIN_RESERVED);
+	curtain_state(slot1, CURTAIN_ON_SELF, CURTAIN_ENABLED);
+	curtain_state(slot1, CURTAIN_ON_EXEC, CURTAIN_ENABLED);
+	curtain_default(slot0, CURTAIN_PASS);
+	curtain_default(slot1, CURTAIN_DENY);
+	curtain_sysfil(slot1, SYSFIL_STDIO, CURTAIN_PASS);
+	curtain_sysfil(slot1, SYSFIL_CURTAIN, CURTAIN_PASS);
+	ATF_REQUIRE(curtain_enforce() >= 0);
+	ATF_CHECK_ERRNO(EPERM, access("/etc/rc", R_OK) < 0);
+	curtain_state(slot0, CURTAIN_ON_SELF, CURTAIN_ENABLED);
+	curtain_state(slot0, CURTAIN_ON_EXEC, CURTAIN_ENABLED);
+	ATF_REQUIRE(curtain_enforce() >= 0);
+	ATF_CHECK(access("/etc/rc", R_OK) >= 0);
+}
+
+
+
 ATF_TP_ADD_TCS(tp)
 {
 	ATF_TP_ADD_TC(tp, sysfil_level_pass);
@@ -111,5 +135,6 @@ ATF_TP_ADD_TCS(tp)
 	ATF_TP_ADD_TC(tp, sysfil_level_kill);
 	ATF_TP_ADD_TC(tp, sysfil_raise_allow);
 	ATF_TP_ADD_TC(tp, sysfil_raise_block);
+	ATF_TP_ADD_TC(tp, unrestrict_unveils);
 	return (atf_no_error());
 }

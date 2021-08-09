@@ -868,6 +868,7 @@ devfs_ioctl_f(struct file *fp, u_long com, void *data, struct ucred *cred, struc
 {
 	struct file *fpop;
 	int error;
+
 	fpop = td->td_fpop;
 	td->td_fpop = fp;
 	error = vnops.fo_ioctl(fp, com, data, cred, td);
@@ -2035,7 +2036,7 @@ static struct fileops devfs_ops_f = {
 	.fo_seek =	vn_seek,
 	.fo_fill_kinfo = vn_fill_kinfo,
 	.fo_mmap =	devfs_mmap_f,
-	.fo_flags =	DFLAG_PASSABLE | DFLAG_SEEKABLE,
+	.fo_flags =	DFLAG_PASSABLE | DFLAG_SEEKABLE
 };
 
 /* Vops for non-CHR vnodes in /dev. */

@@ -79,7 +79,8 @@ __FBSDID("$FreeBSD$");
 #include <sys/unistd.h>
 #include <sys/user.h>
 #include <sys/vnode.h>
-#include <sys/curtain.h>
+#include <sys/sysfil.h>
+#include <sys/unveil.h>
 #include <sys/ktrace.h>
 
 #include <net/vnet.h>
@@ -1736,7 +1737,7 @@ filecaps_move(struct filecaps *src, struct filecaps *dst)
 /*
  * Fill the given filecaps structure with full rights.
  */
-void
+static void
 filecaps_fill(struct filecaps *fcaps)
 {
 
@@ -1744,7 +1745,6 @@ filecaps_fill(struct filecaps *fcaps)
 	fcaps->fc_ioctls = NULL;
 	fcaps->fc_nioctls = -1;
 	fcaps->fc_fcntls = CAP_FCNTL_ALL;
-	fcaps->fc_noreopen = false;
 }
 
 /*
@@ -3469,6 +3469,10 @@ _fgetvp(struct thread *td, int fd, int flags, cap_rights_t *needrightsp,
 		*vpp = fp->f_vnode;
 		vref(*vpp);
 	}
+#ifdef UNVEIL_SUPPORT
+	if (unveil_active(td))
+		unveil_ops->tracker_push_file(td, fp);
+#endif
 	fdrop(fp, td);
 
 	return (error);

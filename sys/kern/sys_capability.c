@@ -79,9 +79,12 @@ __FBSDID("$FreeBSD$");
 #include <sys/ucred.h>
 #include <sys/uio.h>
 #include <sys/ktrace.h>
-#include <sys/curtain.h>
+#include <sys/sysfil.h>
 
 #include <security/audit/audit.h>
+#ifdef SYSFIL
+#include <security/mac/mac_framework.h>
+#endif
 
 #include <vm/uma.h>
 #include <vm/vm.h>
@@ -102,30 +105,37 @@ FEATURE(security_capability_mode, "Capsicum Capability Mode");
 int
 sys_cap_enter(struct thread *td, struct cap_enter_args *uap)
 {
-#ifndef SYSFIL
-	struct ucred *newcred, *oldcred;
 	struct proc *p;
+#ifdef SYSFIL
+	sysfilset_t mask;
+	int error;
+#else
+	struct ucred *newcred, *oldcred;
 #endif
 	if (IN_CAPABILITY_MODE(td))
 		return (0);
+	p = td->td_proc;
 #ifdef SYSFIL
-	curtain_cap_enter(td);
+	BIT_FILL(SYSFILSET_BITS, &mask);
+	BIT_CLR(SYSFILSET_BITS, SYSFIL_UNCAPSICUM, &mask);
+	error = mac_sysfil_update_mask(td, &mask);
+	if (error != 0)
+		return (error);
 #else
 	newcred = crget();
-	p = td->td_proc;
 	PROC_LOCK(p);
 	oldcred = crcopysafe(p, newcred);
 	CRED_SET_CAPABILITY_MODE(newcred);
 	MPASS(CRED_IN_CAPABILITY_MODE(newcred));
 	MPASS(CRED_IN_RESTRICTED_MODE(newcred));
 	proc_set_cred(p, newcred);
+	PROC_UNLOCK(p);
+	crfree(oldcred);
+#endif
 	if (!PROC_IN_RESTRICTED_MODE(p))
 		panic("PROC_IN_RESTRICTED_MODE() bogus");
 	if (!PROC_IN_CAPABILITY_MODE(p))
 		panic("PROC_IN_CAPABILITY_MODE() bogus");
-	PROC_UNLOCK(p);
-	crfree(oldcred);
-#endif
 	return (0);
 }
 

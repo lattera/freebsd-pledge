@@ -62,7 +62,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/event.h>
 #include <sys/mount.h>
 #include <geom/geom.h>
-#include <sys/curtain.h>
+#include <sys/sysfil.h>
 
 #include <machine/atomic.h>
 

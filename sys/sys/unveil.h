@@ -12,11 +12,12 @@
 #include <sys/capsicum.h>
 #include <sys/proc.h>
 #include <sys/namei.h>
+#include <sys/curtain.h>
 #endif
 
 #define	UPERM_NONE		(0)
 #define	UPERM_EXPOSE		(1 <<  0)
-#define	UPERM_FOLLOW		(1 <<  1)
+#define	UPERM_TRAVERSE		(1 <<  1)
 #define	UPERM_SEARCH		(1 <<  2)
 #define	UPERM_STATUS		(1 <<  3)
 #define	UPERM_INSPECT		(UPERM_EXPOSE | UPERM_SEARCH | UPERM_STATUS)
@@ -31,11 +32,14 @@
 #define	UPERM_CONNECT		(1 << 17)
 #define	UPERM_UNIX		(UPERM_BIND | UPERM_CONNECT)
 #define	UPERM_TMPDIR		(1 << 23)
+#define	UPERM_TMPDIR_CHILD	(1 << 24)
+#define	UPERM_DEVFS		(1 << 25)
 #define	UPERM_ALL		(-1)
 
 static const unveil_perms uperms_inheritable =
     UPERM_BROWSE | UPERM_READ | UPERM_WRITE | UPERM_CREATE | UPERM_DELETE |
-    UPERM_EXECUTE | UPERM_SETATTR | UPERM_BIND | UPERM_CONNECT;
+    UPERM_EXECUTE | UPERM_SETATTR | UPERM_BIND | UPERM_CONNECT |
+    UPERM_DEVFS;
 
 static inline unveil_perms
 uperms_expand(unveil_perms uperms)
@@ -44,8 +48,10 @@ uperms_expand(unveil_perms uperms)
 		uperms |= UPERM_EXPOSE | UPERM_SEARCH;
 	if (uperms & (UPERM_BROWSE | UPERM_READ))
 		uperms |= UPERM_STATUS | UPERM_BROWSE;
-	if (uperms & UPERM_STATUS)
-		uperms |= UPERM_FOLLOW;
+	if (uperms & UPERM_DEVFS)
+		uperms |= UPERM_SEARCH;
+	if (uperms & UPERM_SEARCH)
+		uperms |= UPERM_TRAVERSE;
 	if (uperms & UPERM_READ && uperms & UPERM_WRITE &&
 	    uperms & UPERM_CREATE && uperms & UPERM_DELETE)
 		uperms |= UPERM_TMPDIR;
@@ -76,7 +82,6 @@ int unveilreg(int flags, struct unveilreg *);
 #define	UNVEILREG_VERSION	(2 << 24)
 
 #define	UNVEILREG_REGISTER	(1 <<  0 | UNVEILREG_VERSION)
-#define	UNVEILREG_INTERMEDIATE	(1 <<  8 | UNVEILREG_VERSION)
 #define	UNVEILREG_NONDIRBYNAME	(1 <<  9 | UNVEILREG_VERSION)
 
 struct curtainent_unveil {
@@ -94,40 +99,20 @@ enum unveil_on {
 };
 
 static inline bool
-unveil_is_active(struct thread *td)
+unveil_active(struct thread *td)
 {
-#ifdef UNVEIL
-	return (td->td_proc->p_unveils.on[UNVEIL_ON_SELF].active);
+#ifdef UNVEIL_SUPPORT
+	return (sysfil_check(td, SYSFIL_DEFAULT) != 0 &&
+	    td->td_proc->p_unveils != NULL);
 #else
 	return (false);
 #endif
 }
 
-static inline bool
-unveil_exec_is_active(struct thread *td)
-{
-#ifdef UNVEIL
-	return (td->td_proc->p_unveils.on[UNVEIL_ON_EXEC].active);
-#else
-	return (false);
-#endif
-}
-
-static inline bool
-unveil_namei_enabled(struct nameidata *ndp)
-{
-#ifdef UNVEIL
-	if (ndp->ni_startdir == NULL && /* NDINIT_ATVP() */
-	    unveil_is_active(ndp->ni_cnd.cn_thread) &&
-	    !(ndp->ni_cnd.cn_flags & NOUNVEILCHECK))
-		return (true);
-	if (ndp->ni_unveil.save)
-		return (true);
-#endif
-	return (false);
-}
-
-void unveil_proc_exec_switch(struct thread *);
+struct unveil_base *unveil_proc_get_base(struct proc *, bool create);
+void unveil_proc_drop_base(struct proc *);
+void unveil_proc_exec_switch(struct proc *);
+bool unveil_proc_need_exec_switch(struct proc *);
 
 void unveil_base_init(struct unveil_base *);
 void unveil_base_copy(struct unveil_base *dst, struct unveil_base *src);
@@ -138,25 +123,52 @@ void unveil_base_free(struct unveil_base *);
 void unveil_base_write_begin(struct unveil_base *);
 void unveil_base_write_end(struct unveil_base *);
 
-void unveil_base_activate(struct unveil_base *, enum unveil_on);
-void unveil_base_enforce(struct unveil_base *, enum unveil_on);
+void unveil_base_enable(struct unveil_base *, enum unveil_on);
+void unveil_base_disable(struct unveil_base *, enum unveil_on);
+void unveil_base_freeze(struct unveil_base *, enum unveil_on);
 int unveil_index_set(struct unveil_base *, enum unveil_on, unsigned index, unveil_perms);
 int unveil_index_check(struct unveil_base *, unsigned index);
 
 void unveil_lockdown_fd(struct thread *);
 
-int unveil_traverse_begin(struct thread *, struct unveil_traversal *,
-    struct vnode *);
-int unveil_traverse(struct thread *, struct unveil_traversal *,
-    struct vnode *dvp, const char *name, size_t name_len, struct vnode *vp,
-    bool final);
-void unveil_traverse_dotdot(struct thread *, struct unveil_traversal *,
-    struct vnode *);
-unveil_perms unveil_traverse_effective_uperms(struct thread *, struct unveil_traversal *);
-void unveil_traverse_end(struct thread *, struct unveil_traversal *);
+#ifdef UNVEIL_SUPPORT
 
-void unveil_uperms_rights(unveil_perms, cap_rights_t *);
-unveil_perms unveil_fflags_uperms(enum vtype, int);
+struct unveil_traversal;
+
+struct unveil_ops {
+	void (*traverse_begin)(struct thread *, struct unveil_traversal *, bool bypass);
+	int (*traverse_start)(struct thread *, struct unveil_traversal *,
+	    struct vnode *);
+	void (*traverse_component)(struct thread *, struct unveil_traversal *,
+	    struct vnode *dvp, struct componentname *cnp, struct vnode *vp);
+	void (*traverse_backtrack)(struct thread *, struct unveil_traversal *,
+	    struct vnode *dvp);
+	void (*traverse_replace)(struct thread *, struct unveil_traversal *,
+	    struct vnode *from_vp, struct vnode *to_vp);
+	unveil_perms (*traverse_uperms)(struct thread *, struct unveil_traversal *,
+	    struct vnode *vp);
+	void (*traverse_end)(struct thread *, struct unveil_traversal *);
+	unveil_perms (*tracker_find)(struct thread *, struct vnode *);
+	void (*tracker_substitute)(struct thread *,
+	    struct vnode *old_vp, struct vnode *new_vp);
+	void (*tracker_push_file)(struct thread *, struct file *);
+	void (*tracker_save_file)(struct thread *, struct file *, struct vnode *);
+	void (*tracker_clear)(struct thread *);
+};
+
+struct unveil_traversal {
+	struct unveil_tree *tree;
+	struct unveil_save *save;
+	struct unveil_node *cover;
+	unveil_perms actual_uperms;
+	unveil_perms wanted_uperms;
+	unsigned fill;
+	bool bypass;
+	bool uncharted;
+	bool wanted_valid;
+};
+
+#endif
 
 #endif /* _KERNEL */
 

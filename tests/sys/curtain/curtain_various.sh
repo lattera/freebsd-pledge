@@ -87,9 +87,9 @@ session_with_non_tty_body() {
 	echo 'ps -o sid -p $$' | atf_check -o not-file:not-exp curtain -S
 }
 
-atf_test_case script_with_cmd
+atf_test_case script_with_cmd # this tests openpty(3)
 script_with_cmd_body() {
-	atf_check -o not-empty script typescript echo test
+	atf_check -o not-empty curtain -u typescript:w script typescript echo test
 	sed -e '1d' -e '$d' -e 's;\r$;!;g' typescript > out
 	cat << '.' >> exp
 Command: echo test
@@ -98,6 +98,16 @@ test!
 Command exit status: 0
 .
 	atf_check -o file:exp cat out
+}
+
+atf_test_case script_tty_visibility
+script_tty_visibility_body() {
+	atf_check -o not-empty curtain script /dev/null \
+		sh -c 'stat "$(tty)"'
+	atf_check -s not-exit:0 -o not-empty curtain script /dev/null \
+		sh -c 'curtain stat "$(tty)"'
+	atf_check -s not-exit:0 -o not-empty curtain script /dev/null \
+		sh -c 'curtain script /dev/null stat "$(tty)"'
 }
 
 atf_test_case tmpdir_mkdir_p
@@ -136,6 +146,7 @@ atf_init_test_cases() {
 	atf_add_test_case sh_bg_wait
 	atf_add_test_case ps_visibility
 	atf_add_test_case script_with_cmd
+	atf_add_test_case script_tty_visibility
 	atf_add_test_case session_with_non_tty
 	atf_add_test_case tmpdir_mkdir_p
 	atf_add_test_case shared_tmpdir_protects_krb5cc

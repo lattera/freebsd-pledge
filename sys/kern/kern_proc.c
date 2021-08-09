@@ -75,7 +75,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/user.h>
 #include <sys/vnode.h>
 #include <sys/wait.h>
-#include <sys/curtain.h>
+#include <sys/sysfil.h>
 #ifdef KTRACE
 #include <sys/ktrace.h>
 #endif
@@ -279,6 +279,9 @@ proc_init(void *mem, int size, int flags)
 	EVENTHANDLER_DIRECT_INVOKE(process_init, p);
 	p->p_stats = pstats_alloc();
 	p->p_pgrp = NULL;
+#ifdef UNVEIL_SUPPORT /* XXX */
+	p->p_unveils = NULL;
+#endif
 	return (0);
 }
 
@@ -2261,7 +2264,6 @@ sysctl_kern_proc_pathname(SYSCTL_HANDLER_ARGS)
 
 	if (arglen != 1)
 		return (EINVAL);
-
 	if (*pidp == -1) {	/* -1 means this process */
 		p = req->td->td_proc;
 	} else {

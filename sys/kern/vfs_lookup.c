@@ -330,9 +330,13 @@ namei_setup(struct nameidata *ndp, struct vnode **dpp, struct pwd **pwdp)
 		}
 	}
 #endif
-#ifdef UNVEIL
-	if (unveil_namei_enabled(ndp))
-		ndp->ni_lcf |= NI_LCF_UNVEIL_ENABLED;
+#ifdef UNVEIL_SUPPORT
+	if (unveil_active(td) || ndp->ni_unveil) {
+		ndp->ni_lcf |= NI_LCF_UNVEIL_TRAVERSE;
+		if (ndp->ni_startdir || /* NDINIT_ATVP() */
+		    ndp->ni_cnd.cn_flags & NOUNVEILCHECK)
+			ndp->ni_lcf |= NI_LCF_UNVEIL_BYPASSED;
+	}
 #endif
 
 	error = 0;
@@ -348,9 +352,6 @@ namei_setup(struct nameidata *ndp, struct vnode **dpp, struct pwd **pwdp)
 	ndp->ni_rootdir = pwd->pwd_rdir;
 	ndp->ni_topdir = pwd->pwd_jdir;
 
-#ifdef UNVEIL
-	ndp->ni_unveil.effective_uperms = UPERM_NONE;
-#endif
 	if (cnp->cn_pnbuf[0] == '/') {
 		ndp->ni_resflags |= NIRES_ABS;
 		error = namei_handle_root(ndp, dpp);
@@ -389,13 +390,10 @@ namei_setup(struct nameidata *ndp, struct vnode **dpp, struct pwd **pwdp)
 				} else if (dfp->f_vnode == NULL) {
 					error = ENOTDIR;
 				} else {
-#ifdef UNVEIL
-					unveil_perms uperms = dfp->f_uperms;
-					if (ndp->ni_filecaps.fc_noreopen)
-						uperms &= unveil_fflags_uperms(
-						    dfp->f_vnode->v_type,
-						    dfp->f_flag);
-					ndp->ni_unveil.effective_uperms = uperms;
+#ifdef UNVEIL_SUPPORT
+					if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE &&
+					    cnp->cn_flags & EMPTYPATH)
+						unveil_ops->tracker_push_file(td, dfp);
 #endif
 					*dpp = dfp->f_vnode;
 					vref(*dpp);
@@ -513,29 +511,6 @@ namei_emptypath(struct nameidata *ndp)
 		goto errout;
 	}
 
-#ifdef UNVEIL
-	if (ndp->ni_lcf & NI_LCF_UNVEIL_ENABLED) {
-		unveil_perms uperms;
-		cap_rights_t haverights;
-		uperms = ndp->ni_unveil.effective_uperms;
-		unveil_uperms_rights(uperms, &haverights);
-		if (dp && dp->v_type == VDIR) {
-			if (uperms & UPERM_BROWSE)
-				cap_rights_set(&haverights,
-				    CAP_READ, CAP_SEEK);
-			/* Kludge for directory O_SEARCH opens. */
-			if (uperms & UPERM_SEARCH)
-				cap_rights_set(&haverights,
-				    CAP_FEXECVE, CAP_EXECAT);
-		}
-		if (!cap_rights_contains(&haverights, ndp->ni_rightsneeded)) {
-			error = EACCES;
-			namei_cleanup_cnp(cnp);
-			goto errout;
-		}
-	}
-#endif
-
 	/*
 	 * Usecount on dp already provided by namei_setup.
 	 */
@@ -593,6 +568,9 @@ namei(struct nameidata *ndp)
 	struct uio auio;
 	int error, linklen;
 	enum cache_fpl_status status;
+#ifdef UNVEIL_SUPPORT
+	struct unveil_traversal utrav;
+#endif
 
 	cnp = &ndp->ni_cnd;
 	td = cnp->cn_thread;
@@ -697,14 +675,26 @@ namei(struct nameidata *ndp)
 	/*
 	 * Locked lookup.
 	 */
+#ifdef UNVEIL_SUPPORT
+	if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE) {
+		if (!ndp->ni_unveil)
+			unveil_ops->traverse_begin(td, (ndp->ni_unveil = &utrav),
+			    ndp->ni_lcf & NI_LCF_UNVEIL_BYPASSED);
+		error = unveil_ops->traverse_start(td, ndp->ni_unveil, dp);
+		if (error != 0) {
+			if (ndp->ni_unveil == &utrav)
+				unveil_ops->traverse_end(td, ndp->ni_unveil);
+			return (error);
+		}
+	}
+#endif
 	for (;;) {
 		ndp->ni_startdir = dp;
 		error = lookup(ndp);
 		if (error != 0)
 			goto out;
-
 		/*
-		 * If not a symbolic link, we're done.
+		 * If not a (followed) symbolic link, we're done.
 		 */
 		if ((cnp->cn_flags & ISSYMLINK) == 0) {
 			SDT_PROBE4(vfs, namei, lookup, return, error,
@@ -715,10 +705,30 @@ namei(struct nameidata *ndp)
 				cnp->cn_flags |= HASBUF;
 			nameicap_cleanup(ndp);
 			pwd_drop(pwd);
-			if (error == 0)
-				NDVALIDATE(ndp);
+			NDVALIDATE(ndp);
+#ifdef UNVEIL_SUPPORT
+			if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE) {
+				unveil_perms uperms;
+				uperms = unveil_ops->traverse_uperms(
+				    td, ndp->ni_unveil, ndp->ni_vp);
+				if (!(uperms & ~UPERM_TRAVERSE))
+					error = ENOENT;
+				if (ndp->ni_unveil == &utrav)
+					unveil_ops->traverse_end(td, ndp->ni_unveil);
+				if (error != 0)
+					/*
+					 * The lookup() call was successful
+					 * (and was not a symlink special case).
+					 */
+					NDFREE(ndp, 0);
+			}
+#endif
 			return (error);
 		}
+		/*
+		 * Follow symlink and continue resolving the rest of the path.
+		 * ni_dvp will already have been unlocked by lookup().
+		 */
 		if (ndp->ni_loopcnt++ >= MAXSYMLINKS) {
 			error = ELOOP;
 			break;
@@ -781,6 +791,19 @@ namei(struct nameidata *ndp)
 			error = namei_handle_root(ndp, &dp);
 			if (error != 0)
 				goto out;
+#ifdef UNVEIL_SUPPORT
+			if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE) {
+				/* Absolute path, find new unveil cover. */
+				error = unveil_ops->traverse_start(td, ndp->ni_unveil, dp);
+				if (error != 0)
+					goto out;
+			}
+#endif
+		} else {
+#ifdef UNVEIL_SUPPORT
+			if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE)
+				unveil_ops->traverse_backtrack(td, ndp->ni_unveil, dp);
+#endif
 		}
 	}
 	vput(ndp->ni_vp);
@@ -792,144 +815,13 @@ out:
 	namei_cleanup_cnp(cnp);
 	nameicap_cleanup(ndp);
 	pwd_drop(pwd);
+#ifdef UNVEIL_SUPPORT
+	if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE &&
+	    ndp->ni_unveil == &utrav)
+		unveil_ops->traverse_end(td, ndp->ni_unveil);
+#endif
 	return (error);
 }
-
-#ifdef SYSFIL
-
-static int
-sysfil_lookup_check(struct nameidata *ndp)
-{
-	struct componentname *cnp = &ndp->ni_cnd;
-	struct thread *td = cnp->cn_thread;
-	cap_rights_t haverights, *needrights;
-	if (!IN_RESTRICTED_MODE(td))
-		return (0);
-	if (cnp->cn_flags & ISSYMLINK)
-		needrights = &cap_fstat_rights;
-	else
-		needrights = ndp->ni_rightsneeded;
-	sysfil_cred_rights(td->td_ucred, &haverights);
-	if (ndp->ni_vp) {
-		/* Kludge for directory O_SEARCH opens. */
-		if (ndp->ni_vp->v_type == VDIR &&
-		    sysfil_check(td, SYSFIL_VFS_READ) == 0)
-			cap_rights_set(&haverights, CAP_FEXECVE, CAP_EXECAT);
-		/* Kludge for O_CREAT opens. */
-		if (sysfil_check(td, SYSFIL_VFS_WRITE) == 0)
-			cap_rights_set(&haverights, CAP_CREATE);
-	}
-	if (cap_rights_contains(&haverights, needrights))
-		return (0);
-	return (EPERM);
-}
-
-#endif
-
-#ifdef UNVEIL
-
-static inline bool
-unveil_lookup_tolerate_error(struct nameidata *ndp, int error)
-{
-	return (error == ENOENT && ndp->ni_unveil.save &&
-	    (ndp->ni_cnd.cn_flags & ISLASTCN));
-}
-
-static int
-unveil_lookup_start(struct nameidata *ndp, struct vnode *dp)
-{
-	struct componentname *cnp = &ndp->ni_cnd;
-	if (!(ndp->ni_lcf & NI_LCF_UNVEIL_ENABLED))
-		return (0);
-	return (unveil_traverse_begin(cnp->cn_thread, &ndp->ni_unveil, dp));
-}
-
-static inline int
-unveil_lookup_descend(struct nameidata *ndp, struct vnode *dvp)
-{
-	struct componentname *cnp = &ndp->ni_cnd;
-	if (!(ndp->ni_lcf & NI_LCF_UNVEIL_ENABLED))
-		return (0);
-	return (unveil_traverse(cnp->cn_thread, &ndp->ni_unveil,
-	    dvp, NULL, 0, NULL, false));
-}
-
-static inline int
-unveil_lookup_name(struct nameidata *ndp,
-    struct vnode *dvp, struct vnode *vp)
-{
-	struct componentname *cnp = &ndp->ni_cnd;
-	if (!(ndp->ni_lcf & NI_LCF_UNVEIL_ENABLED))
-		return (0);
-	return (unveil_traverse(cnp->cn_thread, &ndp->ni_unveil,
-	    dvp, cnp->cn_nameptr, cnp->cn_namelen, vp,
-	    (cnp->cn_flags & ISSYMLINK) == 0));
-}
-
-static void
-unveil_lookup_dotdot(struct nameidata *ndp,
-    struct vnode *pdvp, struct vnode *dvp)
-{
-	struct componentname *cnp = &ndp->ni_cnd;
-	if (!(ndp->ni_lcf & NI_LCF_UNVEIL_ENABLED))
-		return;
-	unveil_traverse_dotdot(cnp->cn_thread, &ndp->ni_unveil, pdvp);
-}
-
-static int
-unveil_lookup_check(struct nameidata *ndp)
-{
-	struct componentname *cnp = &ndp->ni_cnd;
-	cap_rights_t haverights, *needrights;
-	unveil_perms uperms;
-	if (!(ndp->ni_lcf & NI_LCF_UNVEIL_ENABLED))
-		return (0);
-	uperms = unveil_traverse_effective_uperms(
-	    cnp->cn_thread, &ndp->ni_unveil);
-	if (cnp->cn_flags & ISSYMLINK) {
-		if (uperms & UPERM_FOLLOW)
-			return (0);
-	} else {
-		needrights = ndp->ni_rightsneeded;
-		unveil_uperms_rights(uperms, &haverights);
-		if (ndp->ni_vp) {
-			if (ndp->ni_vp->v_type == VDIR) {
-				if (uperms & UPERM_BROWSE)
-					cap_rights_set(&haverights,
-					    CAP_READ, CAP_SEEK);
-				/* Kludge for directory O_SEARCH opens. */
-				if (uperms & UPERM_SEARCH)
-					cap_rights_set(&haverights,
-					    CAP_FEXECVE, CAP_EXECAT);
-			}
-			/* Kludge for O_CREAT opens. */
-			if (uperms & UPERM_WRITE)
-				cap_rights_set(&haverights, CAP_CREATE);
-		}
-		if (cap_rights_contains(&haverights, needrights))
-			return (0);
-		if (ndp->ni_vp && ndp->ni_vp->v_type == VCHR && ndp->ni_vp->v_rdev &&
-		    curtain_device_unveil_bypass(cnp->cn_thread, ndp->ni_vp->v_rdev))
-			return (0);
-	}
-	if (uperms & UPERM_EXPOSE) {
-		if (ndp->ni_vp && cnp->cn_nameiop == CREATE)
-			return (EEXIST); /* `mkdir -p` */
-		return (EACCES);
-	}
-	return (ENOENT);
-}
-
-static inline void
-unveil_lookup_end(struct nameidata *ndp)
-{
-	struct componentname *cnp = &ndp->ni_cnd;
-	if (!(ndp->ni_lcf & NI_LCF_UNVEIL_ENABLED))
-		return;
-	unveil_traverse_end(cnp->cn_thread, &ndp->ni_unveil);
-}
-
-#endif
 
 static int
 compute_cn_lkflags(struct mount *mp, int lkflags, int cnflags)
@@ -1038,7 +930,7 @@ lookup(struct nameidata *ndp)
 	int rdonly;			/* lookup read-only flag bit */
 	int error = 0;
 	int dpunlocked = 0;		/* dp has already been unlocked */
-	int ni_dvp_unlocked = 0;	/* ni_dvp has already been unlocked */
+	int ni_dvp_unlocked = 0;	/* ni_dvp already unlocked/released */
 	int relookup = 0;		/* do not consume the path component */
 	struct componentname *cnp = &ndp->ni_cnd;
 	int lkflags_save;
@@ -1067,11 +959,6 @@ lookup(struct nameidata *ndp)
 	rdonly = cnp->cn_flags & RDONLY;
 	cnp->cn_flags &= ~ISSYMLINK;
 	ndp->ni_dvp = NULL;
-#ifdef UNVEIL
-	error = unveil_lookup_start(ndp, ndp->ni_startdir);
-	if (error)
-		return (error);
-#endif
 	/*
 	 * We use shared locks until we hit the parent of the last cn then
 	 * we adjust based on the requesting flags.
@@ -1179,20 +1066,10 @@ dirloop:
 			error = EISDIR;
 			goto bad;
 		}
-#ifdef UNVEIL
-		/*
-		 * These arguments are going to be a bit weird, but not a
-		 * problem for unveil_traverse() since it's a directory.
-		 */
-		error = unveil_lookup_name(ndp, dp, dp);
-		if (error)
-			goto bad;
-#endif
 		if (wantparent) {
 			ndp->ni_dvp = dp;
 			VREF(dp);
-		} else
-			ni_dvp_unlocked = 2;
+		}
 		ndp->ni_vp = dp;
 
 		if (cnp->cn_flags & AUDITVNODE1)
@@ -1200,21 +1077,13 @@ dirloop:
 		else if (cnp->cn_flags & AUDITVNODE2)
 			AUDIT_ARG_VNODE2(dp);
 
-		if (!(cnp->cn_flags & (LOCKPARENT | LOCKLEAF))) {
+		if (!(cnp->cn_flags & (LOCKPARENT | LOCKLEAF)))
 			VOP_UNLOCK(dp);
-			dpunlocked = 1;
-		}
 		/* XXX This should probably move to the top of function. */
 		if (cnp->cn_flags & SAVESTART)
 			panic("lookup: SAVESTART");
 		goto success;
 	}
-
-#ifdef UNVEIL
-	error = unveil_lookup_descend(ndp, dp);
-	if (error)
-		goto bad;
-#endif
 
 	/*
 	 * Handle "..": five special cases.
@@ -1276,6 +1145,11 @@ dirloop:
 			}
 			tdp = dp;
 			dp = dp->v_mount->mnt_vnodecovered;
+#ifdef UNVEIL_SUPPORT
+			if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE)
+				unveil_ops->traverse_replace(cnp->cn_thread, ndp->ni_unveil,
+				    tdp, dp);
+#endif
 			VREF(dp);
 			vput(tdp);
 			vn_lock(dp,
@@ -1289,11 +1163,6 @@ dirloop:
 #endif
 				goto bad;
 			}
-#ifdef UNVEIL
-			error = unveil_lookup_descend(ndp, dp);
-			if (error)
-				goto bad;
-#endif
 		}
 	}
 
@@ -1344,17 +1213,17 @@ unionlookup:
 		    (dp->v_mount->mnt_flag & MNT_UNION)) {
 			tdp = dp;
 			dp = dp->v_mount->mnt_vnodecovered;
+#ifdef UNVEIL_SUPPORT
+			if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE)
+				unveil_ops->traverse_replace(cnp->cn_thread, ndp->ni_unveil,
+				    tdp, dp);
+#endif
 			VREF(dp);
 			vput(tdp);
 			vn_lock(dp,
 			    compute_cn_lkflags(dp->v_mount, cnp->cn_lkflags |
 			    LK_RETRY, cnp->cn_flags));
 			nameicap_tracker_add(ndp, dp);
-#ifdef UNVEIL
-			error = unveil_lookup_descend(ndp, dp);
-			if (error)
-				goto bad;
-#endif
 			goto unionlookup;
 		}
 
@@ -1367,8 +1236,9 @@ unionlookup:
 		}
 
 		if (error != EJUSTRETURN
-#ifdef UNVEIL
-		    && !unveil_lookup_tolerate_error(ndp, error)
+#ifdef UNVEIL_SUPPORT
+		    && !(error == ENOENT && (cnp->cn_flags & ISLASTCN) &&
+			    ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE && ndp->ni_unveil->save)
 #endif
 		    )
 			goto bad;
@@ -1388,16 +1258,13 @@ unionlookup:
 			error = ENOENT;
 			goto bad;
 		}
-#ifdef UNVEIL
-		error = unveil_lookup_name(ndp, dp, NULL);
-		if (error)
-			goto bad;
+#ifdef UNVEIL_SUPPORT
+		if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE)
+			unveil_ops->traverse_component(cnp->cn_thread, ndp->ni_unveil,
+			    dp, cnp, NULL);
 #endif
-		ni_dvp_unlocked = 2; /* cleanup code should only deal with dp */
-		if ((cnp->cn_flags & LOCKPARENT) == 0) {
+		if ((cnp->cn_flags & LOCKPARENT) == 0)
 			VOP_UNLOCK(dp);
-			dpunlocked = 1;
-		}
 		/*
 		 * We return with ni_vp NULL to indicate that the entry
 		 * doesn't currently exist, leaving a pointer to the
@@ -1409,11 +1276,6 @@ unionlookup:
 		}
 		goto success;
 	}
-
-#ifdef UNVEIL
-	if ((cnp->cn_flags & ISDOTDOT) && dp != ndp->ni_vp)
-		unveil_lookup_dotdot(ndp, ndp->ni_vp, dp);
-#endif
 
 good:
 #ifdef NAMEI_DIAGNOSTIC
@@ -1429,11 +1291,6 @@ good:
 	       (cnp->cn_flags & NOCROSSMOUNT) == 0) {
 		if (vfs_busy(mp, 0))
 			continue;
-#ifdef UNVEIL
-		error = unveil_lookup_descend(ndp, dp);
-		if (error)
-			goto bad2;
-#endif
 		vput(dp);
 		if (dp != ndp->ni_dvp)
 			vput(ndp->ni_dvp);
@@ -1447,11 +1304,17 @@ good:
 		if (vn_lock(vp_crossmp, LK_SHARED | LK_NOWAIT))
 			panic("vp_crossmp exclusively locked or reclaimed");
 		if (error) {
-			dpunlocked = 2;
+			dpunlocked = 1;
 			goto bad2;
 		}
 		ndp->ni_vp = dp = tdp;
 	}
+
+#ifdef UNVEIL_SUPPORT
+	if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE)
+		unveil_ops->traverse_component(cnp->cn_thread, ndp->ni_unveil,
+		    ndp->ni_dvp, cnp, ndp->ni_vp);
+#endif
 
 	/*
 	 * Check for symbolic link
@@ -1472,11 +1335,6 @@ good:
 			error = EACCES;
 			goto bad2;
 		}
-#ifdef UNVEIL
-		error = unveil_lookup_name(ndp, ndp->ni_dvp, dp);
-		if (error)
-			goto bad2;
-#endif
 		/*
 		 * Symlink code always expects an unlocked dvp.
 		 */
@@ -1542,12 +1400,6 @@ nextname:
 		error = EROFS;
 		goto bad2;
 	}
-
-#ifdef UNVEIL
-	error = unveil_lookup_name(ndp, ndp->ni_dvp, dp);
-	if (error)
-		goto bad2;
-#endif
 	if (cnp->cn_flags & SAVESTART) {
 		ndp->ni_startdir = ndp->ni_dvp;
 		VREF(ndp->ni_startdir);
@@ -1568,28 +1420,9 @@ nextname:
 	else if (cnp->cn_flags & AUDITVNODE2)
 		AUDIT_ARG_VNODE2(dp);
 
-	if ((cnp->cn_flags & LOCKLEAF) == 0) {
+	if ((cnp->cn_flags & LOCKLEAF) == 0)
 		VOP_UNLOCK(dp);
-		dpunlocked = 1;
-	}
 success:
-	/*
-	 * NOTE: "success:" is sometimes not so successful (especially with
-	 * unveil checking).  dp, dpunlocked, ni_dvp and ni_dvp_unlocked must
-	 * be properly set before jumping to success so that cleanup is done
-	 * correctly on failure.
-	 */
-#ifdef UNVEIL
-	/* Check unveils first because it can yield better errnos. */
-	error = unveil_lookup_check(ndp);
-	if (error)
-		goto bad2;
-#endif
-#ifdef SYSFIL
-	error = sysfil_lookup_check(ndp);
-	if (error)
-		goto bad2;
-#endif
 	/*
 	 * FIXME: for lookups which only cross a mount point to fetch the
 	 * root vnode, ni_dvp will be set to vp_crossmp. This can be a problem
@@ -1607,9 +1440,6 @@ success:
 			goto bad2;
 		}
 	}
-#ifdef UNVEIL
-	unveil_lookup_end(ndp);
-#endif
 	if (ndp->ni_vp != NULL) {
 		if ((cnp->cn_flags & ISDOTDOT) == 0)
 			nameicap_tracker_add(ndp, ndp->ni_vp);
@@ -1626,15 +1456,8 @@ bad2:
 			vrele(ndp->ni_dvp);
 	}
 bad:
-	if (dpunlocked != 2) {
-		if (!dpunlocked)
-			vput(dp);
-		else
-			vrele(dp);
-	}
-#ifdef UNVEIL
-	unveil_lookup_end(ndp);
-#endif
+	if (!dpunlocked)
+		vput(dp);
 	ndp->ni_vp = NULL;
 	return (error);
 bad_eexist:
@@ -2050,3 +1873,11 @@ keeporig:
 		bcopy(ptr, buf, len);
 	return (error);
 }
+
+#ifdef UNVEIL_SUPPORT
+bool unveil_support = true;
+const struct unveil_ops *unveil_ops = NULL;
+#else
+bool unveil_support = false;
+#endif
+

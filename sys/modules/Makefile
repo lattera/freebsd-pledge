@@ -220,6 +220,7 @@ SUBDIR=	\
 	lpt \
 	mac_biba \
 	mac_bsdextended \
+	mac_curtain \
 	mac_ifoff \
 	mac_lomac \
 	mac_mls \

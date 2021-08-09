@@ -95,8 +95,9 @@ check_accessat(int atfd, const char *path, const char *flags)
 	     w, /* writable */
 	     x, /* executable (for regular files) */
 	     d, /* is a directory */
-	     p; /* may have extra permissions */
-	e = s = i = r = w = x = d = p = false;
+	     p, /* may have extra permissions */
+	     a; /* fail with EPERM instead of EACCES */
+	e = s = i = r = w = x = d = p = a = false;
 	for (const char *ptr = flags; *ptr; ptr++)
 		switch (*ptr) {
 		case 's':         s     = true; break;
@@ -107,19 +108,26 @@ check_accessat(int atfd, const char *path, const char *flags)
 		case 'x': x =     s = e = true; break;
 		case 'd': d =             true; break;
 		case '+': p =             true; break;
+		case '*': a =             true; break;
 		default: assert(0); break;
 		}
 	if (atfd == AT_FDCWD && strcmp(path, "/") == 0)
 		/*
-		 * This implementation always give some limited access to the
-		 * root directory (see comments in libcurtain), but the deny
-		 * errno is still ENOENT as if the path was not unveiled.
+		 * This unveil() implementation always give some limited access
+		 * to the root directory (see comments in libcurtain), but the
+		 * deny errno is still ENOENT as if the path was not unveiled.
 		 */
 		s = true;
+	if (a)
+		/*
+		 * The sysfil-level restrictions only allow chdir()/O_SEARCH
+		 * when reading is allowed.
+		 */
+		s = i;
 
 	warnx("%s: %s %s", __FUNCTION__, path, flags);
 
-	int expected_errno = e ? EACCES : ENOENT;
+	int expected_errno = a ? EPERM : e ? EACCES : ENOENT;
 
 	if (i)
 		ATF_CHECK(try_statat(atfd, path) >= 0);

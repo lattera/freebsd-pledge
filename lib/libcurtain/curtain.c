@@ -659,8 +659,7 @@ curtain_unveil(struct curtain_slot *slot,
 		.tev = tev,
 	};
 	ssize_t ter;
-	ter = unveilreg(UNVEILREG_REGISTER |
-	    UNVEILREG_INTERMEDIATE | UNVEILREG_NONDIRBYNAME, &reg);
+	ter = unveilreg(UNVEILREG_REGISTER | UNVEILREG_NONDIRBYNAME, &reg);
 	if (ter < 0) {
 		if (errno != ENOENT && errno != EACCES && errno != ENOSYS)
 			warn("%s: %s", __FUNCTION__, path);
@@ -669,25 +668,15 @@ curtain_unveil(struct curtain_slot *slot,
 	node = NULL;
 	mode = NULL;
 	for (ssize_t i = 0; i < ter; i++) {
-		bool last = ter - i <= 1, follow = !last && tev[i][1] != tev[i + 1][0];
 		node = get_unveil_index_pair(tev[i][0], tev[i][1]);
 		if (!node)
 			err(EX_TEMPFAIL, "malloc");
-		if (last || follow || flags & CURTAIN_UNVEIL_INSPECT) {
-			mode = get_unveil_mode(slot, node);
-			if (!mode)
-				return (-1);
-			if (flags & CURTAIN_UNVEIL_INSPECT)
-				mode->uperms |= UPERM_INSPECT;
-			if (follow)
-				/*
-				 * XXX This is added even for unveils that only
-				 * request write permissions, but it gets wiped
-				 * by a curtain_unveils_limit() with the same
-				 * permissions.
-				 */
-				mode->uperms |= UPERM_FOLLOW;
-		}
+		mode = get_unveil_mode(slot, node);
+		if (!mode)
+			return (-1);
+		mode->uperms |= UPERM_TRAVERSE;
+		if (flags & CURTAIN_UNVEIL_INSPECT)
+			mode->uperms |= UPERM_INSPECT;
 	}
 	if (mode) {
 		mode->inherit = flags & CURTAIN_UNVEIL_INHERIT;
@@ -701,7 +690,7 @@ int
 curtain_unveils_limit(struct curtain_slot *slot, unveil_perms uperms)
 {
 	struct unveil_mode *mode;
-	uperms = uperms_expand(uperms);
+	uperms = uperms_expand(uperms | UPERM_TRAVERSE);
 	for (mode = slot->unveil_modes; mode; mode = mode->slot_next)
 		mode->uperms &= uperms;
 	return (0);

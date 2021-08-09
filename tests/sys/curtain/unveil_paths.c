@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <unistd.h>
 #include <dirent.h>
 #include <atf-c.h>
 #include <pledge.h>
@@ -319,8 +320,19 @@ ATF_TC_BODY(symlink2, tc)
 	check_access("d/f", "rw");
 	check_access("d/l", "dr");
 	check_access("d/l/f", "rw");
-	char buf[64];
-	ATF_CHECK(readlink("d/l", buf, sizeof buf) >= 0);
+	char buf[8];
+	ATF_REQUIRE(readlink("d/l", buf, sizeof buf) >= 0);
+	ATF_CHECK(memcmp(buf, ".", 1) == 0);
+}
+
+ATF_TC_WITHOUT_HEAD(symlink_opacity);
+ATF_TC_BODY(symlink_opacity, tc)
+{
+	ATF_REQUIRE(try_creat("f") >= 0);
+	ATF_REQUIRE(symlink("f", "l") >= 0);
+	ATF_REQUIRE(unveil("l", "r") >= 0);
+	char buf[8];
+	ATF_CHECK_ERRNO(ENOENT, readlink("l", buf, sizeof buf) < 0);
 }
 
 ATF_TC_WITHOUT_HEAD(protect_file);
@@ -340,7 +352,6 @@ ATF_TC_BODY(protect_file, tc)
 	 */
 	ATF_CHECK_ERRNO(EACCES, open("p", O_WRONLY|O_TRUNC) < 0);
 	ATF_CHECK_ERRNO(EACCES, truncate("p", 0) < 0);
-	ATF_CHECK_ERRNO(EACCES, undelete("p") < 0);
 	ATF_CHECK_ERRNO(EACCES, unlink("p") < 0);
 	ATF_CHECK_ERRNO(EACCES, rename("p", "o") < 0);
 	ATF_CHECK_ERRNO(EACCES, rename("p", "u") < 0);
@@ -351,7 +362,7 @@ ATF_TC_BODY(protect_file, tc)
 	 */
 	ATF_CHECK_ERRNO(EACCES, link("p", "o") < 0);
 	/* Already wouldn't be allowed, but let's have a look at the errnos... */
-	ATF_CHECK_ERRNO(EACCES, link("p", "u") < 0); /* EEXIST otherwise */
+	ATF_CHECK_ERRNO(EEXIST, link("p", "u") < 0);
 	ATF_CHECK_ERRNO(EEXIST, link("u", "p") < 0);
 	ATF_CHECK_ERRNO(EEXIST, symlink("x", "p") < 0);
 }
@@ -435,6 +446,133 @@ ATF_TC_BODY(unveil_perm_raise, tc)
 }
 
 
+ATF_TC_WITHOUT_HEAD(conceal_path);
+ATF_TC_BODY(conceal_path, tc)
+{
+	ATF_REQUIRE(try_creat("f") >= 0);
+	ATF_REQUIRE(try_mkdir("d") >= 0);
+	ATF_REQUIRE(try_mkdir("h") >= 0);
+	ATF_REQUIRE(try_creat("h/f") >= 0);
+	ATF_REQUIRE(try_mkdir("h/d") >= 0);
+	ATF_REQUIRE(try_creat("h/d/f") >= 0);
+	ATF_REQUIRE(unveil(".", "rwcx") >= 0);
+	ATF_REQUIRE(unveil("h", "") >= 0);
+	check_access(".", "drw");
+	check_access("h", "d");
+	check_access("h/f", "");
+	check_access("h/d", "d");
+	check_access("h/d/f", "");
+
+	/*
+	 * NOTE: The current implementation doesn't allow to descend into
+	 * hidden directories at all during path lookups, so these tests don't
+	 * actually trigger the special conditions for most of those
+	 * operation-specific errnos to be returned.
+	 *
+	 * This only works for directories that have no unveil permissions.
+	 * Paths can still be discovered on write-only directories.  There are
+	 * many more cases that would need to be tested if path concealment
+	 * were to be implemented for write-only directories.
+	 */
+
+	ATF_CHECK_ERRNO(ENOENT, try_open("h/u", O_CREAT | O_WRONLY) < 0);
+	ATF_CHECK_ERRNO(ENOENT, try_open("h/d/u", O_CREAT | O_WRONLY) < 0);
+	ATF_CHECK_ERRNO(ENOENT, try_open("h/u", O_WRONLY) < 0);
+	ATF_CHECK_ERRNO(ENOENT, try_open("h/d/u", O_WRONLY) < 0);
+	/* EEXIST hidden */
+	ATF_CHECK_ERRNO(ENOENT, try_open("h/f", O_CREAT | O_EXCL | O_WRONLY) < 0);
+	ATF_CHECK_ERRNO(ENOENT, try_open("h/d/f", O_CREAT | O_EXCL | O_WRONLY) < 0);
+	/* EISDIR hidden */
+	ATF_CHECK_ERRNO(ENOENT, try_open("h/d", O_WRONLY) < 0);
+	ATF_CHECK_ERRNO(ENOENT, try_open("h/d", O_CREAT | O_EXCL | O_WRONLY) < 0);
+	/* ENOTDIR hidden */
+	ATF_CHECK_ERRNO(ENOENT, try_open("h/f/", O_RDONLY) < 0);
+	ATF_CHECK_ERRNO(ENOENT, try_open("h/f/u", O_RDONLY) < 0);
+	ATF_CHECK_ERRNO(ENOENT, try_open("h/f/.", O_RDONLY) < 0);
+	ATF_CHECK_ERRNO(ENOENT, try_open("h/f/..", O_RDONLY) < 0);
+	ATF_CHECK_ERRNO(ENOENT, try_open("h/d/f/", O_RDONLY) < 0);
+	ATF_CHECK_ERRNO(ENOENT, try_open("h/d/f/u", O_RDONLY) < 0);
+	ATF_CHECK_ERRNO(ENOENT, try_open("h/d/f/.", O_RDONLY) < 0);
+	ATF_CHECK_ERRNO(ENOENT, try_open("h/d/f/..", O_RDONLY) < 0);
+	ATF_CHECK_ERRNO(ENOENT, try_open("h/d/../f/u", O_RDONLY) < 0);
+	ATF_CHECK_ERRNO(ENOENT, try_open("h/d/../f/.", O_RDONLY) < 0);
+	ATF_CHECK_ERRNO(ENOENT, try_open("h/d/../f/..", O_RDONLY) < 0);
+
+	ATF_CHECK_ERRNO(ENOENT, chdir("h") < 0);
+	ATF_CHECK_ERRNO(ENOENT, chdir("h/.") < 0);
+	ATF_CHECK_ERRNO(ENOENT, chdir("h/../h") < 0);
+	ATF_CHECK_ERRNO(ENOENT, chdir("h/d") < 0);
+	ATF_CHECK_ERRNO(ENOENT, chdir("h/d/.") < 0);
+	ATF_CHECK_ERRNO(ENOENT, chdir("h/d/..") < 0);
+	ATF_CHECK_ERRNO(ENOENT, chdir("h/d/../d") < 0);
+	/* ENOTDIR hidden */
+	ATF_CHECK_ERRNO(ENOENT, chdir("h/f") < 0);
+	ATF_CHECK_ERRNO(ENOENT, chdir("h/d/f") < 0);
+
+	/* EEXIST hidden */
+	ATF_CHECK_ERRNO(ENOENT, try_mkdir("h/f") < 0);
+	ATF_CHECK_ERRNO(ENOENT, try_mkdir("h/f/u") < 0);
+	ATF_CHECK_ERRNO(ENOENT, try_mkdir("h/f/.") < 0);
+	ATF_CHECK_ERRNO(ENOENT, try_mkdir("h/f/..") < 0);
+	ATF_CHECK_ERRNO(ENOENT, try_mkdir("h/d") < 0);
+	ATF_CHECK_ERRNO(ENOENT, try_mkdir("h/d/u") < 0);
+	ATF_CHECK_ERRNO(ENOENT, try_mkdir("h/d/.") < 0);
+	ATF_CHECK_ERRNO(ENOENT, try_mkdir("h/d/..") < 0);
+	ATF_CHECK_ERRNO(ENOENT, try_mkdir("h/d/../f") < 0);
+	ATF_CHECK_ERRNO(ENOENT, try_mkdir("h/d/../d") < 0);
+	ATF_CHECK_ERRNO(ENOENT, try_mkdir("h/d/../u") < 0);
+	ATF_CHECK_ERRNO(ENOENT, try_mkdir("h/d/../.") < 0);
+	ATF_CHECK_ERRNO(ENOENT, try_mkdir("h/d/../..") < 0);
+	/* ENOTEMPTY hidden */
+	ATF_CHECK_ERRNO(ENOENT, rmdir("h/d") < 0);
+	/* ENOTDIR hidden */
+	ATF_CHECK_ERRNO(ENOENT, rmdir("h/f") < 0);
+	ATF_CHECK_ERRNO(ENOENT, rmdir("h/d/f") < 0);
+	/* EINVAL hidden */
+	ATF_CHECK_ERRNO(ENOENT, rmdir("h/d/.") < 0);
+
+	/* EPERM hidden */
+	ATF_CHECK_ERRNO(ENOENT, unlink("h/d") < 0);
+	ATF_CHECK_ERRNO(ENOENT, unlink("h/d/.") < 0);
+	ATF_CHECK_ERRNO(ENOENT, unlink("h/d/../d") < 0);
+
+	/* EISDIR hidden */
+	ATF_CHECK_ERRNO(ENOENT, truncate("h/d", 0) < 0);
+	ATF_CHECK_ERRNO(ENOENT, truncate("h/d/.", 0) < 0);
+	ATF_CHECK_ERRNO(ENOENT, truncate("h/d/../d", 0) < 0);
+
+	ATF_CHECK_ERRNO(ENOENT, link("h/f", "t") < 0);
+	ATF_CHECK_ERRNO(ENOENT, link("h/d", "t") < 0); /* EPERM hidden */
+	ATF_CHECK_ERRNO(ENOENT, link("h/d/f", "t") < 0);
+	/* EEXIST hidden */
+	ATF_CHECK_ERRNO(ENOENT, symlink("t", "h/f") < 0);
+	ATF_CHECK_ERRNO(ENOENT, symlink("t", "h/d") < 0);
+	ATF_CHECK_ERRNO(ENOENT, symlink("t", "h/d/f") < 0);
+	ATF_CHECK_ERRNO(ENOENT, link("f", "h/f") < 0);
+	ATF_CHECK_ERRNO(ENOENT, link("f", "h/d") < 0);
+	ATF_CHECK_ERRNO(ENOENT, link("f", "h/d/f") < 0);
+
+	ATF_CHECK_ERRNO(ENOENT, rename("f", "h/u") < 0);
+	ATF_CHECK_ERRNO(ENOENT, rename("f", "h/f") < 0);
+	ATF_CHECK_ERRNO(ENOENT, rename("h/f", "u") < 0);
+	ATF_CHECK_ERRNO(ENOENT, rename("h/f", "f") < 0);
+	ATF_CHECK_ERRNO(ENOENT, rename("h/f", "h/u") < 0);
+	ATF_CHECK_ERRNO(ENOENT, rename("h/f", "h/f") < 0);
+	ATF_CHECK_ERRNO(ENOENT, rename("d", "h/u") < 0);
+	ATF_CHECK_ERRNO(ENOENT, rename("d", "h/d") < 0);
+	ATF_CHECK_ERRNO(ENOENT, rename("h/d", "u") < 0);
+	ATF_CHECK_ERRNO(ENOENT, rename("h/d", "d") < 0);
+	ATF_CHECK_ERRNO(ENOENT, rename("h/d", "h/u") < 0);
+	ATF_CHECK_ERRNO(ENOENT, rename("h/d", "h/d") < 0);
+	/* EISDIR hidden */
+	ATF_CHECK_ERRNO(ENOENT, rename("f", "h/d") < 0);
+	ATF_CHECK_ERRNO(ENOENT, rename("h/f", "h/d") < 0);
+	/* ENOTDIR hidden */
+	ATF_CHECK_ERRNO(ENOENT, rename("d", "h/f") < 0);
+	ATF_CHECK_ERRNO(ENOENT, rename("h/d", "h/f") < 0);
+}
+
+
 ATF_TP_ADD_TCS(tp)
 {
 	ATF_TP_ADD_TC(tp, unveil_one_i);
@@ -458,6 +596,7 @@ ATF_TP_ADD_TCS(tp)
 	ATF_TP_ADD_TC(tp, symlink0);
 	ATF_TP_ADD_TC(tp, symlink1);
 	ATF_TP_ADD_TC(tp, symlink2);
+	ATF_TP_ADD_TC(tp, symlink_opacity);
 	ATF_TP_ADD_TC(tp, protect_file);
 	ATF_TP_ADD_TC(tp, dev_stdin);
 	ATF_TP_ADD_TC(tp, dev_stdout);
@@ -465,5 +604,6 @@ ATF_TP_ADD_TCS(tp)
 	ATF_TP_ADD_TC(tp, keep_stdio_unwritable);
 	ATF_TP_ADD_TC(tp, unveil_perm_drop);
 	ATF_TP_ADD_TC(tp, unveil_perm_raise);
+	ATF_TP_ADD_TC(tp, conceal_path);
 	return (atf_no_error());
 }
