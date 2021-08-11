@@ -662,6 +662,7 @@
 #define	AUE_SPECIALFD		43266	/* FreeBSD-specific. */
 #define	AUE_AIO_WRITEV		43267	/* FreeBSD-specific. */
 #define	AUE_AIO_READV		43268	/* FreeBSD-specific. */
+#define	AUE_FSPACECTL		43269	/* FreeBSD-specific. */
 
 /* XXX temporary values to avoid conflicts with new syscalls */
 #define	AUE_CURTAINCTL		50000	/* FreeBSD-specific. */

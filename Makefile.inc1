@@ -714,14 +714,26 @@ BSARGS= 	DESTDIR= \
 		MAKEOBJDIRPREFIX= \
 		BOOTSTRAPPING=${BOOTSTRAPPING_OSRELDATE} \
 		BWPHASE=${.TARGET:C,^_,,} \
-		SSP_CFLAGS= \
-		MK_HTML=no NO_LINT=yes MK_MAN=no MK_MAN_UTILS=yes \
-		-DNO_PIC MK_PROFILE=no -DNO_SHARED \
-		-DNO_CPU_CFLAGS MK_WERROR=no MK_CTF=no \
-		MK_ASAN=no MK_UBSAN=no \
-		MK_CLANG_EXTRAS=no MK_CLANG_FORMAT=no MK_CLANG_FULL=no \
-		MK_LLDB=no MK_RETPOLINE=no MK_TESTS=no \
-		MK_INCLUDES=yes
+		-DNO_CPU_CFLAGS \
+		-DNO_LINT \
+		-DNO_PIC \
+		-DNO_SHARED \
+		MK_ASAN=no \
+		MK_CTF=no \
+		MK_CLANG_EXTRAS=no \
+		MK_CLANG_FORMAT=no \
+		MK_CLANG_FULL=no \
+		MK_HTML=no \
+		MK_LLDB=no \
+		MK_MAN=no \
+		MK_PROFILE=no \
+		MK_RETPOLINE=no \
+		MK_SSP=no \
+		MK_TESTS=no \
+		MK_UBSAN=no \
+		MK_WERROR=no \
+		MK_INCLUDES=yes \
+		MK_MAN_UTILS=yes
 
 BMAKE=		\
 		${TIME_ENV} ${BMAKEENV} ${MAKE} ${WORLD_FLAGS} -f Makefile.inc1 \
@@ -737,12 +749,19 @@ TMAKE=		\
 		DESTDIR= \
 		BOOTSTRAPPING=${BOOTSTRAPPING_OSRELDATE} \
 		BWPHASE=${.TARGET:C,^_,,} \
-		SSP_CFLAGS= \
+		-DNO_CPU_CFLAGS \
 		-DNO_LINT \
-		-DNO_CPU_CFLAGS MK_WERROR=no MK_CTF=no \
-		MK_ASAN=no MK_UBSAN=no \
-		MK_CLANG_EXTRAS=no MK_CLANG_FORMAT=no MK_CLANG_FULL=no \
-		MK_LLDB=no MK_RETPOLINE=no MK_TESTS=no
+		MK_ASAN=no \
+		MK_CTF=no \
+		MK_CLANG_EXTRAS=no \
+		MK_CLANG_FORMAT=no \
+		MK_CLANG_FULL=no \
+		MK_LLDB=no \
+		MK_RETPOLINE=no \
+		MK_SSP=no \
+		MK_TESTS=no \
+		MK_UBSAN=no \
+		MK_WERROR=no
 
 # cross-tools stage
 # TOOLS_PREFIX set in BMAKE
@@ -765,10 +784,17 @@ KTMAKE=		${TIME_ENV} \
 		OBJROOT='$${OBJTOP}/' \
 		MAKEOBJDIRPREFIX= \
 		BOOTSTRAPPING=${BOOTSTRAPPING_OSRELDATE} \
-		SSP_CFLAGS= \
-		MK_HTML=no -DNO_LINT MK_MAN=no \
-		-DNO_PIC MK_PROFILE=no -DNO_SHARED \
-		-DNO_CPU_CFLAGS MK_RETPOLINE=no MK_WERROR=no MK_CTF=no
+		-DNO_CPU_CFLAGS \
+		-DNO_LINT \
+		-DNO_PIC \
+		-DNO_SHARED \
+		MK_CTF=no \
+		MK_HTML=no \
+		MK_MAN=no \
+		MK_PROFILE=no \
+		MK_SSP=no \
+		MK_RETPOLINE=no \
+		MK_WERROR=no
 
 # world stage
 WMAKEENV=	${CROSSENV} \
@@ -1863,7 +1889,8 @@ _pkgbootstrap: .PHONY
 .if make(create-world-packages-jobs) || make(create-kernel-packages*) || make(real-update-packages) || make(sign-packages)
 PKG_ABI!=${PKG_CMD} -o ABI_FILE=${WSTAGEDIR}/usr/bin/uname config ABI
 .endif
-PKG_BIN_VERSION!=${PKG_CMD} --version | awk -F. '/^[0-9.]+$$/ {print $$1 * 10000 + $$2 * 100 + $$3}'
+PKG_BIN_VERSION!=${PKG_CMD} --version </dev/null 2>/dev/null |\
+    awk -F. '/^[0-9.]+$$/ {print $$1 * 10000 + $$2 * 100 + $$3}'
 .if ${PKG_BIN_VERSION} < 11700
 PKG_EXT=	${PKG_FORMAT}
 .else
@@ -2742,7 +2769,6 @@ NXBMAKEARGS+= \
 	-DNO_SHARED \
 	-DNO_CPU_CFLAGS \
 	-DNO_PIC \
-	SSP_CFLAGS= \
 	MK_CASPER=no \
 	MK_CLANG_EXTRAS=no \
 	MK_CLANG_FORMAT=no \
@@ -2758,6 +2784,7 @@ NXBMAKEARGS+= \
 	MK_PROFILE=no \
 	MK_RETPOLINE=no \
 	MK_SENDMAIL=no \
+	MK_SSP=no \
 	MK_TESTS=no \
 	MK_WERROR=no \
 	MK_ZFS=no
