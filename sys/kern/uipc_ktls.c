@@ -709,6 +709,7 @@ ktls_clone_session(struct ktls_session *tls)
 	counter_u64_add(ktls_offload_active, 1);
 
 	refcount_init(&tls_new->refcount, 1);
+	TASK_INIT(&tls_new->reset_tag_task, 0, ktls_reset_send_tag, tls_new);
 
 	/* Copy fields from existing session. */
 	tls_new->params = tls->params;
@@ -1632,12 +1633,12 @@ ktls_frame(struct mbuf *top, struct ktls_session *tls, int *enq_cnt,
 		 */
 		if (tls->mode == TCP_TLS_MODE_SW) {
 			m->m_flags |= M_NOTREADY;
-			m->m_epg_nrdy = m->m_epg_npgs;
 			if (__predict_false(tls_len == 0)) {
 				/* TLS 1.0 empty fragment. */
-				*enq_cnt += 1;
+				m->m_epg_nrdy = 1;
 			} else
-				*enq_cnt += m->m_epg_npgs;
+				m->m_epg_nrdy = m->m_epg_npgs;
+			*enq_cnt += m->m_epg_nrdy;
 		}
 	}
 }
@@ -2180,11 +2181,7 @@ ktls_encrypt(struct ktls_wq *wq, struct mbuf *top)
 			break;
 		}
 
-		if (__predict_false(m->m_epg_npgs == 0)) {
-			/* TLS 1.0 empty fragment. */
-			npages++;
-		} else
-			npages += m->m_epg_npgs;
+		npages += m->m_epg_nrdy;
 
 		/*
 		 * Drop a reference to the session now that it is no
