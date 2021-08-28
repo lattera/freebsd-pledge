@@ -119,9 +119,12 @@ struct unveil_tracker {
 
 struct unveil_cache {
 	uint64_t lockdown_gen;
-	struct vnode *vp;
-	unsigned vp_nchash, vp_hash;
-	struct unveil_node *cover;
+#define UNVEIL_CACHE_ENTRIES_COUNT 4
+	struct unveil_cache_entry {
+		struct vnode *vp;
+		unsigned vp_nchash, vp_hash;
+		struct unveil_node *cover;
+	} entries[UNVEIL_CACHE_ENTRIES_COUNT];
 };
 
 struct unveil_base {
@@ -811,21 +814,28 @@ unveil_traverse_start(struct thread *td, struct unveil_traversal *trav,
 	}
 	depth = 0;
 	trav->cover = NULL;
-	if (unveil_cover_cache_enabled && base->cover_cache.vp == dvp) {
-		if (trav->save)
-			sx_assert(&base->sx, SA_XLOCKED);
-		else
-			sx_slock(&base->sx);
-		if (base->cover_cache.vp == dvp &&
-		    base->cover_cache.vp_nchash == dvp->v_nchash &&
-		    base->cover_cache.vp_hash == dvp->v_hash &&
-		    base->cover_cache.lockdown_gen == base->lockdown_gen) {
-			trav->cover = base->cover_cache.cover;
-			depth = -1;
-			counter_u64_add(unveil_stats_ascents_cached, 1);
+	if (unveil_cover_cache_enabled) {
+		struct unveil_cache_entry *ent;
+		ent = NULL;
+		for (size_t i = 0; i < UNVEIL_CACHE_ENTRIES_COUNT; i++)
+			if (base->cover_cache.entries[i].vp == dvp)
+				ent = &base->cover_cache.entries[i];
+		if (ent) {
+			if (trav->save)
+				sx_assert(&base->sx, SA_XLOCKED);
+			else
+				sx_slock(&base->sx);
+			if (ent->vp == dvp &&
+			    ent->vp_nchash == dvp->v_nchash &&
+			    ent->vp_hash == dvp->v_hash &&
+			    base->cover_cache.lockdown_gen == base->lockdown_gen) {
+				trav->cover = ent->cover;
+				depth = -1;
+				counter_u64_add(unveil_stats_ascents_cached, 1);
+			}
+			if (!trav->save)
+				sx_sunlock(&base->sx);
 		}
-		if (!trav->save)
-			sx_sunlock(&base->sx);
 	}
 	if (!trav->cover && trav->tree) {
 		error = unveil_find_cover(td, trav->tree, dvp, &trav->cover, &depth);
@@ -835,14 +845,17 @@ unveil_traverse_start(struct thread *td, struct unveil_traversal *trav,
 			counter_u64_add(unveil_stats_ascents, 1);
 			counter_u64_add(unveil_stats_ascent_total_depth, depth);
 			if (unveil_cover_cache_enabled && trav->cover) {
+				struct unveil_cache_entry *ent;
 				if (trav->save)
 					sx_assert(&base->sx, SA_XLOCKED);
 				else
 					sx_xlock(&base->sx);
-				base->cover_cache.cover = trav->cover;
-				base->cover_cache.vp = dvp;
-				base->cover_cache.vp_nchash = dvp->v_nchash;
-				base->cover_cache.vp_hash = dvp->v_hash;
+				ent = base->cover_cache.entries;
+				memcpy(ent, &ent[1], (UNVEIL_CACHE_ENTRIES_COUNT - 1) * sizeof *ent);
+				ent->cover = trav->cover;
+				ent->vp = dvp;
+				ent->vp_nchash = dvp->v_nchash;
+				ent->vp_hash = dvp->v_hash;
 				base->cover_cache.lockdown_gen = base->lockdown_gen;
 				if (!trav->save)
 					sx_xunlock(&base->sx);
