@@ -74,7 +74,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/umtxvar.h>
 #include <sys/vnode.h>
 #include <sys/wait.h>
-#include <sys/unveil.h>
 #ifdef KTRACE
 #include <sys/ktrace.h>
 #endif

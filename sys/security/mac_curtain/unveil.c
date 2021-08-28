@@ -88,7 +88,7 @@ CTASSERT(NAME_MAX <= UCHAR_MAX);
 
 struct unveil_tree {
 	RB_HEAD(unveil_node_tree, unveil_node) root;
-	unsigned refcount;
+	int refcount;
 	unsigned node_count;
 };
 
@@ -156,6 +156,13 @@ unveil_tree_new(void)
 		.root = RB_INITIALIZER(&tree->root),
 	};
 	refcount_init(&tree->refcount, 1);
+	return (tree);
+}
+
+static struct unveil_tree *
+unveil_tree_hold(struct unveil_tree *tree)
+{
+	refcount_acquire(&tree->refcount);
 	return (tree);
 }
 
@@ -280,10 +287,7 @@ unveil_base_init(struct unveil_base *base)
 static struct unveil_tree *
 unveil_base_tree_snap(struct unveil_base *base)
 {
-	if (base->tree == NULL)
-		return (NULL);
-	refcount_acquire(&base->tree->refcount);
-	return (base->tree);
+	return (base->tree ? unveil_tree_hold(base->tree) : NULL);
 }
 
 void
@@ -794,9 +798,12 @@ unveil_traverse_start(struct thread *td, struct unveil_traversal *trav,
 	}
 	/* TODO: caching */
 	depth = 0;
-	error = unveil_find_cover(td, trav->tree, dvp, &trav->cover, &depth);
-	if (error)
-		return (error);
+	if (trav->tree) {
+		error = unveil_find_cover(td, trav->tree, dvp, &trav->cover, &depth);
+		if (error)
+			return (error);
+	} else
+		trav->cover = NULL;
 	trav->uncharted = true;
 	trav->wanted_valid = false;
 	trav->wanted_uperms = trav->actual_uperms = UPERM_NONE;
