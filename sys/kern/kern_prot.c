@@ -72,7 +72,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/socketvar.h>
 #include <sys/syscallsubr.h>
 #include <sys/sysctl.h>
-#include <sys/curtain.h>
 #include <sys/sysfil.h>
 
 #ifdef REGRESSION

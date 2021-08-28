@@ -38,6 +38,7 @@ __FBSDID("$FreeBSD$");
 static MALLOC_DEFINE(M_UNVEIL, "unveil", "vnode unveils");
 
 static bool __read_mostly unveil_enabled = true;
+static bool __read_mostly unveil_cover_cache_enabled = true;
 static unsigned int __read_mostly unveil_max_nodes_per_process = 128;
 
 static SYSCTL_NODE(_vfs, OID_AUTO, unveil, CTLFLAG_RW | CTLFLAG_MPSAFE, 0,
@@ -45,6 +46,9 @@ static SYSCTL_NODE(_vfs, OID_AUTO, unveil, CTLFLAG_RW | CTLFLAG_MPSAFE, 0,
 
 SYSCTL_BOOL(_vfs_unveil, OID_AUTO, enabled, CTLFLAG_RW,
     &unveil_enabled, 0, "Allow unveilreg(2) usage");
+
+SYSCTL_BOOL(_vfs_unveil, OID_AUTO, cover_cache, CTLFLAG_RW,
+    &unveil_cover_cache_enabled, 0, "");
 
 SYSCTL_UINT(_vfs_unveil, OID_AUTO, maxperproc, CTLFLAG_RW,
     &unveil_max_nodes_per_process, 0, "Maximum unveils allowed per process");
@@ -61,6 +65,7 @@ STATNODE_COUNTER(lookups, unveil_stats_lookups, "");
 STATNODE_COUNTER(treedups, unveil_stats_treedups, "");
 STATNODE_COUNTER(traversals, unveil_stats_traversals, "");
 STATNODE_COUNTER(ascents, unveil_stats_ascents, "");
+STATNODE_COUNTER(ascents_cached, unveil_stats_ascents_cached, "");
 STATNODE_COUNTER(ascent_total_depth, unveil_stats_ascent_total_depth, "");
 
 static volatile uint64_t unveil_lockdown_gen = 1;
@@ -112,6 +117,13 @@ struct unveil_tracker {
 	unsigned fill;
 };
 
+struct unveil_cache {
+	uint64_t lockdown_gen;
+	struct vnode *vp;
+	unsigned vp_nchash, vp_hash;
+	struct unveil_node *cover;
+};
+
 struct unveil_base {
 	volatile uint64_t lockdown_gen;
 	struct sx sx;
@@ -121,6 +133,7 @@ struct unveil_base {
 		bool frozen;
 		bool wanted;
 	} on[UNVEIL_ON_COUNT];
+	struct unveil_cache cover_cache;
 };
 
 
@@ -796,14 +809,46 @@ unveil_traverse_start(struct thread *td, struct unveil_traversal *trav,
 		unveil_traverse_track(td, trav, dvp);
 		return (0);
 	}
-	/* TODO: caching */
 	depth = 0;
-	if (trav->tree) {
+	trav->cover = NULL;
+	if (unveil_cover_cache_enabled && base->cover_cache.vp == dvp) {
+		if (trav->save)
+			sx_assert(&base->sx, SA_XLOCKED);
+		else
+			sx_slock(&base->sx);
+		if (base->cover_cache.vp == dvp &&
+		    base->cover_cache.vp_nchash == dvp->v_nchash &&
+		    base->cover_cache.vp_hash == dvp->v_hash &&
+		    base->cover_cache.lockdown_gen == base->lockdown_gen) {
+			trav->cover = base->cover_cache.cover;
+			depth = -1;
+			counter_u64_add(unveil_stats_ascents_cached, 1);
+		}
+		if (!trav->save)
+			sx_sunlock(&base->sx);
+	}
+	if (!trav->cover && trav->tree) {
 		error = unveil_find_cover(td, trav->tree, dvp, &trav->cover, &depth);
 		if (error)
 			return (error);
-	} else
-		trav->cover = NULL;
+		if (depth > 0) {
+			counter_u64_add(unveil_stats_ascents, 1);
+			counter_u64_add(unveil_stats_ascent_total_depth, depth);
+			if (unveil_cover_cache_enabled && trav->cover) {
+				if (trav->save)
+					sx_assert(&base->sx, SA_XLOCKED);
+				else
+					sx_xlock(&base->sx);
+				base->cover_cache.cover = trav->cover;
+				base->cover_cache.vp = dvp;
+				base->cover_cache.vp_nchash = dvp->v_nchash;
+				base->cover_cache.vp_hash = dvp->v_hash;
+				base->cover_cache.lockdown_gen = base->lockdown_gen;
+				if (!trav->save)
+					sx_xunlock(&base->sx);
+			}
+		}
+	}
 	trav->uncharted = true;
 	trav->wanted_valid = false;
 	trav->wanted_uperms = trav->actual_uperms = UPERM_NONE;
@@ -835,10 +880,6 @@ unveil_traverse_start(struct thread *td, struct unveil_traversal *trav,
 	}
 	unveil_traverse_track(td, trav, dvp);
 
-	if (depth > 0) {
-		counter_u64_add(unveil_stats_ascents, 1);
-		counter_u64_add(unveil_stats_ascent_total_depth, depth);
-	}
 	return (0);
 }
 
