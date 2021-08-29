@@ -42,7 +42,6 @@ auto_curtain_setup(const char *name)
 	curtain_config_load_tags(cfg);
 	curtain_config_gui(cfg);
 	curtain_enforce();
-	curtain_config_reprotect(cfg);
 }
 
 static void __attribute__((constructor))

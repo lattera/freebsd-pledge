@@ -345,6 +345,7 @@ parse_unveil(struct parser *par, struct word *w)
 		if (w->len == 1 && (w->ptr[0] == ':' ||
 		    (par->unveil_create = w->ptr[0] == '!'))) {
 			patterns_end = w;
+			par->uperms = UPERM_NONE;
 			if (!(w = w->next))
 				break;
 			r = curtain_parse_unveil_perms(&par->uperms, w->ptr);
@@ -457,15 +458,6 @@ parse_socklvl(struct parser *par, struct word *w)
 	}
 }
 
-static void
-parse_reprotect(struct parser *par, struct word *w)
-{
-	if (par->apply)
-		par->cfg->need_reprotect = true;
-	if (w)
-		return (parse_error(par, "unexpected word"));
-}
-
 static const struct {
 	const char name[16];
 	void (*func)(struct parser *, struct word *);
@@ -482,7 +474,6 @@ static const struct {
 	{ "ioctls", parse_ioctls },
 	{ "sockaf", parse_sockaf },
 	{ "socklvl", parse_socklvl },
-	{ "reprotect", parse_reprotect },
 };
 
 static void

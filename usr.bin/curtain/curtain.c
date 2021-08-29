@@ -476,8 +476,6 @@ main(int argc, char *argv[])
 			err(EX_NOPERM, "curtain_enforce");
 	}
 
-	curtain_config_reprotect(cfg);
-
 
 	if (login_shell) { /* prefix arg0 with "-" */
 		char *p, *q;

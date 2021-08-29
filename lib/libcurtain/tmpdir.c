@@ -7,66 +7,6 @@
 #include <sysexits.h>
 #include <unistd.h>
 
-static void
-pathfmt(char *path, const char *fmt, ...)
-{
-	int r;
-	va_list ap;
-	va_start(ap, fmt);
-	r = vsnprintf(path, PATH_MAX, fmt, ap);
-	va_end(ap);
-	if (r < 0)
-		err(EX_TEMPFAIL, "snprintf");
-}
-
-static struct curtain_slot *
-get_slot(struct curtain_config *cfg)
-{
-	struct curtain_slot *slot;
-	if (cfg->on_exec)
-		curtain_enable((slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
-	else
-		slot = curtain_slot();
-	return (slot);
-}
-
-static void
-reprotect_1(struct curtain_slot *slot)
-{
-	const char *tmpdir, *tmux_tmpdir;
-	char path[PATH_MAX];
-
-	/* TODO: This should be moved to a config file. */
-
-	if (!(tmpdir = getenv("TMPDIR")))
-		tmpdir = _PATH_TMP;
-	pathfmt(path, "%s/krb5cc_%u", tmpdir, geteuid());
-	curtain_unveil(slot, path, 0, UPERM_NONE);
-
-	if (!(tmux_tmpdir = getenv("TMUX_TMPDIR")))
-		tmux_tmpdir = tmpdir;
-	pathfmt(path, "%s/tmux-%u", tmux_tmpdir, geteuid());
-	curtain_unveil(slot, path, 0, UPERM_NONE);
-}
-
-int
-curtain_config_reprotect(struct curtain_config *cfg)
-{
-	/*
-	 * Re-apply another layer of unveils to hide potentially dangerous
-	 * files that might allow to escape the sandbox.
-	 */
-	struct curtain_slot *slot;
-	if (!cfg->need_reprotect)
-		return (0);
-	curtain_unveils_reset_all();
-	slot = get_slot(cfg);
-	curtain_unveil(slot, "/", 0, UPERM_ALL);
-	reprotect_1(slot);
-	return (curtain_enforce());
-}
-
-
 static char *new_tmpdir = NULL;
 
 static void
@@ -116,7 +56,6 @@ curtain_config_tmpdir(struct curtain_config *cfg, bool separate)
 		 * krb5cc_<uid> is a pretty bad example of this.
 		 */
 		curtain_config_tag_push(cfg, "_shared_tmpdir");
-		cfg->need_reprotect = true;
 	}
 	return (0);
 }

@@ -1,9 +1,13 @@
 #include <ctype.h>
 #include <err.h>
+#include <errno.h>
 #include <pwd.h>
+#include <stdarg.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "pathexp.h"
 
@@ -56,6 +60,50 @@ skip(const char *p)
 }
 
 static int expand(struct pathexp *a, const char *pat, char *exp, size_t depth);
+
+static int
+expand_printf(struct pathexp *a, char **e, const char *fmt, ...)
+{
+	va_list ap;
+	int r;
+	va_start(ap, fmt);
+	r = vsnprintf(*e, a->exp_end - *e, fmt, ap);
+	va_end(ap);
+	if (r < 0)
+		return (error(a, strerror(errno)));
+	if (r > a->exp_end - *e)
+		return (toobig(a));
+	*e += r;
+	return (r);
+}
+
+static int
+expand_percent(struct pathexp *a, const char *p, char *e, size_t depth)
+{
+	const char *q;
+	int r;
+	q = p;
+	switch (*q++) {
+	case 'u':
+		r = expand_printf(a, &e, "%lu", (unsigned long)geteuid());
+		if (r < 0)
+			return (r);
+		break;
+	case 'g':
+		r = expand_printf(a, &e, "%lu", (unsigned long)getegid());
+		if (r < 0)
+			return (r);
+		break;
+	case '%':
+		  if (q == a->exp_end)
+			  return (toobig(a));
+		  *e++ = '%';
+		  break;
+	default:
+		  return (error(a, "unexpected percent specifier"));
+	}
+	return (expand(a, q, e, depth));
+}
 
 static int
 expand_homedir(struct pathexp *a, const char *p, char *e, size_t depth)
@@ -195,6 +243,8 @@ expand(struct pathexp *a, const char *pat, char *exp, size_t depth)
 			return (expand_homedir(a, ++pat, exp, depth));
 		case '$':
 			return (expand_envvar(a, ++pat, exp, depth));
+		case '%':
+			return (expand_percent(a, ++pat, exp, depth));
 		case '\\':
 			if (!*++pat)
 				break;

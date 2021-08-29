@@ -77,7 +77,6 @@ struct curtain_config { /* TODO: make private */
 	uint8_t config_level;
 	bool on_exec;
 	bool verbose;
-	bool need_reprotect;
 	bool x11, x11_trusted;
 	bool wayland;
 };
@@ -98,7 +97,6 @@ void curtain_config_load_tags(struct curtain_config *);
 void curtain_config_tags_from_env(struct curtain_config *);
 
 int curtain_config_gui(struct curtain_config *);
-int curtain_config_reprotect(struct curtain_config *);
 int curtain_config_tmpdir(struct curtain_config *, bool separate);
 
 #endif

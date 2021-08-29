@@ -133,8 +133,8 @@ ${ZDOTDIR:-~/}/.zlogout			: r
 
 [libreoffice : _editor]
 @push! _pwddb
-@unveil!! /tmp				: rwu
-@reprotect!!
+# LibreOffice ignores $TMPDIR for some things.
+@push!! _unsafe_system_tmpdir
 ~/.config/libreoffice/			: rw
 
 [xpdf : _viewer]
