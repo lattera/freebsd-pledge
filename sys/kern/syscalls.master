@@ -3264,7 +3264,7 @@
 		    _Inout_ struct aiocb *aiocbp
 		);
 	}
-580	AUE_FSPACECTL	STD {
+580	AUE_FSPACECTL	STD|SYSFIL_STDIO {
 		int fspacectl(
 		    int fd,
 		    int cmd,
