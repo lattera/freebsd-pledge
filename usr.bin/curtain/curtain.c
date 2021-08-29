@@ -283,8 +283,11 @@ main(int argc, char *argv[])
 	curtain_enable((main_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 	curtain_enable((unveils_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 
-	while ((ch = getopt(argc, argv, "vfkgenaA!t:p:u:0:SslXYWD")) != -1)
+	while ((ch = getopt(argc, argv, "@:vfkgenaA!t:p:u:0:SslXYWD")) != -1)
 		switch (ch) {
+		case '@':
+			curtain_config_directive(cfg, optarg);
+			break;
 		case 'v':
 			cfg->verbose = verbose = true;
 			break;

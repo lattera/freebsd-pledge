@@ -481,8 +481,10 @@ parse_directive(struct parser *par, char *p)
 {
 	char *dir, *dir_end;
 	unsigned unsafe_level;
-	dir = p = skip_spaces(p + 1);
-	dir_end = p = skip_word(p, "!");
+	dir = p = skip_spaces(p);
+	dir_end = p = skip_word(p, "!:");
+	if (*p == ':') /* intended for argv directives */
+		p++;
 	unsafe_level = 0;
 	while (*p == '!')
 		p++, unsafe_level++;
@@ -664,7 +666,7 @@ parse_line(struct parser *par)
 	if (!par->matched)
 		return;
 	if (p[0] == '@')
-		return (parse_directive(par, p));
+		return (parse_directive(par, p + 1));
 	if (par->skip)
 		return;
 	need_slot(par);
@@ -709,6 +711,24 @@ process_file(struct curtain_config *cfg, const char *path)
 	saved_errno = errno;
 	fclose(par.file);
 	errno = saved_errno;
+	return (par.error ? -1 : 0);
+}
+
+int
+curtain_config_directive(struct curtain_config *cfg, const char *directive)
+{
+	struct parser par = {
+		.cfg = cfg,
+		.file_name = "argv",
+		.matched = true,
+		.apply = true,
+	};
+	par.line = strdup(directive);
+	if (!par.line)
+		err(EX_TEMPFAIL, "strdup");
+	par.line_size = strlen(par.line);
+	parse_directive(&par, par.line);
+	free(par.line);
 	return (par.error ? -1 : 0);
 }
 

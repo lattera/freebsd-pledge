@@ -96,6 +96,8 @@ curtain_config_tag_push(struct curtain_config *cfg, const char *name)
 void curtain_config_load_tags(struct curtain_config *);
 void curtain_config_tags_from_env(struct curtain_config *);
 
+int curtain_config_directive(struct curtain_config *, const char *directive);
+
 int curtain_config_gui(struct curtain_config *);
 int curtain_config_tmpdir(struct curtain_config *, bool separate);
 
