@@ -140,7 +140,7 @@ syscallenter(struct thread *td)
 	 */
 	sysfil = (se->sy_flags & SYF_SYSFIL_MASK) >> SYF_SYSFIL_SHIFT;
 	if (__predict_false(!sysfil_match_cred(td->td_ucred, sysfil))) {
-		td->td_errno = error = sysfil_require(td, sysfil);
+		td->td_errno = error = sysfil_check(td, sysfil);
 		MPASS(error != 0);
 		goto retval;
 	}
@@ -256,6 +256,19 @@ syscallret(struct thread *td)
 			trapsignal(td, &ksi);
 		}
 	}
+#ifdef SYSFIL
+	if (__predict_false(td->td_errno == ERESTRICTEDTRAP ||
+	    td->td_errno == ERESTRICTEDKILL)) {
+		ksiginfo_init_trap(&ksi);
+		ksi.ksi_signo = td->td_errno == ERESTRICTEDTRAP ?
+		    SIGTRAP : SIGKILL;
+		ksi.ksi_code = SI_RESTRICTED;
+		ksi.ksi_info.si_syscall = sa->original_code;
+		td->td_errno = EPERM;
+		ksi.ksi_errno = td->td_errno;
+		trapsignal(td, &ksi);
+	}
+#endif
 
 	/*
 	 * Handle reschedule and other end-of-syscall issues

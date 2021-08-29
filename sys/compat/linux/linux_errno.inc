@@ -156,9 +156,11 @@ static const int linux_errtbl[ELAST + 1] = {
 	[ENOTRECOVERABLE] = -LINUX_ENOTRECOVERABLE,
 	[EOWNERDEAD] = -LINUX_EOWNERDEAD,
 	[EINTEGRITY] = -LINUX_EINVAL,	/* XXX */
+	[ERESTRICTEDTRAP] = -LINUX_EPERM,
+	[ERESTRICTEDKILL] = -LINUX_EPERM,
 };
 
-_Static_assert(ELAST == 97,
+_Static_assert(ELAST == 99,
     "missing errno entries in linux_errtbl");
 
 static const int linux_to_bsd_errtbl[LINUX_ELAST + 1] = {

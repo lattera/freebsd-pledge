@@ -625,7 +625,7 @@ sys_procctl(struct thread *td, struct procctl_args *uap)
 			sf = SYSFIL_REAP;
 			break;
 		}
-		error = sysfil_require(td, sf);
+		error = sysfil_check(td, sf);
 		if (error)
 			return (error);
 	}

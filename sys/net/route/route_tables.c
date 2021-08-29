@@ -50,6 +50,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/sx.h>
 #include <sys/domain.h>
 #include <sys/sysproto.h>
+#include <sys/sockopt.h>
 
 #include <net/vnet.h>
 #include <net/route.h>
@@ -155,7 +156,14 @@ sys_setfib(struct thread *td, struct setfib_args *uap)
 	int error = 0;
 
 #ifdef MAC
-	error = mac_sysfil_require_sockopt(td, SOL_SOCKET, SO_SETFIB);
+	struct sockopt sopt;
+	sopt = (struct sockopt){
+		.sopt_dir = SOPT_SET,
+		.sopt_level = SOL_SOCKET,
+		.sopt_name = SO_SETFIB,
+	};
+	/* XXX should have a different hook for this check */
+	error = mac_socket_check_setsockopt(td->td_ucred, NULL, &sopt);
 	if (error)
 		return (error);
 #endif

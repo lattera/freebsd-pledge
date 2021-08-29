@@ -59,6 +59,7 @@ struct bpf_d;
 struct cdev;
 struct componentname;
 struct devfs_dirent;
+struct file;
 struct ifnet;
 struct ifreq;
 struct image_params;
@@ -79,6 +80,7 @@ struct shmfd;
 struct shmid_kernel;
 struct sockaddr;
 struct socket;
+struct sockopt;
 struct sysctl_oid;
 struct sysctl_req;
 struct pipepair;
@@ -364,6 +366,8 @@ int	mac_socket_check_connect(struct ucred *cred, struct socket *so,
 	    struct sockaddr *sa);
 int	mac_socket_check_create(struct ucred *cred, int domain, int type,
 	    int proto);
+int	mac_socket_check_create_pair(struct ucred *cred, int domain, int type,
+	    int proto);
 int	mac_socket_check_deliver(struct socket *so, struct mbuf *m);
 int	mac_socket_check_listen(struct ucred *cred, struct socket *so);
 int	mac_socket_check_poll(struct ucred *cred, struct socket *so);
@@ -371,6 +375,10 @@ int	mac_socket_check_receive(struct ucred *cred, struct socket *so);
 int	mac_socket_check_send(struct ucred *cred, struct socket *so);
 int	mac_socket_check_stat(struct ucred *cred, struct socket *so);
 int	mac_socket_check_visible(struct ucred *cred, struct socket *so);
+int	mac_socket_check_setsockopt(struct ucred *cred, struct socket *so,
+	    struct sockopt *opt);
+int	mac_socket_check_getsockopt(struct ucred *cred, struct socket *so,
+	    struct sockopt *opt);
 void	mac_socket_create_mbuf(struct socket *so, struct mbuf *m);
 void	mac_socket_create(struct ucred *cred, struct socket *so);
 void	mac_socket_destroy(struct socket *);
@@ -687,16 +695,16 @@ void	mac_vnode_relabel(struct ucred *cred, struct vnode *vp,
  */
 int	vop_stdsetlabel_ea(struct vop_setlabel_args *ap);
 
-void	mac_sysfil_violation(struct thread *td, int sf, int error);
+int	mac_generic_check_ioctl(struct ucred *cred, struct file *fp,
+	    unsigned long cmd, void *data);
+int	mac_generic_check_vm_prot(struct ucred *cred, struct file *fp,
+	    vm_prot_t prot);
+
+int	mac_sysfil_check(struct ucred *cred, int sf);
 
 bool	mac_sysfil_exec_restricted(struct thread *td, struct ucred *cred);
 bool	mac_sysfil_need_exec_adjust(struct thread *td, struct ucred *cred);
 void	mac_sysfil_exec_adjust(struct thread *td, struct ucred *newcred);
 int	mac_sysfil_update_mask(struct thread *td, const sysfilset_t *mask_sfs);
-
-int	mac_sysfil_require_vm_prot(struct thread *, vm_prot_t prot, bool loose);
-int	mac_sysfil_require_ioctl(struct thread *, u_long com);
-int	mac_sysfil_require_sockaf(struct thread *, int af);
-int	mac_sysfil_require_sockopt(struct thread *, int level, int name);
 
 #endif /* !_SECURITY_MAC_MAC_FRAMEWORK_H_ */

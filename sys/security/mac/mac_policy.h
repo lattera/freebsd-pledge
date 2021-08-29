@@ -74,6 +74,7 @@ struct bpf_d;
 struct cdev;
 struct componentname;
 struct devfs_dirent;
+struct file;
 struct ifnet;
 struct image_params;
 struct inpcb;
@@ -94,6 +95,7 @@ struct shmfd;
 struct shmid_kernel;
 struct sockaddr;
 struct socket;
+struct sockopt;
 struct sysctl_oid;
 struct sysctl_req;
 struct thread;
@@ -427,6 +429,9 @@ typedef int	(*mpo_socket_check_stat_t)(struct ucred *cred,
 		    struct socket *so, struct label *solabel);
 typedef int	(*mpo_socket_check_visible_t)(struct ucred *cred,
 		    struct socket *so, struct label *solabel);
+typedef int	(*mpo_socket_check_sockopt_t)(struct ucred *cred,
+		    struct socket *so, struct label *solabel,
+		    struct sockopt *sopt);
 typedef void	(*mpo_socket_copy_label_t)(struct label *src,
 		    struct label *dest);
 typedef void	(*mpo_socket_create_t)(struct ucred *cred, struct socket *so,
@@ -671,7 +676,13 @@ typedef int	(*mpo_vnode_setlabel_extattr_t)(struct ucred *cred,
 		    struct vnode *vp, struct label *vplabel,
 		    struct label *intlabel);
 
-typedef void	(*mpo_sysfil_violation_t)(struct thread *td, int sf, int error);
+typedef int	(*mpo_generic_check_ioctl_t)(struct ucred *cred,
+		    struct file *file,
+		    unsigned long cmd, void *data);
+typedef int	(*mpo_generic_check_vm_prot_t)(struct ucred *cred,
+		    struct file *file, vm_prot_t prot);
+
+typedef int	(*mpo_sysfil_check_t)(struct ucred *cred, int sf);
 typedef bool	(*mpo_sysfil_exec_restricted_t)(struct thread *td,
 		    struct ucred *cred);
 typedef bool	(*mpo_sysfil_need_exec_adjust_t)(struct thread *td,
@@ -679,13 +690,6 @@ typedef bool	(*mpo_sysfil_need_exec_adjust_t)(struct thread *td,
 typedef void	(*mpo_sysfil_exec_adjust_t)(struct thread *td,
 		    struct ucred *cred);
 typedef int	(*mpo_sysfil_update_mask_t)(struct ucred *newcred);
-
-typedef int	(*mpo_sysfil_check_vm_prot_t)(struct ucred *cred,
-		    vm_prot_t prot, bool loose);
-typedef int	(*mpo_sysfil_check_ioctl_t)(struct ucred *, u_long com);
-typedef int	(*mpo_sysfil_check_sockaf_t)(struct ucred *, int af);
-typedef int	(*mpo_sysfil_check_sockopt_t)(struct ucred *,
-		    int level, int name);
 
 struct mac_policy_ops {
 	/*
@@ -860,6 +864,7 @@ struct mac_policy_ops {
 	mpo_socket_check_bind_t			mpo_socket_check_bind;
 	mpo_socket_check_connect_t		mpo_socket_check_connect;
 	mpo_socket_check_create_t		mpo_socket_check_create;
+	mpo_socket_check_create_t		mpo_socket_check_create_pair;
 	mpo_socket_check_deliver_t		mpo_socket_check_deliver;
 	mpo_socket_check_listen_t		mpo_socket_check_listen;
 	mpo_socket_check_poll_t			mpo_socket_check_poll;
@@ -868,6 +873,8 @@ struct mac_policy_ops {
 	mpo_socket_check_send_t			mpo_socket_check_send;
 	mpo_socket_check_stat_t			mpo_socket_check_stat;
 	mpo_socket_check_visible_t		mpo_socket_check_visible;
+	mpo_socket_check_sockopt_t		mpo_socket_check_setsockopt;
+	mpo_socket_check_sockopt_t		mpo_socket_check_getsockopt;
 	mpo_socket_copy_label_t			mpo_socket_copy_label;
 	mpo_socket_create_t			mpo_socket_create;
 	mpo_socket_create_mbuf_t		mpo_socket_create_mbuf;
@@ -979,15 +986,15 @@ struct mac_policy_ops {
 	mpo_vnode_internalize_label_t		mpo_vnode_internalize_label;
 	mpo_vnode_relabel_t			mpo_vnode_relabel;
 	mpo_vnode_setlabel_extattr_t		mpo_vnode_setlabel_extattr;
-	mpo_sysfil_violation_t			mpo_sysfil_violation;
+
+	mpo_generic_check_ioctl_t		mpo_generic_check_ioctl;
+	mpo_generic_check_vm_prot_t		mpo_generic_check_vm_prot;
+
+	mpo_sysfil_check_t			mpo_sysfil_check;
 	mpo_sysfil_exec_restricted_t		mpo_sysfil_exec_restricted;
 	mpo_sysfil_need_exec_adjust_t		mpo_sysfil_need_exec_adjust;
 	mpo_sysfil_exec_adjust_t		mpo_sysfil_exec_adjust;
 	mpo_sysfil_update_mask_t		mpo_sysfil_update_mask;
-	mpo_sysfil_check_vm_prot_t		mpo_sysfil_check_vm_prot;
-	mpo_sysfil_check_ioctl_t		mpo_sysfil_check_ioctl;
-	mpo_sysfil_check_sockaf_t		mpo_sysfil_check_sockaf;
-	mpo_sysfil_check_sockopt_t		mpo_sysfil_check_sockopt;
 };
 
 /*

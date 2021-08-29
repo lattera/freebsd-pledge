@@ -775,7 +775,7 @@ __elfN(load_file)(struct proc *p, const char *file, u_long *addr,
 		return (ECAPMODE);
 #endif
 
-	error = sysfil_require(curthread, SYSFIL_EXEC);
+	error = sysfil_check(curthread, SYSFIL_EXEC);
 	if (error)
 		return (error);
 

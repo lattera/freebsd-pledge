@@ -147,9 +147,6 @@ kern_socket(struct thread *td, int domain, int type, int protocol)
 	}
 
 #ifdef MAC
-	error = mac_sysfil_require_sockaf(td, domain);
-	if (error)
-		return (error);
 	error = mac_socket_check_create(td->td_ucred, domain, type, protocol);
 	if (error != 0)
 		return (error);
@@ -581,8 +578,7 @@ kern_socketpair(struct thread *td, int domain, int type, int protocol,
 		fflag |= FNONBLOCK;
 	}
 #ifdef MAC
-	/* We might want to have a separate check for socket pairs. */
-	error = mac_socket_check_create(td->td_ucred, domain, type,
+	error = mac_socket_check_create_pair(td->td_ucred, domain, type,
 	    protocol);
 	if (error != 0)
 		return (error);
@@ -685,11 +681,6 @@ sendit(struct thread *td, int s, struct msghdr *mp, int flags)
 			to = NULL;
 			goto bad;
 		}
-#ifdef MAC
-		error = mac_sysfil_require_sockaf(td, to->sa_family);
-		if (error)
-			goto bad;
-#endif
 		mp->msg_name = to;
 	} else {
 		to = NULL;
@@ -1273,7 +1264,7 @@ kern_setsockopt(struct thread *td, int s, int level, int name, const void *val,
 	if (error == 0) {
 		so = fp->f_data;
 #ifdef MAC
-		error = mac_sysfil_require_sockopt(td, sopt.sopt_level, sopt.sopt_name);
+		error = mac_socket_check_getsockopt(td->td_ucred, so, &sopt);
 #endif
 		if (error == 0)
 			error = sosetopt(so, &sopt);
@@ -1342,7 +1333,7 @@ kern_getsockopt(struct thread *td, int s, int level, int name, void *val,
 	if (error == 0) {
 		so = fp->f_data;
 #ifdef MAC
-		error = mac_sysfil_require_sockopt(td, sopt.sopt_level, sopt.sopt_name);
+		error = mac_socket_check_getsockopt(td->td_ucred, so, &sopt);
 #endif
 		if (error == 0) {
 			error = sogetopt(so, &sopt);

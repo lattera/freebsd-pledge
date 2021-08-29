@@ -2219,7 +2219,7 @@ int
 sys_aio_mlock(struct thread *td, struct aio_mlock_args *uap)
 {
 	int error;
-	error = sysfil_require(td, SYSFIL_MLOCK);
+	error = sysfil_check(td, SYSFIL_MLOCK);
 	if (error)
 		return (error);
 	return (aio_aqueue(td, uap->aiocbp, NULL, LIO_MLOCK, &aiocb_ops));

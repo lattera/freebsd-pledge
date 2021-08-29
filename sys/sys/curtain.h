@@ -72,6 +72,7 @@ struct curtain_item {
 		 * Using __packed to reduce the alignment requirements on
 		 * specific members to save 4 bytes per item on 64-bits archs.
 		 */
+		int sysfil;
 		unsigned long __packed ioctl;
 		int sockaf;
 		int socklvl;

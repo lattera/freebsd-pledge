@@ -731,7 +731,7 @@ curtain_device_unveil_bypass(struct thread *td, struct cdev *dev)
 	struct ucred *cr1 = td->td_ucred, *cr2 = dev->si_cred;
 	if (!cr2 || !curtain_cred_visible(cr1, cr2, true))
 		return (false);
-	if (dev->si_devsw->d_flags & D_TTY && sysfil_check(td, SYSFIL_TTY) == 0)
+	if (dev->si_devsw->d_flags & D_TTY && sysfil_probe(td, SYSFIL_TTY) == 0)
 		return (true);
 	return (false);
 }

@@ -921,7 +921,7 @@ cpuset_which(cpuwhich_t which, id_t id, struct proc **pp, struct thread **tdp,
 		p = td->td_proc;
 		break;
 	case CPU_WHICH_CPUSET:
-		error = sysfil_require(curthread, SYSFIL_CPUSET);
+		error = sysfil_check(curthread, SYSFIL_CPUSET);
 		if (error)
 			return (error);
 		if (id == -1) {
@@ -938,10 +938,10 @@ cpuset_which(cpuwhich_t which, id_t id, struct proc **pp, struct thread **tdp,
 	case CPU_WHICH_JAIL:
 	{
 		struct prison *pr;
-		error = sysfil_require(curthread, SYSFIL_CPUSET);
+		error = sysfil_check(curthread, SYSFIL_CPUSET);
 		if (error)
 			return (error);
-		error = sysfil_require(curthread, SYSFIL_JAIL);
+		error = sysfil_check(curthread, SYSFIL_JAIL);
 		if (error)
 			return (error);
 		/* Find `set' for prison with given id. */
@@ -957,7 +957,7 @@ cpuset_which(cpuwhich_t which, id_t id, struct proc **pp, struct thread **tdp,
 	}
 	case CPU_WHICH_IRQ:
 	case CPU_WHICH_DOMAIN:
-		return (sysfil_require(curthread, SYSFIL_CPUSET));
+		return (sysfil_check(curthread, SYSFIL_CPUSET));
 	default:
 		return (EINVAL);
 	}

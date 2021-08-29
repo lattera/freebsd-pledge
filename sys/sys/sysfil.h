@@ -142,37 +142,37 @@ sysfil_match_cred(const struct ucred *cr, int sf) {
 }
 
 static inline int
-sysfil_check_cred(const struct ucred *cr, int sf)
+sysfil_probe_cred(struct ucred *cr, int sf)
 {
 	if (__predict_false(!SYSFIL_VALID(sf)))
 		return (EINVAL);
-	if (__predict_false(!sysfil_match_cred(cr, sf)))
-		return (SYSFIL_FAILED_ERRNO);
-	return (0);
+	if (__predict_true(sysfil_match_cred(cr, sf)))
+		return (0);
+	return (SYSFIL_FAILED_ERRNO);
 }
 
 static inline int
-sysfil_check(const struct thread *td, int sf)
+sysfil_probe(struct thread *td, int sf)
 {
-	return (sysfil_check_cred(td->td_ucred, sf));
+	return (sysfil_probe_cred(td->td_ucred, sf));
 }
 
-/*
- * Note: sysfil_require() may acquire the PROC_LOCK to send a violation signal.
- * Thus it must not be called with the PROC_LOCK (or any other incompatible
- * lock) currently being held.
- */
 static inline int
-sysfil_require(struct thread *td, int sf)
+sysfil_check_cred(struct ucred *cr, int sf)
 {
 	int error;
-	PROC_LOCK_ASSERT(td->td_proc, MA_NOTOWNED);
-	error = sysfil_check(td, sf);
+	error = sysfil_probe_cred(cr, sf);
 #ifdef MAC
-	if (__predict_false(error))
-		mac_sysfil_violation(td, sf, error);
+	if (error)
+		error = mac_sysfil_check(cr, sf);
 #endif
 	return (error);
+}
+
+static inline int
+sysfil_check(struct thread *td, int sf)
+{
+	return (sysfil_check_cred(td->td_ucred, sf));
 }
 
 static inline void

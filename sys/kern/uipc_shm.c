@@ -612,7 +612,7 @@ shm_copyin_path(struct thread *td, const char *userpath_in, char **path_out) {
 			goto out;
 		prefix += n;
 	}
-	if (sysfil_check(td, SYSFIL_NOTMPIPC) != 0) {
+	if (sysfil_probe(td, SYSFIL_NOTMPIPC) != 0) {
 		n = strlcpy(path + prefix, "/tmp", MAXPATHLEN - prefix);
 		if (n >= MAXPATHLEN - prefix)
 			goto out;
@@ -1090,7 +1090,7 @@ kern_shm_open2(struct thread *td, const char *userpath, int flags, mode_t mode,
 		if (IN_CAPABILITY_MODE(td))
 			return (ECAPMODE);
 #endif
-		error = sysfil_require(td, SYSFIL_POSIXIPC);
+		error = sysfil_check(td, SYSFIL_POSIXIPC);
 		if (error)
 			return (error);
 	}

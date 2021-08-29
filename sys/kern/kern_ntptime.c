@@ -1002,7 +1002,7 @@ kern_adjtime(struct thread *td, struct timeval *delta, struct timeval *olddelta)
 		error = priv_check(td, PRIV_ADJTIME);
 		if (error != 0)
 			return (error);
-		error = sysfil_require(td, SYSFIL_SETTIME);
+		error = sysfil_check(td, SYSFIL_SETTIME);
 		if (error != 0)
 			return (error);
 		ltw = (int64_t)delta->tv_sec * 1000000 + delta->tv_usec;

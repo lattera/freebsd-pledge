@@ -24,6 +24,8 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysent.h>
 #include <sys/syscall.h>
 #include <sys/sysfil.h>
+#include <sys/socket.h>
+#include <sys/sockopt.h>
 #include <sys/unveil.h>
 #include <sys/curtain.h>
 
@@ -45,20 +47,20 @@ SDT_PROBE_DEFINE1(curtain,, do_curtainctl, compact, "struct curtain *");
 SDT_PROBE_DEFINE1(curtain,, do_curtainctl, assign, "struct curtain *");
 
 
-static bool __read_mostly sysfil_enabled = true;
-static unsigned __read_mostly sysfil_violation_log_level = 1;
+static bool __read_mostly curtainctl_enabled = true;
+static unsigned __read_mostly curtain_log_level = CURTAINLVL_TRAP;
 
 SYSCTL_NODE(_security, OID_AUTO, curtain,
     CTLFLAG_RW | CTLFLAG_MPSAFE, 0,
     "Curtain");
 
 SYSCTL_BOOL(_security_curtain, OID_AUTO, enabled,
-    CTLFLAG_RW, &sysfil_enabled, 0,
+    CTLFLAG_RW, &curtainctl_enabled, 0,
     "Allow curtainctl(2) usage");
 
-SYSCTL_UINT(_security_curtain, OID_AUTO, log_sysfil_violation,
-    CTLFLAG_RW, &sysfil_violation_log_level, 0,
-    "Log violations of sysfil restrictions");
+SYSCTL_UINT(_security_curtain, OID_AUTO, log_level,
+    CTLFLAG_RW, &curtain_log_level, 0,
+    "");
 
 #define CURTAIN_STATS
 
@@ -541,20 +543,6 @@ sysfil_for_type(enum curtain_type type)
 
 typedef union curtain_key ctkey;
 
-static int
-curtain_check_cred(const struct ucred *cr, enum curtain_type type, union curtain_key key)
-{
-	const struct curtain *ct;
-	/* TODO: handle level */
-	if ((ct = CRED_SLOT(cr))) {
-		const struct curtain_item *item;
-		item = curtain_lookup(ct, type, key);
-		if (item && item->mode.on_self == CURTAINLVL_PASS)
-			return (0);
-	}
-	return (sysfil_check_cred(cr, sysfil_for_type(type)));
-}
-
 static bool
 curtain_need_exec_switch(const struct curtain *ct)
 {
@@ -978,7 +966,7 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 #endif
 	bool on_self, on_exec;
 
-	if (!sysfil_enabled)
+	if (!curtainctl_enabled)
 		return (ENOSYS);
 
 #ifdef UNVEIL_SUPPORT
@@ -1156,7 +1144,63 @@ out:	while (reqi--)
 #endif /* SYSFIL */
 }
 
+
 #ifdef SYSFIL
+
+static const char lvl2str[][5] = {
+	[CURTAINLVL_PASS] = "pass",
+	[CURTAINLVL_DENY] = "deny",
+	[CURTAINLVL_TRAP] = "trap",
+	[CURTAINLVL_KILL] = "kill",
+};
+
+static const int lvl2err[] = {
+	[CURTAINLVL_PASS] = 0,
+	[CURTAINLVL_DENY] = SYSFIL_FAILED_ERRNO,
+	[CURTAINLVL_TRAP] = ERESTRICTEDTRAP,
+	[CURTAINLVL_KILL] = ERESTRICTEDKILL,
+};
+
+#define	CURTAIN_LOG(td, lvl, fmt, ...) do { \
+	if ((lvl) >= curtain_log_level) \
+		log(LOG_ERR, "curtain %s: pid %d (%s), jid %d, uid %d: " fmt "\n", \
+		    lvl2str[lvl], (td)->td_proc->p_pid, (td)->td_proc->p_comm, \
+		    (td)->td_ucred->cr_prison->pr_id, (td)->td_ucred->cr_uid, \
+		    __VA_ARGS__); \
+} while (0)
+
+#define	CURTAIN_CRED_LOG(cr, lvl, fmt, ...) do { \
+	if ((cr) == curthread->td_ucred) \
+		CURTAIN_LOG(curthread, (lvl), fmt, __VA_ARGS__); \
+} while (0)
+
+static enum curtain_level
+curtain_cred_level(const struct ucred *cr, enum curtain_type type, union curtain_key key)
+{
+	const struct curtain *ct;
+	if ((ct = CRED_SLOT(cr))) {
+		if (type == CURTAINTYP_SYSFIL) {
+			return (ct->ct_sysfils[key.sysfil].on_self);
+		} else {
+			const struct curtain_item *item;
+			item = curtain_lookup(ct, type, key);
+			if (item)
+				return (item->mode.on_self);
+		}
+		return (CURTAINLVL_KILL);
+	} else {
+		if (type == CURTAINTYP_SYSFIL)
+			if (sysfil_match_cred(cr, key.sysfil))
+				return (CURTAINLVL_PASS);
+		return (CURTAINLVL_DENY);
+	}
+}
+
+static enum curtain_level
+curtain_cred_sysfil_level(const struct ucred *cr, int sf)
+{
+	return (curtain_cred_level(cr, CURTAINTYP_SYSFIL, (ctkey){ .sysfil = sf }));
+}
 
 
 static void
@@ -1228,6 +1272,61 @@ curtain_proc_check_debug(struct ucred *cr, struct proc *p)
 	if (!curtain_visible(CRED_SLOT(cr), CRED_SLOT(p->p_ucred), false))
 		return (ESRCH);
 	return (0);
+}
+
+
+static int
+curtain_socket_check_create(struct ucred *cr, int domain, int type, int protocol)
+{
+	enum curtain_level lvl;
+	lvl = curtain_cred_level(cr, CURTAINTYP_SOCKAF, (ctkey){ .sockaf = domain });
+	if (lvl == CURTAINLVL_PASS)
+		return (0);
+	lvl = MIN(lvl, curtain_cred_sysfil_level(cr, SYSFIL_ANY_SOCKAF));
+	if (lvl == CURTAINLVL_PASS)
+		return (0);
+	CURTAIN_CRED_LOG(cr, lvl, "sockaf %d", domain);
+	return (lvl2err[lvl]);
+}
+
+static int
+curtain_socket_check_connect(struct ucred *cr, struct socket *so, struct label *solabel,
+    struct sockaddr *sa)
+{
+	enum curtain_level lvl;
+	int domain;
+	domain = sa->sa_family;
+	lvl = curtain_cred_level(cr, CURTAINTYP_SOCKAF, (ctkey){ .sockaf = domain });
+	if (lvl == CURTAINLVL_PASS)
+		return (0);
+	lvl = MIN(lvl, curtain_cred_sysfil_level(cr, SYSFIL_ANY_SOCKAF));
+	if (lvl == CURTAINLVL_PASS)
+		return (0);
+	CURTAIN_CRED_LOG(cr, lvl, "sockaf %d", domain);
+	return (lvl2err[lvl]);
+}
+
+static int
+curtain_socket_check_sockopt(struct ucred *cr, struct socket *so, struct label *solabel,
+    struct sockopt *sopt)
+{
+	enum curtain_level lvl;
+	int level, name;
+	level = sopt->sopt_level;
+	name = sopt->sopt_name;
+	lvl = curtain_cred_level(cr, CURTAINTYP_SOCKOPT,
+	    (ctkey){ .sockopt = { level, name } });
+	if (lvl == CURTAINLVL_PASS)
+		return (0);
+	lvl = MIN(lvl, curtain_cred_level(cr, CURTAINTYP_SOCKLVL,
+	    (ctkey){ .socklvl = level }));
+	if (lvl == CURTAINLVL_PASS)
+		return (0);
+	lvl = MIN(lvl, curtain_cred_sysfil_level(cr, SYSFIL_ANY_SOCKOPT));
+	if (lvl == CURTAINLVL_PASS)
+		return (0);
+	CURTAIN_CRED_LOG(cr, lvl, "sockopt %d:%d", level, name);
+	return (lvl2err[lvl]);
 }
 
 
@@ -1718,6 +1817,64 @@ curtain_vnode_check_exec(struct ucred *cr,
 
 
 static int
+curtain_generic_check_ioctl(struct ucred *cr, struct file *fp, u_long com, void *data)
+{
+	enum curtain_level lvl;
+	int sf;
+	lvl = curtain_cred_level(cr, CURTAINTYP_IOCTL, (ctkey){ .ioctl = com });
+	if (lvl == CURTAINLVL_PASS)
+		return (0);
+	switch (com) {
+	case FIOCLEX:
+	case FIONCLEX:
+	case FIONREAD:
+	case FIONWRITE:
+	case FIONSPACE:
+	case FIONBIO:
+	case FIOASYNC:
+	case FIOGETOWN:
+	case FIODTYPE:
+		/* always allowed ioctls */
+		sf = SYSFIL_ALWAYS;
+		break;
+	case TIOCGETA:
+		/* needed for isatty(3) */
+		sf = SYSFIL_STDIO;
+		break;
+	case FIOSETOWN:
+		/* also checked in setown() */
+		sf = SYSFIL_PROC;
+		break;
+	default:
+		sf = SYSFIL_ANY_IOCTL;
+		break;
+	}
+	if (sf != SYSFIL_ANY_IOCTL) {
+		lvl = MIN(lvl, curtain_cred_sysfil_level(cr, sf));
+		if (lvl == CURTAINLVL_PASS)
+			return (0);
+		sf = SYSFIL_ANY_IOCTL;
+	}
+	lvl = MIN(lvl, curtain_cred_sysfil_level(cr, sf));
+	if (lvl == CURTAINLVL_PASS)
+		return (0);
+	CURTAIN_CRED_LOG(cr, lvl, "ioctl %#jx", (uintmax_t)com);
+	return (lvl2err[lvl]);
+}
+
+static int
+curtain_generic_check_vm_prot(struct ucred *cr, struct file *fp, vm_prot_t prot)
+{
+	if (prot & VM_PROT_EXECUTE) {
+		bool loose = fp && fp->f_ops == &vnops;
+		return (sysfil_check_cred(cr, loose && !(prot & VM_PROT_WRITE) ?
+		    SYSFIL_PROT_EXEC_LOOSE : SYSFIL_PROT_EXEC));
+	}
+	return (0);
+}
+
+
+static int
 curtain_system_check_sysctl(struct ucred *cr,
     struct sysctl_oid *oidp, void *arg1, int arg2,
     struct sysctl_req *req)
@@ -1732,15 +1889,18 @@ curtain_system_check_sysctl(struct ucred *cr,
 			if (item && item->mode.on_self == CURTAINLVL_PASS)
 				return (0);
 		} while ((oidp = SYSCTL_PARENT(oidp))); /* XXX locking */
-	return (sysfil_check_cred(cr, sysfil_for_type(CURTAINTYP_SYSCTL)));
+	/* TODO handle levels here too */
+	return (sysfil_probe_cred(cr, sysfil_for_type(CURTAINTYP_SYSCTL)));
 }
 
 
 static int
 curtain_priv_check(struct ucred *cr, int priv)
 {
+	enum curtain_level lvl;
 	int sf;
-	if (curtain_check_cred(cr, CURTAINTYP_PRIV, (ctkey){ .priv = priv }) == 0)
+	lvl = curtain_cred_level(cr, CURTAINTYP_PRIV, (ctkey){ .priv = priv });
+	if (lvl == CURTAINLVL_PASS)
 		return (0);
 	/*
 	 * Mostly a subset of what's being allowed for jails (see
@@ -1839,42 +1999,39 @@ curtain_priv_check(struct ucred *cr, int priv)
 		sf = SYSFIL_ANY_PRIV;
 		break;
 	}
-	return (sysfil_check_cred(cr, sf));
-}
-
-static void
-sysfil_log_violation(struct thread *td, int sf, int sig)
-{
-	struct proc *p = td->td_proc;
-	struct ucred *cr = td->td_ucred;
-	log(LOG_ERR, "pid %d (%s), jid %d, uid %d: violated sysfil #%d restrictions%s\n",
-	    p->p_pid, p->p_comm, cr->cr_prison->pr_id, cr->cr_uid, sf,
-	    sig == SIGKILL ? " and was killed" : sig != 0 ? " and was signaled" : "");
-}
-
-static void
-curtain_sysfil_violation(struct thread *td, int sf, int error)
-{
-	struct curtain *ct;
-	enum curtain_level lvl;
-	int sig;
-	ct = CRED_SLOT(td->td_ucred);
-	lvl = ct ? ct->ct_sysfils[sf].on_self : CURTAINLVL_DENY;
-	sig = lvl >= CURTAINLVL_KILL ? SIGKILL :
-	      lvl >= CURTAINLVL_TRAP ? SIGTRAP : 0;
-	if (sysfil_violation_log_level >= 2 ? true :
-	    sysfil_violation_log_level >= 1 ? sig != 0 :
-	                                      false)
-		sysfil_log_violation(td, sf, sig);
-	if (sig != 0) {
-		ksiginfo_t ksi;
-		ksiginfo_init_trap(&ksi);
-		ksi.ksi_signo = sig;
-		ksi.ksi_code = SI_SYSFIL;
-		ksi.ksi_sysfil = sf;
-		ksi.ksi_errno = error;
-		trapsignal(td, &ksi);
+	if (sf != SYSFIL_ANY_PRIV) {
+		lvl = MIN(lvl, curtain_cred_sysfil_level(cr, sf));
+		if (lvl == CURTAINLVL_PASS)
+			return (0);
+		sf = SYSFIL_ANY_PRIV;
 	}
+	lvl = MIN(lvl, curtain_cred_sysfil_level(cr, sf));
+	if (lvl == CURTAINLVL_PASS)
+		return (0);
+	/*
+	 * Some priv_check()/priv_check_cred() callers just compare the error
+	 * value against 0 without returning it.  Some privileges are checked
+	 * in this way so often that it shouldn't be logged.
+	 */
+	switch (priv) {
+	case PRIV_VFS_GENERATION:
+		break;
+	default:
+		CURTAIN_CRED_LOG(cr, lvl, "priv %d", priv);
+		break;
+	}
+	return (lvl2err[lvl]);
+}
+
+static int
+curtain_sysfil_check(struct ucred *cr, int sf)
+{
+	enum curtain_level lvl;
+	lvl = curtain_cred_sysfil_level(cr, sf);
+	if (lvl == CURTAINLVL_PASS)
+		return (0);
+	CURTAIN_CRED_LOG(cr, lvl, "sysfil %d", sf);
+	return (lvl2err[lvl]);
 }
 
 static bool
@@ -1932,69 +2089,6 @@ static int curtain_sysfil_update_mask(struct ucred *cr)
 	return (0);
 }
 
-static int
-curtain_sysfil_check_vm_prot(struct ucred *cr, vm_prot_t prot, bool loose)
-{
-	if (prot & VM_PROT_EXECUTE)
-		return (sysfil_check_cred(cr, loose && !(prot & VM_PROT_WRITE) ?
-		    SYSFIL_PROT_EXEC_LOOSE : SYSFIL_PROT_EXEC));
-	return (0);
-}
-
-static int
-curtain_sysfil_check_ioctl(struct ucred *cr, u_long com)
-{
-	int sf;
-	if (curtain_check_cred(cr, CURTAINTYP_IOCTL, (ctkey){ .ioctl = com }) == 0)
-		return (0);
-	switch (com) {
-	case FIOCLEX:
-	case FIONCLEX:
-	case FIONREAD:
-	case FIONWRITE:
-	case FIONSPACE:
-	case FIONBIO:
-	case FIOASYNC:
-	case FIOGETOWN:
-	case FIODTYPE:
-		/* always allowed ioctls */
-		sf = SYSFIL_ALWAYS;
-		break;
-	case TIOCGETA:
-		/* needed for isatty(3) */
-		sf = SYSFIL_STDIO;
-		break;
-	case FIOSETOWN:
-		/* also checked in setown() */
-		sf = SYSFIL_PROC;
-		break;
-	default:
-		sf = SYSFIL_ANY_IOCTL;
-		break;
-	}
-	return (sysfil_check_cred(cr, sf));
-}
-
-static int
-curtain_sysfil_check_sockaf(struct ucred *cr, int af)
-{
-	if (curtain_check_cred(cr, CURTAINTYP_SOCKAF, (ctkey){ .sockaf = af }) == 0)
-		return (0);
-	return (sysfil_check_cred(cr, SYSFIL_ANY_SOCKAF));
-}
-
-static int
-curtain_sysfil_check_sockopt(struct ucred *cr, int level, int name)
-{
-	if (curtain_check_cred(cr, CURTAINTYP_SOCKOPT,
-	    (ctkey){ .sockopt = { level, name } }) == 0)
-		return (0);
-	if (curtain_check_cred(cr, CURTAINTYP_SOCKLVL,
-	    (ctkey){ .socklvl = level }) == 0)
-		return (0);
-	return (sysfil_check_cred(cr, SYSFIL_ANY_SOCKOPT));
-}
-
 
 static struct mac_policy_ops curtain_policy_ops = {
 	.mpo_cred_init_label = curtain_cred_init_label,
@@ -2004,6 +2098,10 @@ static struct mac_policy_ops curtain_policy_ops = {
 	.mpo_proc_check_signal = curtain_proc_check_signal,
 	.mpo_proc_check_sched = curtain_proc_check_sched,
 	.mpo_proc_check_debug = curtain_proc_check_debug,
+	.mpo_socket_check_create = curtain_socket_check_create,
+	.mpo_socket_check_connect = curtain_socket_check_connect,
+	.mpo_socket_check_setsockopt = curtain_socket_check_sockopt,
+	.mpo_socket_check_getsockopt = curtain_socket_check_sockopt,
 	.mpo_vnode_check_access = curtain_vnode_check_open,
 	.mpo_vnode_check_open = curtain_vnode_check_open,
 	.mpo_vnode_check_read = curtain_vnode_check_read,
@@ -2032,17 +2130,15 @@ static struct mac_policy_ops curtain_policy_ops = {
 	.mpo_vnode_check_relabel = curtain_vnode_check_relabel,
 	.mpo_vnode_check_exec = curtain_vnode_check_exec,
 	.mpo_vnode_check_revoke = curtain_vnode_check_revoke,
+	.mpo_generic_check_ioctl = curtain_generic_check_ioctl,
+	.mpo_generic_check_vm_prot = curtain_generic_check_vm_prot,
 	.mpo_system_check_sysctl = curtain_system_check_sysctl,
 	.mpo_priv_check = curtain_priv_check,
+	.mpo_sysfil_check = curtain_sysfil_check,
 	.mpo_sysfil_exec_restricted = curtain_sysfil_exec_restricted,
 	.mpo_sysfil_need_exec_adjust = curtain_sysfil_need_exec_adjust,
 	.mpo_sysfil_exec_adjust = curtain_sysfil_exec_adjust,
 	.mpo_sysfil_update_mask = curtain_sysfil_update_mask,
-	.mpo_sysfil_violation = curtain_sysfil_violation,
-	.mpo_sysfil_check_vm_prot = curtain_sysfil_check_vm_prot,
-	.mpo_sysfil_check_ioctl = curtain_sysfil_check_ioctl,
-	.mpo_sysfil_check_sockaf = curtain_sysfil_check_sockaf,
-	.mpo_sysfil_check_sockopt = curtain_sysfil_check_sockopt,
 };
 
 

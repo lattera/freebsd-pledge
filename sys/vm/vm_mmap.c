@@ -383,7 +383,7 @@ kern_mmap(struct thread *td, const struct mmap_req *mrp)
 		 * This relies on VM_PROT_* matching PROT_*.
 		 */
 #ifdef MAC
-		error = mac_sysfil_require_vm_prot(td, prot, false);
+		error = mac_generic_check_vm_prot(td->td_ucred, NULL, prot);
 		if (error)
 			return (error);
 #endif
@@ -414,7 +414,7 @@ kern_mmap(struct thread *td, const struct mmap_req *mrp)
 			goto done;
 		}
 #ifdef MAC
-		error = mac_sysfil_require_vm_prot(td, prot, fp->f_ops == &vnops);
+		error = mac_generic_check_vm_prot(td->td_ucred, fp, prot);
 		if (error)
 			goto done;
 #endif
@@ -690,7 +690,7 @@ kern_mprotect(struct thread *td, uintptr_t addr0, size_t size, int prot)
 		return (EINVAL);
 
 #ifdef MAC
-	error = mac_sysfil_require_vm_prot(td, prot, false);
+	error = mac_generic_check_vm_prot(td->td_ucred, NULL, prot);
 	if (error)
 		return (error);
 #endif

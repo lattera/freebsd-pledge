@@ -1706,7 +1706,7 @@ sysctl_kern_proc(SYSCTL_HANDLER_ARGS)
 	int flags, oid_number;
 	int error = 0;
 
-	error = sysfil_require(req->td, SYSFIL_PS);
+	error = sysfil_check(req->td, SYSFIL_PS);
 	if (error)
 		return (error);
 
@@ -2107,7 +2107,7 @@ sysctl_kern_proc_args(SYSCTL_HANDLER_ARGS)
 	}
 
 	if (pid != p->p_pid) {
-		error = sysfil_require(req->td, SYSFIL_PS);
+		error = sysfil_check(req->td, SYSFIL_PS);
 		if (error)
 			return (error);
 	}
@@ -2190,7 +2190,7 @@ sysctl_kern_proc_env(SYSCTL_HANDLER_ARGS)
 	if (namelen != 1)
 		return (EINVAL);
 
-	error = sysfil_require(req->td, SYSFIL_PS);
+	error = sysfil_check(req->td, SYSFIL_PS);
 	if (error)
 		return (error);
 
@@ -2227,7 +2227,7 @@ sysctl_kern_proc_auxv(SYSCTL_HANDLER_ARGS)
 	if (namelen != 1)
 		return (EINVAL);
 
-	error = sysfil_require(req->td, SYSFIL_PS);
+	error = sysfil_check(req->td, SYSFIL_PS);
 	if (error)
 		return (error);
 
@@ -2272,7 +2272,7 @@ sysctl_kern_proc_pathname(SYSCTL_HANDLER_ARGS)
 	}
 
 	if (p != req->td->td_proc) {
-		error = sysfil_require(req->td, SYSFIL_PS);
+		error = sysfil_check(req->td, SYSFIL_PS);
 		if (error)
 			return (error);
 	}
@@ -2308,7 +2308,7 @@ sysctl_kern_proc_sv_name(SYSCTL_HANDLER_ARGS)
 	if (namelen != 1)
 		return (EINVAL);
 
-	error = sysfil_require(req->td, SYSFIL_PS);
+	error = sysfil_check(req->td, SYSFIL_PS);
 	if (error)
 		return (error);
 
@@ -2843,7 +2843,7 @@ sysctl_kern_proc_groups(SYSCTL_HANDLER_ARGS)
 	if (arglen != 1)
 		return (EINVAL);
 
-	error = sysfil_require(req->td, SYSFIL_PS);
+	error = sysfil_check(req->td, SYSFIL_PS);
 	if (error)
 		return (error);
 
@@ -2889,11 +2889,11 @@ sysctl_kern_proc_rlimit(SYSCTL_HANDLER_ARGS)
 	if (req->newptr != NULL && req->newlen != sizeof(rlim))
 		return (EINVAL);
 
-	error = sysfil_require(req->td, SYSFIL_PS);
+	error = sysfil_check(req->td, SYSFIL_PS);
 	if (error)
 		return (error);
 	if (req->newptr != NULL) {
-		error = sysfil_require(req->td, SYSFIL_RLIMIT);
+		error = sysfil_check(req->td, SYSFIL_RLIMIT);
 		if (error)
 			return (error);
 	}

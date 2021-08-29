@@ -434,13 +434,46 @@ mac_proc_check_wait(struct ucred *cred, struct proc *p)
 	return (error);
 }
 
-void
-mac_sysfil_violation(struct thread *td, int sf, int error)
+MAC_CHECK_PROBE_DEFINE4(generic_check_ioctl, "struct ucred *",
+    "struct file *", "unsigned long", "void *");
+
+int
+mac_generic_check_ioctl(struct ucred *cred, struct file *fp,
+    u_long cmd, void *data)
 {
+	int error;
+
+	MAC_POLICY_CHECK_NOSLEEP(generic_check_ioctl, cred, fp, cmd, data);
+	MAC_CHECK_PROBE4(generic_check_ioctl, error, cred, fp, cmd, data);
+
+	return (error);
+}
+
+MAC_CHECK_PROBE_DEFINE3(generic_check_vm_prot, "struct ucred *",
+    "struct file *", "vm_prot_t");
+
+int
+mac_generic_check_vm_prot(struct ucred *cred, struct file *fp, vm_prot_t prot)
+{
+	int error;
+
+	MAC_POLICY_CHECK(generic_check_vm_prot, cred, fp, prot);
+	MAC_CHECK_PROBE3(generic_check_vm_prot, error, cred, fp, prot);
+
+	return (error);
+}
+
+int
+mac_sysfil_check(struct ucred *cred, int sf)
+{
+	int error;
 
 #ifdef SYSFIL
-	MAC_POLICY_PERFORM(sysfil_violation, td, sf, error);
+	MAC_POLICY_CHECK(sysfil_check, cred, sf);
+#else
+	error = 0;
 #endif
+	return (error);
 }
 
 bool
@@ -513,73 +546,5 @@ mac_sysfil_update_mask(struct thread *td, const sysfilset_t *mask_sfs)
 	PROC_UNLOCK(p);
 #endif
 	return (0);
-}
-
-int
-mac_sysfil_require_vm_prot(struct thread *td, vm_prot_t prot, bool loose)
-{
-	int error;
-
-#ifdef SYSFIL
-	MAC_POLICY_CHECK(sysfil_check_vm_prot, td->td_ucred, prot, loose);
-
-	if (error != 0)
-		mac_sysfil_violation(td, SYSFIL_PROT_EXEC, error);
-#else
-	error = 0;
-#endif
-
-	return (error);
-}
-
-int
-mac_sysfil_require_ioctl(struct thread *td, u_long com)
-{
-	int error;
-
-#ifdef SYSFIL
-	MAC_POLICY_CHECK(sysfil_check_ioctl, td->td_ucred, com);
-
-	if (error != 0)
-		mac_sysfil_violation(td, SYSFIL_ANY_IOCTL, error);
-#else
-	error = 0;
-#endif
-
-	return (error);
-}
-
-int
-mac_sysfil_require_sockaf(struct thread *td, int af)
-{
-	int error;
-
-#ifdef SYSFIL
-	MAC_POLICY_CHECK(sysfil_check_sockaf, td->td_ucred, af);
-
-	if (error != 0)
-		mac_sysfil_violation(td, SYSFIL_ANY_SOCKAF, error);
-#else
-	error = 0;
-#endif
-
-	return (error);
-}
-
-int
-mac_sysfil_require_sockopt(struct thread *td, int level, int name)
-{
-	int error;
-
-#ifdef SYSFIL
-	MAC_POLICY_CHECK(sysfil_check_sockopt, td->td_ucred, level, name);
-
-	if (error != 0)
-		mac_sysfil_violation(td, SYSFIL_ANY_SOCKOPT, error);
-#else
-	error = 0;
-#endif
-
-	return (error);
 }
 

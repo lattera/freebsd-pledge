@@ -774,7 +774,7 @@ kern_ioctl(struct thread *td, int fd, u_long com, caddr_t data)
 	}
 #endif
 #ifdef MAC
-	error = mac_sysfil_require_ioctl(td, com);
+	error = mac_generic_check_ioctl(td->td_ucred, fp, com, data);
 	if (error)
 		goto out;
 #endif

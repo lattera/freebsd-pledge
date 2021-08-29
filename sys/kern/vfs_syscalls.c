@@ -2855,7 +2855,7 @@ setfmode(struct thread *td, struct ucred *cred, struct vnode *vp, int mode)
 		return (error);
 	vn_lock(vp, LK_EXCLUSIVE | LK_RETRY);
 	VATTR_NULL(&vattr);
-	allow_special = sysfil_check(td, SYSFIL_CHMOD_SPECIAL) == 0;
+	allow_special = sysfil_probe(td, SYSFIL_CHMOD_SPECIAL) == 0;
 	vattr.va_mode = mode & (allow_special ? ALLPERMS : ACCESSPERMS);
 #ifdef MAC
 	error = mac_vnode_check_setmode(cred, vp, vattr.va_mode);

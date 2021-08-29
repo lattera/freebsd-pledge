@@ -256,9 +256,6 @@ typedef	struct __siginfo {
 			long	_band;		/* band event for SIGPOLL */
 		} _poll;			/* was this ever used ? */
 		struct {
-			int _sysfil;
-		} _sysfil;
-		struct {
 			int	_syscall;	/* Syscall number for signals
 						 * delivered as a result of
 						 * system calls denied by
@@ -276,7 +273,6 @@ typedef	struct __siginfo {
 #define si_overrun	_reason._timer._overrun
 #define si_mqd		_reason._mesgq._mqd
 #define si_band		_reason._poll._band
-#define	si_sysfil	_reason._sysfil._sysfil
 #define si_syscall	_reason._capsicum._syscall
 
 #if defined(_WANT_LWPINFO32) || (defined(_KERNEL) && defined(__LP64__))
@@ -422,7 +418,7 @@ struct sigaction {
 					/* message on an empty message queue. */
 #define	SI_KERNEL	0x10006
 #define	SI_LWP		0x10007		/* Signal sent by thr_kill */
-#define	SI_SYSFIL	0x10008		/* Signal sent due to sysfil violation */
+#define	SI_RESTRICTED	0x10008		/* Signal sent due to sysfil violation */
 #endif
 #if __BSD_VISIBLE
 #define	SI_UNDEFINED	0

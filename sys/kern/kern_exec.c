@@ -433,7 +433,7 @@ do_execve(struct thread *td, struct image_args *args, struct mac *mac_p,
 	orig_brandinfo = p->p_elf_brandinfo;
 
 #ifdef SYSFIL
-	error = sysfil_require(td, SYSFIL_EXEC);
+	error = sysfil_check(td, SYSFIL_EXEC);
 	if (error)
 		goto exec_fail;
 #endif

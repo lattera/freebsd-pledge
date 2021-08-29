@@ -102,7 +102,7 @@ static inline bool
 unveil_active(struct thread *td)
 {
 #ifdef UNVEIL_SUPPORT
-	return (sysfil_check(td, SYSFIL_DEFAULT) != 0 &&
+	return (sysfil_probe(td, SYSFIL_DEFAULT) != 0 &&
 	    td->td_proc->p_unveils != NULL);
 #else
 	return (false);

@@ -360,6 +360,22 @@ mac_socket_check_create(struct ucred *cred, int domain, int type, int proto)
 	return (error);
 }
 
+MAC_CHECK_PROBE_DEFINE4(socket_check_create_pair, "struct ucred *", "int", "int",
+    "int");
+
+int
+mac_socket_check_create_pair(struct ucred *cred, int domain, int type, int proto)
+{
+	int error;
+
+	MAC_POLICY_CHECK_NOSLEEP(socket_check_create_pair, cred, domain, type,
+	    proto);
+	MAC_CHECK_PROBE4(socket_check_create_pair, error, cred, domain, type,
+	    proto);
+
+	return (error);
+}
+
 MAC_CHECK_PROBE_DEFINE2(socket_check_deliver, "struct socket *",
     "struct mbuf *");
 
@@ -482,6 +498,38 @@ mac_socket_check_visible(struct ucred *cred, struct socket *so)
 	MAC_POLICY_CHECK_NOSLEEP(socket_check_visible, cred, so,
 	    so->so_label);
 	MAC_CHECK_PROBE2(socket_check_visible, error, cred, so);
+
+	return (error);
+}
+
+MAC_CHECK_PROBE_DEFINE3(socket_check_setsockopt, "struct ucred *",
+    "struct socket *", "struct sockopt *");
+
+int
+mac_socket_check_setsockopt(struct ucred *cred, struct socket *so,
+    struct sockopt *sopt)
+{
+	int error;
+
+	MAC_POLICY_CHECK_NOSLEEP(socket_check_setsockopt, cred,
+	    so, so ? so->so_label : NULL, sopt);
+	MAC_CHECK_PROBE3(socket_check_setsockopt, error, cred, so, sopt);
+
+	return (error);
+}
+
+MAC_CHECK_PROBE_DEFINE3(socket_check_getsockopt, "struct ucred *",
+    "struct socket *", "struct sockopt *");
+
+int
+mac_socket_check_getsockopt(struct ucred *cred, struct socket *so,
+    struct sockopt *sopt)
+{
+	int error;
+
+	MAC_POLICY_CHECK_NOSLEEP(socket_check_getsockopt, cred,
+	    so, so ? so->so_label : NULL, sopt);
+	MAC_CHECK_PROBE3(socket_check_getsockopt, error, cred, so, sopt);
 
 	return (error);
 }
