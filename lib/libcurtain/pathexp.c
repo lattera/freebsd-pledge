@@ -81,16 +81,21 @@ static int
 expand_percent(struct pathexp *a, const char *p, char *e, size_t depth)
 {
 	const char *q;
+	bool alt;
 	int r;
 	q = p;
+	if ((alt = *q == '#'))
+		q++;
 	switch (*q++) {
 	case 'u':
-		r = expand_printf(a, &e, "%lu", (unsigned long)geteuid());
+		r = expand_printf(a, &e, "%lu",
+		    (unsigned long)(alt ? getuid() : geteuid()));
 		if (r < 0)
 			return (r);
 		break;
 	case 'g':
-		r = expand_printf(a, &e, "%lu", (unsigned long)getegid());
+		r = expand_printf(a, &e, "%lu",
+		    (unsigned long)(alt ? getgid() : getegid()));
 		if (r < 0)
 			return (r);
 		break;
