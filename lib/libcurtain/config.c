@@ -411,17 +411,28 @@ static void
 parse_ioctls(struct parser *par, struct word *w)
 {
 	while (w) {
-		const unsigned long *bundle;
-		bundle = NULL;
-		for (size_t i = 0; i < nitems(ioctls_bundles); i++)
-			if (strmemcmp(ioctls_bundles[i].name, w->ptr, w->len) == 0) {
-				bundle = ioctls_bundles[i].ioctls;
-				break;
-			}
-		if (!bundle)
-			parse_error(par, "unknown ioctl bundle");
-		else if (par->apply)
-			curtain_ioctls(par->slot, bundle, 0);
+		if (w->ptr[0] >= '0' && w->ptr[0] <= '9') {
+			unsigned long n;
+			char *end;
+			errno = 0;
+			n = strtoul(w->ptr, &end, 0);
+			if (errno || *end)
+				parse_error(par, "invalid ioctl");
+			else if (par->apply)
+				curtain_ioctl(par->slot, n, 0);
+		} else {
+			const unsigned long *bundle;
+			bundle = NULL;
+			for (size_t i = 0; i < nitems(ioctls_bundles); i++)
+				if (strmemcmp(ioctls_bundles[i].name, w->ptr, w->len) == 0) {
+					bundle = ioctls_bundles[i].ioctls;
+					break;
+				}
+			if (!bundle)
+				parse_error(par, "unknown ioctl bundle");
+			else if (par->apply)
+				curtain_ioctls(par->slot, bundle, 0);
+		}
 		w = w->next;
 	}
 }
@@ -471,6 +482,7 @@ static const struct {
 	{ "sysfil", parse_sysfil },
 	{ "sysctl", parse_sysctl },
 	{ "priv", parse_priv },
+	{ "ioctl", parse_ioctls },
 	{ "ioctls", parse_ioctls },
 	{ "sockaf", parse_sockaf },
 	{ "socklvl", parse_socklvl },
