@@ -83,12 +83,11 @@ STATNODE_COUNTER(long_probes, curtain_stats_long_probes, "");
 
 CTASSERT(CURTAINCTL_MAX_ITEMS <= (curtain_index)-1);
 
-#ifdef SYSFIL
-
 static int __read_mostly curtain_slot;
 #define	SLOT(l) ((struct curtain *)mac_label_get((l), curtain_slot))
 #define	SLOT_SET(l, val) mac_label_set((l), curtain_slot, (uintptr_t)(val))
 #define	CRED_SLOT(cr) ((cr)->cr_label ? SLOT((cr)->cr_label) : NULL)
+
 
 static inline void
 mode_set(struct curtain_mode *mode, enum curtain_level lvl)
@@ -911,11 +910,7 @@ fail:	SDT_PROBE0(curtain,, curtain_build, failed);
 	return (NULL);
 }
 
-#endif /* SYSFIL */
-
 
-#ifdef SYSFIL
-
 static void
 curtain_cred_exec_switch(struct ucred *cr)
 {
@@ -948,11 +943,7 @@ curtain_cred_visible(const struct ucred *subject, const struct ucred *target, bo
 	return (curtain_visible(CRED_SLOT(subject), CRED_SLOT(target), strict));
 }
 
-#endif
-
 
-#ifdef SYSFIL
-
 static int
 do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq *reqv)
 {
@@ -1095,12 +1086,9 @@ out2:
 	return (error);
 }
 
-#endif /* SYSFIL */
-
 int
 sys_curtainctl(struct thread *td, struct curtainctl_args *uap)
 {
-#ifdef SYSFIL
 	size_t reqc, reqi, avail;
 	struct curtainreq *reqv;
 	int flags, error;
@@ -1139,14 +1127,9 @@ out:	while (reqi--)
 			free(reqv[reqi].data, M_TEMP);
 	free(reqv, M_TEMP);
 	return (error);
-#else
-	return (ENOSYS);
-#endif /* SYSFIL */
 }
 
 
-#ifdef SYSFIL
-
 static const char lvl2str[][5] = {
 	[CURTAINLVL_PASS] = "pass",
 	[CURTAINLVL_DENY] = "deny",
@@ -2169,5 +2152,3 @@ SYSINIT(curtain_sysinit, SI_SUB_MAC_POLICY, SI_ORDER_ANY, curtain_sysinit, NULL)
 SYSUNINIT(curtain_sysuninit, SI_SUB_MAC_POLICY, SI_ORDER_ANY, curtain_sysuninit, NULL);
 
 MAC_POLICY_SET(&curtain_policy_ops, mac_curtain, "MAC/curtain", 0, &curtain_slot);
-
-#endif /* SYSFIL */
