@@ -525,7 +525,7 @@ mac_sysfil_update_mask(struct thread *td, const sysfilset_t *mask_sfs)
 		BIT_AND(SYSFILSET_BITS, &cr->cr_sysfilset, mask_sfs);
 		crhold(old_cr);
 		PROC_UNLOCK(p);
-		MAC_POLICY_CHECK(sysfil_update_mask, cr);
+		MAC_POLICY_CHECK(sysfil_update_mask, cr, mask_sfs);
 		if (error != 0) {
 			crfree(old_cr);
 			crfree(cr);

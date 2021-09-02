@@ -2077,13 +2077,13 @@ curtain_sysfil_exec_adjust(struct thread *td, struct ucred *cr)
 		unveil_proc_drop_base(td->td_proc);
 }
 
-static int curtain_sysfil_update_mask(struct ucred *cr)
+static int curtain_sysfil_update_mask(struct ucred *cr, const sysfilset_t *mask_sfs)
 {
 	struct curtain *ct;
 	if (!CRED_SLOT(cr))
 		return (0);
 	ct = curtain_dup_child(CRED_SLOT(cr));
-	curtain_mask_sysfils(ct, &cr->cr_sysfilset);
+	curtain_mask_sysfils(ct, mask_sfs);
 	curtain_free(CRED_SLOT(cr));
 	SLOT_SET(cr->cr_label, ct);
 	return (0);

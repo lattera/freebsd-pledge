@@ -66,6 +66,7 @@
 #include <sys/acl.h>	/* XXX acl_type_t */
 #include <sys/types.h>	/* XXX accmode_t */
 #include <vm/vm.h>	/* vm_prot_t */
+#include <sys/_sysfil.h>	/* sysfilset_t */
 
 struct acl;
 struct auditinfo;
@@ -689,7 +690,8 @@ typedef bool	(*mpo_sysfil_need_exec_adjust_t)(struct thread *td,
 		    struct ucred *cred);
 typedef void	(*mpo_sysfil_exec_adjust_t)(struct thread *td,
 		    struct ucred *cred);
-typedef int	(*mpo_sysfil_update_mask_t)(struct ucred *newcred);
+typedef int	(*mpo_sysfil_update_mask_t)(struct ucred *newcred,
+		    const sysfilset_t *mask_sfs);
 
 struct mac_policy_ops {
 	/*
