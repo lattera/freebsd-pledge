@@ -2901,6 +2901,15 @@ finit_vnode(struct file *fp, u_int flag, void *data, struct fileops *ops)
 	    data, ops);
 }
 
+static inline void
+_fget_unveil(struct thread *td, struct filedesc *fdp, struct file *fp)
+{
+#ifdef UNVEIL_SUPPORT
+	if (unveil_active(td))
+		unveil_ops->tracker_push_file(td, fp);
+#endif
+}
+
 int
 fget_cap_locked(struct filedesc *fdp, int fd, cap_rights_t *needrightsp,
     struct file **fpp, struct filecaps *havecapsp)
@@ -2926,6 +2935,7 @@ fget_cap_locked(struct filedesc *fdp, int fd, cap_rights_t *needrightsp,
 		filecaps_copy(&fde->fde_caps, havecapsp, true);
 
 	*fpp = fde->fde_file;
+	_fget_unveil(curthread, fdp, *fpp);
 
 	error = 0;
 out:
@@ -2966,6 +2976,7 @@ fget_cap(struct thread *td, int fd, cap_rights_t *needrightsp,
 	}
 
 	*fpp = fp;
+	_fget_unveil(td, fdp, fp);
 	return (0);
 
 get_locked:
@@ -3173,6 +3184,7 @@ fget_unlocked(struct filedesc *fdp, int fd, cap_rights_t *needrightsp,
 #endif
 	const struct fdescenttbl *fdt;
 	struct file *fp;
+	int error;
 #ifdef CAPABILITIES
 	seqc_t seq;
 	const cap_rights_t *haverights;
@@ -3210,12 +3222,17 @@ fget_unlocked(struct filedesc *fdp, int fd, cap_rights_t *needrightsp,
 	if (__predict_false(fp != fdt->fdt_ofiles[fd].fde_file))
 #endif
 		goto out_fdrop;
-	*fpp = fp;
-	return (0);
+	goto out_success;
 out_fdrop:
 	fdrop(fp, curthread);
 out_fallback:
-	return (fget_unlocked_seq(fdp, fd, needrightsp, fpp, NULL));
+	error = fget_unlocked_seq(fdp, fd, needrightsp, &fp, NULL);
+	if (error)
+		return (error);
+out_success:
+	*fpp = fp;
+	_fget_unveil(curthread, fdp, fp);
+	return (0);
 }
 
 /*
@@ -3254,6 +3271,7 @@ fget_only_user(struct filedesc *fdp, int fd, cap_rights_t *needrightsp,
 	if (__predict_false(error != 0))
 		return (error);
 	*fpp = fp;
+	_fget_unveil(curthread, fdp, fp);
 	return (0);
 }
 #else
@@ -3274,6 +3292,7 @@ fget_only_user(struct filedesc *fdp, int fd, cap_rights_t *needrightsp,
 
 	MPASS(refcount_load(&fp->f_count) > 0);
 	*fpp = fp;
+	_fget_unveil(curthread, fdp, fp);
 	return (0);
 }
 #endif
@@ -3386,6 +3405,7 @@ fget_mmap(struct thread *td, int fd, cap_rights_t *rightsp, vm_prot_t *maxprotp,
 	if (maxprotp != NULL)
 		*maxprotp = cap_rights_to_vmprot(&fdrights);
 	*fpp = fp;
+	_fget_unveil(td, fdp, fp);
 	return (0);
 #endif
 }
@@ -3432,6 +3452,7 @@ fget_fcntl(struct thread *td, int fd, cap_rights_t *rightsp, int needfcntl,
 		return (error);
 	}
 	*fpp = fp;
+	_fget_unveil(td, fdp, fp);
 	return (0);
 #endif
 }
@@ -3460,10 +3481,6 @@ _fgetvp(struct thread *td, int fd, int flags, cap_rights_t *needrightsp,
 		*vpp = fp->f_vnode;
 		vref(*vpp);
 	}
-#ifdef UNVEIL_SUPPORT
-	if (unveil_active(td))
-		unveil_ops->tracker_push_file(td, fp);
-#endif
 	fdrop(fp, td);
 
 	return (error);

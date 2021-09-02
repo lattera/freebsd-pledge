@@ -2430,10 +2430,6 @@ vn_chmod(struct file *fp, mode_t mode, struct ucred *active_cred,
 	AUDIT_ARG_VNODE1(vp);
 	VOP_UNLOCK(vp);
 #endif
-#ifdef UNVEIL_SUPPORT
-	if (unveil_active(td))
-		unveil_ops->tracker_push_file(td, fp);
-#endif
 	return (setfmode(td, active_cred, vp, mode));
 }
 
@@ -2448,10 +2444,6 @@ vn_chown(struct file *fp, uid_t uid, gid_t gid, struct ucred *active_cred,
 	vn_lock(vp, LK_SHARED | LK_RETRY);
 	AUDIT_ARG_VNODE1(vp);
 	VOP_UNLOCK(vp);
-#endif
-#ifdef UNVEIL_SUPPORT
-	if (unveil_active(td))
-		unveil_ops->tracker_push_file(td, fp);
 #endif
 	return (setfown(td, active_cred, vp, uid, gid));
 }

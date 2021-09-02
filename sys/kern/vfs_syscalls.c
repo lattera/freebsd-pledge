@@ -4332,10 +4332,6 @@ getvnode_path(struct thread *td, int fd, cap_rights_t *rightsp,
 		return (EINVAL);
 	}
 
-#ifdef UNVEIL_SUPPORT
-	if (unveil_active(td))
-		unveil_ops->tracker_push_file(td, fp);
-#endif
 	*fpp = fp;
 	return (0);
 }
