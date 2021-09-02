@@ -220,6 +220,7 @@ int	cache_fplookup(struct nameidata *ndp, enum cache_fpl_status *status,
 #define	NI_LCF_CAP_DOTDOT	0x0002	/* ".." in strictrelative case */
 #define	NI_LCF_UNVEIL_TRAVERSE	0x0020	/* do unveil checks */
 #define	NI_LCF_UNVEIL_BYPASSED	0x0040	/* pretend that unveil checks passed */
+#define	NI_LCF_UNVEIL_REUSEFILL	0x0080	/* tracker entry already filled */
 
 /*
  * Initialization of a nameidata structure.

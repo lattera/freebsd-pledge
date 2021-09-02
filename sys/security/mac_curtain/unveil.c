@@ -393,6 +393,14 @@ unveil_tracker_find(struct thread *td, struct vnode *vp)
 	return (UPERM_NONE);
 }
 
+static size_t
+unveil_tracker_last(struct thread *td)
+{
+	struct unveil_tracker *track;
+	track = td->td_unveil_tracker;
+	return ((track->fill - 1) % UNVEIL_TRACKER_ENTRIES_COUNT);
+}
+
 static unveil_perms
 unveil_tracker_get(struct thread *td, size_t i)
 {
@@ -761,7 +769,8 @@ unveil_traverse_track(struct thread *td, struct unveil_traversal *trav, struct v
 }
 
 static void
-unveil_traverse_begin(struct thread *td, struct unveil_traversal *trav, bool bypass)
+unveil_traverse_begin(struct thread *td, struct unveil_traversal *trav,
+    bool bypass, bool reuse)
 {
 	struct unveil_base *base;
 	if (!(base = unveil_proc_get_base(td->td_proc, false)))
@@ -775,7 +784,8 @@ unveil_traverse_begin(struct thread *td, struct unveil_traversal *trav, bool byp
 		sx_sunlock(&base->sx);
 	}
 	trav->save = NULL;
-	trav->fill = unveil_tracker_push(td, NULL, UPERM_NONE);
+	trav->fill = reuse ? unveil_tracker_last(td)
+	                   : unveil_tracker_push(td, NULL, UPERM_NONE);
 }
 
 static void

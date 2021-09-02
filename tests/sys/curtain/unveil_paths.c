@@ -573,6 +573,33 @@ ATF_TC_BODY(conceal_path, tc)
 }
 
 
+ATF_TC_WITHOUT_HEAD(linkat_both_fds);
+ATF_TC_BODY(linkat_both_fds, tc)
+{
+	int fd1, fd2;
+	ATF_REQUIRE(try_mkdir("a") >= 0);
+	ATF_REQUIRE(try_mkdir("b") >= 0);
+	ATF_REQUIRE(try_creat("a/f") >= 0);
+	ATF_REQUIRE(unveil(".", "rwcax") >= 0);
+	ATF_REQUIRE((fd1 = open("a", O_RDONLY)) >= 0);
+	ATF_REQUIRE((fd2 = open("b", O_RDONLY)) >= 0);
+	ATF_CHECK(linkat(fd1, "f", fd2, "f", 0) >= 0);
+}
+
+ATF_TC_WITHOUT_HEAD(renameat_both_fds);
+ATF_TC_BODY(renameat_both_fds, tc)
+{
+	int fd1, fd2;
+	ATF_REQUIRE(try_mkdir("a") >= 0);
+	ATF_REQUIRE(try_mkdir("b") >= 0);
+	ATF_REQUIRE(try_creat("a/f") >= 0);
+	ATF_REQUIRE(unveil(".", "rwcax") >= 0);
+	ATF_REQUIRE((fd1 = open("a", O_RDONLY)) >= 0);
+	ATF_REQUIRE((fd2 = open("b", O_RDONLY)) >= 0);
+	ATF_CHECK(renameat(fd1, "f", fd2, "f") >= 0);
+}
+
+
 ATF_TP_ADD_TCS(tp)
 {
 	ATF_TP_ADD_TC(tp, unveil_one_i);
@@ -605,5 +632,7 @@ ATF_TP_ADD_TCS(tp)
 	ATF_TP_ADD_TC(tp, unveil_perm_drop);
 	ATF_TP_ADD_TC(tp, unveil_perm_raise);
 	ATF_TP_ADD_TC(tp, conceal_path);
+	ATF_TP_ADD_TC(tp, linkat_both_fds);
+	ATF_TP_ADD_TC(tp, renameat_both_fds);
 	return (atf_no_error());
 }

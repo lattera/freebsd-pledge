@@ -136,7 +136,8 @@ void unveil_lockdown_fd(struct thread *);
 struct unveil_traversal;
 
 struct unveil_ops {
-	void (*traverse_begin)(struct thread *, struct unveil_traversal *, bool bypass);
+	void (*traverse_begin)(struct thread *, struct unveil_traversal *,
+	    bool bypass, bool reuse);
 	int (*traverse_start)(struct thread *, struct unveil_traversal *,
 	    struct vnode *);
 	void (*traverse_component)(struct thread *, struct unveil_traversal *,

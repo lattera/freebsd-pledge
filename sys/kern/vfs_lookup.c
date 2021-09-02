@@ -387,16 +387,15 @@ namei_setup(struct nameidata *ndp, struct vnode **dpp, struct pwd **pwdp)
 				} else if (dfp->f_vnode == NULL) {
 					error = ENOTDIR;
 				} else {
-#ifdef UNVEIL_SUPPORT
-					if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE &&
-					    cnp->cn_flags & EMPTYPATH)
-						unveil_ops->tracker_push_file(td, dfp);
-#endif
 					*dpp = dfp->f_vnode;
 					vref(*dpp);
 
 					if ((dfp->f_flag & FSEARCH) != 0)
 						cnp->cn_flags |= NOEXECCHECK;
+#ifdef UNVEIL_SUPPORT
+					/* Reuse fget_cap()'s tracker slot. */
+					ndp->ni_lcf |= NI_LCF_UNVEIL_REUSEFILL;
+#endif
 				}
 				fdrop(dfp, td);
 			}
@@ -676,7 +675,8 @@ namei(struct nameidata *ndp)
 	if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE) {
 		if (!ndp->ni_unveil)
 			unveil_ops->traverse_begin(td, (ndp->ni_unveil = &utrav),
-			    ndp->ni_lcf & NI_LCF_UNVEIL_BYPASSED);
+			    ndp->ni_lcf & NI_LCF_UNVEIL_BYPASSED,
+			    ndp->ni_lcf & NI_LCF_UNVEIL_REUSEFILL);
 		error = unveil_ops->traverse_start(td, ndp->ni_unveil, dp);
 		if (error != 0) {
 			if (ndp->ni_unveil == &utrav)
