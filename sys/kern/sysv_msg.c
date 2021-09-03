@@ -742,6 +742,8 @@ sys_msgget(struct thread *td, struct msgget_args *uap)
 		msqkptr->u.msg_rtime = 0;
 		msqkptr->u.msg_ctime = time_second;
 #ifdef MAC
+		if (!msqkptr->label) /* deal with late loaded MAC modules */
+			mac_sysvmsq_init(msqkptr);
 		mac_sysvmsq_create(cred, msqkptr);
 #endif
 		AUDIT_ARG_SVIPC_PERM(&msqkptr->u.msg_perm);

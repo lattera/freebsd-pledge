@@ -1841,6 +1841,87 @@ curtain_posixsem_check_open_unlink(struct ucred *cr,
 }
 
 
+static void
+curtain_sysvshm_create(struct ucred *cr,
+    struct shmid_kernel *shm, struct label *shmlabel)
+{
+	curtain_copy_label(cr->cr_label, shmlabel);
+}
+
+static int
+curtain_sysvshm_check_something(struct ucred *cr,
+    struct shmid_kernel *shm, struct label *shmlabel, int something)
+{
+	if (!curtain_visible(CRED_SLOT(cr), SLOT(shmlabel), false))
+		return (ENOENT);
+	return (0);
+}
+
+
+
+static void
+curtain_sysvsem_create(struct ucred *cr,
+    struct semid_kernel *sem, struct label *semlabel)
+{
+	curtain_copy_label(cr->cr_label, semlabel);
+}
+
+static int
+curtain_sysvsem_check_semctl(struct ucred *cr,
+    struct semid_kernel *sem, struct label *semlabel,
+    int cmd)
+{
+	if (!curtain_visible(CRED_SLOT(cr), SLOT(semlabel), false))
+		return (ENOENT);
+	return (0);
+}
+
+static int
+curtain_sysvsem_check_semget(struct ucred *cr,
+    struct semid_kernel *sem, struct label *semlabel)
+{
+	if (!curtain_visible(CRED_SLOT(cr), SLOT(semlabel), false))
+		return (ENOENT);
+	return (0);
+}
+
+static int
+curtain_sysvsem_check_semop(struct ucred *cr,
+    struct semid_kernel *sem, struct label *semlabel,
+    size_t accesstype)
+{
+	if (!curtain_visible(CRED_SLOT(cr), SLOT(semlabel), false))
+		return (ENOENT);
+	return (0);
+}
+
+
+static void
+curtain_sysvmsq_create(struct ucred *cr,
+    struct msqid_kernel *msq, struct label *msqlabel)
+{
+	curtain_copy_label(cr->cr_label, msqlabel);
+}
+
+static int
+curtain_sysvmsq_check_1(struct ucred *cr,
+    struct msqid_kernel *msq, struct label *msqlabel)
+{
+	if (!curtain_visible(CRED_SLOT(cr), SLOT(msqlabel), false))
+		return (ENOENT);
+	return (0);
+}
+
+static int
+curtain_sysvmsq_check_2(struct ucred *cr,
+    struct msqid_kernel *msq, struct label *msqlabel, int something)
+{
+	if (!curtain_visible(CRED_SLOT(cr), SLOT(msqlabel), false))
+		return (ENOENT);
+	return (0);
+}
+
+
 static int
 curtain_generic_ipc_name_prefix(struct ucred *cr, char **prefix, char *end)
 {
@@ -2134,13 +2215,16 @@ static struct mac_policy_ops curtain_policy_ops = {
 	.mpo_cred_copy_label = curtain_copy_label,
 	.mpo_cred_destroy_label = curtain_destroy_label,
 	.mpo_cred_check_visible = curtain_cred_check_visible,
+
 	.mpo_proc_check_signal = curtain_proc_check_signal,
 	.mpo_proc_check_sched = curtain_proc_check_sched,
 	.mpo_proc_check_debug = curtain_proc_check_debug,
+
 	.mpo_socket_check_create = curtain_socket_check_create,
 	.mpo_socket_check_connect = curtain_socket_check_connect,
 	.mpo_socket_check_setsockopt = curtain_socket_check_sockopt,
 	.mpo_socket_check_getsockopt = curtain_socket_check_sockopt,
+
 	.mpo_vnode_check_access = curtain_vnode_check_open,
 	.mpo_vnode_check_open = curtain_vnode_check_open,
 	.mpo_vnode_check_read = curtain_vnode_check_read,
@@ -2169,21 +2253,52 @@ static struct mac_policy_ops curtain_policy_ops = {
 	.mpo_vnode_check_relabel = curtain_vnode_check_relabel,
 	.mpo_vnode_check_exec = curtain_vnode_check_exec,
 	.mpo_vnode_check_revoke = curtain_vnode_check_revoke,
+
 	.mpo_posixshm_init_label = curtain_init_label,
 	.mpo_posixshm_destroy_label = curtain_destroy_label,
 	.mpo_posixshm_create = curtain_posixshm_create,
 	.mpo_posixshm_check_open = curtain_posixshm_check_open,
 	.mpo_posixshm_check_unlink = curtain_posixshm_check_unlink,
+
 	.mpo_posixsem_init_label = curtain_init_label,
 	.mpo_posixsem_destroy_label = curtain_destroy_label,
 	.mpo_posixsem_create = curtain_posixsem_create,
 	.mpo_posixsem_check_open = curtain_posixsem_check_open_unlink,
 	.mpo_posixsem_check_unlink = curtain_posixsem_check_open_unlink,
+
+	.mpo_sysvshm_init_label = curtain_init_label,
+	.mpo_sysvshm_cleanup = curtain_destroy_label,
+	.mpo_sysvshm_destroy_label = curtain_destroy_label,
+	.mpo_sysvshm_create = curtain_sysvshm_create,
+	.mpo_sysvshm_check_shmat = curtain_sysvshm_check_something,
+	.mpo_sysvshm_check_shmctl = curtain_sysvshm_check_something,
+	.mpo_sysvshm_check_shmget = curtain_sysvshm_check_something,
+
+	.mpo_sysvsem_init_label = curtain_init_label,
+	.mpo_sysvsem_cleanup = curtain_destroy_label,
+	.mpo_sysvsem_destroy_label = curtain_destroy_label,
+	.mpo_sysvsem_create = curtain_sysvsem_create,
+	.mpo_sysvsem_check_semctl = curtain_sysvsem_check_semctl,
+	.mpo_sysvsem_check_semget = curtain_sysvsem_check_semget,
+	.mpo_sysvsem_check_semop = curtain_sysvsem_check_semop,
+
+	.mpo_sysvmsq_init_label = curtain_init_label,
+	.mpo_sysvmsq_cleanup = curtain_destroy_label,
+	.mpo_sysvmsq_destroy_label = curtain_destroy_label,
+	.mpo_sysvmsq_create = curtain_sysvmsq_create,
+	.mpo_sysvmsq_check_msqctl = curtain_sysvmsq_check_2,
+	.mpo_sysvmsq_check_msqget = curtain_sysvmsq_check_1,
+	.mpo_sysvmsq_check_msqrcv = curtain_sysvmsq_check_1,
+	.mpo_sysvmsq_check_msqsnd = curtain_sysvmsq_check_1,
+
 	.mpo_generic_ipc_name_prefix = curtain_generic_ipc_name_prefix,
 	.mpo_generic_check_ioctl = curtain_generic_check_ioctl,
 	.mpo_generic_check_vm_prot = curtain_generic_check_vm_prot,
+
 	.mpo_system_check_sysctl = curtain_system_check_sysctl,
+
 	.mpo_priv_check = curtain_priv_check,
+
 	.mpo_sysfil_check = curtain_sysfil_check,
 	.mpo_sysfil_exec_restricted = curtain_sysfil_exec_restricted,
 	.mpo_sysfil_need_exec_adjust = curtain_sysfil_need_exec_adjust,

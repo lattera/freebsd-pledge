@@ -761,6 +761,8 @@ shmget_allocate_segment(struct thread *td, key_t key, size_t size, int mode)
 	shmseg->u.shm_lpid = shmseg->u.shm_nattch = 0;
 	shmseg->u.shm_atime = shmseg->u.shm_dtime = 0;
 #ifdef MAC
+	if (!shmseg->label) /* deal with late loaded MAC modules */
+		mac_sysvshm_init(shmseg);
 	mac_sysvshm_create(cred, shmseg);
 #endif
 	shmseg->u.shm_ctime = time_second;
