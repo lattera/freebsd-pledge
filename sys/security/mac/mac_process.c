@@ -464,6 +464,16 @@ mac_generic_check_vm_prot(struct ucred *cred, struct file *fp, vm_prot_t prot)
 }
 
 int
+mac_generic_ipc_name_prefix(struct ucred *cred, char **prefix, char *end)
+{
+	int error;
+
+	MAC_POLICY_CHECK(generic_ipc_name_prefix, cred, prefix, end);
+
+	return (error);
+}
+
+int
 mac_sysfil_check(struct ucred *cred, int sf)
 {
 	int error;

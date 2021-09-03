@@ -596,31 +596,23 @@ shm_close(struct file *fp, struct thread *td)
 static int
 shm_copyin_path(struct thread *td, const char *userpath_in, char **path_out) {
 	int error;
-	char *path;
+	char *path, *path_prefix;
 	const char *pr_path;
-	size_t prefix, n;
 
 	path = malloc(MAXPATHLEN, M_SHMFD, M_WAITOK);
 	pr_path = td->td_ucred->cr_prison->pr_path;
 
 	/* Construct a full pathname for jailed callers. */
-	prefix = 0;
-	error = ENAMETOOLONG;
-	if (strcmp(pr_path, "/") != 0) {
-		n = strlcpy(path + prefix, pr_path, MAXPATHLEN - prefix);
-		if (n >= MAXPATHLEN - prefix)
-			goto out;
-		prefix += n;
-	}
-	if (sysfil_probe(td, SYSFIL_NOTMPIPC) != 0) {
-		n = strlcpy(path + prefix, "/tmp", MAXPATHLEN - prefix);
-		if (n >= MAXPATHLEN - prefix)
-			goto out;
-		prefix += n;
-	}
-
-	error = copyinstr(userpath_in, path + prefix,
-	    MAXPATHLEN - prefix, NULL);
+	path_prefix = strcmp(pr_path, "/") == 0 ?
+	    path : path + strlcpy(path, pr_path, MAXPATHLEN);
+#ifdef MAC
+	error = mac_generic_ipc_name_prefix(td->td_ucred,
+	    &path_prefix, path + MAXPATHLEN);
+	if (error)
+		goto out;
+#endif
+	error = copyinstr(userpath_in, path_prefix,
+	    path + MAXPATHLEN - path_prefix, NULL);
 	if (error != 0)
 		goto out;
 
@@ -630,7 +622,7 @@ shm_copyin_path(struct thread *td, const char *userpath_in, char **path_out) {
 #endif
 
 	/* Require paths to start with a '/' character. */
-	if (path[prefix] != '/') {
+	if (*path_prefix != '/') {
 		error = EINVAL;
 		goto out;
 	}

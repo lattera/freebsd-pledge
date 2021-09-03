@@ -468,9 +468,8 @@ ksem_create(struct thread *td, const char *name, semid_t *semidp, mode_t mode,
 	struct pwddesc *pdp;
 	struct ksem *ks;
 	struct file *fp;
-	char *path;
+	char *path, *path_prefix;
 	const char *pr_path;
-	size_t pr_pathlen;
 	Fnv32_t fnv;
 	int error, fd;
 
@@ -514,19 +513,23 @@ ksem_create(struct thread *td, const char *name, semid_t *semidp, mode_t mode,
 		pr_path = td->td_ucred->cr_prison->pr_path;
 
 		/* Construct a full pathname for jailed callers. */
-		pr_pathlen = strcmp(pr_path, "/") == 0 ? 0
-		    : strlcpy(path, pr_path, MAXPATHLEN);
-		error = copyinstr(name, path + pr_pathlen,
-		    MAXPATHLEN - pr_pathlen, NULL);
+		path_prefix = strcmp(pr_path, "/") == 0 ?
+		    path : path + strlcpy(path, pr_path, MAXPATHLEN);
+#ifdef MAC
+		error = mac_generic_ipc_name_prefix(td->td_ucred,
+		    &path_prefix, path + MAXPATHLEN);
+		if (error)
+			goto err;
+#endif
+		error = copyinstr(name, path_prefix,
+		    path + MAXPATHLEN - path_prefix, NULL);
+		if (error)
+			goto err;
 
 		/* Require paths to start with a '/' character. */
-		if (error == 0 && path[pr_pathlen] != '/')
+		if (*path_prefix != '/') {
 			error = EINVAL;
-		if (error) {
-			fdclose(td, fp, fd);
-			fdrop(fp, td);
-			free(path, M_KSEM);
-			return (error);
+			goto err;
 		}
 
 		AUDIT_ARG_UPATH1_CANON(path);
@@ -586,6 +589,11 @@ ksem_create(struct thread *td, const char *name, semid_t *semidp, mode_t mode,
 	fdrop(fp, td);
 
 	return (0);
+err:
+	fdclose(td, fp, fd);
+	fdrop(fp, td);
+	free(path, M_KSEM);
+	return (error);
 }
 
 static int
@@ -656,21 +664,28 @@ struct ksem_unlink_args {
 int
 sys_ksem_unlink(struct thread *td, struct ksem_unlink_args *uap)
 {
-	char *path;
+	char *path, *path_prefix;
 	const char *pr_path;
-	size_t pr_pathlen;
 	Fnv32_t fnv;
 	int error;
 
 	path = malloc(MAXPATHLEN, M_TEMP, M_WAITOK);
 	pr_path = td->td_ucred->cr_prison->pr_path;
-	pr_pathlen = strcmp(pr_path, "/") == 0 ? 0
-	    : strlcpy(path, pr_path, MAXPATHLEN);
-	error = copyinstr(uap->name, path + pr_pathlen, MAXPATHLEN - pr_pathlen,
-	    NULL);
-	if (error) {
-		free(path, M_TEMP);
-		return (error);
+	path_prefix = strcmp(pr_path, "/") == 0 ?
+	    path : path + strlcpy(path, pr_path, MAXPATHLEN);
+#ifdef MAC
+	error = mac_generic_ipc_name_prefix(td->td_ucred,
+	    &path_prefix, path + MAXPATHLEN);
+	if (error)
+		goto out;
+#endif
+	error = copyinstr(uap->name, path_prefix,
+	    path + MAXPATHLEN - path_prefix, NULL);
+	if (error != 0)
+		goto out;
+	if (*path_prefix != '/') {
+		error = EINVAL;
+		goto out;
 	}
 
 	AUDIT_ARG_UPATH1_CANON(path);
@@ -678,6 +693,7 @@ sys_ksem_unlink(struct thread *td, struct ksem_unlink_args *uap)
 	sx_xlock(&ksem_dict_lock);
 	error = ksem_remove(path, fnv, td->td_ucred);
 	sx_xunlock(&ksem_dict_lock);
+out:
 	free(path, M_TEMP);
 
 	return (error);

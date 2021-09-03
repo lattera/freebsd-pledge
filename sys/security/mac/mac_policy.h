@@ -683,6 +683,9 @@ typedef int	(*mpo_generic_check_ioctl_t)(struct ucred *cred,
 typedef int	(*mpo_generic_check_vm_prot_t)(struct ucred *cred,
 		    struct file *file, vm_prot_t prot);
 
+typedef int	(*mpo_generic_ipc_name_prefix_t)(struct ucred *cred,
+		    char **prefix, char *end);
+
 typedef int	(*mpo_sysfil_check_t)(struct ucred *cred, int sf);
 typedef bool	(*mpo_sysfil_exec_restricted_t)(struct thread *td,
 		    struct ucred *cred);
@@ -991,6 +994,7 @@ struct mac_policy_ops {
 
 	mpo_generic_check_ioctl_t		mpo_generic_check_ioctl;
 	mpo_generic_check_vm_prot_t		mpo_generic_check_vm_prot;
+	mpo_generic_ipc_name_prefix_t		mpo_generic_ipc_name_prefix;
 
 	mpo_sysfil_check_t			mpo_sysfil_check;
 	mpo_sysfil_exec_restricted_t		mpo_sysfil_exec_restricted;

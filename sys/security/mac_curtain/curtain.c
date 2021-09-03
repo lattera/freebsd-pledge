@@ -1825,6 +1825,20 @@ curtain_posixshm_check_unlink(struct ucred *cr,
 
 
 static int
+curtain_generic_ipc_name_prefix(struct ucred *cr, char **prefix, char *end)
+{
+	static const char *const str = "/tmp";
+	if (sysfil_probe_cred(cr, SYSFIL_NOTMPIPC) != 0) {
+		size_t n;
+		n = strlcpy(*prefix, str, end - *prefix);
+		if (n >= end - *prefix)
+			return (ENAMETOOLONG);
+		*prefix += n;
+	}
+	return (0);
+}
+
+static int
 curtain_generic_check_ioctl(struct ucred *cr, struct file *fp, u_long com, void *data)
 {
 	enum curtain_level lvl;
@@ -2143,6 +2157,7 @@ static struct mac_policy_ops curtain_policy_ops = {
 	.mpo_posixshm_create = curtain_posixshm_create,
 	.mpo_posixshm_check_open = curtain_posixshm_check_open,
 	.mpo_posixshm_check_unlink = curtain_posixshm_check_unlink,
+	.mpo_generic_ipc_name_prefix = curtain_generic_ipc_name_prefix,
 	.mpo_generic_check_ioctl = curtain_generic_check_ioctl,
 	.mpo_generic_check_vm_prot = curtain_generic_check_vm_prot,
 	.mpo_system_check_sysctl = curtain_system_check_sysctl,
