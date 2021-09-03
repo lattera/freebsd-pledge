@@ -79,7 +79,7 @@
 #define	SYSFIL__UNUSED3		55
 #define	SYSFIL_REAP		56
 #define	SYSFIL_FFCLOCK		57
-#define	SYSFIL__UNUSED4		58
+#define	SYSFIL_AUDIT		58
 #define	SYSFIL__UNUSED5		59
 #define	SYSFIL__UNUSED6		60
 #define	SYSFIL__UNUSED7		61

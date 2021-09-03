@@ -2041,6 +2041,13 @@ curtain_priv_check(struct ucred *cr, int priv)
 	 * prison_priv_check()) with some extra conditions based on sysfils.
 	 */
 	switch (priv) {
+	case PRIV_AUDIT_CONTROL:
+	case PRIV_AUDIT_FAILSTOP:
+	case PRIV_AUDIT_GETAUDIT:
+	case PRIV_AUDIT_SETAUDIT:
+	case PRIV_AUDIT_SUBMIT:
+		sf = SYSFIL_AUDIT;
+		break;
 	case PRIV_CRED_SETUID:
 	case PRIV_CRED_SETEUID:
 	case PRIV_CRED_SETGID:

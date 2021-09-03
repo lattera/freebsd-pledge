@@ -501,15 +501,15 @@ struct sysent sysent[] = {
 	{ .sy_narg = AS(thr_suspend_args), .sy_call = (sy_call_t *)sys_thr_suspend, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_THREAD << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 442 = thr_suspend */
 	{ .sy_narg = AS(thr_wake_args), .sy_call = (sy_call_t *)sys_thr_wake, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_THREAD << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 443 = thr_wake */
 	{ .sy_narg = AS(kldunloadf_args), .sy_call = (sy_call_t *)sys_kldunloadf, .sy_auevent = AUE_MODUNLOAD, .sy_flags = 0, .sy_thrcnt = SY_THR_STATIC },	/* 444 = kldunloadf */
-	{ .sy_narg = AS(audit_args), .sy_call = (sy_call_t *)sys_audit, .sy_auevent = AUE_AUDIT, .sy_flags = 0, .sy_thrcnt = SY_THR_STATIC },	/* 445 = audit */
-	{ .sy_narg = AS(auditon_args), .sy_call = (sy_call_t *)sys_auditon, .sy_auevent = AUE_AUDITON, .sy_flags = 0, .sy_thrcnt = SY_THR_STATIC },	/* 446 = auditon */
-	{ .sy_narg = AS(getauid_args), .sy_call = (sy_call_t *)sys_getauid, .sy_auevent = AUE_GETAUID, .sy_flags = SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 447 = getauid */
-	{ .sy_narg = AS(setauid_args), .sy_call = (sy_call_t *)sys_setauid, .sy_auevent = AUE_SETAUID, .sy_flags = SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 448 = setauid */
-	{ .sy_narg = AS(getaudit_args), .sy_call = (sy_call_t *)sys_getaudit, .sy_auevent = AUE_GETAUDIT, .sy_flags = SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 449 = getaudit */
-	{ .sy_narg = AS(setaudit_args), .sy_call = (sy_call_t *)sys_setaudit, .sy_auevent = AUE_SETAUDIT, .sy_flags = SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 450 = setaudit */
-	{ .sy_narg = AS(getaudit_addr_args), .sy_call = (sy_call_t *)sys_getaudit_addr, .sy_auevent = AUE_GETAUDIT_ADDR, .sy_flags = SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 451 = getaudit_addr */
-	{ .sy_narg = AS(setaudit_addr_args), .sy_call = (sy_call_t *)sys_setaudit_addr, .sy_auevent = AUE_SETAUDIT_ADDR, .sy_flags = SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 452 = setaudit_addr */
-	{ .sy_narg = AS(auditctl_args), .sy_call = (sy_call_t *)sys_auditctl, .sy_auevent = AUE_AUDITCTL, .sy_flags = 0, .sy_thrcnt = SY_THR_STATIC },	/* 453 = auditctl */
+	{ .sy_narg = AS(audit_args), .sy_call = (sy_call_t *)sys_audit, .sy_auevent = AUE_AUDIT, .sy_flags = (SYSFIL_AUDIT << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 445 = audit */
+	{ .sy_narg = AS(auditon_args), .sy_call = (sy_call_t *)sys_auditon, .sy_auevent = AUE_AUDITON, .sy_flags = (SYSFIL_AUDIT << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 446 = auditon */
+	{ .sy_narg = AS(getauid_args), .sy_call = (sy_call_t *)sys_getauid, .sy_auevent = AUE_GETAUID, .sy_flags = (SYSFIL_AUDIT << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 447 = getauid */
+	{ .sy_narg = AS(setauid_args), .sy_call = (sy_call_t *)sys_setauid, .sy_auevent = AUE_SETAUID, .sy_flags = (SYSFIL_AUDIT << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 448 = setauid */
+	{ .sy_narg = AS(getaudit_args), .sy_call = (sy_call_t *)sys_getaudit, .sy_auevent = AUE_GETAUDIT, .sy_flags = (SYSFIL_AUDIT << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 449 = getaudit */
+	{ .sy_narg = AS(setaudit_args), .sy_call = (sy_call_t *)sys_setaudit, .sy_auevent = AUE_SETAUDIT, .sy_flags = (SYSFIL_AUDIT << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 450 = setaudit */
+	{ .sy_narg = AS(getaudit_addr_args), .sy_call = (sy_call_t *)sys_getaudit_addr, .sy_auevent = AUE_GETAUDIT_ADDR, .sy_flags = (SYSFIL_AUDIT << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 451 = getaudit_addr */
+	{ .sy_narg = AS(setaudit_addr_args), .sy_call = (sy_call_t *)sys_setaudit_addr, .sy_auevent = AUE_SETAUDIT_ADDR, .sy_flags = (SYSFIL_AUDIT << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 452 = setaudit_addr */
+	{ .sy_narg = AS(auditctl_args), .sy_call = (sy_call_t *)sys_auditctl, .sy_auevent = AUE_AUDITCTL, .sy_flags = (SYSFIL_AUDIT << SYF_SYSFIL_SHIFT), .sy_thrcnt = SY_THR_STATIC },	/* 453 = auditctl */
 	{ .sy_narg = AS(_umtx_op_args), .sy_call = (sy_call_t *)sys__umtx_op, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 454 = _umtx_op */
 	{ .sy_narg = AS(thr_new_args), .sy_call = (sy_call_t *)sys_thr_new, .sy_auevent = AUE_THR_NEW, .sy_flags = (SYSFIL_THREAD << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 455 = thr_new */
 	{ .sy_narg = AS(sigqueue_args), .sy_call = (sy_call_t *)sys_sigqueue, .sy_auevent = AUE_NULL, .sy_flags = (SYSFIL_STDIO << SYF_SYSFIL_SHIFT) | SYF_CAPENABLED, .sy_thrcnt = SY_THR_STATIC },	/* 456 = sigqueue */

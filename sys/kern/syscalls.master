@@ -2350,52 +2350,52 @@
 		    int flags
 		);
 	}
-445	AUE_AUDIT	STD {
+445	AUE_AUDIT	STD|SYSFIL_AUDIT {
 		int audit(
 		    _In_reads_bytes_(length) const void *record,
 		    u_int length
 		);
 	}
-446	AUE_AUDITON	STD {
+446	AUE_AUDITON	STD|SYSFIL_AUDIT {
 		int auditon(
 		    int cmd,
 		    _In_opt_ void *data,
 		    u_int length
 		);
 	}
-447	AUE_GETAUID	STD {
+447	AUE_GETAUID	STD|SYSFIL_AUDIT {
 		int getauid(
 		    _Out_ uid_t *auid
 		);
 	}
-448	AUE_SETAUID	STD {
+448	AUE_SETAUID	STD|SYSFIL_AUDIT {
 		int setauid(
 		    _In_ uid_t *auid
 		);
 	}
-449	AUE_GETAUDIT	STD {
+449	AUE_GETAUDIT	STD|SYSFIL_AUDIT {
 		int getaudit(
 		    _Out_ struct auditinfo *auditinfo
 		);
 	}
-450	AUE_SETAUDIT	STD {
+450	AUE_SETAUDIT	STD|SYSFIL_AUDIT {
 		int setaudit(
 		    _In_ struct auditinfo *auditinfo
 		);
 	}
-451	AUE_GETAUDIT_ADDR	STD {
+451	AUE_GETAUDIT_ADDR	STD|SYSFIL_AUDIT {
 		int getaudit_addr(
 		    _Out_writes_bytes_(length) struct auditinfo_addr *auditinfo_addr,
 		    u_int length
 		);
 	}
-452	AUE_SETAUDIT_ADDR	STD {
+452	AUE_SETAUDIT_ADDR	STD|SYSFIL_AUDIT {
 		int setaudit_addr(
 		    _In_reads_bytes_(length) struct auditinfo_addr *auditinfo_addr,
 		    u_int length
 		);
 	}
-453	AUE_AUDITCTL	STD {
+453	AUE_AUDITCTL	STD|SYSFIL_AUDIT {
 		int auditctl(
 		    _In_z_ const char *path
 		);
