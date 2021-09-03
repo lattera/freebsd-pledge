@@ -1798,6 +1798,7 @@ curtain_vnode_check_exec(struct ucred *cr,
 	return (0);
 }
 
+
 static void curtain_posixshm_create(struct ucred *cr,
     struct shmfd *shmfd, struct label *shmlabel)
 {
@@ -1819,6 +1820,22 @@ curtain_posixshm_check_unlink(struct ucred *cr,
     struct shmfd *shmfd, struct label *shmlabel)
 {
 	if (!curtain_visible(CRED_SLOT(cr), SLOT(shmlabel), false))
+		return (ENOENT);
+	return (0);
+}
+
+
+static void curtain_posixsem_create(struct ucred *cr,
+    struct ksem *sem, struct label *semlabel)
+{
+	curtain_copy_label(cr->cr_label, semlabel);
+}
+
+static int
+curtain_posixsem_check_open_unlink(struct ucred *cr,
+    struct ksem *sem, struct label *semlabel)
+{
+	if (!curtain_visible(CRED_SLOT(cr), SLOT(semlabel), false))
 		return (ENOENT);
 	return (0);
 }
@@ -2157,6 +2174,11 @@ static struct mac_policy_ops curtain_policy_ops = {
 	.mpo_posixshm_create = curtain_posixshm_create,
 	.mpo_posixshm_check_open = curtain_posixshm_check_open,
 	.mpo_posixshm_check_unlink = curtain_posixshm_check_unlink,
+	.mpo_posixsem_init_label = curtain_init_label,
+	.mpo_posixsem_destroy_label = curtain_destroy_label,
+	.mpo_posixsem_create = curtain_posixsem_create,
+	.mpo_posixsem_check_open = curtain_posixsem_check_open_unlink,
+	.mpo_posixsem_check_unlink = curtain_posixsem_check_open_unlink,
 	.mpo_generic_ipc_name_prefix = curtain_generic_ipc_name_prefix,
 	.mpo_generic_check_ioctl = curtain_generic_check_ioctl,
 	.mpo_generic_check_vm_prot = curtain_generic_check_vm_prot,
