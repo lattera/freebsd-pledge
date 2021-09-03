@@ -225,7 +225,7 @@
 25	AUE_GETEUID	STD|SYSFIL_STDIO {
 		uid_t geteuid(void);
 	}
-26	AUE_PTRACE	STD {
+26	AUE_PTRACE	STD|SYSFIL_DEBUG {
 		int ptrace(
 		    int req,
 		    pid_t pid,
@@ -331,7 +331,7 @@
 43	AUE_GETEGID	STD|SYSFIL_STDIO {
 		gid_t getegid(void);
 	}
-44	AUE_PROFILE	STD {
+44	AUE_PROFILE	STD|SYSFIL_DEBUG {
 		int profil(
 		    _Out_writes_bytes_(size) char *samples,
 		    size_t size,
@@ -339,7 +339,7 @@
 		    u_int scale
 		);
 	}
-45	AUE_KTRACE	STD {
+45	AUE_KTRACE	STD|SYSFIL_DEBUG {
 		int ktrace(
 		    _In_z_ const char *fname,
 		    int ops,

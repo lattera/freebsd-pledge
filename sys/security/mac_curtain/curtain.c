@@ -1254,7 +1254,7 @@ static int
 curtain_proc_check_debug(struct ucred *cr, struct proc *p)
 {
 	int error;
-	if ((error = sysfil_check_cred(cr, SYSFIL_DEFAULT)))
+	if ((error = sysfil_check_cred(cr, SYSFIL_DEBUG)))
 		return (error);
 	if (!curtain_visible(CRED_SLOT(cr), CRED_SLOT(p->p_ucred), false))
 		return (ESRCH);
@@ -2057,6 +2057,11 @@ curtain_priv_check(struct ucred *cr, int priv)
 	case PRIV_SEEOTHERGIDS:
 	case PRIV_SEEOTHERUIDS:
 		sf = SYSFIL_PS;
+		break;
+	case PRIV_DEBUG_DIFFCRED:
+	case PRIV_DEBUG_SUGID:
+	case PRIV_DEBUG_UNPRIV:
+		sf = SYSFIL_DEBUG;
 		break;
 	case PRIV_PROC_LIMIT:
 	case PRIV_PROC_SETRLIMIT:

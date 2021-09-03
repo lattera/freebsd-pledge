@@ -1695,6 +1695,8 @@ p_candebug(struct thread *td, struct proc *p)
 
 	KASSERT(td == curthread, ("%s: td not curthread", __func__));
 	PROC_LOCK_ASSERT(p, MA_OWNED);
+	if ((error = sysfil_check(td, SYSFIL_DEBUG)))
+		return (error);
 	if ((error = priv_check(td, PRIV_DEBUG_UNPRIV)))
 		return (error);
 	if (td->td_proc == p)
