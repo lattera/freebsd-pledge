@@ -84,9 +84,9 @@ STATNODE_COUNTER(long_probes, curtain_stats_long_probes, "");
 CTASSERT(CURTAINCTL_MAX_ITEMS <= (curtain_index)-1);
 
 static int __read_mostly curtain_slot;
-#define	SLOT(l) ((struct curtain *)mac_label_get((l), curtain_slot))
+#define	SLOT(l) ((l) ? (struct curtain *)mac_label_get((l), curtain_slot) : NULL)
 #define	SLOT_SET(l, val) mac_label_set((l), curtain_slot, (uintptr_t)(val))
-#define	CRED_SLOT(cr) ((cr)->cr_label ? SLOT((cr)->cr_label) : NULL)
+#define	CRED_SLOT(cr) SLOT((cr)->cr_label)
 
 
 static inline void
@@ -1187,14 +1187,14 @@ curtain_cred_sysfil_level(const struct ucred *cr, int sf)
 
 
 static void
-curtain_cred_init_label(struct label *label)
+curtain_init_label(struct label *label)
 {
 	if (label)
 		SLOT_SET(label, NULL);
 }
 
 static void
-curtain_cred_copy_label(struct label *src, struct label *dst)
+curtain_copy_label(struct label *src, struct label *dst)
 {
 	if (dst) {
 		if (SLOT(dst))
@@ -1207,7 +1207,7 @@ curtain_cred_copy_label(struct label *src, struct label *dst)
 }
 
 static void
-curtain_cred_destroy_label(struct label *label)
+curtain_destroy_label(struct label *label)
 {
 	if (label) {
 		if (SLOT(label))
@@ -1798,6 +1798,31 @@ curtain_vnode_check_exec(struct ucred *cr,
 	return (0);
 }
 
+static void curtain_posixshm_create(struct ucred *cr,
+    struct shmfd *shmfd, struct label *shmlabel)
+{
+	curtain_copy_label(cr->cr_label, shmlabel);
+}
+
+static int
+curtain_posixshm_check_open(struct ucred *cr,
+    struct shmfd *shmfd, struct label *shmlabel,
+    accmode_t accmode)
+{
+	if (!curtain_visible(CRED_SLOT(cr), SLOT(shmlabel), false))
+		return (ENOENT);
+	return (0);
+}
+
+static int
+curtain_posixshm_check_unlink(struct ucred *cr,
+    struct shmfd *shmfd, struct label *shmlabel)
+{
+	if (!curtain_visible(CRED_SLOT(cr), SLOT(shmlabel), false))
+		return (ENOENT);
+	return (0);
+}
+
 
 static int
 curtain_generic_check_ioctl(struct ucred *cr, struct file *fp, u_long com, void *data)
@@ -2074,9 +2099,9 @@ static int curtain_sysfil_update_mask(struct ucred *cr, const sysfilset_t *mask_
 
 
 static struct mac_policy_ops curtain_policy_ops = {
-	.mpo_cred_init_label = curtain_cred_init_label,
-	.mpo_cred_copy_label = curtain_cred_copy_label,
-	.mpo_cred_destroy_label = curtain_cred_destroy_label,
+	.mpo_cred_init_label = curtain_init_label,
+	.mpo_cred_copy_label = curtain_copy_label,
+	.mpo_cred_destroy_label = curtain_destroy_label,
 	.mpo_cred_check_visible = curtain_cred_check_visible,
 	.mpo_proc_check_signal = curtain_proc_check_signal,
 	.mpo_proc_check_sched = curtain_proc_check_sched,
@@ -2113,6 +2138,11 @@ static struct mac_policy_ops curtain_policy_ops = {
 	.mpo_vnode_check_relabel = curtain_vnode_check_relabel,
 	.mpo_vnode_check_exec = curtain_vnode_check_exec,
 	.mpo_vnode_check_revoke = curtain_vnode_check_revoke,
+	.mpo_posixshm_init_label = curtain_init_label,
+	.mpo_posixshm_destroy_label = curtain_destroy_label,
+	.mpo_posixshm_create = curtain_posixshm_create,
+	.mpo_posixshm_check_open = curtain_posixshm_check_open,
+	.mpo_posixshm_check_unlink = curtain_posixshm_check_unlink,
 	.mpo_generic_check_ioctl = curtain_generic_check_ioctl,
 	.mpo_generic_check_vm_prot = curtain_generic_check_vm_prot,
 	.mpo_system_check_sysctl = curtain_system_check_sysctl,
