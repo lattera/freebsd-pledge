@@ -83,6 +83,8 @@ STATNODE_COUNTER(long_probes, curtain_stats_long_probes, "");
 
 CTASSERT(CURTAINCTL_MAX_ITEMS <= (curtain_index)-1);
 
+static volatile uint64_t curtain_serial = 1;
+
 static int __read_mostly curtain_slot;
 #define	SLOT(l) ((l) ? (struct curtain *)mac_label_get((l), curtain_slot) : NULL)
 #define	SLOT_SET(l, val) mac_label_set((l), curtain_slot, (uintptr_t)(val))
@@ -138,6 +140,7 @@ curtain_init(struct curtain *ct, size_t nslots)
 		.ct_modulo = nslots,
 		.ct_cellar = nslots,
 	};
+	ct->ct_serial = atomic_fetchadd_64(&curtain_serial, 1);
 	for (curtain_index i = 0; i < nslots; i++)
 		ct->ct_slots[i].type = 0;
 }
@@ -495,6 +498,7 @@ curtain_dup_compact(const struct curtain *src)
 	dst->ct_overflowed = src->ct_overflowed;
 	if ((dst->ct_cache_valid = src->ct_cache_valid))
 		dst->ct_cached = src->ct_cached;
+	dst->ct_serial = src->ct_serial;
 	dst->ct_barrier = src->ct_barrier;
 	dst->ct_barrier_on_exec = src->ct_barrier_on_exec;
 	memcpy(dst->ct_sysfils, src->ct_sysfils, sizeof dst->ct_sysfils);
@@ -1925,11 +1929,21 @@ curtain_sysvmsq_check_2(struct ucred *cr,
 static int
 curtain_generic_ipc_name_prefix(struct ucred *cr, char **prefix, char *end)
 {
-	static const char *const str = "/tmp";
 	if (sysfil_probe_cred(cr, SYSFIL_NOTMPIPC) != 0) {
-		size_t n;
-		n = strlcpy(*prefix, str, end - *prefix);
-		if (n >= end - *prefix)
+		struct curtain *ct;
+		size_t n, m;
+		m = end - *prefix;
+		ct = CRED_SLOT(cr);
+		while (ct && !ct->ct_barrier)
+			ct = ct->ct_parent;
+		if (ct) {
+			ssize_t r;
+			r = snprintf(*prefix, m,
+			    "/curtain/%ju", (uintmax_t)ct->ct_serial);
+			n = r > 0 ? r : 0;
+		} else
+			n = strlcpy(*prefix, "/curtain/tmp", m);
+		if (n >= m)
 			return (ENAMETOOLONG);
 		*prefix += n;
 	}

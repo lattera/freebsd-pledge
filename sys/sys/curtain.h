@@ -105,6 +105,7 @@ struct curtain {
 		bool is_restricted_on_self;
 		bool is_restricted_on_exec;
 	} ct_cached;
+	uint64_t ct_serial;
 	bool ct_barrier, ct_barrier_on_exec;
 	struct curtain_mode ct_sysfils[SYSFIL_COUNT];
 	struct curtain_item ct_slots[];
