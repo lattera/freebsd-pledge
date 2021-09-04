@@ -312,9 +312,18 @@ main(int argc, char *argv[])
 		case '!':
 			unsafe_level++;
 			break;
-		case 't':
-			curtain_config_tag_push(cfg, optarg);
+		case 't': {
+			char *p = optarg;
+			if (*p == '-') {
+				p++;
+				curtain_config_tag_block(cfg, p);
+			} else {
+				if (*p == '+')
+					p++;
+				curtain_config_tag_push(cfg, p);
+			}
 			break;
+		}
 		case 'p':
 			for (char *p = optarg; *p; p++)
 				if (*p == ',')

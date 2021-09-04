@@ -7,7 +7,7 @@
 
 struct curtain_config_tag {
 	struct curtain_config_tag *chain;
-	uint8_t dropped_level;
+	bool blocked;
 	char name[];
 };
 

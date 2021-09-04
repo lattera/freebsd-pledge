@@ -73,8 +73,7 @@ struct curtain_config;
 struct curtain_config { /* TODO: make private */
 	struct curtain_config_tag *tags_pending, *tags_current, *tags_visited;
 	const char *old_tmpdir;
-	uint8_t unsafe_level;
-	uint8_t config_level;
+	unsigned unsafe_level;
 	bool on_exec;
 	bool verbose;
 	bool x11, x11_trusted;
@@ -91,6 +90,14 @@ static inline struct curtain_config_tag *
 curtain_config_tag_push(struct curtain_config *cfg, const char *name)
 {
 	return (curtain_config_tag_push_mem(cfg, name, strlen(name)));
+}
+
+struct curtain_config_tag *curtain_config_tag_block_mem(struct curtain_config *, const char *buf, size_t len);
+
+static inline struct curtain_config_tag *
+curtain_config_tag_block(struct curtain_config *cfg, const char *name)
+{
+	return (curtain_config_tag_block_mem(cfg, name, strlen(name)));
 }
 
 void curtain_config_load_tags(struct curtain_config *);
