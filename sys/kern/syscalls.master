@@ -1442,7 +1442,7 @@
 		    int inherit
 		);
 	}
-251	AUE_RFORK	STD|SYSFIL_PROC {
+251	AUE_RFORK	STD|SYSFIL_RFORK {
 		int rfork(
 		    int flags
 		);
