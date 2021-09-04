@@ -23,8 +23,6 @@ auto_curtain_setup(const char *name)
 	curtain_config_tags_from_env(cfg);
 	curtain_config_tag_push(cfg, "_default");
 	curtain_config_tag_push(cfg, "_auto");
-	curtain_config_tag_push(cfg, "_prot_exec");
-	curtain_config_tag_push(cfg, "_network");
 	if (name)
 		curtain_config_tag_push(cfg, name);
 	if ((p = getenv("CURTAIN_AUTO_X11"))) {

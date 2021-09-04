@@ -242,7 +242,7 @@ preexec_cleanup(void)
 static void
 usage(void)
 {
-	fprintf(stderr, "usage: %s [-vfkgenaAXYWD] "
+	fprintf(stderr, "usage: %s [-vfkgnaAXYWD] "
 	    "[-t tag] [-p promises] [-u unveil ...] "
 	    "[-Ssl] cmd [arg ...]\n",
 	    getprogname());
@@ -264,8 +264,7 @@ main(int argc, char *argv[])
 	     login_shell = false,
 	     new_session = false,
 	     new_pgrp = false,
-	     no_network = false,
-	     no_protexec = false;
+	     no_network = false;
 	enum { X11_NONE, X11_UNTRUSTED, X11_TRUSTED } x11_mode = X11_NONE;
 	bool wayland = false;
 	bool dbus = false;
@@ -283,7 +282,7 @@ main(int argc, char *argv[])
 	curtain_enable((main_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 	curtain_enable((unveils_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 
-	while ((ch = getopt(argc, argv, "@:vfkgenaA!t:p:u:0:SslXYWD")) != -1)
+	while ((ch = getopt(argc, argv, "@:vfkgnaA!t:p:u:0:SslXYWD")) != -1)
 		switch (ch) {
 		case '@':
 			curtain_config_directive(cfg, optarg);
@@ -296,9 +295,6 @@ main(int argc, char *argv[])
 			break;
 		case 'g':
 			new_pgrp = true;
-			break;
-		case 'e':
-			no_protexec = true;
 			break;
 		case 'n':
 			no_network = true;
@@ -427,10 +423,8 @@ main(int argc, char *argv[])
 	curtain_config_tag_push(cfg, "_default");
 	if (!signaling)
 		curtain_default(main_slot, CURTAIN_DENY);
-	if (!no_protexec)
-		curtain_config_tag_push(cfg, "_prot_exec");
-	if (!no_network)
-		curtain_config_tag_push(cfg, "_network");
+	if (no_network)
+		curtain_config_tag_block(cfg, "_network");
 	if (new_session)
 		curtain_config_tag_push(cfg, "_session");
 	if (run_shell)
