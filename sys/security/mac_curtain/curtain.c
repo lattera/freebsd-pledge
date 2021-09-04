@@ -26,6 +26,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysfil.h>
 #include <sys/socket.h>
 #include <sys/sockopt.h>
+#include <sys/sbuf.h>
 #include <sys/unveil.h>
 #include <sys/curtain.h>
 
@@ -933,6 +934,7 @@ curtain_cred_exec_switch(struct ucred *cr)
 	}
 
 	ct = curtain_dup(ct);
+	ct->ct_serial = atomic_fetchadd_64(&curtain_serial, 1);
 	curtain_exec_switch(ct);
 	curtain_cache_update(ct);
 	curtain_cred_sysfil_update(cr, ct);
@@ -1219,6 +1221,20 @@ curtain_destroy_label(struct label *label)
 		SLOT_SET(label, NULL);
 	}
 }
+
+static int
+curtain_externalize_label(struct label *label, char *element_name,
+    struct sbuf *sb, int *claimed)
+{
+	struct curtain *ct;
+	if (!(ct = SLOT(label)) || strcmp("curtain", element_name) != 0)
+		return (0);
+	(*claimed)++;
+	sbuf_printf(sb, "%ju%s", (uintmax_t)ct->ct_serial,
+	    ct->ct_barrier ? "*" : "");
+	return (sbuf_error(sb) ? EINVAL : 0);
+}
+
 
 static int
 curtain_cred_check_visible(struct ucred *cr1, struct ucred *cr2)
@@ -2240,6 +2256,7 @@ static struct mac_policy_ops curtain_policy_ops = {
 	.mpo_cred_init_label = curtain_init_label,
 	.mpo_cred_copy_label = curtain_copy_label,
 	.mpo_cred_destroy_label = curtain_destroy_label,
+	.mpo_cred_externalize_label = curtain_externalize_label,
 	.mpo_cred_check_visible = curtain_cred_check_visible,
 
 	.mpo_proc_check_signal = curtain_proc_check_signal,
