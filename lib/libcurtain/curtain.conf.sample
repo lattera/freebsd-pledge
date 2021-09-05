@@ -52,6 +52,9 @@
 [_viewer]
 ~/Pictures/				: r
 
+[_terminal]
+@push _pty
+@push _session
 
 [sh, ksh, ksh93, mksh, oksh, dash, bash, zsh : _bourne]
 
@@ -104,6 +107,7 @@ ${ZDOTDIR:-~/}/.zlogout			: r
 ~/.gitconfig				: r
 
 [tcpdump]
+@sysfil id
 @push _bpf
 
 [wireshark]
@@ -122,16 +126,18 @@ ${ZDOTDIR:-~/}/.zlogout			: r
 ~/.config/abiword/			: rw
 
 [gimp : _editor]
+@sysfil sysvipc
 /usr/local/etc/gimp/			: r
 ~/.config/GIMP/				: rw
 ~/.cache/gimp/				: rw
 
 [inkscape : _editor]
-@sysfil! posixipc
+@sysfil posixipc
 ~/.cache/inkscape/			: rw
 ~/.config/inkscape/			: rw
 
 [libreoffice : _editor]
+@sysfil prot_exec
 @push! _pwddb
 # LibreOffice ignores $TMPDIR for some things.
 @push!! _unsafe_system_tmpdir
@@ -180,7 +186,7 @@ ${ZDOTDIR:-~/}/.zlogout			: r
 # NOTE: Sometimes crash due to X11 errors with -X.  Works better under -Y/-W.
 # Run with GDK_BACKEND=wayland for -W.  When giving it DRM access, it sometimes
 # doesn't activate until the second start.
-@sysfil posixipc
+@sysfil posixipc prot_exec
 ~/.mozilla/firefox/			: rw
 ~/.cache/mozilla/firefox/		: rw
 
@@ -188,20 +194,22 @@ ${ZDOTDIR:-~/}/.zlogout			: r
 # NOTE: When running chromium as an "untrusted" X11 client (curtain -X), the
 # setting "Use system title bar and borders" in the "Appearance" section must
 # be enabled.
-@sysfil posixipc
+@sysfil posixipc prot_exec
 ~/.config/chromium/			: rw
 ~/.cache/chromium/			: rw
 
 [thunderbird]
-@sysfil posixipc
+@sysfil posixipc prot_exec
 ~/.thunderbird/				: rw
 ~/.cache/thunderbird/			: rw
 
 [falkon : _browser]
 ~/.config/falkon/			: rw
+@sysfil prot_exec
 ~/.cache/falkon/			: rw
 
 [otter-browser : _browser]
+@sysfil prot_exec
 ~/.config/otter/			: rw
 ~/.cache/Otter/				: rw
 
@@ -212,6 +220,7 @@ ${ZDOTDIR:-~/}/.zlogout			: r
 ~/.cache/qBittorrent/			: rw
 
 [deluge : _p2p]
+# XXX needs dbus
 ~/.config/deluge/			: rw
 
 [audacious : _player]
@@ -225,8 +234,19 @@ ${ZDOTDIR:-~/}/.zlogout			: r
 ~/.mplayer/				: rw
 
 [vlc : _player]
+@sysfil sysvipc
+@sysfil prot_exec
 ~/.config/vlc/				: rw
 ~/.local/share/vlc/			: rw
+
+[xterm : _terminal]
+# Dies with an X11 error when trying to select text under -X.
+@sysfil id
+
+[urxvt : _terminal]
+
+[st : _terminal]
+@push! _pwddb
 
 [_ports_build]
 @push _pwddb

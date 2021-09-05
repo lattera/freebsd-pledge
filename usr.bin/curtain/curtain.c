@@ -242,7 +242,7 @@ preexec_cleanup(void)
 static void
 usage(void)
 {
-	fprintf(stderr, "usage: %s [-vfkgnaAXYWD] "
+	fprintf(stderr, "usage: %s [-vfkgneaAXYWD] "
 	    "[-t tag] [-p promises] [-u unveil ...] "
 	    "[-Ssl] cmd [arg ...]\n",
 	    getprogname());
@@ -257,6 +257,7 @@ main(int argc, char *argv[])
 	char *promises = NULL;
 	unsigned unsafe_level = 0;
 	bool verbose = false,
+	     extra = false,
 	     autotag = false,
 	     signaling = false,
 	     no_fork = false,
@@ -282,7 +283,7 @@ main(int argc, char *argv[])
 	curtain_enable((main_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 	curtain_enable((unveils_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 
-	while ((ch = getopt(argc, argv, "@:vfkgnaA!t:p:u:0:SslXYWD")) != -1)
+	while ((ch = getopt(argc, argv, "@:vfkgneaA!t:p:u:0:SslXYWD")) != -1)
 		switch (ch) {
 		case '@':
 			curtain_config_directive(cfg, optarg);
@@ -298,6 +299,9 @@ main(int argc, char *argv[])
 			break;
 		case 'n':
 			no_network = true;
+			break;
+		case 'e':
+			extra = true;
 			break;
 		case 'a':
 			autotag = true;
@@ -423,6 +427,8 @@ main(int argc, char *argv[])
 	curtain_config_tag_push(cfg, "_default");
 	if (!signaling)
 		curtain_default(main_slot, CURTAIN_DENY);
+	if (extra)
+		curtain_config_tag_push(cfg, "_extra");
 	if (no_network)
 		curtain_config_tag_block(cfg, "_network");
 	if (new_session)

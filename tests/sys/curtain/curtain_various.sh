@@ -24,10 +24,10 @@ cmd_cat_body() {
 atf_test_case cmd_curtain_cat
 cmd_curtain_cat_body() {
 	local f="/etc/rc"
-	atf_check -s not-exit:0 -e not-empty -o empty curtain curtain -u "$f" cat "$f"
-	atf_check -s not-exit:0 -e not-empty -o empty curtain -u "$f" curtain cat "$f"
-	atf_check -s not-exit:0 -e not-empty -o empty curtain curtain cat "$f"
-	atf_check -s exit:0 -e empty -o file:"$f" curtain -u "$f" curtain -u "$f" cat "$f"
+	atf_check -s not-exit:0 -e not-empty -o empty curtain -a curtain -u "$f" cat "$f"
+	atf_check -s not-exit:0 -e not-empty -o empty curtain -a -u "$f" curtain cat "$f"
+	atf_check -s not-exit:0 -e not-empty -o empty curtain -a curtain cat "$f"
+	atf_check -s exit:0 -e empty -o file:"$f" curtain -a -u "$f" curtain -u "$f" cat "$f"
 }
 
 
@@ -56,10 +56,10 @@ cmd_execpledge_cat_body() {
 atf_test_case cmd_curtain_execpledge_cat
 cmd_curtain_execpledge_cat_body() {
 	local f="/etc/rc"
-	atf_check -s not-exit:0 -e not-empty -o empty curtain curtain -u "$f" execpledge -p 'stdio rpath' cat "$f"
-	atf_check -s not-exit:0 -e not-empty -o empty curtain -u "$f" curtain execpledge -p 'stdio rpath' cat "$f"
-	atf_check -s not-exit:0 -e not-empty -o empty curtain curtain execpledge -p 'stdio rpath' cat "$f"
-	atf_check -s exit:0 -e empty -o file:"$f" curtain -u "$f" curtain -u "$f" execpledge -p 'stdio rpath' cat "$f"
+	atf_check -s not-exit:0 -e not-empty -o empty curtain -a curtain -u "$f" execpledge -p 'stdio rpath' cat "$f"
+	atf_check -s not-exit:0 -e not-empty -o empty curtain -a -u "$f" curtain execpledge -p 'stdio rpath' cat "$f"
+	atf_check -s not-exit:0 -e not-empty -o empty curtain -a curtain execpledge -p 'stdio rpath' cat "$f"
+	atf_check -s exit:0 -e empty -o file:"$f" curtain -a -u "$f" curtain -u "$f" execpledge -p 'stdio rpath' cat "$f"
 }
 
 atf_test_case date_localtime # check if localtime(3) works
@@ -89,7 +89,7 @@ session_with_non_tty_body() {
 
 atf_test_case script_with_cmd # this tests openpty(3)
 script_with_cmd_body() {
-	atf_check -o not-empty curtain -u typescript:w script typescript echo test
+	atf_check -o not-empty curtain -t _pty -u typescript:w script typescript echo test
 	sed -e '1d' -e '$d' -e 's;\r$;!;g' typescript > out
 	cat << '.' >> exp
 Command: echo test
@@ -102,12 +102,15 @@ Command exit status: 0
 
 atf_test_case script_tty_visibility
 script_tty_visibility_body() {
-	atf_check -o not-empty curtain script /dev/null \
-		sh -c 'stat "$(tty)"'
-	atf_check -s not-exit:0 -o not-empty curtain script /dev/null \
-		sh -c 'curtain stat "$(tty)"'
-	atf_check -s not-exit:0 -o not-empty curtain script /dev/null \
-		sh -c 'curtain script /dev/null stat "$(tty)"'
+	atf_check -o not-empty \
+		curtain -t _pty \
+		script /dev/null sh -c 'stat "$(tty)"'
+	atf_check -s not-exit:0 -o not-empty \
+		curtain -t _pty -t curtain \
+		script /dev/null sh -c 'curtain stat "$(tty)"'
+	atf_check -s not-exit:0 -o not-empty \
+		curtain -t _pty -t curtain \
+		script /dev/null sh -c 'curtain script /dev/null stat "$(tty)"'
 }
 
 atf_test_case tmpdir_mkdir_p
