@@ -1155,6 +1155,8 @@ kern_openat(struct thread *td, int fd, const char *path, enum uio_seg pathseg,
 	/* Set the flags early so the finit in devfs can pick them up. */
 	fp->f_flag = flags & FMASK;
 	cmode = ((mode & ~pdp->pd_cmask) & ALLPERMS) & ~S_ISTXT;
+	if (sysfil_probe(td, SYSFIL_CHMOD_SPECIAL) != 0)
+		cmode &= ACCESSPERMS;
 	NDINIT_ATRIGHTS(&nd, LOOKUP, FOLLOW | AUDITVNODE1, pathseg, path, fd,
 	    &rights, td);
 	td->td_dupfd = -1;		/* XXX check for fdopen */
@@ -2849,14 +2851,14 @@ setfmode(struct thread *td, struct ucred *cred, struct vnode *vp, int mode)
 	struct mount *mp;
 	struct vattr vattr;
 	int error;
-	bool allow_special;
 
 	if ((error = vn_start_write(vp, &mp, V_WAIT | PCATCH)) != 0)
 		return (error);
 	vn_lock(vp, LK_EXCLUSIVE | LK_RETRY);
 	VATTR_NULL(&vattr);
-	allow_special = sysfil_probe(td, SYSFIL_CHMOD_SPECIAL) == 0;
-	vattr.va_mode = mode & (allow_special ? ALLPERMS : ACCESSPERMS);
+	vattr.va_mode = mode & ALLPERMS;
+	if (sysfil_probe(td, SYSFIL_CHMOD_SPECIAL) != 0)
+		vattr.va_mode &= ACCESSPERMS;
 #ifdef MAC
 	error = mac_vnode_check_setmode(cred, vp, vattr.va_mode);
 	if (error == 0)

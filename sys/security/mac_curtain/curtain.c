@@ -27,6 +27,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/socket.h>
 #include <sys/sockopt.h>
 #include <sys/sbuf.h>
+#include <sys/stat.h>
 #include <sys/unveil.h>
 #include <sys/curtain.h>
 
@@ -1358,6 +1359,27 @@ get_vp_uperms(struct vnode *vp)
 }
 
 static int
+check_fmode(struct ucred *cr, mode_t mode)
+{
+	int error;
+	if (mode & ~ACCESSPERMS) {
+		if ((error = sysfil_check_cred(cr, SYSFIL_CHMOD_SPECIAL)))
+			return (error);
+	}
+	return (0);
+}
+
+static int
+check_vattr(struct ucred *cr, struct vattr *vap)
+{
+	int error;
+	if (vap->va_mode != (mode_t)VNOVAL &&
+	    (error = check_fmode(cr, vap->va_mode)))
+		return (error);
+	return (0);
+}
+
+static int
 curtain_vnode_check_open(struct ucred *cr,
     struct vnode *vp, struct label *vplabel, accmode_t accmode)
 {
@@ -1457,6 +1479,9 @@ curtain_vnode_check_create(struct ucred *cr,
 	int error;
 
 	uperms = get_vp_uperms(dvp);
+
+	if ((error = check_vattr(cr, vap)))
+		return (error);
 
 	if (vap->va_type == VSOCK) {
 		if ((error = unveil_check_uperms_create(uperms, UPERM_BIND)))
@@ -1650,6 +1675,8 @@ curtain_vnode_check_setmode(struct ucred *cr,
     struct vnode *vp, struct label *vplabel, mode_t mode)
 {
 	int error;
+	if ((error = check_fmode(cr, mode)))
+		return (error);
 	if ((error = unveil_check_uperms(get_vp_uperms(vp), UPERM_SETATTR)))
 		return (error);
 	if ((error = sysfil_check_cred(cr, SYSFIL_FATTR)))

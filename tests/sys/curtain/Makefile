@@ -22,6 +22,7 @@ ATF_TESTS_C+=	pledge_capsicum
 ATF_TESTS_C+=	pledge_proc
 ATF_TESTS_C+=	pledge_exec
 ATF_TESTS_C+=	pledge_chown_same
+ATF_TESTS_C+=	pledge_fattr
 ATF_TESTS_C+=	pledge_prot_exec
 ATF_TESTS_C+=	pledge_netdb
 ATF_TESTS_C+=	pledge_socket
