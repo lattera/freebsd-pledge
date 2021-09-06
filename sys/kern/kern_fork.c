@@ -75,6 +75,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/sx.h>
 #include <sys/sysent.h>
 #include <sys/signalvar.h>
+#include <sys/sysfil.h>
 
 #include <security/audit/audit.h>
 #include <security/mac/mac_framework.h>
@@ -182,6 +183,9 @@ sys_rfork(struct thread *td, struct rfork_args *uap)
 		fr.fr_flags2 = FR2_DROPSIG_CAUGHT;
 	} else {
 		fr.fr_flags = uap->flags;
+		error = sysfil_check(td, SYSFIL_RFORK);
+		if (error != 0)
+			return (error);
 	}
 	fr.fr_pidp = &pid;
 	error = fork1(td, &fr);
