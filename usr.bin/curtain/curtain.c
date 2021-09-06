@@ -425,6 +425,7 @@ main(int argc, char *argv[])
 
 	curtain_config_tags_from_env(cfg);
 	curtain_config_tag_push(cfg, "_default");
+	curtain_config_tag_push(cfg, "_basic");
 	if (!signaling)
 		curtain_default(main_slot, CURTAIN_DENY);
 	if (extra)

@@ -22,6 +22,7 @@ auto_curtain_setup(const char *name)
 	cfg->on_exec = false;
 	curtain_config_tags_from_env(cfg);
 	curtain_config_tag_push(cfg, "_default");
+	curtain_config_tag_push(cfg, "_basic");
 	curtain_config_tag_push(cfg, "_auto");
 	if (name)
 		curtain_config_tag_push(cfg, name);
