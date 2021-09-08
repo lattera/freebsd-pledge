@@ -269,7 +269,7 @@ test_pidfile_inherited(void)
 static const char *
 test_pidfile_relative(void)
 {
-	char path[PATH_MAX], pid[32], tmpdir[PATH_MAX];
+	char path[PATH_MAX], pid[32] = "", tmpdir[PATH_MAX];
 	struct pidfh *pfh;
 	int fd;
 

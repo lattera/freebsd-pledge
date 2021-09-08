@@ -74,11 +74,20 @@ sh_bg_wait_body() {
 	echo 'true & true & true & wait' | curtain -s
 }
 
+atf_test_case kill_restriction
+kill_restriction_body() {
+	atf_check -s signal:sigterm curtain -f sh -c 'kill $$'
+	atf_check -s exit:0 curtain sh -c 'sleep 100 & kill $!'
+	atf_check -s not-exit:0 -e not-empty curtain kill $$
+	sleep 100 & atf_check -s not-exit:0 -e not-empty curtain kill $! && kill $!
+}
+
 atf_test_case ps_visibility
 ps_visibility_body() {
-	atf_check -s exit:0 -o not-empty curtain sh -c 'exec ps -o pid= -p $$'
 	atf_check -s exit:0 -o not-empty curtain sh -c 'ps -o pid= -p $$'
+	atf_check -s exit:0 -o not-empty curtain sh -c 'sleep 100 & ps -o pid= -p $! && kill $!'
 	atf_check -s not-exit:0 -o empty curtain ps -o pid= -p $$
+	sleep 100 & atf_check -s not-exit:0 -o empty curtain ps -o pid= -p $$ && kill $!
 }
 
 atf_test_case session_with_non_tty
@@ -105,12 +114,15 @@ script_tty_visibility_body() {
 	atf_check -o not-empty \
 		curtain -t _pty \
 		script /dev/null sh -c 'stat "$(tty)"'
+	atf_check -o not-empty \
+		curtain -t _pty \
+		script /dev/null sh -c 'script /dev/null stat "$(tty)"'
 	atf_check -s not-exit:0 -o not-empty \
 		curtain -t _pty -t curtain \
-		script /dev/null sh -c 'curtain stat "$(tty)"'
+		script /dev/null sh -c 'curtain -t _pty stat "$(tty)"'
 	atf_check -s not-exit:0 -o not-empty \
 		curtain -t _pty -t curtain \
-		script /dev/null sh -c 'curtain script /dev/null stat "$(tty)"'
+		script /dev/null sh -c 'curtain -t _pty script /dev/null stat "$(tty)"'
 }
 
 atf_test_case tmpdir_mkdir_p
@@ -134,6 +146,30 @@ shared_tmpdir_protects_krb5cc_body() {
 	atf_check rmdir "$newtmpdir"
 }
 
+atf_test_case posixshm_restriction
+posixshm_restriction_body() {
+	atf_check curtain -@sysfil:posixipc \
+		sh -c 'posixshmcontrol create /test && posixshmcontrol dump /test && posixshmcontrol rm /test'
+	local p="/tests/curtain-posix-shm-test"
+	atf_check posixshmcontrol create "$p/test"
+	atf_check posixshmcontrol dump "$p/test"
+	atf_check -s not-exit:0 -e not-empty curtain -@sysfil:posixipc \
+		posixshmcontrol dump "$p/test"
+	atf_check posixshmcontrol rm "$p/test"
+}
+
+atf_test_case cmd_timeout
+cmd_timeout_body() {
+	atf_check -s exit:124 curtain -@sysfil:reap timeout 0.001 sleep 100
+	atf_check -s exit:124 curtain -@sysfil:reap -t curtain timeout 0.001 curtain -f sleep 100
+}
+
+atf_test_case cmd_id
+cmd_id_body() {
+	atf_check -o save:exp id
+	atf_check -o file:exp curtain -t _pwddb id
+}
+
 atf_init_test_cases() {
 	atf_add_test_case cmd_true
 	atf_add_test_case cmd_false
@@ -147,10 +183,14 @@ atf_init_test_cases() {
 	atf_add_test_case cmd_curtain_execpledge_cat
 	atf_add_test_case date_localtime
 	atf_add_test_case sh_bg_wait
+	atf_add_test_case kill_restriction
 	atf_add_test_case ps_visibility
 	atf_add_test_case script_with_cmd
 	atf_add_test_case script_tty_visibility
 	atf_add_test_case session_with_non_tty
 	atf_add_test_case tmpdir_mkdir_p
 	atf_add_test_case shared_tmpdir_protects_krb5cc
+	atf_add_test_case posixshm_restriction
+	atf_add_test_case cmd_timeout
+	atf_add_test_case cmd_id
 }
