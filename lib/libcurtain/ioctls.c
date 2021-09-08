@@ -26,6 +26,7 @@ const unsigned long curtain_ioctls_tty_basic[] = {
 	TIOCCDTR,
 	TIOCGPGRP,
 	TIOCSPGRP, /* XXX */
+	TIOCGETD,
 	TIOCGETA,
 	TIOCSETA,
 	TIOCSETAW,
