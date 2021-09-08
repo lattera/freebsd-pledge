@@ -2204,6 +2204,8 @@ curtain_priv_check(struct ucred *cr, int priv)
 	 */
 	switch (priv) {
 	case PRIV_VFS_GENERATION:
+	case PRIV_VFS_EXCEEDQUOTA:
+	case PRIV_VFS_SYSFLAGS:
 		break;
 	default:
 		CURTAIN_CRED_LOG(cr, lvl, "priv %d", priv);
