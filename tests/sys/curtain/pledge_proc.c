@@ -46,6 +46,8 @@ ATF_TC_BODY(fcntl_setown_deny, tc)
 	ATF_CHECK(close(fd) >= 0);
 }
 
+#if 0
+
 ATF_TC_WITHOUT_HEAD(can_signal_child);
 ATF_TC_BODY(can_signal_child, tc)
 {
@@ -92,13 +94,17 @@ ATF_TC_BODY(cannot_signal_parent, tc)
 	ATF_CHECK_EQ(0, WEXITSTATUS(status));
 }
 
+#endif
+
 ATF_TP_ADD_TCS(tp)
 {
 	ATF_TP_ADD_TC(tp, fcntl_setown_allow);
 	ATF_TP_ADD_TC(tp, fcntl_setown_deny);
 	ATF_TP_ADD_TC(tp, error_no_signal);
 	ATF_TP_ADD_TC(tp, violation_signal);
+#if 0
 	ATF_TP_ADD_TC(tp, can_signal_child);
 	ATF_TP_ADD_TC(tp, cannot_signal_parent);
+#endif
 	return (atf_no_error());
 }

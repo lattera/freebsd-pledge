@@ -121,16 +121,20 @@ void
 curtain_state(struct curtain_slot *slot, enum curtain_on on, enum curtain_state state)
 { slot->state_on[on] = state; }
 
-enum { CURTAIN_LEVEL_COUNT = 4 };
+enum { CURTAIN_LEVEL_COUNT = CURTAINLVL_COUNT };
 
 static enum curtain_level
 flags2level(int flags)
 {
 	switch (flags & CURTAIN_LEVEL_MASK) {
-	case CURTAIN_PASS: return (CURTAINLVL_PASS); break;
-	case CURTAIN_DENY: return (CURTAINLVL_DENY); break;
-	case CURTAIN_TRAP: return (CURTAINLVL_TRAP); break;
-	default:           return (CURTAINLVL_KILL); break;
+	case CURTAIN_PASS:	return (CURTAINLVL_PASS);	break;
+	case CURTAIN_GATE:	return (CURTAINLVL_GATE);	break;
+	case CURTAIN_ALLOW:	/* FALLTHROUGH */
+	case CURTAIN_WALL:	return (CURTAINLVL_WALL);	break;
+	case CURTAIN_DENY:	return (CURTAINLVL_DENY);	break;
+	case CURTAIN_TRAP:	return (CURTAINLVL_TRAP);	break;
+	default:
+	case CURTAIN_KILL:	return (CURTAINLVL_KILL);	break;
 	}
 }
 

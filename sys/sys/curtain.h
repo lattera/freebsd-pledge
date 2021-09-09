@@ -15,9 +15,12 @@ enum curtain_type {
 
 enum curtain_level {
 	CURTAINLVL_PASS = 0,
-	CURTAINLVL_DENY = 1,
-	CURTAINLVL_TRAP = 2,
-	CURTAINLVL_KILL = 3,
+	CURTAINLVL_GATE = 1,
+	CURTAINLVL_WALL = 2,
+	CURTAINLVL_DENY = 3,
+	CURTAINLVL_TRAP = 4,
+	CURTAINLVL_KILL = 5,
+#define	CURTAINLVL_COUNT 6
 };
 
 struct curtainreq {
@@ -35,7 +38,7 @@ struct curtainreq {
 int curtainctl(int flags, size_t reqc, struct curtainreq *reqv);
 
 #define	CURTAINCTL_VERSION_MASK	(0xff << 24)
-#define	CURTAINCTL_VERSION	(5 << 24)
+#define	CURTAINCTL_VERSION	(6 << 24)
 
 #define	CURTAINCTL_ENGAGE	(1 <<  0 | CURTAINCTL_VERSION)
 #define	CURTAINCTL_REQUIRE	(1 <<  1 | CURTAINCTL_VERSION)
@@ -54,7 +57,16 @@ int curtainctl(int flags, size_t reqc, struct curtainreq *reqv);
 #include <sys/proc.h>
 #include <sys/queue.h>
 
+enum curtain_action {
+	CURTAINACT_ALLOW = 0,
+	CURTAINACT_DENY = 1,
+	CURTAINACT_TRAP = 2,
+	CURTAINACT_KILL = 3,
+#define	CURTAINACT_COUNT 4
+};
+
 struct curtain_mode {
+	/* enum curtain_action */
 	uint8_t on_self     : 2;
 	uint8_t on_self_max : 2;
 	uint8_t on_exec     : 2;
@@ -88,6 +100,29 @@ struct curtain_item {
 
 CTASSERT(sizeof(struct curtain_item) <= 12);
 
+enum curtain_barrier {
+	CURTAINBAR_PASS = 0,
+	CURTAINBAR_GATE = 1,
+	CURTAINBAR_WALL = 2,
+};
+
+enum barrier_type {
+	BARRIER_PROC_STATUS,
+	BARRIER_PROC_SIGNAL,
+	BARRIER_PROC_SCHED,
+	BARRIER_PROC_DEBUG,
+	BARRIER_SOCKET,
+	BARRIER_POSIXIPC,
+	BARRIER_SYSVIPC,
+	BARRIER_DEVICE,
+#define	BARRIER_COUNT 8 /* UPDATE ME!!! */
+};
+
+struct barrier_mode {
+	/* enum curtain_barrier */
+	uint8_t on_self : 2, on_exec : 2;
+};
+
 struct curtain {
 	struct curtain *ct_parent;
 	LIST_HEAD(, curtain) ct_children;
@@ -106,13 +141,13 @@ struct curtain {
 		bool is_restricted_on_exec;
 	} ct_cached;
 	uint64_t ct_serial;
-	bool ct_barrier, ct_barrier_on_exec;
+	struct barrier_mode ct_barriers[BARRIER_COUNT];
 	struct curtain_mode ct_sysfils[SYSFIL_COUNT];
 	struct curtain_item ct_slots[];
 };
 
 bool	curtain_cred_visible(const struct ucred *subject, const struct ucred *target,
-	    bool strict);
+	    enum barrier_type);
 
 #endif
 

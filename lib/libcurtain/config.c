@@ -350,13 +350,25 @@ parse_sysfil(struct parser *par, struct word *w)
 {
 	while (w) {
 		const struct sysfilent *e;
+		unsigned flags;
+		flags = 0;
+		switch (w->len ? w->ptr[w->len - 1] : '\0') {
+		case '!':
+			flags |= CURTAIN_PASS;
+			w->len--;
+			break;
+		case '+':
+			flags |= CURTAIN_GATE;
+			w->len--;
+			break;
+		}
 		for (e = curtain_sysfiltab; e->name; e++)
 			if (strmemcmp(e->name, w->ptr, w->len) == 0)
 				break;
 		if (!e->name)
 			parse_error(par, "unknown sysfil");
 		else if (par->apply)
-			curtain_sysfil(par->slot, e->sysfil, 0);
+			curtain_sysfil(par->slot, e->sysfil, flags);
 		w = w->next;
 	}
 }

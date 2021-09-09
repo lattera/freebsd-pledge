@@ -36,7 +36,6 @@ enum promise_type {
 	PROMISE_CHOWN,
 	PROMISE_ID,
 	PROMISE_PROC,
-	PROMISE_PROC_BARRIER,
 	PROMISE_REAP,
 	PROMISE_THREAD,
 	PROMISE_EXEC,
@@ -53,14 +52,12 @@ enum promise_type {
 	PROMISE_ACL,
 	PROMISE_MAC,
 	PROMISE_CPUSET,
-	PROMISE_NOTMPIPC,
 	PROMISE_SYSVIPC,
 	PROMISE_POSIXIPC,
 	PROMISE_POSIXRT,
 	PROMISE_CHROOT,
 	PROMISE_JAIL,
 	PROMISE_PS,
-	PROMISE_PS_BARRIER,
 	PROMISE_CHMOD_SPECIAL,
 	PROMISE_SYSFLAGS,
 	PROMISE_SENDFILE,
@@ -107,7 +104,6 @@ static const struct promise_name {
 	[PROMISE_CHOWN] =		{ "chown" },
 	[PROMISE_ID] =			{ "id" },
 	[PROMISE_PROC] =		{ "proc" },
-	[PROMISE_PROC_BARRIER] =	{ "proc_barrier" },
 	[PROMISE_REAP] =		{ "reap" },
 	[PROMISE_THREAD] =		{ "thread" },
 	[PROMISE_EXEC] =		{ "exec" },
@@ -124,14 +120,12 @@ static const struct promise_name {
 	[PROMISE_ACL] =			{ "acl" },
 	[PROMISE_MAC] =			{ "mac" },
 	[PROMISE_CPUSET] =		{ "cpuset" },
-	[PROMISE_NOTMPIPC] =		{ "notmpipc" },
 	[PROMISE_SYSVIPC] =		{ "sysvipc" },
 	[PROMISE_POSIXIPC] =		{ "posixipc" },
 	[PROMISE_POSIXRT] =		{ "posixrt" },
 	[PROMISE_CHROOT] =		{ "chroot" },
 	[PROMISE_JAIL] =		{ "jail" },
 	[PROMISE_PS] =			{ "ps" },
-	[PROMISE_PS_BARRIER] =		{ "ps_barrier" },
 	[PROMISE_CHMOD_SPECIAL] =	{ "chmod_special" },
 	[PROMISE_SYSFLAGS] =		{ "sysflags" },
 	[PROMISE_SENDFILE] =		{ "sendfile" },
@@ -182,8 +176,6 @@ static const struct promise_sysfil {
 	{ PROMISE_ID,			SYSFIL_ID },
 	{ PROMISE_PROC,			SYSFIL_PROC },
 	{ PROMISE_PROC,			SYSFIL_SCHED },
-	{ PROMISE_PROC,			SYSFIL_ANY_PROCESS },
-	{ PROMISE_PROC_BARRIER,		SYSFIL_PROC },
 	{ PROMISE_REAP,			SYSFIL_PROC },
 	{ PROMISE_REAP,			SYSFIL_REAP },
 	{ PROMISE_THREAD,		SYSFIL_THREAD },
@@ -202,15 +194,12 @@ static const struct promise_sysfil {
 	{ PROMISE_ACL,			SYSFIL_ACL },
 	{ PROMISE_MAC,			SYSFIL_MAC },
 	{ PROMISE_CPUSET,		SYSFIL_CPUSET },
-	{ PROMISE_NOTMPIPC,		SYSFIL_NOTMPIPC },
 	{ PROMISE_SYSVIPC,		SYSFIL_SYSVIPC },
 	{ PROMISE_POSIXIPC,		SYSFIL_POSIXIPC },
 	{ PROMISE_POSIXRT,		SYSFIL_POSIXRT },
 	{ PROMISE_CHROOT,		SYSFIL_CHROOT },
 	{ PROMISE_JAIL,			SYSFIL_JAIL },
 	{ PROMISE_PS,			SYSFIL_PS },
-	{ PROMISE_PS,			SYSFIL_ANY_PROCESS },
-	{ PROMISE_PS_BARRIER,		SYSFIL_PS },
 	{ PROMISE_CHMOD_SPECIAL,	SYSFIL_CHMOD_SPECIAL },
 	{ PROMISE_SYSFLAGS,		SYSFIL_SYSFLAGS },
 	{ PROMISE_SENDFILE,		SYSFIL_SENDFILE },
@@ -443,27 +432,27 @@ uperms_for_promises(const enum curtain_state *promises)
 }
 
 static void
-sysfils_for_uperms(struct curtain_slot *slot, unveil_perms uperms)
+sysfils_for_uperms(struct curtain_slot *slot, unveil_perms uperms, unsigned flags)
 {
 	if (uperms & UPERM_READ)
-		curtain_sysfil(slot, SYSFIL_VFS_READ, 0);
+		curtain_sysfil(slot, SYSFIL_VFS_READ, flags);
 	if (uperms & UPERM_WRITE)
-		curtain_sysfil(slot, SYSFIL_VFS_WRITE, 0);
+		curtain_sysfil(slot, SYSFIL_VFS_WRITE, flags);
 	if (uperms & UPERM_CREATE)
-		curtain_sysfil(slot, SYSFIL_VFS_CREATE, 0);
+		curtain_sysfil(slot, SYSFIL_VFS_CREATE, flags);
 	if (uperms & UPERM_DELETE)
-		curtain_sysfil(slot, SYSFIL_VFS_DELETE, 0);
+		curtain_sysfil(slot, SYSFIL_VFS_DELETE, flags);
 	if (uperms & UPERM_EXECUTE)
-		curtain_sysfil(slot, SYSFIL_EXEC, 0);
+		curtain_sysfil(slot, SYSFIL_EXEC, flags);
 	if (uperms & UPERM_SETATTR)
-		curtain_sysfil(slot, SYSFIL_FATTR, 0);
+		curtain_sysfil(slot, SYSFIL_FATTR, flags);
 	if (uperms & UPERM_UNIX)
-		curtain_sysfil(slot, SYSFIL_UNIX, 0);
+		curtain_sysfil(slot, SYSFIL_UNIX, flags);
 	if (uperms & UPERM_TMPDIR) {
-		curtain_sysfil(slot, SYSFIL_VFS_READ, 0);
-		curtain_sysfil(slot, SYSFIL_VFS_WRITE, 0);
-		curtain_sysfil(slot, SYSFIL_VFS_CREATE, 0);
-		curtain_sysfil(slot, SYSFIL_VFS_DELETE, 0);
+		curtain_sysfil(slot, SYSFIL_VFS_READ, flags);
+		curtain_sysfil(slot, SYSFIL_VFS_WRITE, flags);
+		curtain_sysfil(slot, SYSFIL_VFS_CREATE, flags);
+		curtain_sysfil(slot, SYSFIL_VFS_DELETE, flags);
 	}
 }
 
@@ -475,6 +464,7 @@ do_promises_slots(enum curtain_on on,
 {
 	bool fill[PROMISE_COUNT], fill_unveils[PROMISE_COUNT];
 	bool tainted, changed;
+	unsigned flags;
 
 #define	FOREACH_ARRAY(ent, tab) \
 	for (__typeof(&(tab)[0]) (ent) = (tab); (ent) < &(tab)[nitems(tab)]; (ent)++)
@@ -514,6 +504,8 @@ do_promises_slots(enum curtain_on on,
 			curtain_state(promise_unveil_slots[promise], on, state);
 	}
 
+	flags = CURTAIN_PASS;
+
 	tainted = issetugid() != 0;
 	FOREACH_ARRAY(e, unveils_table) {
 		if (fill_unveils[e->promise]) {
@@ -527,28 +519,28 @@ do_promises_slots(enum curtain_on on,
 			    CURTAIN_UNVEIL_INHERIT, e->uperms);
 		}
 		if (fill[e->promise])
-			sysfils_for_uperms(promise_slots[e->promise], e->uperms);
+			sysfils_for_uperms(promise_slots[e->promise], e->uperms, flags);
 	}
 
 	FOREACH_ARRAY(e, sysfils_table)
 		if (fill[e->promise])
-			curtain_sysfil(promise_slots[e->promise], e->sysfil, 0);
+			curtain_sysfil(promise_slots[e->promise], e->sysfil, flags);
 
 	FOREACH_ARRAY(e, ioctls_table)
 		if (fill[e->promise])
-			curtain_ioctls(promise_slots[e->promise], e->ioctls, 0);
+			curtain_ioctls(promise_slots[e->promise], e->ioctls, flags);
 
 	FOREACH_ARRAY(e, sockafs_table)
 		if (fill[e->promise])
-			curtain_sockaf(promise_slots[e->promise], e->af, 0);
+			curtain_sockaf(promise_slots[e->promise], e->af, flags);
 
 	FOREACH_ARRAY(e, sockopts_table)
 		if (fill[e->promise])
-			curtain_sockopt(promise_slots[e->promise], e->level, e->optname, 0);
+			curtain_sockopt(promise_slots[e->promise], e->level, e->optname, flags);
 
 	FOREACH_ARRAY(e, sysctls_table)
 		if (fill[e->promise])
-			curtain_sysctl(promise_slots[e->promise], e->sysctl, 0);
+			curtain_sysctl(promise_slots[e->promise], e->sysctl, flags);
 
 	if (fill[PROMISE_ERROR])
 		curtain_default(promise_slots[PROMISE_ERROR], CURTAIN_DENY);
@@ -562,7 +554,7 @@ do_promises_slots(enum curtain_on on,
 		 * This is different from the "unveil" promise which is handled
 		 * specially in do_pledge().
 		 */
-		curtain_sysfil(always_slot, SYSFIL_CURTAIN, 0);
+		curtain_sysfil(always_slot, SYSFIL_CURTAIN, flags);
 		/*
 		 * Always keep the root directory chdir()-able (but not
 		 * necessarily stat()-able or readable).  This is sufficient to
@@ -575,7 +567,7 @@ do_promises_slots(enum curtain_on on,
 		 * not expect the call to fail (which could lead to security
 		 * issues if the program isn't in the directory that it expects).
 		 */
-		curtain_unveil(always_slot, root_path, 0, UPERM_SEARCH);
+		curtain_unveil(always_slot, root_path, flags, UPERM_SEARCH);
 	}
 	curtain_enable(always_slot, on);
 }
