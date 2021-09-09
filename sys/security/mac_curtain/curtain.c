@@ -1480,14 +1480,6 @@ unveil_check_uperms(unveil_perms uhave, unveil_perms uneed)
 	return (uhave & UPERM_EXPOSE ? EACCES : ENOENT);
 }
 
-static inline int
-unveil_check_uperms_create(unveil_perms uhave, unveil_perms uneed)
-{
-	if (!(uneed & ~uhave))
-		return (0);
-	return (uhave & UPERM_BROWSE ? EACCES : ENOENT);
-}
-
 static unveil_perms
 get_vp_uperms(struct vnode *vp)
 {
@@ -1497,22 +1489,24 @@ get_vp_uperms(struct vnode *vp)
 }
 
 static int
-check_fmode(struct ucred *cr, mode_t mode)
+check_fmode(struct ucred *cr, unveil_perms uperms, mode_t mode)
 {
 	int error;
 	if (mode & ~ACCESSPERMS) {
 		if ((error = sysfil_check_cred(cr, SYSFIL_CHMOD_SPECIAL)))
+			return (error);
+		if ((error = unveil_check_uperms(uperms, UPERM_SETATTR)))
 			return (error);
 	}
 	return (0);
 }
 
 static int
-check_vattr(struct ucred *cr, struct vattr *vap)
+check_vattr(struct ucred *cr, unveil_perms uperms, struct vattr *vap)
 {
 	int error;
 	if (vap->va_mode != (mode_t)VNOVAL &&
-	    (error = check_fmode(cr, vap->va_mode)))
+	    (error = check_fmode(cr, uperms, vap->va_mode)))
 		return (error);
 	return (0);
 }
@@ -1618,15 +1612,15 @@ curtain_vnode_check_create(struct ucred *cr,
 
 	uperms = get_vp_uperms(dvp);
 
-	if ((error = check_vattr(cr, vap)))
+	if ((error = check_vattr(cr, uperms, vap)))
 		return (error);
 
 	if (vap->va_type == VSOCK) {
-		if ((error = unveil_check_uperms_create(uperms, UPERM_BIND)))
+		if ((error = unveil_check_uperms(uperms, UPERM_BIND)))
 			return (error);
 	} else {
 		if (!(uperms & UPERM_TMPDIR_CHILD && vap->va_type == VREG) &&
-		    (error = unveil_check_uperms_create(uperms, UPERM_CREATE)))
+		    (error = unveil_check_uperms(uperms, UPERM_CREATE)))
 			return (error);
 	}
 
@@ -1670,7 +1664,7 @@ curtain_vnode_check_link(struct ucred *cr,
 	if ((error = unveil_check_uperms(get_vp_uperms(from_vp),
 	    UPERM_READ | UPERM_WRITE | UPERM_SETATTR | UPERM_CREATE | UPERM_DELETE)))
 		return (error);
-	if ((error = unveil_check_uperms_create(get_vp_uperms(to_dvp), UPERM_CREATE)))
+	if ((error = unveil_check_uperms(get_vp_uperms(to_dvp), UPERM_CREATE)))
 		return (error);
 	if ((error = sysfil_check_cred(cr, SYSFIL_VFS_CREATE)))
 		return (error);
@@ -1736,7 +1730,7 @@ curtain_vnode_check_rename_to(struct ucred *cr,
 	int error;
 	if (vp && (error = unveil_check_uperms(get_vp_uperms(vp), UPERM_DELETE)))
 		return (error);
-	if ((error = unveil_check_uperms_create(get_vp_uperms(vp ? vp : dvp), UPERM_CREATE)))
+	if ((error = unveil_check_uperms(get_vp_uperms(vp ? vp : dvp), UPERM_CREATE)))
 		return (error);
 	if (vp && (error = sysfil_check_cred(cr, SYSFIL_VFS_DELETE)))
 		return (error);
@@ -1812,10 +1806,12 @@ static int
 curtain_vnode_check_setmode(struct ucred *cr,
     struct vnode *vp, struct label *vplabel, mode_t mode)
 {
+	unveil_perms uperms;
 	int error;
-	if ((error = check_fmode(cr, mode)))
+	uperms = get_vp_uperms(vp);
+	if ((error = check_fmode(cr, uperms, mode)))
 		return (error);
-	if ((error = unveil_check_uperms(get_vp_uperms(vp), UPERM_SETATTR)))
+	if ((error = unveil_check_uperms(uperms, UPERM_SETATTR)))
 		return (error);
 	if ((error = sysfil_check_cred(cr, SYSFIL_FATTR)))
 		return (error);
