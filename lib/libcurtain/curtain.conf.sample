@@ -255,6 +255,8 @@ ${ZDOTDIR:-~/}/.zlogout			: r
 /usr/include/
 /usr/obj/usr/ports/			: rxw
 /var/db/ports/				: rw
+[_ports_build _localbase]
+/usr/local/include/
 
 [_src_build]
 @push _pwddb
