@@ -779,6 +779,15 @@ curtain_mask(struct curtain *dst, const struct curtain *src)
 	curtain_invariants(dst);
 }
 
+
+bool
+curtain_cred_visible(const struct ucred *subject, const struct ucred *target,
+    enum barrier_type type)
+{
+	return (curtain_visible(CRED_SLOT(subject), CRED_SLOT(target), type));
+}
+
+
 /* Some sysfils shouldn't be disabled via curtainctl(2). */
 static const int sysfils_always[] = { SYSFIL_ALWAYS, SYSFIL_UNCAPSICUM };
 /* Some sysfils don't make much sense without some others. */
@@ -1035,41 +1044,6 @@ curtain_build(int flags, size_t reqc, const struct curtainreq *reqv)
 fail:	SDT_PROBE0(curtain,, curtain_build, failed);
 	curtain_free(ct);
 	return (NULL);
-}
-
-
-static void
-curtain_cred_exec_switch(struct ucred *cr)
-{
-	struct curtain *ct;
-	KASSERT(cr->cr_ref == 1, ("modifying shared ucred"));
-	if (!(ct = CRED_SLOT(cr)))
-		return; /* NOTE: sysfilset kept as-is */
-
-	MPASS(ct->ct_finalized);
-	if (!ct->ct_cached.is_restricted_on_exec) {
-		curtain_free(ct);
-		SLOT_SET(cr->cr_label, NULL);
-		sysfil_cred_init(cr);
-		MPASS(!CRED_IN_RESTRICTED_MODE(cr));
-		return;
-	}
-
-	ct = curtain_dup(ct);
-	ct->ct_serial = atomic_fetchadd_64(&curtain_serial, 1);
-	curtain_exec_switch(ct);
-	curtain_cache_update(ct);
-	curtain_cred_sysfil_update(cr, ct);
-	curtain_free(CRED_SLOT(cr));
-	SLOT_SET(cr->cr_label, ct);
-	MPASS(CRED_IN_RESTRICTED_MODE(cr));
-}
-
-bool
-curtain_cred_visible(const struct ucred *subject, const struct ucred *target,
-    enum barrier_type type)
-{
-	return (curtain_visible(CRED_SLOT(subject), CRED_SLOT(target), type));
 }
 
 
@@ -2395,18 +2369,35 @@ curtain_sysfil_need_exec_adjust(struct thread *td, struct ucred *cr)
 	return (false);
 }
 
+
 static void
 curtain_sysfil_exec_adjust(struct thread *td, struct ucred *cr)
 {
 	struct curtain *ct;
+	KASSERT(cr->cr_ref == 1, ("modifying shared ucred"));
 	if (!(ct = CRED_SLOT(cr)))
-		return;
-	curtain_cred_exec_switch(cr);
+		return; /* NOTE: sysfilset kept as-is */
+
 	MPASS(ct->ct_finalized);
-	if (ct->ct_cached.is_restricted_on_exec)
-		unveil_proc_exec_switch(td->td_proc);
-	else
+	if (!ct->ct_cached.is_restricted_on_exec) {
+		/* Can drop the curtain and unveils altogether. */
+		curtain_free(ct);
+		SLOT_SET(cr->cr_label, NULL);
+		sysfil_cred_init(cr);
+		MPASS(!CRED_IN_RESTRICTED_MODE(cr));
 		unveil_proc_drop_base(td->td_proc);
+		return;
+	}
+
+	ct = curtain_dup(ct);
+	ct->ct_serial = atomic_fetchadd_64(&curtain_serial, 1);
+	curtain_exec_switch(ct);
+	curtain_cache_update(ct);
+	curtain_cred_sysfil_update(cr, ct);
+	curtain_free(CRED_SLOT(cr));
+	SLOT_SET(cr->cr_label, ct);
+	MPASS(CRED_IN_RESTRICTED_MODE(cr));
+	unveil_proc_exec_switch(td->td_proc);
 }
 
 static int curtain_sysfil_update_mask(struct ucred *cr, const sysfilset_t *mask_sfs)
