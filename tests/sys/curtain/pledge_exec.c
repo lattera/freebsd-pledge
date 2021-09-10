@@ -80,8 +80,8 @@ prepare_suid_check(const struct atf_tc *tc)
 	}
 	ATF_REQUIRE(waitpid(pid, &status, WEXITED) == pid);
 	ATF_REQUIRE(WIFEXITED(status));
-	ATF_REQUIRE(WEXITSTATUS(status) < 4);
-	if (WEXITSTATUS(status) != 0)
+	ATF_REQUIRE(WEXITSTATUS(status) >= 30 && WEXITSTATUS(status) <= (30 + 3));
+	if (WEXITSTATUS(status) != 30)
 		atf_tc_skip("suid execution already disabled");
 	return (suid_check_path);
 }
@@ -95,7 +95,7 @@ ATF_TC_BODY(suid_no_pledge, tc)
 		ATF_REQUIRE(execl(suid_check_path, suid_check_path, (char *)NULL) >= 0);
 		_exit(127);
 	}
-	atf_utils_wait(pid, 0, "", "");
+	atf_utils_wait(pid, 30 + 0, "", "");
 }
 
 ATF_TC_WITHOUT_HEAD(suid_self_pledge);
@@ -108,7 +108,7 @@ ATF_TC_BODY(suid_self_pledge, tc)
 		ATF_REQUIRE(execl(suid_check_path, suid_check_path, (char *)NULL) >= 0);
 		_exit(127);
 	}
-	atf_utils_wait(pid, 0, "", "");
+	atf_utils_wait(pid, 30 + 0, "", "");
 }
 
 ATF_TC_WITHOUT_HEAD(suid_exec_pledge);
@@ -117,11 +117,11 @@ ATF_TC_BODY(suid_exec_pledge, tc)
 	const char *suid_check_path = prepare_suid_check(tc);
 	pid_t pid = atf_utils_fork();
 	if (pid == 0) {
-		ATF_REQUIRE(pledge(NULL, "stdio path") >= 0);
+		ATF_REQUIRE(pledge(NULL, "stdio rpath") >= 0);
 		ATF_REQUIRE(execl(suid_check_path, suid_check_path, (char *)NULL) >= 0);
 		_exit(127);
 	}
-	atf_utils_wait(pid, 1, "", "");
+	atf_utils_wait(pid, 30 + 1, "", "");
 }
 
 ATF_TC_WITHOUT_HEAD(suid_self_exec_pledge);
@@ -130,11 +130,11 @@ ATF_TC_BODY(suid_self_exec_pledge, tc)
 	const char *suid_check_path = prepare_suid_check(tc);
 	pid_t pid = atf_utils_fork();
 	if (pid == 0) {
-		ATF_REQUIRE(pledge("stdio exec", "stdio path") >= 0);
+		ATF_REQUIRE(pledge("stdio exec", "stdio rpath") >= 0);
 		ATF_REQUIRE(execl(suid_check_path, suid_check_path, (char *)NULL) >= 0);
 		_exit(127);
 	}
-	atf_utils_wait(pid, 1, "", "");
+	atf_utils_wait(pid, 30 + 1, "", "");
 }
 
 ATF_TC_WITHOUT_HEAD(suid_unveils);
@@ -149,7 +149,7 @@ ATF_TC_BODY(suid_unveils, tc)
 		ATF_REQUIRE(execl(suid_check_path, suid_check_path, (char *)NULL) >= 0);
 		_exit(127);
 	}
-	atf_utils_wait(pid, 3, "", "");
+	atf_utils_wait(pid, 30 + 3, "", "");
 }
 
 ATF_TC_WITHOUT_HEAD(suid_unveils_unfinalized);
@@ -163,7 +163,7 @@ ATF_TC_BODY(suid_unveils_unfinalized, tc)
 		ATF_REQUIRE(execl(suid_check_path, suid_check_path, (char *)NULL) >= 0);
 		_exit(127);
 	}
-	atf_utils_wait(pid, 3, "", "");
+	atf_utils_wait(pid, 30 + 3, "", "");
 }
 
 

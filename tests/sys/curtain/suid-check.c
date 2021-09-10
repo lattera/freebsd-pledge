@@ -6,12 +6,12 @@ int
 main()
 {
 	int r, e;
-	e = 0;
+	e = 30;
 	if (geteuid())
-		e |= 1;
+		e += 1;
 	r = open("/etc", O_DIRECTORY|O_RDONLY);
 	if (r < 0)
-		e |= 2;
+		e += 2;
 	else
 		close(r);
 	return (e);
