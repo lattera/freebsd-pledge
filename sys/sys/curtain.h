@@ -134,7 +134,7 @@ struct curtain {
 	curtain_index ct_modulo;
 	curtain_index ct_cellar;
 	bool ct_overflowed;
-	bool ct_cache_valid;
+	bool ct_finalized;
 	struct {
 		bool need_exec_switch;
 		bool is_restricted_on_self;

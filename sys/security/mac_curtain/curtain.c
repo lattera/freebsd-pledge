@@ -140,17 +140,12 @@ mode_need_exec_switch(struct curtain_mode mode)
 }
 
 static inline bool
-mode_is_restricted_on_self(struct curtain_mode mode)
+mode_restricts(struct curtain_mode mode1, struct curtain_mode mode2)
 {
-	return (mode.on_self     != CURTAINACT_ALLOW ||
-	        mode.on_self_max != CURTAINACT_ALLOW);
-}
-
-static inline bool
-mode_is_restricted_on_exec(struct curtain_mode mode)
-{
-	return (mode.on_exec     != CURTAINACT_ALLOW ||
-	        mode.on_exec_max != CURTAINACT_ALLOW);
+	return (mode1.on_self > mode2.on_self ||
+	        mode1.on_exec > mode2.on_exec ||
+	        mode1.on_self_max > mode2.on_self_max ||
+	        mode1.on_exec_max > mode2.on_exec_max);
 }
 
 
@@ -164,7 +159,7 @@ curtain_init(struct curtain *ct, size_t nslots)
 		.ct_parent = NULL,
 		.ct_children = SLIST_HEAD_INITIALIZER(ct.ct_children),
 		.ct_nchildren = 0,
-		.ct_cache_valid = false,
+		.ct_finalized = false,
 		.ct_nitems = 0,
 		.ct_nslots = nslots,
 		.ct_modulo = nslots,
@@ -396,7 +391,7 @@ curtain_dup_child(struct curtain *src)
 static inline void
 curtain_dirty(struct curtain *ct)
 {
-	ct->ct_cache_valid = false;
+	ct->ct_finalized = false;
 }
 
 #define CURTAIN_KEY_INVALID_TYPE_CASES	\
@@ -561,7 +556,7 @@ curtain_dup_compact(const struct curtain *src)
 	curtain_invariants(src);
 	dst = curtain_make(src->ct_nitems);
 	dst->ct_overflowed = src->ct_overflowed;
-	if ((dst->ct_cache_valid = src->ct_cache_valid))
+	if ((dst->ct_finalized = src->ct_finalized))
 		dst->ct_cached = src->ct_cached;
 	dst->ct_serial = src->ct_serial;
 	memcpy(dst->ct_barriers, src->ct_barriers, sizeof dst->ct_barriers);
@@ -627,14 +622,14 @@ curtain_need_exec_switch(const struct curtain *ct)
 }
 
 static inline bool
-curtain_is_restricted(const struct curtain *ct, bool (*pred)(struct curtain_mode))
+curtain_is_restricted(const struct curtain *ct, struct curtain_mode mode)
 {
 	const struct curtain_item *item;
 	for (int sf = 0; sf <= SYSFIL_LAST; sf++)
-		if (pred(ct->ct_sysfils[sf]))
+		if (mode_restricts(ct->ct_sysfils[sf], mode))
 			return (true);
 	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
-		if (item->type != 0 && pred(item->mode))
+		if (item->type != 0 && mode_restricts(item->mode, mode))
 			return (true);
 	return (false);
 }
@@ -642,7 +637,11 @@ curtain_is_restricted(const struct curtain *ct, bool (*pred)(struct curtain_mode
 static bool
 curtain_is_restricted_on_self(const struct curtain *ct)
 {
-	if (curtain_is_restricted(ct, mode_is_restricted_on_self))
+	const struct curtain_mode mode = {
+		.on_self = CURTAINACT_ALLOW, .on_self_max = CURTAINACT_ALLOW,
+		.on_exec = CURTAINACT_KILL, .on_exec_max = CURTAINACT_KILL,
+	};
+	if (curtain_is_restricted(ct, mode))
 		return (true);
 	for (size_t i = 0; i < BARRIER_COUNT; i++)
 		if (ct->ct_barriers[i].on_self > CURTAINBAR_PASS)
@@ -653,7 +652,11 @@ curtain_is_restricted_on_self(const struct curtain *ct)
 static bool
 curtain_is_restricted_on_exec(const struct curtain *ct)
 {
-	if (curtain_is_restricted(ct, mode_is_restricted_on_exec))
+	const struct curtain_mode mode = {
+		.on_self = CURTAINACT_KILL, .on_self_max = CURTAINACT_KILL,
+		.on_exec = CURTAINACT_ALLOW, .on_exec_max = CURTAINACT_ALLOW,
+	};
+	if (curtain_is_restricted(ct, mode))
 		return (true);
 	for (size_t i = 0; i < BARRIER_COUNT; i++)
 		if (ct->ct_barriers[i].on_exec > CURTAINBAR_PASS)
@@ -678,7 +681,7 @@ curtain_cache_update(struct curtain *ct)
 	ct->ct_cached.need_exec_switch = curtain_need_exec_switch(ct);
 	ct->ct_cached.is_restricted_on_self = curtain_is_restricted_on_self(ct);
 	ct->ct_cached.is_restricted_on_exec = curtain_is_restricted_on_exec(ct);
-	ct->ct_cache_valid = true;
+	ct->ct_finalized = true;
 }
 
 static void
@@ -689,6 +692,8 @@ curtain_cred_sysfil_update(struct ucred *cr, const struct curtain *ct)
 		MPASS(SYSFILSET_IS_RESTRICTED(&cr->cr_sysfilset));
 		MPASS(CRED_IN_RESTRICTED_MODE(cr));
 	} else {
+		/* NOTE: Unrestricted processes must have their whole sysfilset
+		 * filled, not just the bits for existing sysfils. */
 		BIT_FILL(SYSFILSET_BITS, &cr->cr_sysfilset);
 		MPASS(!SYSFILSET_IS_RESTRICTED(&cr->cr_sysfilset));
 		MPASS(!CRED_IN_RESTRICTED_MODE(cr));
@@ -789,6 +794,27 @@ static const int sysfils_expand[][2] = {
 	{ SYSFIL_CPUSET,	SYSFIL_SCHED		},
 };
 
+static void
+curtain_expand(struct curtain *ct)
+{
+	for (size_t i = 0; i < nitems(sysfils_always); i++) {
+		ct->ct_sysfils[sysfils_always[i]].on_self = CURTAINACT_ALLOW;
+		ct->ct_sysfils[sysfils_always[i]].on_exec = CURTAINACT_ALLOW;
+	}
+	for (size_t i = 0; i < nitems(sysfils_expand); i++) {
+		ct->ct_sysfils[sysfils_expand[i][1]].on_self =
+		    MIN(ct->ct_sysfils[sysfils_expand[i][0]].on_self,
+		        ct->ct_sysfils[sysfils_expand[i][1]].on_self);
+		ct->ct_sysfils[sysfils_expand[i][1]].on_exec =
+		    MIN(ct->ct_sysfils[sysfils_expand[i][0]].on_exec,
+		        ct->ct_sysfils[sysfils_expand[i][1]].on_exec);
+	}
+	ct->ct_sysfils[SYSFIL_PROT_EXEC_LOOSE].on_exec =
+	    MIN(MIN(ct->ct_sysfils[SYSFIL_EXEC].on_self,
+	            ct->ct_sysfils[SYSFIL_EXEC].on_exec),
+		ct->ct_sysfils[SYSFIL_PROT_EXEC_LOOSE].on_exec);
+}
+
 static const enum curtain_action lvl2act[CURTAINLVL_COUNT] = {
 	[CURTAINLVL_PASS] = CURTAINACT_ALLOW,
 	[CURTAINLVL_GATE] = CURTAINACT_ALLOW,
@@ -868,11 +894,6 @@ curtain_build(int flags, size_t reqc, const struct curtainreq *reqv)
 		ct->ct_sysfils[sf].on_self = lvl2act[def_on_self];
 		ct->ct_sysfils[sf].on_exec = lvl2act[def_on_exec];
 	}
-	for (size_t i = 0; i < nitems(sysfils_always); i++) {
-		ct->ct_sysfils[sysfils_always[i]].on_self = CURTAINACT_ALLOW;
-		ct->ct_sysfils[sysfils_always[i]].on_exec = CURTAINACT_ALLOW;
-	}
-
 	for (size_t i = 0; i < BARRIER_COUNT; i++) {
 		ct->ct_barriers[i].on_self = lvl2bar[def_on_self];
 		ct->ct_barriers[i].on_exec = lvl2bar[def_on_exec];
@@ -993,18 +1014,7 @@ curtain_build(int flags, size_t reqc, const struct curtainreq *reqv)
 	if (ct->ct_nitems > CURTAINCTL_MAX_ITEMS)
 		goto fail;
 
-	for (size_t i = 0; i < nitems(sysfils_expand); i++) {
-		ct->ct_sysfils[sysfils_expand[i][1]].on_self =
-		    MIN(ct->ct_sysfils[sysfils_expand[i][0]].on_self,
-		        ct->ct_sysfils[sysfils_expand[i][1]].on_self);
-		ct->ct_sysfils[sysfils_expand[i][1]].on_exec =
-		    MIN(ct->ct_sysfils[sysfils_expand[i][0]].on_exec,
-		        ct->ct_sysfils[sysfils_expand[i][1]].on_exec);
-	}
-	ct->ct_sysfils[SYSFIL_PROT_EXEC_LOOSE].on_exec =
-	    MIN(MIN(ct->ct_sysfils[SYSFIL_EXEC].on_self,
-	            ct->ct_sysfils[SYSFIL_EXEC].on_exec),
-		ct->ct_sysfils[SYSFIL_PROT_EXEC_LOOSE].on_exec);
+	curtain_expand(ct);
 
 	if (curtain_is_restricted_on_self(ct))
 		ct->ct_sysfils[SYSFIL_DEFAULT].on_self =
@@ -1036,8 +1046,8 @@ curtain_cred_exec_switch(struct ucred *cr)
 	if (!(ct = CRED_SLOT(cr)))
 		return; /* NOTE: sysfilset kept as-is */
 
-	if (!(ct->ct_cache_valid ? ct->ct_cached.is_restricted_on_exec
-	                         : curtain_is_restricted_on_exec(ct))) {
+	MPASS(ct->ct_finalized);
+	if (!ct->ct_cached.is_restricted_on_exec) {
 		curtain_free(ct);
 		SLOT_SET(cr->cr_label, NULL);
 		sysfil_cred_init(cr);
@@ -2361,8 +2371,8 @@ curtain_sysfil_exec_restricted(struct thread *td, struct ucred *cr)
 {
 	const struct curtain *ct;
 	if ((ct = CRED_SLOT(cr))) {
-		if (ct->ct_cache_valid ? ct->ct_cached.is_restricted_on_exec
-	                               : curtain_is_restricted_on_exec(ct))
+		MPASS(ct->ct_finalized);
+		if (ct->ct_cached.is_restricted_on_exec)
 			return (true);
 	} else {
 		if (CRED_IN_RESTRICTED_MODE(cr))
@@ -2376,8 +2386,8 @@ curtain_sysfil_need_exec_adjust(struct thread *td, struct ucred *cr)
 {
 	const struct curtain *ct;
 	if ((ct = CRED_SLOT(cr))) {
-		if (ct->ct_cache_valid ? ct->ct_cached.need_exec_switch
-		                       : curtain_need_exec_switch(ct))
+		MPASS(ct->ct_finalized);
+		if (ct->ct_cached.need_exec_switch)
 			return (true);
 	}
 	if (unveil_proc_need_exec_switch(td->td_proc))
@@ -2392,8 +2402,8 @@ curtain_sysfil_exec_adjust(struct thread *td, struct ucred *cr)
 	if (!(ct = CRED_SLOT(cr)))
 		return;
 	curtain_cred_exec_switch(cr);
-	if (ct->ct_cache_valid ? ct->ct_cached.is_restricted_on_exec
-	                       : curtain_is_restricted_on_exec(ct))
+	MPASS(ct->ct_finalized);
+	if (ct->ct_cached.is_restricted_on_exec)
 		unveil_proc_exec_switch(td->td_proc);
 	else
 		unveil_proc_drop_base(td->td_proc);
@@ -2406,6 +2416,7 @@ static int curtain_sysfil_update_mask(struct ucred *cr, const sysfilset_t *mask_
 		return (0);
 	ct = curtain_dup_child(CRED_SLOT(cr));
 	curtain_mask_sysfils(ct, mask_sfs);
+	curtain_cache_update(ct);
 	curtain_free(CRED_SLOT(cr));
 	SLOT_SET(cr->cr_label, ct);
 	return (0);
