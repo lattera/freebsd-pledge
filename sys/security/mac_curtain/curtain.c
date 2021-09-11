@@ -40,13 +40,13 @@ __FBSDID("$FreeBSD$");
 static MALLOC_DEFINE(M_CURTAIN, "curtain", "curtain restrictions");
 
 SDT_PROVIDER_DEFINE(curtain);
-SDT_PROBE_DEFINE3(curtain,, curtain_build, begin,
-    "int", "size_t", "const struct curtainreq *");
-SDT_PROBE_DEFINE1(curtain,, curtain_build, harden, "struct curtain *");
+SDT_PROBE_DEFINE2(curtain,, curtain_build, begin,
+    "size_t", "const struct curtainreq *");
 SDT_PROBE_DEFINE1(curtain,, curtain_build, done, "struct curtain *");
 SDT_PROBE_DEFINE0(curtain,, curtain_build, failed);
 SDT_PROBE_DEFINE1(curtain,, do_curtainctl, mask, "struct curtain *");
 SDT_PROBE_DEFINE1(curtain,, do_curtainctl, compact, "struct curtain *");
+SDT_PROBE_DEFINE1(curtain,, do_curtainctl, harden, "struct curtain *");
 SDT_PROBE_DEFINE1(curtain,, do_curtainctl, assign, "struct curtain *");
 
 
@@ -734,17 +734,16 @@ curtain_mask_sysfils(struct curtain *ct, const sysfilset_t *sfs)
 	curtain_dirty(ct);
 }
 
-static void
-curtain_mask_item(struct curtain_mode *mode,
-    enum curtain_type type, union curtain_key key, const struct curtain *ct)
+static struct curtain_mode
+curtain_lookup_mode(const struct curtain *ct,
+    enum curtain_type type, union curtain_key key)
 {
 	const struct curtain_item *item;
 	item = curtain_lookup(ct, type, key);
 	if (!item && type == CURTAINTYP_SOCKOPT)
 		item = curtain_lookup(ct, CURTAINTYP_SOCKLVL,
 		    (ctkey){ .socklvl = key.sockopt.level });
-	mode_mask(mode, item ? item->mode :
-	    ct->ct_sysfils[sysfil_for_type(type)]);
+	return (item ? item->mode : ct->ct_sysfils[sysfil_for_type(type)]);
 }
 
 static void
@@ -756,15 +755,16 @@ curtain_mask(struct curtain *dst, const struct curtain *src)
 	KASSERT(dst->ct_ref == 1, ("modifying shared curtain"));
 	for (si = src->ct_slots; si < &src->ct_slots[src->ct_nslots]; si++)
 		if (si->type != 0 && !curtain_lookup(dst, si->type, si->key)) {
-			struct curtain_mode mode = si->mode;
-			curtain_mask_item(&mode, si->type, si->key, dst);
+			/* Insert missing items and mask them in the next loop. */
+			struct curtain_mode mode;
+			mode = curtain_lookup_mode(dst, si->type, si->key);
 			di = curtain_search(dst, si->type, si->key);
 			if (di)
 				di->mode = mode;
 		}
 	for (di = dst->ct_slots; di < &dst->ct_slots[dst->ct_nslots]; di++)
 		if (di->type != 0)
-			curtain_mask_item(&di->mode, di->type, di->key, src);
+			mode_mask(&di->mode, curtain_lookup_mode(src, di->type, di->key));
 	for (int sf = 0; sf <= SYSFIL_LAST; sf++)
 		mode_mask(&dst->ct_sysfils[sf], src->ct_sysfils[sf]);
 	curtain_dirty(dst);
@@ -881,13 +881,13 @@ curtain_build_sysfil(struct curtain *ct, const struct curtainreq *req, int sf)
 }
 
 static struct curtain *
-curtain_build(int flags, size_t reqc, const struct curtainreq *reqv)
+curtain_build(size_t reqc, const struct curtainreq *reqv)
 {
 	struct curtain *ct;
 	const struct curtainreq *req;
 	enum curtain_level def_on_self, def_on_exec;
 
-	SDT_PROBE3(curtain,, curtain_build, begin, flags, reqc, reqv);
+	SDT_PROBE2(curtain,, curtain_build, begin, reqc, reqv);
 
 	ct = curtain_make(CURTAINCTL_MAX_ITEMS);
 
@@ -1029,11 +1029,6 @@ curtain_build(int flags, size_t reqc, const struct curtainreq *reqv)
 	curtain_build_expand(ct);
 	curtain_build_restrict(ct);
 
-	if (flags & CURTAINCTL_ENFORCE) {
-		SDT_PROBE1(curtain,, curtain_build, harden, ct);
-		curtain_harden(ct);
-	}
-
 	SDT_PROBE1(curtain,, curtain_build, done, ct);
 	curtain_invariants_sync(ct);
 	return (ct);
@@ -1083,7 +1078,7 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 		}
 #endif
 
-	ct = curtain_build(flags, reqc, reqv);
+	ct = curtain_build(reqc, reqv);
 	if (!ct) {
 		error = EINVAL;
 		goto out2;
@@ -1136,6 +1131,11 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 	}
 	curtain_cache_update(ct);
 	curtain_cred_sysfil_update(cr, ct);
+
+	if (flags & CURTAINCTL_ENFORCE) {
+		SDT_PROBE1(curtain,, do_curtainctl, harden, ct);
+		curtain_harden(ct);
+	}
 
 	if (!(flags & (CURTAINCTL_ENFORCE | CURTAINCTL_ENGAGE)))
 		goto out1;
