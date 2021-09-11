@@ -2347,19 +2347,22 @@ curtain_sysfil_check(struct ucred *cr, int sf)
 	return (act2err[act]);
 }
 
-static bool
-curtain_sysfil_exec_restricted(struct thread *td, struct ucred *cr)
+static int
+curtain_proc_check_exec_sugid(struct ucred *cr, struct proc *p)
 {
 	const struct curtain *ct;
+	enum curtain_action act;
 	if ((ct = CRED_SLOT(cr))) {
 		MPASS(ct->ct_finalized);
 		if (ct->ct_cached.is_restricted_on_exec)
-			return (ct->ct_sysfils[SYSFIL_RSUGID_EXEC].on_exec != CURTAINACT_ALLOW);
-	} else {
-		if (CRED_IN_RESTRICTED_MODE(cr))
-			return (true);
-	}
-	return (false);
+			act = ct->ct_sysfils[SYSFIL_RSUGID_EXEC].on_exec;
+		else
+			act = CURTAINACT_ALLOW;
+	} else if (CRED_IN_RESTRICTED_MODE(cr))
+		act = CURTAINACT_DENY;
+	else
+		act = CURTAINACT_ALLOW;
+	return (act2err[act]);
 }
 
 static bool
@@ -2515,7 +2518,9 @@ static struct mac_policy_ops curtain_policy_ops = {
 	.mpo_priv_check = curtain_priv_check,
 
 	.mpo_sysfil_check = curtain_sysfil_check,
-	.mpo_sysfil_exec_restricted = curtain_sysfil_exec_restricted,
+
+	.mpo_proc_check_exec_sugid = curtain_proc_check_exec_sugid,
+
 	.mpo_sysfil_need_exec_adjust = curtain_sysfil_need_exec_adjust,
 	.mpo_sysfil_exec_adjust = curtain_sysfil_exec_adjust,
 	.mpo_sysfil_update_mask = curtain_sysfil_update_mask,

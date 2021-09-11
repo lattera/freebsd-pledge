@@ -486,17 +486,18 @@ mac_sysfil_check(struct ucred *cred, int sf)
 	return (error);
 }
 
-bool
-mac_sysfil_exec_restricted(struct thread *td, struct ucred *cred)
+int
+mac_proc_check_exec_sugid(struct ucred *cred, struct proc *p)
 {
-	bool result;
+	int error;
 
-	result = false;
 #ifdef SYSFIL
-	MAC_POLICY_BOOLEAN_NOSLEEP(sysfil_exec_restricted, ||, td, cred);
+	MAC_POLICY_CHECK(proc_check_exec_sugid, cred, p);
+#else
+	error = 0;
 #endif
 
-	return (result);
+	return (error);
 }
 
 bool

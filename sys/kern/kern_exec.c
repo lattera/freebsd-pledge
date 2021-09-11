@@ -551,7 +551,7 @@ interpret:
 	    !CRED_IN_CAPABILITY_MODE(oldcred) &&
 #endif
 #ifdef MAC
-	    !mac_sysfil_exec_restricted(td, oldcred) &&
+	    mac_proc_check_exec_sugid(oldcred, p) == 0 &&
 #else
 	    !CRED_IN_RESTRICTED_MODE(oldcred) &&
 #endif

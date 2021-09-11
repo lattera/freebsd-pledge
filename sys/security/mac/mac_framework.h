@@ -704,7 +704,8 @@ int	mac_generic_ipc_name_prefix(struct ucred *cred, char **prefix, char *end);
 
 int	mac_sysfil_check(struct ucred *cred, int sf);
 
-bool	mac_sysfil_exec_restricted(struct thread *td, struct ucred *cred);
+int	mac_proc_check_exec_sugid(struct ucred *cred, struct proc *p);
+
 bool	mac_sysfil_need_exec_adjust(struct thread *td, struct ucred *cred);
 void	mac_sysfil_exec_adjust(struct thread *td, struct ucred *newcred);
 int	mac_sysfil_update_mask(struct thread *td, const sysfilset_t *mask_sfs);

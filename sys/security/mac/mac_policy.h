@@ -687,8 +687,10 @@ typedef int	(*mpo_generic_ipc_name_prefix_t)(struct ucred *cred,
 		    char **prefix, char *end);
 
 typedef int	(*mpo_sysfil_check_t)(struct ucred *cred, int sf);
-typedef bool	(*mpo_sysfil_exec_restricted_t)(struct thread *td,
-		    struct ucred *cred);
+
+typedef int	(*mpo_proc_check_exec_sugid_t)(struct ucred *cred,
+		    struct proc *);
+
 typedef bool	(*mpo_sysfil_need_exec_adjust_t)(struct thread *td,
 		    struct ucred *cred);
 typedef void	(*mpo_sysfil_exec_adjust_t)(struct thread *td,
@@ -997,7 +999,9 @@ struct mac_policy_ops {
 	mpo_generic_ipc_name_prefix_t		mpo_generic_ipc_name_prefix;
 
 	mpo_sysfil_check_t			mpo_sysfil_check;
-	mpo_sysfil_exec_restricted_t		mpo_sysfil_exec_restricted;
+
+	mpo_proc_check_exec_sugid_t		mpo_proc_check_exec_sugid;
+
 	mpo_sysfil_need_exec_adjust_t		mpo_sysfil_need_exec_adjust;
 	mpo_sysfil_exec_adjust_t		mpo_sysfil_exec_adjust;
 	mpo_sysfil_update_mask_t		mpo_sysfil_update_mask;
