@@ -203,6 +203,14 @@ mac_execve_interpreter_exit(struct label *interpvplabel)
 		mac_vnode_label_free(interpvplabel);
 }
 
+void
+mac_execve_adjust(struct image_params *imgp)
+{
+#ifdef SYSFIL
+	MAC_POLICY_PERFORM(proc_exec_adjust, imgp);
+#endif
+}
+
 /*
  * When relabeling a process, call out to the policies for the maximum
  * permission allowed for each object type we know about in its memory space,
@@ -534,26 +542,5 @@ mac_proc_check_exec_sugid(struct ucred *cred, struct proc *p)
 #endif
 
 	return (error);
-}
-
-bool
-mac_sysfil_need_exec_adjust(struct thread *td, struct ucred *cred)
-{
-	bool result;
-
-	result = false;
-#ifdef SYSFIL
-	MAC_POLICY_BOOLEAN_NOSLEEP(sysfil_need_exec_adjust, ||, td, cred);
-#endif
-
-	return (result);
-}
-
-void
-mac_sysfil_exec_adjust(struct thread *td, struct ucred *newcred)
-{
-#ifdef SYSFIL
-	MAC_POLICY_PERFORM(sysfil_exec_adjust, td, newcred);
-#endif
 }
 

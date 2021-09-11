@@ -358,6 +358,7 @@ void	mac_execve_exit(struct image_params *imgp);
 void	mac_execve_interpreter_enter(struct vnode *interpvp,
 	    struct label **interplabel);
 void	mac_execve_interpreter_exit(struct label *interpvplabel);
+void	mac_execve_adjust(struct image_params *imgp);
 
 int	mac_socket_check_accept(struct ucred *cred, struct socket *so);
 int	mac_socket_check_bind(struct ucred *cred, struct socket *so,

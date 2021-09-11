@@ -29,6 +29,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/sockopt.h>
 #include <sys/sbuf.h>
 #include <sys/stat.h>
+#include <sys/imgact.h>
 #include <sys/unveil.h>
 #include <sys/curtain.h>
 
@@ -2377,37 +2378,29 @@ curtain_proc_check_exec_sugid(struct ucred *cr, struct proc *p)
 	return (act2err[act]);
 }
 
-static bool
-curtain_sysfil_need_exec_adjust(struct thread *td, struct ucred *cr)
-{
-	const struct curtain *ct;
-	if ((ct = CRED_SLOT(cr))) {
-		MPASS(ct->ct_finalized);
-		if (ct->ct_cached.need_exec_switch)
-			return (true);
-	}
-	if (unveil_proc_need_exec_switch(td->td_proc))
-		return (true);
-	return (false);
-}
-
-
 static void
-curtain_sysfil_exec_adjust(struct thread *td, struct ucred *cr)
+curtain_proc_exec_adjust(struct image_params *imgp)
 {
+	struct ucred *cr;
 	struct curtain *ct;
-	KASSERT(cr->cr_ref == 1, ("modifying shared ucred"));
-	if (!(ct = CRED_SLOT(cr)))
+	if (!(ct = CRED_SLOT(imgp->proc->p_ucred)))
 		return; /* NOTE: sysfilset kept as-is */
 
 	MPASS(ct->ct_finalized);
+	if (!ct->ct_cached.need_exec_switch &&
+	    !unveil_proc_need_exec_switch(imgp->proc))
+		return;
+
+	if (!(cr = imgp->newcred))
+		cr = imgp->newcred = crdup(imgp->proc->p_ucred);
+
 	if (!ct->ct_cached.is_restricted_on_exec) {
 		/* Can drop the curtain and unveils altogether. */
 		curtain_free(ct);
 		SLOT_SET(cr->cr_label, NULL);
 		sysfil_cred_init(cr);
 		MPASS(!CRED_IN_RESTRICTED_MODE(cr));
-		unveil_proc_drop_base(td->td_proc);
+		unveil_proc_drop_base(imgp->proc);
 		return;
 	}
 
@@ -2419,7 +2412,7 @@ curtain_sysfil_exec_adjust(struct thread *td, struct ucred *cr)
 	curtain_free(CRED_SLOT(cr));
 	SLOT_SET(cr->cr_label, ct);
 	MPASS(CRED_IN_RESTRICTED_MODE(cr));
-	unveil_proc_exec_switch(td->td_proc);
+	unveil_proc_exec_switch(imgp->proc);
 }
 
 
@@ -2516,12 +2509,10 @@ static struct mac_policy_ops curtain_policy_ops = {
 	.mpo_priv_check = curtain_priv_check,
 
 	.mpo_sysfil_check = curtain_sysfil_check,
+	.mpo_sysfil_update_mask = curtain_sysfil_update_mask,
 
 	.mpo_proc_check_exec_sugid = curtain_proc_check_exec_sugid,
-
-	.mpo_sysfil_need_exec_adjust = curtain_sysfil_need_exec_adjust,
-	.mpo_sysfil_exec_adjust = curtain_sysfil_exec_adjust,
-	.mpo_sysfil_update_mask = curtain_sysfil_update_mask,
+	.mpo_proc_exec_adjust = curtain_proc_exec_adjust,
 };
 
 

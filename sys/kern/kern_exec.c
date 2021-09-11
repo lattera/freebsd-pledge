@@ -763,14 +763,8 @@ interpret:
 	    !(*imgp->sysent->sv_setid_allowed)(td, imgp)) ||
 	    (p->p_flag2 & P2_NO_NEW_PRIVS) != 0)
 		execve_nosetid(imgp);
-
-#if defined(SYSFIL) && defined(MAC)
-	if (mac_sysfil_need_exec_adjust(td,
-	    imgp->newcred ? imgp->newcred : oldcred)) {
-		if (!imgp->newcred)
-			imgp->newcred = crdup(oldcred);
-		mac_sysfil_exec_adjust(td, imgp->newcred);
-	}
+#ifdef MAC
+	mac_execve_adjust(imgp);
 #endif
 
 	vn_lock(imgp->vp, LK_SHARED | LK_RETRY);
