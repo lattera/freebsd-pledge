@@ -504,7 +504,8 @@ curtain_lookup(const struct curtain *ctc, enum curtain_type type, union curtain_
 }
 
 static struct curtain_item *
-curtain_search(struct curtain *ct, enum curtain_type type, union curtain_key key)
+curtain_search(struct curtain *ct, enum curtain_type type, union curtain_key key,
+    bool *inserted)
 {
 	struct curtain_item *item, *prev;
 	item = curtain_hash_head(ct, curtain_key_hash(type, key));
@@ -524,18 +525,23 @@ curtain_search(struct curtain *ct, enum curtain_type type, union curtain_key key
 		prev = NULL;
 	if (!item) {
 		ct->ct_overflowed = true;
-	} else {
-		curtain_dirty(ct);
-		if (item->type == 0) {
-			ct->ct_nitems++;
-			item->type = type;
-			item->key = key;
-			curtain_hash_init(ct, item);
-			if (prev)
-				curtain_hash_link(ct, prev, item);
-			mode_set(&item->mode, CURTAINACT_ALLOW);
-		}
+		if (inserted)
+			*inserted = false;
+		return (NULL);
 	}
+	curtain_dirty(ct);
+	if (item->type == 0) {
+		if (inserted)
+			*inserted = true;
+		ct->ct_nitems++;
+		item->type = type;
+		item->key = key;
+		curtain_hash_init(ct, item);
+		if (prev)
+			curtain_hash_link(ct, prev, item);
+		mode_set(&item->mode, CURTAINACT_ALLOW);
+	} else if (inserted)
+		*inserted = false;
 	return (item);
 }
 
@@ -555,7 +561,9 @@ curtain_dup_compact(const struct curtain *src)
 	memcpy(dst->ct_sysfils, src->ct_sysfils, sizeof dst->ct_sysfils);
 	for (si = src->ct_slots; si < &src->ct_slots[src->ct_nslots]; si++)
 		if (si->type != 0) {
-			di = curtain_search(dst, si->type, si->key);
+			bool inserted;
+			di = curtain_search(dst, si->type, si->key, &inserted);
+			MPASS(di && inserted);
 			if (di)
 				di->mode = si->mode;
 		}
@@ -573,7 +581,7 @@ curtain_dup_compact(const struct curtain *src)
 }
 
 static int
-sysfil_for_type(enum curtain_type type)
+sysfil_fallback(enum curtain_type type)
 {
 	switch (type) {
 	CURTAIN_KEY_INVALID_TYPE_CASES
@@ -729,9 +737,20 @@ curtain_mask_sysfils(struct curtain *ct, const sysfilset_t *sfs)
 			mode_mask(&ct->ct_sysfils[sf], deny);
 	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
 		if (item->type != 0)
-			if (!BIT_ISSET(SYSFILSET_BITS, sysfil_for_type(item->type), sfs))
+			if (!BIT_ISSET(SYSFILSET_BITS, sysfil_fallback(item->type), sfs))
 				mode_mask(&item->mode, deny);
 	curtain_dirty(ct);
+}
+
+static struct curtain_mode
+curtain_lookup_fallback_mode(const struct curtain *ct,
+    enum curtain_type type, union curtain_key key)
+{
+	const struct curtain_item *item = NULL;
+	if (type == CURTAINTYP_SOCKOPT)
+		item = curtain_lookup(ct, CURTAINTYP_SOCKLVL,
+		    (ctkey){ .socklvl = key.sockopt.level });
+	return (item ? item->mode : ct->ct_sysfils[sysfil_fallback(type)]);
 }
 
 static struct curtain_mode
@@ -740,10 +759,7 @@ curtain_lookup_mode(const struct curtain *ct,
 {
 	const struct curtain_item *item;
 	item = curtain_lookup(ct, type, key);
-	if (!item && type == CURTAINTYP_SOCKOPT)
-		item = curtain_lookup(ct, CURTAINTYP_SOCKLVL,
-		    (ctkey){ .socklvl = key.sockopt.level });
-	return (item ? item->mode : ct->ct_sysfils[sysfil_for_type(type)]);
+	return (item ? item->mode : curtain_lookup_fallback_mode(ct, type, key));
 }
 
 static void
@@ -753,15 +769,14 @@ curtain_mask(struct curtain *dst, const struct curtain *src)
 	const struct curtain_item *si;
 	curtain_invariants(src);
 	KASSERT(dst->ct_ref == 1, ("modifying shared curtain"));
-	for (si = src->ct_slots; si < &src->ct_slots[src->ct_nslots]; si++)
-		if (si->type != 0 && !curtain_lookup(dst, si->type, si->key)) {
+	for (si = src->ct_slots; si < &src->ct_slots[src->ct_nslots]; si++) {
+		bool inserted;
+		if (si->type != 0 &&
+		    (di = curtain_search(dst, si->type, si->key, &inserted)) &&
+		    inserted)
 			/* Insert missing items and mask them in the next loop. */
-			struct curtain_mode mode;
-			mode = curtain_lookup_mode(dst, si->type, si->key);
-			di = curtain_search(dst, si->type, si->key);
-			if (di)
-				di->mode = mode;
-		}
+			di->mode = curtain_lookup_fallback_mode(dst, si->type, si->key);
+	}
 	for (di = dst->ct_slots; di < &dst->ct_slots[dst->ct_nslots]; di++)
 		if (di->type != 0)
 			mode_mask(&di->mode, curtain_lookup_mode(src, di->type, di->key));
@@ -880,6 +895,16 @@ curtain_build_sysfil(struct curtain *ct, const struct curtainreq *req, int sf)
 		ct->ct_barriers[type].on_exec = bar;
 }
 
+static struct curtain_item *
+curtain_build_item(struct curtain *ct, const struct curtainreq *req, union curtain_key key)
+{
+	struct curtain_item *item;
+	item = curtain_search(ct, req->type, key, NULL);
+	if (item)
+		build_mode(&item->mode, req);
+	return (item);
+}
+
 static struct curtain *
 curtain_build(size_t reqc, const struct curtainreq *reqv)
 {
@@ -911,7 +936,7 @@ curtain_build(size_t reqc, const struct curtainreq *reqv)
 		ct->ct_barriers[i].on_exec = lvl2bar[def_on_exec];
 	}
 
-	for (req = reqv; req < &reqv[reqc]; req++)
+	for (req = reqv; req < &reqv[reqc]; req++) {
 		switch (req->type) {
 		case CURTAINTYP_DEFAULT:
 			break; /* handled earlier */
@@ -931,74 +956,46 @@ curtain_build(size_t reqc, const struct curtainreq *reqv)
 		case CURTAINTYP_IOCTL: {
 			unsigned long *p = req->data;
 			size_t c = req->size / sizeof *p;
-			while (c--) {
-				struct curtain_item *item;
-				item = curtain_search(ct, req->type,
-				    (ctkey){ .ioctl = *p++ });
-				if (!item)
-					goto fail;
-				build_mode(&item->mode, req);
-			}
+			while (c--)
+				curtain_build_item(ct, req, (ctkey){ .ioctl = *p++ });
 			break;
 		}
 		case CURTAINTYP_SOCKAF: {
 			int *p = req->data;
 			size_t c = req->size / sizeof *p;
-			while (c--) {
-				struct curtain_item *item;
-				item = curtain_search(ct, req->type,
-				    (ctkey){ .sockaf = *p++ });
-				if (!item)
-					goto fail;
-				build_mode(&item->mode, req);
-			}
+			while (c--)
+				curtain_build_item(ct, req, (ctkey){ .sockaf = *p++ });
 			break;
 		}
 		case CURTAINTYP_SOCKLVL: {
 			int *p = req->data;
 			size_t c = req->size / sizeof *p;
-			while (c--) {
-				struct curtain_item *item;
-				item = curtain_search(ct, req->type,
-				    (ctkey){ .socklvl = *p++ });
-				if (!item)
-					goto fail;
-				build_mode(&item->mode, req);
-			}
+			while (c--)
+				curtain_build_item(ct, req, (ctkey){ .socklvl = *p++ });
 			break;
 		}
 		case CURTAINTYP_SOCKOPT: {
 			int (*p)[2] = req->data;
 			size_t c = req->size / sizeof *p;
 			while (c--) {
-				struct curtain_item *item;
-				item = curtain_search(ct, req->type,
+				curtain_build_item(ct, req,
 				    (ctkey){ .sockopt = { (*p)[0], (*p)[1] } });
 				p++;
-				if (!item)
-					goto fail;
-				build_mode(&item->mode, req);
 			}
 			break;
 		}
 		case CURTAINTYP_PRIV: {
 			int *p = req->data;
 			size_t c = req->size / sizeof *p;
-			while (c--) {
-				struct curtain_item *item;
-				item = curtain_search(ct, req->type,
+			while (c--)
+				curtain_build_item(ct, req,
 				    (ctkey){ .priv = *p++ });
-				if (!item)
-					goto fail;
-				build_mode(&item->mode, req);
-			}
 			break;
 		}
 		case CURTAINTYP_SYSCTL: {
 			int *namep = req->data;
 			size_t namec = req->size / sizeof *namep, namei = 0;
 			while (namei < namec) {
-				struct curtain_item *item;
 				struct sysctl_oid *oidp;
 				int error;
 				if (namep[namei] >= 0) {
@@ -1011,17 +1008,17 @@ curtain_build(size_t reqc, const struct curtainreq *reqv)
 				namep += namei + 1;
 				namec -= namei + 1;
 				namei = 0;
-				item = curtain_search(ct, req->type,
+				curtain_build_item(ct, req,
 				    (ctkey){ .sysctl = { .serial = oidp->oid_serial } });
-				if (!item)
-					goto fail;
-				build_mode(&item->mode, req);
 			}
 			break;
 		}
 		default:
 			goto fail;
 		}
+		if (ct->ct_overflowed)
+			goto fail;
+	}
 
 	if (ct->ct_nitems > CURTAINCTL_MAX_ITEMS)
 		goto fail;
@@ -2188,7 +2185,7 @@ curtain_system_check_sysctl(struct ucred *cr,
 				return (0);
 		} while ((oidp = SYSCTL_PARENT(oidp))); /* XXX locking */
 	/* TODO handle levels here too */
-	return (sysfil_probe_cred(cr, sysfil_for_type(CURTAINTYP_SYSCTL)));
+	return (sysfil_probe_cred(cr, sysfil_fallback(CURTAINTYP_SYSCTL)));
 }
 
 
