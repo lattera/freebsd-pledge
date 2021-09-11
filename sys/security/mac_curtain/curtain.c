@@ -1099,12 +1099,12 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 		cr = crget();
 		PROC_LOCK(p);
 		old_cr = crcopysafe(p, cr);
+		crhold(old_cr);
+		PROC_UNLOCK(p);
 		if (CRED_SLOT(cr))
 			curtain_mask(ct, CRED_SLOT(cr));
 		else
 			curtain_mask_sysfils(ct, &cr->cr_sysfilset);
-		crhold(old_cr);
-		PROC_UNLOCK(p);
 		SDT_PROBE1(curtain,, do_curtainctl, mask, ct);
 		new_ct = curtain_dup_compact(ct);
 		if (CRED_SLOT(cr))
