@@ -102,20 +102,12 @@ mode_set(struct curtain_mode *mode, enum curtain_action act)
 }
 
 static inline void
-mode_mask(struct curtain_mode *dst, const struct curtain_mode *src)
+mode_mask(struct curtain_mode *dst, const struct curtain_mode src)
 {
-	dst->on_self_max = MAX(src->on_self_max, dst->on_self_max);
-	dst->on_exec_max = MAX(src->on_exec_max, dst->on_exec_max);
+	dst->on_self_max = MAX(src.on_self_max, dst->on_self_max);
+	dst->on_exec_max = MAX(src.on_exec_max, dst->on_exec_max);
 	dst->on_self = MAX(dst->on_self, dst->on_self_max);
 	dst->on_exec = MAX(dst->on_exec, dst->on_exec_max);
-}
-
-static inline void
-mode_cap(struct curtain_mode *mode, enum curtain_action act)
-{
-	struct curtain_mode cap;
-	mode_set(&cap, act);
-	mode_mask(mode, &cap);
 }
 
 static inline void
@@ -676,8 +668,6 @@ curtain_to_sysfilset(const struct curtain *ct, sysfilset_t *sfs)
 static void
 curtain_cache_update(struct curtain *ct)
 {
-	sysfilset_t sfs;
-	curtain_to_sysfilset(ct, &sfs);
 	ct->ct_cached.need_exec_switch = curtain_need_exec_switch(ct);
 	ct->ct_cached.is_restricted_on_self = curtain_is_restricted_on_self(ct);
 	ct->ct_cached.is_restricted_on_exec = curtain_is_restricted_on_exec(ct);
@@ -731,14 +721,16 @@ static void
 curtain_mask_sysfils(struct curtain *ct, const sysfilset_t *sfs)
 {
 	struct curtain_item *item;
+	struct curtain_mode deny;
+	mode_set(&deny, CURTAINACT_DENY);
 	KASSERT(ct->ct_ref == 1, ("modifying shared curtain"));
 	for (int sf = 0; sf <= SYSFIL_LAST; sf++)
 		if (!BIT_ISSET(SYSFILSET_BITS, sf, sfs))
-			mode_cap(&ct->ct_sysfils[sf], CURTAINACT_DENY);
+			mode_mask(&ct->ct_sysfils[sf], deny);
 	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
 		if (item->type != 0)
 			if (!BIT_ISSET(SYSFILSET_BITS, sysfil_for_type(item->type), sfs))
-				mode_cap(&item->mode, CURTAINACT_DENY);
+				mode_mask(&item->mode, deny);
 	curtain_dirty(ct);
 }
 
@@ -751,8 +743,8 @@ curtain_mask_item(struct curtain_mode *mode,
 	if (!item && type == CURTAINTYP_SOCKOPT)
 		item = curtain_lookup(ct, CURTAINTYP_SOCKLVL,
 		    (ctkey){ .socklvl = key.sockopt.level });
-	mode_mask(mode, item ? &item->mode :
-	    &ct->ct_sysfils[sysfil_for_type(type)]);
+	mode_mask(mode, item ? item->mode :
+	    ct->ct_sysfils[sysfil_for_type(type)]);
 }
 
 static void
@@ -774,7 +766,7 @@ curtain_mask(struct curtain *dst, const struct curtain *src)
 		if (di->type != 0)
 			curtain_mask_item(&di->mode, di->type, di->key, src);
 	for (int sf = 0; sf <= SYSFIL_LAST; sf++)
-		mode_mask(&dst->ct_sysfils[sf], &src->ct_sysfils[sf]);
+		mode_mask(&dst->ct_sysfils[sf], src->ct_sysfils[sf]);
 	curtain_dirty(dst);
 	curtain_invariants(dst);
 }
@@ -804,7 +796,7 @@ static const int sysfils_expand[][2] = {
 };
 
 static void
-curtain_expand(struct curtain *ct)
+curtain_build_expand(struct curtain *ct)
 {
 	for (size_t i = 0; i < nitems(sysfils_always); i++) {
 		ct->ct_sysfils[sysfils_always[i]].on_self = CURTAINACT_ALLOW;
@@ -822,6 +814,17 @@ curtain_expand(struct curtain *ct)
 	    MIN(MIN(ct->ct_sysfils[SYSFIL_EXEC].on_self,
 	            ct->ct_sysfils[SYSFIL_EXEC].on_exec),
 		ct->ct_sysfils[SYSFIL_PROT_EXEC_LOOSE].on_exec);
+}
+
+static void
+curtain_build_restrict(struct curtain *ct)
+{
+	if (curtain_is_restricted_on_self(ct))
+		ct->ct_sysfils[SYSFIL_DEFAULT].on_self =
+		    MAX(CURTAINACT_DENY, ct->ct_sysfils[SYSFIL_DEFAULT].on_self);
+	if (curtain_is_restricted_on_exec(ct))
+		ct->ct_sysfils[SYSFIL_DEFAULT].on_exec =
+		    MAX(CURTAINACT_DENY, ct->ct_sysfils[SYSFIL_DEFAULT].on_exec);
 }
 
 static const enum curtain_action lvl2act[CURTAINLVL_COUNT] = {
@@ -1023,14 +1026,8 @@ curtain_build(int flags, size_t reqc, const struct curtainreq *reqv)
 	if (ct->ct_nitems > CURTAINCTL_MAX_ITEMS)
 		goto fail;
 
-	curtain_expand(ct);
-
-	if (curtain_is_restricted_on_self(ct))
-		ct->ct_sysfils[SYSFIL_DEFAULT].on_self =
-		    MAX(CURTAINACT_DENY, lvl2act[def_on_self]);
-	if (curtain_is_restricted_on_exec(ct))
-		ct->ct_sysfils[SYSFIL_DEFAULT].on_exec =
-		    MAX(CURTAINACT_DENY, lvl2act[def_on_exec]);
+	curtain_build_expand(ct);
+	curtain_build_restrict(ct);
 
 	if (flags & CURTAINCTL_ENFORCE) {
 		SDT_PROBE1(curtain,, curtain_build, harden, ct);
@@ -1092,9 +1089,19 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 		goto out2;
 	}
 
+	/*
+	 * Were restrictions requested by the user?  This may be different from
+	 * how the curtain actually ends up.
+	 */
 	on_self = curtain_is_restricted_on_self(ct);
 	on_exec = curtain_is_restricted_on_exec(ct);
 
+	/*
+	 * Mask the requested curtain against the curtain (or sysfilset) of the
+	 * process' current ucred, compact it and associate it with a new ucred
+	 * while dealing with the current ucred potentially changing in-between
+	 * process unlocks.
+	 */
 	do {
 		struct curtain *new_ct;
 		cr = crget();
@@ -1108,35 +1115,34 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 		PROC_UNLOCK(p);
 		SDT_PROBE1(curtain,, do_curtainctl, mask, ct);
 		new_ct = curtain_dup_compact(ct);
-		curtain_cache_update(new_ct);
-		if (CRED_SLOT(cr)) {
-			curtain_link(new_ct, CRED_SLOT(cr));
+		if (CRED_SLOT(cr))
 			curtain_free(CRED_SLOT(cr));
-		}
 		SLOT_SET(cr->cr_label, new_ct);
-		SDT_PROBE1(curtain,, do_curtainctl, compact, CRED_SLOT(cr));
+		SDT_PROBE1(curtain,, do_curtainctl, compact, new_ct);
 		PROC_LOCK(p);
 		if (old_cr == p->p_ucred) {
 			crfree(old_cr);
 			curtain_free(ct);
-			ct = CRED_SLOT(cr);
+			ct = new_ct;
 			break;
 		}
 		PROC_UNLOCK(p);
 		crfree(old_cr);
 		crfree(cr);
 	} while (true);
-
-	if (ct->ct_overflowed) {
+	if (ct->ct_overflowed) { /* masking can overflow */
 		error = EINVAL;
 		goto out1;
 	}
-
+	curtain_cache_update(ct);
 	curtain_cred_sysfil_update(cr, ct);
 
 	if (!(flags & (CURTAINCTL_ENFORCE | CURTAINCTL_ENGAGE)))
 		goto out1;
 
+	/* Install new ucred and curtain. */
+	if (CRED_SLOT(old_cr))
+		curtain_link(ct, CRED_SLOT(old_cr));
 	proc_set_cred(p, cr);
 	crfree(old_cr);
 	if (CRED_IN_RESTRICTED_MODE(cr) != PROC_IN_RESTRICTED_MODE(p))
@@ -2408,6 +2414,7 @@ static int curtain_sysfil_update_mask(struct ucred *cr, const sysfilset_t *mask_
 	ct = curtain_dup_child(CRED_SLOT(cr));
 	curtain_mask_sysfils(ct, mask_sfs);
 	curtain_cache_update(ct);
+	MPASS(ct->ct_finalized);
 	curtain_free(CRED_SLOT(cr));
 	SLOT_SET(cr->cr_label, ct);
 	return (0);
