@@ -479,7 +479,7 @@ mac_sysfil_check(struct ucred *cred, int sf)
 	int error;
 
 #ifdef SYSFIL
-	MAC_POLICY_CHECK(sysfil_check, cred, sf);
+	MAC_POLICY_CHECK_NOSLEEP(sysfil_check, cred, sf);
 #else
 	error = 0;
 #endif
