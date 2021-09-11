@@ -1818,14 +1818,6 @@ kern_kill(struct thread *td, pid_t pid, int signum)
 	 */
 	if (IN_CAPABILITY_MODE(td) && pid != td->td_proc->p_pid)
 		return (ECAPMODE);
-	/*
-	 * Similarly for pledged processes without SYSFIL_PROC, except
-	 * signaling the process group is allowed by OpenBSD.
-	 */
-	if (IN_RESTRICTED_MODE(td) &&
-	    pid != 0 && pid != td->td_proc->p_pid &&
-	    (error = sysfil_check(td, SYSFIL_PROC)) != 0)
-		return (error);
 
 	AUDIT_ARG_SIGNUM(signum);
 	AUDIT_ARG_PID(pid);

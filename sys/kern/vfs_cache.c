@@ -4231,7 +4231,7 @@ cache_can_fplookup(struct cache_fpl *fpl)
 		cache_fpl_aborted_early(fpl);
 		return (false);
 	}
-	if (IN_RESTRICTED_MODE(td)) {
+	if (IN_CAPABILITY_MODE(td)) {
 		cache_fpl_aborted_early(fpl);
 		return (false);
 	}

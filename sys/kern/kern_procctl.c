@@ -610,25 +610,25 @@ sys_procctl(struct thread *td, struct procctl_args *uap)
 		struct procctl_reaper_pids rp;
 		struct procctl_reaper_kill rk;
 	} x;
-	int error, error1, flags, signum;
+	int error, error1, flags, signum, sysfil;
 
-	if (IN_RESTRICTED_MODE(td)) {
-		int sf = SYSFIL_DEFAULT;
-		switch (uap->com) {
-		case PROC_REAP_ACQUIRE:
-		case PROC_REAP_RELEASE:
-		case PROC_REAP_STATUS:
-		case PROC_REAP_GETPIDS:
-		case PROC_REAP_KILL:
-		case PROC_PDEATHSIG_CTL:
-		case PROC_PDEATHSIG_STATUS:
-			sf = SYSFIL_REAP;
-			break;
-		}
-		error = sysfil_check(td, sf);
-		if (error)
-			return (error);
+	switch (uap->com) {
+	case PROC_REAP_ACQUIRE:
+	case PROC_REAP_RELEASE:
+	case PROC_REAP_STATUS:
+	case PROC_REAP_GETPIDS:
+	case PROC_REAP_KILL:
+	case PROC_PDEATHSIG_CTL:
+	case PROC_PDEATHSIG_STATUS:
+		sysfil = SYSFIL_REAP;
+		break;
+	default:
+		sysfil = SYSFIL_DEFAULT;
+		break;
 	}
+	error = sysfil_check(td, sysfil);
+	if (error)
+		return (error);
 
 	if (uap->com >= PROC_PROCCTL_MD_MIN)
 		return (cpu_procctl(td, uap->idtype, uap->id,

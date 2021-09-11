@@ -547,16 +547,13 @@ interpret:
 		imgp->proc->p_pdeathsig = 0;
 
 	if (credential_changing &&
-#ifdef SYSFIL
+#ifdef CAPABILITY_MODE
+	    !CRED_IN_CAPABILITY_MODE(oldcred) &&
+#endif
 #ifdef MAC
 	    !mac_sysfil_exec_restricted(td, oldcred) &&
 #else
 	    !CRED_IN_RESTRICTED_MODE(oldcred) &&
-#endif
-#else
-#ifdef CAPABILITY_MODE
-	    !CRED_IN_CAPABILITY_MODE(oldcred) &&
-#endif
 #endif
 	    (imgp->vp->v_mount->mnt_flag & MNT_NOSUID) == 0 &&
 	    (p->p_flag & P_TRACED) == 0) {
