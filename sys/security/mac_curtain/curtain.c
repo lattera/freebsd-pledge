@@ -832,14 +832,18 @@ curtain_build_expand(struct curtain *ct)
 }
 
 static void
-curtain_build_restrict(struct curtain *ct)
+curtain_build_restrict(struct curtain *ct, struct ucred *cr)
 {
 	if (curtain_is_restricted_on_self(ct))
-		ct->ct_sysfils[SYSFIL_DEFAULT].on_self =
-		    MAX(CURTAINACT_DENY, ct->ct_sysfils[SYSFIL_DEFAULT].on_self);
-	if (curtain_is_restricted_on_exec(ct))
-		ct->ct_sysfils[SYSFIL_DEFAULT].on_exec =
-		    MAX(CURTAINACT_DENY, ct->ct_sysfils[SYSFIL_DEFAULT].on_exec);
+		if (ct->ct_sysfils[SYSFIL_DEFAULT].on_self < CURTAINACT_DENY)
+			ct->ct_sysfils[SYSFIL_DEFAULT].on_self = CURTAINACT_DENY;
+	if (curtain_is_restricted_on_exec(ct)) {
+		if (ct->ct_sysfils[SYSFIL_DEFAULT].on_exec < CURTAINACT_DENY)
+			ct->ct_sysfils[SYSFIL_DEFAULT].on_exec = CURTAINACT_DENY;
+		if (ct->ct_sysfils[SYSFIL_RSUGID_EXEC].on_exec < CURTAINACT_DENY &&
+		    priv_check_cred(cr, PRIV_VFS_CHROOT) != 0)
+			ct->ct_sysfils[SYSFIL_RSUGID_EXEC].on_exec = CURTAINACT_DENY;
+	}
 }
 
 static const enum curtain_action lvl2act[CURTAINLVL_COUNT] = {
@@ -1024,7 +1028,6 @@ curtain_build(size_t reqc, const struct curtainreq *reqv)
 		goto fail;
 
 	curtain_build_expand(ct);
-	curtain_build_restrict(ct);
 
 	SDT_PROBE1(curtain,, curtain_build, done, ct);
 	curtain_invariants_sync(ct);
@@ -1126,6 +1129,7 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 		error = EINVAL;
 		goto out1;
 	}
+	curtain_build_restrict(ct, old_cr);
 	curtain_cache_update(ct);
 	curtain_cred_sysfil_update(cr, ct);
 
@@ -2350,7 +2354,7 @@ curtain_sysfil_exec_restricted(struct thread *td, struct ucred *cr)
 	if ((ct = CRED_SLOT(cr))) {
 		MPASS(ct->ct_finalized);
 		if (ct->ct_cached.is_restricted_on_exec)
-			return (true);
+			return (ct->ct_sysfils[SYSFIL_RSUGID_EXEC].on_exec != CURTAINACT_ALLOW);
 	} else {
 		if (CRED_IN_RESTRICTED_MODE(cr))
 			return (true);
