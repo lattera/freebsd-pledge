@@ -487,6 +487,42 @@ mac_sysfil_check(struct ucred *cred, int sf)
 }
 
 int
+mac_sysfil_update_mask(struct proc *p, const sysfilset_t *mask_sfs)
+{
+#ifdef SYSFIL
+	struct ucred *cred, *oldcred;
+	do {
+		int error;
+		cred = crget();
+		PROC_LOCK(p);
+		oldcred = crcopysafe(p, cred);
+		BIT_AND(SYSFILSET_BITS, &cred->cr_sysfilset, mask_sfs);
+		crhold(oldcred);
+		PROC_UNLOCK(p);
+		MAC_POLICY_CHECK(sysfil_update_mask, cred);
+		if (error != 0) {
+			crfree(oldcred);
+			crfree(cred);
+			return (error);
+		}
+		PROC_LOCK(p);
+		if (oldcred == p->p_ucred) {
+			crfree(oldcred);
+			break;
+		}
+		/* retry if the process' ucred was replaced */
+		PROC_UNLOCK(p);
+		crfree(oldcred);
+		crfree(cred);
+	} while (true);
+	crfree(oldcred);
+	proc_set_cred(p, cred);
+	PROC_UNLOCK(p);
+#endif
+	return (0);
+}
+
+int
 mac_proc_check_exec_sugid(struct ucred *cred, struct proc *p)
 {
 	int error;
@@ -519,43 +555,5 @@ mac_sysfil_exec_adjust(struct thread *td, struct ucred *newcred)
 #ifdef SYSFIL
 	MAC_POLICY_PERFORM(sysfil_exec_adjust, td, newcred);
 #endif
-}
-
-int
-mac_sysfil_update_mask(struct thread *td, const sysfilset_t *mask_sfs)
-{
-#ifdef SYSFIL
-	struct proc *p = td->td_proc;
-	struct ucred *cr, *old_cr;
-
-	do {
-		int error;
-		cr = crget();
-		PROC_LOCK(p);
-		old_cr = crcopysafe(p, cr);
-		BIT_AND(SYSFILSET_BITS, &cr->cr_sysfilset, mask_sfs);
-		crhold(old_cr);
-		PROC_UNLOCK(p);
-		MAC_POLICY_CHECK(sysfil_update_mask, cr, mask_sfs);
-		if (error != 0) {
-			crfree(old_cr);
-			crfree(cr);
-			return (error);
-		}
-		PROC_LOCK(p);
-		if (old_cr == p->p_ucred) {
-			crfree(old_cr);
-			break;
-		}
-		/* retry if the process' ucred was replaced */
-		PROC_UNLOCK(p);
-		crfree(old_cr);
-		crfree(cr);
-	} while (true);
-	crfree(old_cr);
-	proc_set_cred(p, cr);
-	PROC_UNLOCK(p);
-#endif
-	return (0);
 }
 

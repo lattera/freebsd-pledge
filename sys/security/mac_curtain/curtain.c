@@ -728,17 +728,12 @@ curtain_harden(struct curtain *ct)
 static void
 curtain_mask_sysfils(struct curtain *ct, const sysfilset_t *sfs)
 {
-	struct curtain_item *item;
 	struct curtain_mode deny;
 	mode_set(&deny, CURTAINACT_DENY);
 	KASSERT(ct->ct_ref == 1, ("modifying shared curtain"));
 	for (int sf = 0; sf <= SYSFIL_LAST; sf++)
 		if (!BIT_ISSET(SYSFILSET_BITS, sf, sfs))
 			mode_mask(&ct->ct_sysfils[sf], deny);
-	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
-		if (item->type != 0)
-			if (!BIT_ISSET(SYSFILSET_BITS, sysfil_fallback(item->type), sfs))
-				mode_mask(&item->mode, deny);
 	curtain_dirty(ct);
 }
 
@@ -2336,6 +2331,7 @@ curtain_priv_check(struct ucred *cr, int priv)
 	return (act2err[act]);
 }
 
+
 static int
 curtain_sysfil_check(struct ucred *cr, int sf)
 {
@@ -2346,6 +2342,22 @@ curtain_sysfil_check(struct ucred *cr, int sf)
 	CURTAIN_CRED_LOG(cr, act, "sysfil %d", sf);
 	return (act2err[act]);
 }
+
+static int
+curtain_sysfil_update_mask(struct ucred *cr)
+{
+	struct curtain *ct;
+	if (!CRED_SLOT(cr))
+		return (0);
+	ct = curtain_dup_child(CRED_SLOT(cr));
+	curtain_mask_sysfils(ct, &cr->cr_sysfilset);
+	curtain_cache_update(ct);
+	MPASS(ct->ct_finalized);
+	curtain_free(CRED_SLOT(cr));
+	SLOT_SET(cr->cr_label, ct);
+	return (0);
+}
+
 
 static int
 curtain_proc_check_exec_sugid(struct ucred *cr, struct proc *p)
@@ -2408,20 +2420,6 @@ curtain_sysfil_exec_adjust(struct thread *td, struct ucred *cr)
 	SLOT_SET(cr->cr_label, ct);
 	MPASS(CRED_IN_RESTRICTED_MODE(cr));
 	unveil_proc_exec_switch(td->td_proc);
-}
-
-static int curtain_sysfil_update_mask(struct ucred *cr, const sysfilset_t *mask_sfs)
-{
-	struct curtain *ct;
-	if (!CRED_SLOT(cr))
-		return (0);
-	ct = curtain_dup_child(CRED_SLOT(cr));
-	curtain_mask_sysfils(ct, mask_sfs);
-	curtain_cache_update(ct);
-	MPASS(ct->ct_finalized);
-	curtain_free(CRED_SLOT(cr));
-	SLOT_SET(cr->cr_label, ct);
-	return (0);
 }
 
 
