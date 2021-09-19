@@ -1041,7 +1041,6 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 	struct proc *p = td->td_proc;
 	struct ucred *cr, *old_cr;
 	struct curtain *ct;
-	const struct curtainreq *req;
 	int error = 0;
 #ifdef UNVEIL_SUPPORT
 	struct unveil_base *base;
@@ -1062,7 +1061,7 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 	 * Validate the unveil indexes first since there's no bailing out once
 	 * we've started updating them.
 	 */
-	for (req = reqv; req < &reqv[reqc]; req++)
+	for (const struct curtainreq *req = reqv; req < &reqv[reqc]; req++)
 		if (req->type == CURTAINTYP_UNVEIL) {
 			struct curtainent_unveil *entp = req->data;
 			size_t entc = req->size / sizeof *entp;
@@ -1148,7 +1147,7 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 	SDT_PROBE1(curtain,, do_curtainctl, assign, ct);
 
 #ifdef UNVEIL_SUPPORT
-	for (req = reqv; req < &reqv[reqc]; req++) {
+	for (const struct curtainreq *req = reqv; req < &reqv[reqc]; req++) {
 		bool req_on_self = req->flags & CURTAINREQ_ON_SELF;
 		bool req_on_exec = req->flags & CURTAINREQ_ON_EXEC;
 		if (req->type == CURTAINTYP_UNVEIL) {
@@ -1470,8 +1469,10 @@ unveil_check_uperms(unveil_perms uhave, unveil_perms uneed)
 static unveil_perms
 get_vp_uperms(struct vnode *vp)
 {
+#ifdef UNVEIL_SUPPORT
 	if (unveil_active(curthread))
 		return (unveil_ops->tracker_find(curthread, vp));
+#endif
 	return (UPERM_ALL);
 }
 

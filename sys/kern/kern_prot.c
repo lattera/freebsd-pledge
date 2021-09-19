@@ -2014,7 +2014,7 @@ crget(void)
 #ifdef MAC
 	mac_cred_init(cr);
 #endif
-#ifdef SYSFIL
+#ifndef NOSYSFIL
 	sysfil_cred_init(cr);
 #endif
 	cr->cr_groups = cr->cr_smallgroups;

@@ -63,7 +63,7 @@ syscallenter(struct thread *td)
 	struct syscall_args *sa;
 	struct sysent *se;
 	int error, traced;
-#ifdef	SYSFIL
+#ifndef NOSYSFIL
 	int sysfil;
 #endif
 	bool sy_thr_static;
@@ -133,7 +133,7 @@ syscallenter(struct thread *td)
 		goto retval;
 	}
 #endif
-#ifdef SYSFIL
+#ifndef NOSYSFIL
 	/*
 	 * In addition to that, check that the system call's filter index is
 	 * enabled in the process' sysfilset.
@@ -256,7 +256,7 @@ syscallret(struct thread *td)
 			trapsignal(td, &ksi);
 		}
 	}
-#ifdef SYSFIL
+#ifndef NOSYSFIL
 	if (__predict_false(td->td_errno == ERESTRICTEDTRAP ||
 	    td->td_errno == ERESTRICTEDKILL)) {
 		ksiginfo_init_trap(&ksi);

@@ -1,5 +1,4 @@
-ident	PLEDGE
+ident	CURTAIN
 include	GENERIC
-options	SYSFIL
 options	UNVEIL_SUPPORT
 options	COMPAT_43

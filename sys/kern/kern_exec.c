@@ -431,11 +431,9 @@ do_execve(struct thread *td, struct image_args *args, struct mac *mac_p,
 	orig_fctl0 = p->p_fctl0;
 	orig_brandinfo = p->p_elf_brandinfo;
 
-#ifdef SYSFIL
 	error = sysfil_check(td, SYSFIL_EXEC);
 	if (error)
 		goto exec_fail;
-#endif
 #ifdef MAC
 	error = mac_execve_enter(imgp, mac_p);
 	if (error)

@@ -136,7 +136,7 @@ CTASSERT(SYSFIL_LAST < SYSFIL_SIZE);
 
 static inline int
 sysfil_match_cred(const struct ucred *cr, int sf) {
-#ifdef SYSFIL
+#ifndef NOSYSFIL
 	return (BIT_ISSET(SYSFILSET_BITS, sf, &cr->cr_sysfilset));
 #else
 	return (1);
@@ -180,7 +180,7 @@ sysfil_check(struct thread *td, int sf)
 static inline void
 sysfil_cred_init(struct ucred *cr)
 {
-#ifdef SYSFIL
+#ifndef NOSYSFIL
 	BIT_FILL(SYSFILSET_BITS, &cr->cr_sysfilset);
 #endif
 }

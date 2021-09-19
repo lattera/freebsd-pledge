@@ -206,9 +206,7 @@ mac_execve_interpreter_exit(struct label *interpvplabel)
 void
 mac_execve_adjust(struct image_params *imgp)
 {
-#ifdef SYSFIL
 	MAC_POLICY_PERFORM(proc_exec_adjust, imgp);
-#endif
 }
 
 /*
@@ -486,18 +484,14 @@ mac_sysfil_check(struct ucred *cred, int sf)
 {
 	int error;
 
-#ifdef SYSFIL
 	MAC_POLICY_CHECK_NOSLEEP(sysfil_check, cred, sf);
-#else
-	error = 0;
-#endif
+
 	return (error);
 }
 
 int
 mac_sysfil_update_mask(struct proc *p, const sysfilset_t *mask_sfs)
 {
-#ifdef SYSFIL
 	struct ucred *cred, *oldcred;
 	do {
 		int error;
@@ -526,7 +520,6 @@ mac_sysfil_update_mask(struct proc *p, const sysfilset_t *mask_sfs)
 	crfree(oldcred);
 	proc_set_cred(p, cred);
 	PROC_UNLOCK(p);
-#endif
 	return (0);
 }
 
@@ -535,11 +528,7 @@ mac_proc_check_exec_sugid(struct ucred *cred, struct proc *p)
 {
 	int error;
 
-#ifdef SYSFIL
 	MAC_POLICY_CHECK(proc_check_exec_sugid, cred, p);
-#else
-	error = 0;
-#endif
 
 	return (error);
 }

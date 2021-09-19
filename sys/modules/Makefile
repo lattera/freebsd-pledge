@@ -769,7 +769,7 @@ _vmm=		vmm
 .endif
 .endif
 
-.if ${KERN_OPTS:MSYSFIL}
+.if empty(KERN_OPTS:MNOSYSFIL)
 _mac_curtain=	mac_curtain
 .endif
 

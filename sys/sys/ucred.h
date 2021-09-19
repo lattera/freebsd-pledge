@@ -78,10 +78,8 @@ struct ucred {
 	struct uidinfo	*cr_ruidinfo;	/* per ruid resource consumption */
 	struct prison	*cr_prison;	/* jail(2) */
 	struct loginclass	*cr_loginclass; /* login class */
-#ifdef SYSFIL
+#ifndef NOSYSFIL
 	sysfilset_t	cr_sysfilset;
-#else
-	u_int		cr_flags;	/* credential flags */
 #endif
 	void		*cr_pspare2[2];	/* general use 2 */
 #define	cr_endcopy	cr_label
@@ -95,15 +93,14 @@ struct ucred {
 #define	FSCRED	((struct ucred *)-1)	/* filesystem credential */
 
 
-#ifdef SYSFIL
+#ifdef NOSYSFIL
+#define	CRED_IN_RESTRICTED_MODE(cr) 0
+#define	CRED_IN_CAPABILITY_MODE(cr) 0
+#else
 #define	CRED_IN_RESTRICTED_MODE(cr) \
 	SYSFILSET_IS_RESTRICTED(&(cr)->cr_sysfilset)
 #define	CRED_IN_CAPABILITY_MODE(cr) \
 	SYSFILSET_IN_CAPABILITY_MODE(&(cr)->cr_sysfilset)
-#else
-#define	CRED_IN_RESTRICTED_MODE(cr) CRED_IN_CAPABILITY_MODE(cr)
-#define	CRED_IN_CAPABILITY_MODE(cr) (((cr)->cr_flags & CRED_FLAG_CAPMODE) != 0)
-#define	CRED_SET_CAPABILITY_MODE(cr) ((cr)->cr_flags |= CRED_FLAG_CAPMODE)
 #endif
 
 #endif /* _KERNEL || _WANT_UCRED */
