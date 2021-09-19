@@ -9,6 +9,7 @@
 #include <sys/types.h>
 #include <sysexits.h>
 #include <paths.h>
+#include <unistd.h>
 
 static struct curtain_config *auto_curtain_cfg = NULL;
 
@@ -57,7 +58,7 @@ auto_curtain_ctor()
 	size_t argsbuf_size = sizeof argsbuf;
 	int r;
 
-	if (!getenv("CURTAIN_AUTO"))
+	if (issetugid() || !getenv("CURTAIN_AUTO"))
 		return;
 
 	if (auto_curtain_cfg) {

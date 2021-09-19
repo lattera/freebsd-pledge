@@ -22,11 +22,12 @@ cleanup_tmpdir(void)
 static void
 prepare_tmpdir(struct curtain_config *cfg)
 {
+	const char *tmpdir;
 	char *p;
 	int r;
-	p = getenv("TMPDIR");
-	r = asprintf(&p, "%s/%s.tmpdir.XXXXXXXXXXXX",
-	    p && *p ? p : _PATH_TMP, getprogname());
+	if (issetugid() || !(tmpdir = getenv("TMPDIR")))
+		tmpdir = _PATH_TMP;
+	r = asprintf(&p, "%s/%s.tmpdir.XXXXXXXXXXXX", tmpdir, getprogname());
 	if (r < 0)
 		err(EX_TEMPFAIL, "snprintf");
 	new_tmpdir = mkdtemp(p);

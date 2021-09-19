@@ -11,6 +11,7 @@
 #include <string.h>
 #include <sys/unveil.h>
 #include <sysexits.h>
+#include <unistd.h>
 
 #include "common.h"
 #include "pathexp.h"
@@ -803,7 +804,7 @@ curtain_config_load_tags(struct curtain_config *cfg)
 {
 	char path[PATH_MAX];
 	const char *home;
-	home = getenv("HOME");
+	home = issetugid() ? NULL : getenv("HOME");
 
 	/*
 	 * The tags list contains all of the section names that must be applied
@@ -846,7 +847,7 @@ static void
 config_init(struct curtain_config *cfg)
 {
 	*cfg = (struct curtain_config){ 0 };
-	if (!(cfg->old_tmpdir = getenv("TMPDIR")))
+	if (issetugid() || !(cfg->old_tmpdir = getenv("TMPDIR")))
 		cfg->old_tmpdir = _PATH_TMP;
 }
 
@@ -865,7 +866,7 @@ void
 curtain_config_tags_from_env(struct curtain_config *cfg)
 {
 	char *p, *q;
-	p = getenv("CURTAIN_TAGS");
+	p = issetugid() ? NULL : getenv("CURTAIN_TAGS");
 	if ((q = p))
 		do {
 			if (!*q || is_space(*q)) {
