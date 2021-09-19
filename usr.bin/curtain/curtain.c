@@ -255,9 +255,8 @@ main(int argc, char *argv[])
 	char *sh_argv[2];
 	int ch, r;
 	char *promises = NULL;
-	unsigned unsafe_level = 0;
-	bool verbose = false,
-	     extra = false,
+	unsigned unsafety = 0;
+	bool extra = false,
 	     autotag = false,
 	     signaling = false,
 	     no_fork = false,
@@ -277,8 +276,7 @@ main(int argc, char *argv[])
 	bool do_exec, pty_wrap;
 	int status;
 
-	cfg = curtain_config_new();
-	cfg->on_exec = true;
+	cfg = curtain_config_new(CURTAIN_CONFIG_ON_EXEC_ONLY);
 
 	curtain_enable((main_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 	curtain_enable((unveils_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
@@ -289,7 +287,7 @@ main(int argc, char *argv[])
 			curtain_config_directive(cfg, optarg);
 			break;
 		case 'v':
-			cfg->verbose = verbose = true;
+			curtain_config_verbosity(cfg, 1);
 			break;
 		case 'k':
 			signaling = true;
@@ -310,7 +308,7 @@ main(int argc, char *argv[])
 			autotag = true;
 			/* FALLTHROUGH */
 		case '!':
-			unsafe_level++;
+			unsafety++;
 			break;
 		case 't': {
 			char *p = optarg;
@@ -423,6 +421,7 @@ main(int argc, char *argv[])
 	}
 
 
+	curtain_config_unsafety(cfg, unsafety);
 	curtain_config_tags_from_env(cfg);
 	curtain_config_tag_push(cfg, "_default");
 	curtain_config_tag_push(cfg, "_basic");
@@ -440,19 +439,6 @@ main(int argc, char *argv[])
 		curtain_config_tag_push(cfg, "_login_shell");
 	if (new_pgrp)
 		curtain_config_tag_push(cfg, "_pgrp");
-	if (x11_mode != X11_NONE) {
-		if (no_fork)
-			errx(EX_USAGE, "X11 mode incompatible with -f");
-		curtain_config_tag_push(cfg, "_x11");
-		curtain_config_tag_push(cfg, "_gui");
-		cfg->x11 = true;
-		cfg->x11_trusted = x11_mode == X11_TRUSTED;
-	};
-	if (wayland) {
-		curtain_config_tag_push(cfg, "_wayland");
-		curtain_config_tag_push(cfg, "_gui");
-		cfg->wayland = true;
-	}
 	if (dbus) {
 		if (no_fork)
 			errx(EX_USAGE, "-D incompatible with -f");
@@ -471,10 +457,22 @@ main(int argc, char *argv[])
 			p = argv[0];
 		curtain_config_tag_push(cfg, p);
 	}
-	cfg->unsafe_level = unsafe_level;
-	curtain_config_tmpdir(cfg, !no_fork);
-	curtain_config_load_tags(cfg);
-	curtain_config_gui(cfg);
+
+	curtain_config_setup_tmpdir(cfg, !no_fork);
+	if (x11_mode != X11_NONE) {
+		if (no_fork)
+			errx(EX_USAGE, "X11 mode incompatible with -f");
+		curtain_config_tag_push(cfg, "_x11");
+		curtain_config_tag_push(cfg, "_gui");
+		curtain_config_setup_x11(cfg, x11_mode == X11_TRUSTED);
+	};
+	if (wayland) {
+		curtain_config_tag_push(cfg, "_wayland");
+		curtain_config_tag_push(cfg, "_gui");
+		curtain_config_setup_wayland(cfg);
+	}
+
+	curtain_config_load(cfg);
 
 	if (promises) {
 		r = pledge(NULL, promises);

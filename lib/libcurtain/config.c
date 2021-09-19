@@ -129,7 +129,7 @@ static void
 need_slot(struct parser *par)
 {
 	if (!par->slot) {
-		if (par->cfg->on_exec)
+		if (par->cfg->on_exec_only)
 			curtain_enable((par->slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 		else
 			par->slot = curtain_slot();
@@ -483,17 +483,17 @@ static void
 parse_directive(struct parser *par, char *p)
 {
 	char *dir, *dir_end;
-	unsigned unsafe_level;
+	int unsafety;
 	dir = p = skip_spaces(p);
 	dir_end = p = skip_word(p, "!:");
 	if (*p == ':') /* intended for argv directives */
 		p++;
-	unsafe_level = 0;
+	unsafety = 0;
 	while (*p == '!')
-		p++, unsafe_level++;
+		p++, unsafety++;
 	for (size_t i = 0; i < nitems(directives); i++)
 		if (strmemcmp(directives[i].name, dir, dir_end - dir) == 0) {
-			if (unsafe_level > par->cfg->unsafe_level)
+			if (unsafety > par->cfg->unsafety)
 				return;
 			/*
 			 * Always process included files (when the include
@@ -634,7 +634,7 @@ parse_section(struct parser *par, char *p)
 	par->slot = NULL;
 	par->last_matched_section_path = NULL;
 	p = parse_section_pred(par, p + 1);
-	if (par->cfg->verbose && par->matched)
+	if (par->cfg->verbosity >= 1 && par->matched)
 		fprintf(stderr, "%s: %s:%ju: matched section%s\n",
 		    getprogname(), par->file_name, (uintmax_t)par->line_no,
 		    par->skip ? ", already applied" : "");
@@ -703,7 +703,7 @@ process_file(struct curtain_config *cfg, const char *path)
 			warn("%s", par.file_name);
 		return (-1);
 	}
-	if (cfg->verbose) {
+	if (cfg->verbosity >= 1) {
 		fprintf(stderr, "%s: %s: processing with tags [", getprogname(), path);
 		for (const struct curtain_config_tag *tag = cfg->tags_current; tag; tag = tag->chain)
 			fprintf(stderr, "%s%s", tag->name,
@@ -800,7 +800,7 @@ process_dir(struct curtain_config *cfg, const char *base)
 }
 
 void
-curtain_config_load_tags(struct curtain_config *cfg)
+curtain_config_load(struct curtain_config *cfg)
 {
 	char path[PATH_MAX];
 	const char *home;
@@ -843,23 +843,61 @@ curtain_config_load_tags(struct curtain_config *cfg)
 	} while (cfg->tags_current != cfg->tags_pending);
 }
 
-static void
-config_init(struct curtain_config *cfg)
+void
+curtain_config_tags_clear(struct curtain_config *cfg)
 {
-	*cfg = (struct curtain_config){ 0 };
+	struct curtain_config_tag *tag, *tag_next;
+	tag_next = cfg->tags_pending;
+	while ((tag = tag_next)) {
+		tag_next = tag->chain;
+		free(tag);
+	}
+	cfg->tags_pending = cfg->tags_current = cfg->tags_visited = NULL;
+}
+
+static void
+curtain_config_init(struct curtain_config *cfg, unsigned flags)
+{
+	*cfg = (struct curtain_config){
+		.on_exec_only = flags & CURTAIN_CONFIG_ON_EXEC_ONLY,
+	};
 	if (issetugid() || !(cfg->old_tmpdir = getenv("TMPDIR")))
 		cfg->old_tmpdir = _PATH_TMP;
 }
 
 struct curtain_config *
-curtain_config_new(void)
+curtain_config_new(unsigned flags)
 {
 	struct curtain_config *cfg;
 	cfg = malloc(sizeof *cfg);
 	if (!cfg)
 		err(EX_TEMPFAIL, "malloc");
-	config_init(cfg);
+	curtain_config_init(cfg, flags);
 	return (cfg);
+}
+
+int
+curtain_config_verbosity(struct curtain_config *cfg, int new)
+{
+	int old = cfg->verbosity;
+	cfg->verbosity = new;
+	return (old);
+}
+
+int
+curtain_config_unsafety(struct curtain_config *cfg, int new)
+{
+	int old = cfg->unsafety;
+	cfg->unsafety = new;
+	return (old);
+}
+
+void
+curtain_config_free(struct curtain_config *cfg)
+{
+	/* XXX: there should be some way to free the slots eventually */
+	curtain_config_tags_clear(cfg);
+	free(cfg);
 }
 
 void

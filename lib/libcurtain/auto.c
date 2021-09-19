@@ -11,6 +11,8 @@
 #include <paths.h>
 #include <unistd.h>
 
+#include "common.h"
+
 static struct curtain_config *auto_curtain_cfg = NULL;
 
 static void
@@ -18,29 +20,27 @@ auto_curtain_setup(const char *name)
 {
 	struct curtain_config *cfg;
 	char *p;
-	auto_curtain_cfg = cfg = curtain_config_new();
-	cfg->unsafe_level = 1; /* XXX */
-	cfg->on_exec = false;
+	auto_curtain_cfg = cfg = curtain_config_new(0);
+	cfg->unsafety = 1; /* XXX */
 	curtain_config_tags_from_env(cfg);
 	curtain_config_tag_push(cfg, "_default");
 	curtain_config_tag_push(cfg, "_basic");
 	curtain_config_tag_push(cfg, "_auto");
 	if (name)
 		curtain_config_tag_push(cfg, name);
+	curtain_config_setup_tmpdir(cfg, true);
 	if ((p = getenv("CURTAIN_AUTO_X11"))) {
 		curtain_config_tag_push(cfg, "_x11");
 		curtain_config_tag_push(cfg, "_gui");
-		cfg->x11 = true;
-		cfg->x11_trusted = strcmp(p, "trusted") == 0;
+		curtain_config_setup_x11(cfg, strcmp(p, "trusted") == 0);
 	}
 	if (getenv("CURTAIN_AUTO_WAYLAND")) {
 		curtain_config_tag_push(cfg, "_wayland");
 		curtain_config_tag_push(cfg, "_gui");
-		cfg->wayland = true;
+		curtain_config_setup_wayland(cfg);
 	}
-	curtain_config_tmpdir(cfg, true);
-	curtain_config_load_tags(cfg);
-	curtain_config_gui(cfg);
+	curtain_config_load(cfg);
+	curtain_config_free(cfg);
 	curtain_enforce();
 }
 

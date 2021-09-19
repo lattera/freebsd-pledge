@@ -5,6 +5,14 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+struct curtain_config {
+	struct curtain_config_tag *tags_pending, *tags_current, *tags_visited;
+	const char *old_tmpdir;
+	int unsafety;
+	int verbosity;
+	bool on_exec_only;
+};
+
 struct curtain_config_tag {
 	struct curtain_config_tag *chain;
 	bool blocked;

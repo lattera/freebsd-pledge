@@ -73,19 +73,17 @@ extern const unsigned long curtain_ioctls_bpf_all[];
 
 struct curtain_config;
 
-struct curtain_config { /* TODO: make private */
-	struct curtain_config_tag *tags_pending, *tags_current, *tags_visited;
-	const char *old_tmpdir;
-	unsigned unsafe_level;
-	bool on_exec;
-	bool verbose;
-	bool x11, x11_trusted;
-	bool wayland;
+enum curtain_config_flags {
+	CURTAIN_CONFIG_ON_EXEC_ONLY = 1 << 0,
 };
 
 int curtain_parse_unveil_perms(unveil_perms *, const char *);
 
-struct curtain_config *curtain_config_new(void);
+struct curtain_config *curtain_config_new(unsigned flags);
+void curtain_config_free(struct curtain_config *);
+
+int curtain_config_verbosity(struct curtain_config *, int);
+int curtain_config_unsafety(struct curtain_config *, int);
 
 struct curtain_config_tag *curtain_config_tag_push_mem(struct curtain_config *, const char *buf, size_t len);
 
@@ -103,12 +101,14 @@ curtain_config_tag_block(struct curtain_config *cfg, const char *name)
 	return (curtain_config_tag_block_mem(cfg, name, strlen(name)));
 }
 
-void curtain_config_load_tags(struct curtain_config *);
+void curtain_config_load(struct curtain_config *);
 void curtain_config_tags_from_env(struct curtain_config *);
+void curtain_config_tags_clear(struct curtain_config *);
 
 int curtain_config_directive(struct curtain_config *, const char *directive);
 
-int curtain_config_gui(struct curtain_config *);
-int curtain_config_tmpdir(struct curtain_config *, bool separate);
+int curtain_config_setup_x11(struct curtain_config *, bool trusted);
+int curtain_config_setup_wayland(struct curtain_config *);
+int curtain_config_setup_tmpdir(struct curtain_config *, bool separate);
 
 #endif

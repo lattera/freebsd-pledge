@@ -9,11 +9,13 @@
 #include <sysexits.h>
 #include <unistd.h>
 
+#include "common.h"
+
 static struct curtain_slot *
 get_slot(struct curtain_config *cfg)
 {
 	struct curtain_slot *slot;
-	if (cfg->on_exec)
+	if (cfg->on_exec_only)
 		curtain_enable((slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 	else
 		slot = curtain_slot();
@@ -41,8 +43,8 @@ cleanup_x11(void)
 	}
 }
 
-static void
-prepare_x11(struct curtain_config *cfg)
+int
+curtain_config_setup_x11(struct curtain_config *cfg, bool trusted)
 {
 	struct curtain_slot *slot;
 	int r;
@@ -53,7 +55,7 @@ prepare_x11(struct curtain_config *cfg)
 	display = getenv("DISPLAY");
 	if (!display || !*display) {
 		warnx("DISPLAY environment variable not set");
-		return;
+		return (-1);
 	}
 
 	r = asprintf(&p, "%s/%s.xauth.XXXXXXXXXXXX",
@@ -64,7 +66,7 @@ prepare_x11(struct curtain_config *cfg)
 	if (r < 0) {
 		free(p);
 		warn("mkstemp");
-		return;
+		return (-1);
 	}
 	r = close(r);
 	if (r < 0)
@@ -75,10 +77,10 @@ prepare_x11(struct curtain_config *cfg)
 	pid = vfork();
 	if (pid < 0) {
 		warn("fork");
-		return;
+		return (-1);
 	} else if (pid == 0) {
 		err_set_exit(_exit);
-		if (cfg->x11_trusted)
+		if (trusted)
 			execlp("xauth", "xauth", "-ni",
 			    "extract", tmp_xauth_file, display,
 			    NULL);
@@ -95,13 +97,13 @@ prepare_x11(struct curtain_config *cfg)
 	r = waitpid(pid, &status, 0);
 	if (r < 0) {
 		warn("waitpid");
-		return;
+		return (-1);
 	} else if (!(WIFEXITED(status) && WEXITSTATUS(status) == 0)) {
 		if (WIFSIGNALED(status))
 			warnx("xauth terminated with signal %d", WTERMSIG(status));
 		else
 			warnx("xauth exited with code %d", WEXITSTATUS(status));
-		return;
+		return (-1);
 	}
 
 	if (display[0] == ':')
@@ -129,12 +131,13 @@ prepare_x11(struct curtain_config *cfg)
 	if (tmp_xauth_file)
 		curtain_unveil(slot, tmp_xauth_file,
 		    CURTAIN_UNVEIL_INSPECT,
-		    UPERM_READ | (cfg->on_exec ? UPERM_NONE : UPERM_DELETE));
+		    UPERM_READ | (cfg->on_exec_only ? UPERM_NONE : UPERM_DELETE));
+	return (0);
 }
 
 
-static void
-prepare_wayland(struct curtain_config *cfg)
+int
+curtain_config_setup_wayland(struct curtain_config *cfg)
 {
 	struct curtain_slot *slot;
 	const char *display;
@@ -153,7 +156,7 @@ prepare_wayland(struct curtain_config *cfg)
 		rundir = getenv("XDG_RUNTIME_DIR");
 		if (!rundir) {
 			warnx("XDG_RUNTIME_DIR environment variable not set");
-			return;
+			return (-1);
 		}
 		r = asprintf(&socket, "%s/%s", rundir, display);
 		if (r < 0)
@@ -162,15 +165,6 @@ prepare_wayland(struct curtain_config *cfg)
 	curtain_unveil(slot, socket,
 	    CURTAIN_UNVEIL_INSPECT, UPERM_CONNECT|UPERM_INSPECT);
 	free(socket);
-}
-
-
-int
-curtain_config_gui(struct curtain_config *cfg)
-{
-	if (cfg->x11 || cfg->x11_trusted)
-		prepare_x11(cfg);
-	if (cfg->wayland)
-		prepare_wayland(cfg);
 	return (0);
 }
+
