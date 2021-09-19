@@ -234,7 +234,6 @@ syscallret(struct thread *td)
 {
 	struct proc *p;
 	struct syscall_args *sa;
-	ksiginfo_t ksi;
 	int traced;
 
 	KASSERT((td->td_pflags & TDP_FORKING) == 0,
@@ -244,29 +243,36 @@ syscallret(struct thread *td)
 
 	p = td->td_proc;
 	sa = &td->td_sa;
-	if (__predict_false(td->td_errno == ENOTCAPABLE ||
-	    td->td_errno == ECAPMODE)) {
-		if ((trap_enotcap ||
-		    (p->p_flag2 & P2_TRAPCAP) != 0) && IN_CAPABILITY_MODE(td)) {
+
+#ifndef NOSYSFIL
+	/* Handle special errnos that should trigger signals. */
+	if (__predict_false(td->td_errno != 0)) {
+		ksiginfo_t ksi;
+		switch (td->td_errno) {
+		case ENOTCAPABLE:
+		case ECAPMODE:
+			if (!IN_CAPABILITY_MODE(td) ||
+			    !(trap_enotcap || (p->p_flag2 & P2_TRAPCAP) != 0))
+				break;
 			ksiginfo_init_trap(&ksi);
 			ksi.ksi_signo = SIGTRAP;
 			ksi.ksi_errno = td->td_errno;
 			ksi.ksi_code = TRAP_CAP;
 			ksi.ksi_info.si_syscall = sa->original_code;
 			trapsignal(td, &ksi);
+			break;
+		case ERESTRICTEDTRAP:
+		case ERESTRICTEDKILL:
+			ksiginfo_init_trap(&ksi);
+			ksi.ksi_signo = td->td_errno == ERESTRICTEDTRAP ?
+			    SIGTRAP : SIGKILL;
+			ksi.ksi_code = SI_RESTRICTED;
+			ksi.ksi_info.si_syscall = sa->original_code;
+			td->td_errno = EPERM;
+			ksi.ksi_errno = td->td_errno;
+			trapsignal(td, &ksi);
+			break;
 		}
-	}
-#ifndef NOSYSFIL
-	if (__predict_false(td->td_errno == ERESTRICTEDTRAP ||
-	    td->td_errno == ERESTRICTEDKILL)) {
-		ksiginfo_init_trap(&ksi);
-		ksi.ksi_signo = td->td_errno == ERESTRICTEDTRAP ?
-		    SIGTRAP : SIGKILL;
-		ksi.ksi_code = SI_RESTRICTED;
-		ksi.ksi_info.si_syscall = sa->original_code;
-		td->td_errno = EPERM;
-		ksi.ksi_errno = td->td_errno;
-		trapsignal(td, &ksi);
 	}
 #endif
 
