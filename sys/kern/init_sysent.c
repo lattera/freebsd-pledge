@@ -471,7 +471,7 @@ struct sysent sysent[] = {
 	{ .sy_narg = AS(extattr_set_link_args), .sy_call = (sy_call_t *)sys_extattr_set_link, .sy_auevent = AUE_EXTATTR_SET_LINK, .sy_flags = SYF_SYSFILS(SYSFIL_EXTATTR | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 412 = extattr_set_link */
 	{ .sy_narg = AS(extattr_get_link_args), .sy_call = (sy_call_t *)sys_extattr_get_link, .sy_auevent = AUE_EXTATTR_GET_LINK, .sy_flags = SYF_SYSFILS(SYSFIL_EXTATTR | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 413 = extattr_get_link */
 	{ .sy_narg = AS(extattr_delete_link_args), .sy_call = (sy_call_t *)sys_extattr_delete_link, .sy_auevent = AUE_EXTATTR_DELETE_LINK, .sy_flags = SYF_SYSFILS(SYSFIL_EXTATTR | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 414 = extattr_delete_link */
-	{ .sy_narg = AS(__mac_execve_args), .sy_call = (sy_call_t *)sys___mac_execve, .sy_auevent = AUE_NULL, .sy_flags = SYF_SYSFILS(SYSFIL_MAC | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 415 = __mac_execve */
+	{ .sy_narg = AS(__mac_execve_args), .sy_call = (sy_call_t *)sys___mac_execve, .sy_auevent = AUE_NULL, .sy_flags = SYF_SYSFILS(SYSFIL_MAC | SYSFIL_EXEC | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 415 = __mac_execve */
 	{ .sy_narg = AS(sigaction_args), .sy_call = (sy_call_t *)sys_sigaction, .sy_auevent = AUE_SIGACTION, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 416 = sigaction */
 	{ .sy_narg = AS(sigreturn_args), .sy_call = (sy_call_t *)sys_sigreturn, .sy_auevent = AUE_SIGRETURN, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 417 = sigreturn */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 418 = reserved for local use */
@@ -599,7 +599,7 @@ struct sysent sysent[] = {
 	{ .sy_narg = AS(chflagsat_args), .sy_call = (sy_call_t *)sys_chflagsat, .sy_auevent = AUE_CHFLAGSAT, .sy_flags = SYF_SYSFILS(SYSFIL_FATTR), .sy_thrcnt = SY_THR_STATIC },	/* 540 = chflagsat */
 	{ .sy_narg = AS(accept4_args), .sy_call = (sy_call_t *)sys_accept4, .sy_auevent = AUE_ACCEPT, .sy_flags = SYF_SYSFILS(SYSFIL_NET), .sy_thrcnt = SY_THR_STATIC },	/* 541 = accept4 */
 	{ .sy_narg = AS(pipe2_args), .sy_call = (sy_call_t *)sys_pipe2, .sy_auevent = AUE_PIPE, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 542 = pipe2 */
-	{ .sy_narg = AS(aio_mlock_args), .sy_call = (sy_call_t *)sys_aio_mlock, .sy_auevent = AUE_AIO_MLOCK, .sy_flags = SYF_SYSFILS(SYSFIL_AIO | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 543 = aio_mlock */
+	{ .sy_narg = AS(aio_mlock_args), .sy_call = (sy_call_t *)sys_aio_mlock, .sy_auevent = AUE_AIO_MLOCK, .sy_flags = SYF_SYSFILS(SYSFIL_AIO | SYSFIL_MLOCK | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 543 = aio_mlock */
 	{ .sy_narg = AS(procctl_args), .sy_call = (sy_call_t *)sys_procctl, .sy_auevent = AUE_PROCCTL, .sy_flags = SYF_SYSFILS(SYSFIL_PROC | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 544 = procctl */
 	{ .sy_narg = AS(ppoll_args), .sy_call = (sy_call_t *)sys_ppoll, .sy_auevent = AUE_POLL, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 545 = ppoll */
 	{ .sy_narg = AS(futimens_args), .sy_call = (sy_call_t *)sys_futimens, .sy_auevent = AUE_FUTIMES, .sy_flags = SYF_SYSFILS(SYSFIL_FATTR), .sy_thrcnt = SY_THR_STATIC },	/* 546 = futimens */

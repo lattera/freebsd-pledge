@@ -2188,7 +2188,7 @@
 		    _In_z_ const char *attrname
 		);
 	}
-415	AUE_NULL	STD|SYSFIL_MAC {
+415	AUE_NULL	STD|SYSFIL_MAC|SYSFIL_EXEC {
 		int __mac_execve(
 		    _In_z_ const char *fname,
 		    _In_ char **argv,
@@ -3008,7 +3008,7 @@
 		    int flags
 		);
 	}
-543	AUE_AIO_MLOCK	STD|SYSFIL_AIO {
+543	AUE_AIO_MLOCK	STD|SYSFIL_AIO|SYSFIL_MLOCK {
 		int aio_mlock(
 		    _In_ struct aiocb *aiocbp
 		);
