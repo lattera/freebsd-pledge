@@ -158,63 +158,63 @@ static const enum promise_type depends_table[][2] = {
 	{ PROMISE_UNIX, PROMISE_NET },
 };
 
-static const struct promise_sysfil {
+static const struct promise_ability {
 	enum promise_type promise;
-	int sysfil;
-} sysfils_table[] = {
-	{ PROMISE_BASIC,		SYSFIL_STDIO },
-	{ PROMISE_STDIO,		SYSFIL_STDIO },
-	{ PROMISE_RPATH,		SYSFIL_VFS_READ },
-	{ PROMISE_WPATH,		SYSFIL_VFS_WRITE },
-	{ PROMISE_CPATH,		SYSFIL_VFS_CREATE },
-	{ PROMISE_CPATH,		SYSFIL_VFS_DELETE },
-	{ PROMISE_DPATH,		SYSFIL_MKFIFO },
-	{ PROMISE_DPATH,		SYSFIL_MAKEDEV },
-	{ PROMISE_FLOCK,		SYSFIL_FLOCK },
-	{ PROMISE_FATTR,		SYSFIL_FATTR },
-	{ PROMISE_CHOWN,		SYSFIL_CHOWN },
-	{ PROMISE_ID,			SYSFIL_ID },
-	{ PROMISE_PROC,			SYSFIL_PROC },
-	{ PROMISE_PROC,			SYSFIL_SCHED },
-	{ PROMISE_REAP,			SYSFIL_PROC },
-	{ PROMISE_REAP,			SYSFIL_REAP },
-	{ PROMISE_THREAD,		SYSFIL_THREAD },
-	{ PROMISE_THREAD,		SYSFIL_SCHED },
-	{ PROMISE_EXEC,			SYSFIL_EXEC },
-	{ PROMISE_PROT_EXEC,		SYSFIL_PROT_EXEC },
-	{ PROMISE_TTY,			SYSFIL_TTY },
-	{ PROMISE_PTS,			SYSFIL_TTY },
-	{ PROMISE_RLIMIT,		SYSFIL_RLIMIT },
-	{ PROMISE_SCHED,		SYSFIL_SCHED },
-	{ PROMISE_SETTIME,		SYSFIL_SETTIME },
-	{ PROMISE_FFCLOCK,		SYSFIL_FFCLOCK },
-	{ PROMISE_MLOCK,		SYSFIL_MLOCK },
-	{ PROMISE_AIO,			SYSFIL_AIO },
-	{ PROMISE_EXTATTR,		SYSFIL_EXTATTR },
-	{ PROMISE_ACL,			SYSFIL_ACL },
-	{ PROMISE_MAC,			SYSFIL_MAC },
-	{ PROMISE_CPUSET,		SYSFIL_CPUSET },
-	{ PROMISE_SYSVIPC,		SYSFIL_SYSVIPC },
-	{ PROMISE_POSIXIPC,		SYSFIL_POSIXIPC },
-	{ PROMISE_POSIXRT,		SYSFIL_POSIXRT },
-	{ PROMISE_CHROOT,		SYSFIL_CHROOT },
-	{ PROMISE_JAIL,			SYSFIL_JAIL },
-	{ PROMISE_PS,			SYSFIL_PS },
-	{ PROMISE_CHMOD_SPECIAL,	SYSFIL_CHMOD_SPECIAL },
-	{ PROMISE_SYSFLAGS,		SYSFIL_SYSFLAGS },
-	{ PROMISE_SENDFILE,		SYSFIL_SENDFILE },
-	{ PROMISE_UNIX,			SYSFIL_UNIX },
-	{ PROMISE_INET,			SYSFIL_NET },
-	{ PROMISE_RECVFD,		SYSFIL_RECVFD },
-	{ PROMISE_SENDFD,		SYSFIL_SENDFD },
-	{ PROMISE_MOUNT,		SYSFIL_MOUNT },
-	{ PROMISE_QUOTA,		SYSFIL_QUOTA },
-	{ PROMISE_FH,			SYSFIL_FH },
-	{ PROMISE_ANY_SOCKAF,		SYSFIL_ANY_SOCKAF },
-	{ PROMISE_ANY_PRIV,		SYSFIL_ANY_PRIV },
-	{ PROMISE_ANY_IOCTL,		SYSFIL_ANY_IOCTL },
-	{ PROMISE_ANY_SOCKOPT,		SYSFIL_ANY_SOCKOPT },
-	{ PROMISE_ANY_SYSCTL,		SYSFIL_ANY_SYSCTL },
+	enum curtain_ability ability;
+} abilities_table[] = {
+	{ PROMISE_BASIC,		CURTAINABL_STDIO },
+	{ PROMISE_STDIO,		CURTAINABL_STDIO },
+	{ PROMISE_RPATH,		CURTAINABL_VFS_READ },
+	{ PROMISE_WPATH,		CURTAINABL_VFS_WRITE },
+	{ PROMISE_CPATH,		CURTAINABL_VFS_CREATE },
+	{ PROMISE_CPATH,		CURTAINABL_VFS_DELETE },
+	{ PROMISE_DPATH,		CURTAINABL_MKFIFO },
+	{ PROMISE_DPATH,		CURTAINABL_MAKEDEV },
+	{ PROMISE_FLOCK,		CURTAINABL_FLOCK },
+	{ PROMISE_FATTR,		CURTAINABL_FATTR },
+	{ PROMISE_CHOWN,		CURTAINABL_CHOWN },
+	{ PROMISE_ID,			CURTAINABL_ID },
+	{ PROMISE_PROC,			CURTAINABL_PROC },
+	{ PROMISE_PROC,			CURTAINABL_SCHED },
+	{ PROMISE_REAP,			CURTAINABL_PROC },
+	{ PROMISE_REAP,			CURTAINABL_REAP },
+	{ PROMISE_THREAD,		CURTAINABL_THREAD },
+	{ PROMISE_THREAD,		CURTAINABL_SCHED },
+	{ PROMISE_EXEC,			CURTAINABL_EXEC },
+	{ PROMISE_PROT_EXEC,		CURTAINABL_PROT_EXEC },
+	{ PROMISE_TTY,			CURTAINABL_TTY },
+	{ PROMISE_PTS,			CURTAINABL_TTY },
+	{ PROMISE_RLIMIT,		CURTAINABL_RLIMIT },
+	{ PROMISE_SCHED,		CURTAINABL_SCHED },
+	{ PROMISE_SETTIME,		CURTAINABL_SETTIME },
+	{ PROMISE_FFCLOCK,		CURTAINABL_FFCLOCK },
+	{ PROMISE_MLOCK,		CURTAINABL_MLOCK },
+	{ PROMISE_AIO,			CURTAINABL_AIO },
+	{ PROMISE_EXTATTR,		CURTAINABL_EXTATTR },
+	{ PROMISE_ACL,			CURTAINABL_ACL },
+	{ PROMISE_MAC,			CURTAINABL_MAC },
+	{ PROMISE_CPUSET,		CURTAINABL_CPUSET },
+	{ PROMISE_SYSVIPC,		CURTAINABL_SYSVIPC },
+	{ PROMISE_POSIXIPC,		CURTAINABL_POSIXIPC },
+	{ PROMISE_POSIXRT,		CURTAINABL_POSIXRT },
+	{ PROMISE_CHROOT,		CURTAINABL_CHROOT },
+	{ PROMISE_JAIL,			CURTAINABL_JAIL },
+	{ PROMISE_PS,			CURTAINABL_PS },
+	{ PROMISE_CHMOD_SPECIAL,	CURTAINABL_CHMOD_SPECIAL },
+	{ PROMISE_SYSFLAGS,		CURTAINABL_SYSFLAGS },
+	{ PROMISE_SENDFILE,		CURTAINABL_SENDFILE },
+	{ PROMISE_UNIX,			CURTAINABL_UNIX },
+	{ PROMISE_INET,			CURTAINABL_NET },
+	{ PROMISE_RECVFD,		CURTAINABL_RECVFD },
+	{ PROMISE_SENDFD,		CURTAINABL_SENDFD },
+	{ PROMISE_MOUNT,		CURTAINABL_MOUNT },
+	{ PROMISE_QUOTA,		CURTAINABL_QUOTA },
+	{ PROMISE_FH,			CURTAINABL_FH },
+	{ PROMISE_ANY_SOCKAF,		CURTAINABL_ANY_SOCKAF },
+	{ PROMISE_ANY_PRIV,		CURTAINABL_ANY_PRIV },
+	{ PROMISE_ANY_IOCTL,		CURTAINABL_ANY_IOCTL },
+	{ PROMISE_ANY_SOCKOPT,		CURTAINABL_ANY_SOCKOPT },
+	{ PROMISE_ANY_SYSCTL,		CURTAINABL_ANY_SYSCTL },
 };
 
 static const struct promise_ioctl {
@@ -432,27 +432,27 @@ uperms_for_promises(const enum curtain_state *promises)
 }
 
 static void
-sysfils_for_uperms(struct curtain_slot *slot, unveil_perms uperms, unsigned flags)
+abilities_for_uperms(struct curtain_slot *slot, unveil_perms uperms, unsigned flags)
 {
 	if (uperms & UPERM_READ)
-		curtain_sysfil(slot, SYSFIL_VFS_READ, flags);
+		curtain_ability(slot, CURTAINABL_VFS_READ, flags);
 	if (uperms & UPERM_WRITE)
-		curtain_sysfil(slot, SYSFIL_VFS_WRITE, flags);
+		curtain_ability(slot, CURTAINABL_VFS_WRITE, flags);
 	if (uperms & UPERM_CREATE)
-		curtain_sysfil(slot, SYSFIL_VFS_CREATE, flags);
+		curtain_ability(slot, CURTAINABL_VFS_CREATE, flags);
 	if (uperms & UPERM_DELETE)
-		curtain_sysfil(slot, SYSFIL_VFS_DELETE, flags);
+		curtain_ability(slot, CURTAINABL_VFS_DELETE, flags);
 	if (uperms & UPERM_EXECUTE)
-		curtain_sysfil(slot, SYSFIL_EXEC, flags);
+		curtain_ability(slot, CURTAINABL_EXEC, flags);
 	if (uperms & UPERM_SETATTR)
-		curtain_sysfil(slot, SYSFIL_FATTR, flags);
+		curtain_ability(slot, CURTAINABL_FATTR, flags);
 	if (uperms & UPERM_UNIX)
-		curtain_sysfil(slot, SYSFIL_UNIX, flags);
+		curtain_ability(slot, CURTAINABL_UNIX, flags);
 	if (uperms & UPERM_TMPDIR) {
-		curtain_sysfil(slot, SYSFIL_VFS_READ, flags);
-		curtain_sysfil(slot, SYSFIL_VFS_WRITE, flags);
-		curtain_sysfil(slot, SYSFIL_VFS_CREATE, flags);
-		curtain_sysfil(slot, SYSFIL_VFS_DELETE, flags);
+		curtain_ability(slot, CURTAINABL_VFS_READ, flags);
+		curtain_ability(slot, CURTAINABL_VFS_WRITE, flags);
+		curtain_ability(slot, CURTAINABL_VFS_CREATE, flags);
+		curtain_ability(slot, CURTAINABL_VFS_DELETE, flags);
 	}
 }
 
@@ -480,7 +480,7 @@ do_promises_slots(enum curtain_on on,
 	} while (changed);
 
 	/*
-	 * Initialize promise slots on first use.  Sysfil and unveils are
+	 * Initialize promise slots on first use.  Abilities and unveils are
 	 * separated because unveil() needs to deal with them differently when
 	 * unveil() is done before pledge().
 	 */
@@ -519,12 +519,12 @@ do_promises_slots(enum curtain_on on,
 			    CURTAIN_UNVEIL_INHERIT, e->uperms);
 		}
 		if (fill[e->promise])
-			sysfils_for_uperms(promise_slots[e->promise], e->uperms, flags);
+			abilities_for_uperms(promise_slots[e->promise], e->uperms, flags);
 	}
 
-	FOREACH_ARRAY(e, sysfils_table)
+	FOREACH_ARRAY(e, abilities_table)
 		if (fill[e->promise])
-			curtain_sysfil(promise_slots[e->promise], e->sysfil, flags);
+			curtain_ability(promise_slots[e->promise], e->ability, flags);
 
 	FOREACH_ARRAY(e, ioctls_table)
 		if (fill[e->promise])
@@ -554,7 +554,7 @@ do_promises_slots(enum curtain_on on,
 		 * This is different from the "unveil" promise which is handled
 		 * specially in do_pledge().
 		 */
-		curtain_sysfil(always_slot, SYSFIL_CURTAIN, flags);
+		curtain_ability(always_slot, CURTAINABL_CURTAIN, flags);
 		/*
 		 * Always keep the root directory chdir()-able (but not
 		 * necessarily stat()-able or readable).  This is sufficient to
@@ -651,8 +651,8 @@ do_unveil_init_on(enum curtain_on on)
 		enum curtain_state promises[PROMISE_COUNT],
 		                   unveil_promises[PROMISE_COUNT];
 		/*
-		 * unveil() was called before pledge().  Enable sysfils for all
-		 * promises and reserve their unveils.
+		 * unveil() was called before pledge().  Enable abilities for
+		 * all promises and reserve their unveils.
 		 */
 		for (enum promise_type i = 0; i < PROMISE_COUNT; i++) {
 			promises[i] = CURTAIN_ENABLED;

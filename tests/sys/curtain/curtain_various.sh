@@ -148,20 +148,20 @@ shared_tmpdir_protects_krb5cc_body() {
 
 atf_test_case posixshm_restriction
 posixshm_restriction_body() {
-	atf_check curtain -@sysfil:posixipc \
+	atf_check curtain -@ability:posixipc \
 		sh -c 'posixshmcontrol create /test && posixshmcontrol dump /test && posixshmcontrol rm /test'
 	local p="/tests/curtain-posix-shm-test"
 	atf_check posixshmcontrol create "$p/test"
 	atf_check posixshmcontrol dump "$p/test"
-	atf_check -s not-exit:0 -e not-empty curtain -@sysfil:posixipc \
+	atf_check -s not-exit:0 -e not-empty curtain -@ability:posixipc \
 		posixshmcontrol dump "$p/test"
 	atf_check posixshmcontrol rm "$p/test"
 }
 
 atf_test_case cmd_timeout
 cmd_timeout_body() {
-	atf_check -s exit:124 curtain -@sysfil:reap timeout 0.001 sleep 100
-	atf_check -s exit:124 curtain -@sysfil:reap -t curtain timeout 0.001 curtain -f sleep 100
+	atf_check -s exit:124 curtain -@ability:reap timeout 0.001 sleep 100
+	atf_check -s exit:124 curtain -@ability:reap -t curtain timeout 0.001 curtain -f sleep 100
 }
 
 atf_test_case cmd_id

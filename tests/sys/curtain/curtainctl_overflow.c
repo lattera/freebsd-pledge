@@ -9,13 +9,13 @@
 ATF_TC_WITHOUT_HEAD(curtainctl_sanity);
 ATF_TC_BODY(curtainctl_sanity, tc)
 {
-	int sysfils[] = { SYSFIL_STDIO };
+	enum curtain_ability abilities[] = { CURTAINABL_STDIO };
 	struct curtainreq reqs[] = {
 		{
-			.type = CURTAINTYP_SYSFIL,
+			.type = CURTAINTYP_ABILITY,
 			.flags = CURTAINREQ_ON_SELF,
-			.data = sysfils,
-			.size = sizeof sysfils,
+			.data = abilities,
+			.size = sizeof abilities,
 		}
 	};
 	int flags = CURTAINCTL_ENFORCE;
@@ -26,15 +26,15 @@ ATF_TC_BODY(curtainctl_sanity, tc)
 ATF_TC_WITHOUT_HEAD(curtainctl_overflow_reqs);
 ATF_TC_BODY(curtainctl_overflow_reqs, tc)
 {
-	int sysfils[] = { SYSFIL_STDIO };
+	enum curtain_ability abilities[] = { CURTAINABL_STDIO };
 	struct curtainreq reqs[CURTAINCTL_MAX_REQS + 1];
 	int flags = CURTAINCTL_ENFORCE;
 	for (size_t i = 0; i < nitems(reqs); i++)
 		reqs[i] = (struct curtainreq){
-			.type = CURTAINTYP_SYSFIL,
+			.type = CURTAINTYP_ABILITY,
 			.flags = CURTAINREQ_ON_SELF,
-			.data = sysfils,
-			.size = sizeof sysfils,
+			.data = abilities,
+			.size = sizeof abilities,
 		};
 	ATF_CHECK_ERRNO(EINVAL, curtainctl(flags, nitems(reqs), reqs) < 0);
 }
@@ -42,17 +42,17 @@ ATF_TC_BODY(curtainctl_overflow_reqs, tc)
 ATF_TC_WITHOUT_HEAD(curtainctl_overflow_size);
 ATF_TC_BODY(curtainctl_overflow_size, tc)
 {
-	int sysfils[CURTAINCTL_MAX_SIZE / sizeof (int) / 8];
+	enum curtain_ability abilities[CURTAINCTL_MAX_SIZE / sizeof (int) / 8];
 	struct curtainreq reqs[32];
 	int flags = CURTAINCTL_ENFORCE;
-	for (size_t i = 0; i < nitems(sysfils); i++)
-		sysfils[i] = SYSFIL_STDIO;
+	for (size_t i = 0; i < nitems(abilities); i++)
+		abilities[i] = CURTAINABL_STDIO;
 	for (size_t i = 0; i < nitems(reqs); i++)
 		reqs[i] = (struct curtainreq){
-			.type = CURTAINTYP_SYSFIL,
+			.type = CURTAINTYP_ABILITY,
 			.flags = CURTAINREQ_ON_SELF,
-			.data = sysfils,
-			.size = sizeof sysfils,
+			.data = abilities,
+			.size = sizeof abilities,
 		};
 	ATF_CHECK_ERRNO(EINVAL, curtainctl(flags, nitems(reqs), reqs) < 0);
 }
@@ -60,14 +60,14 @@ ATF_TC_BODY(curtainctl_overflow_size, tc)
 ATF_TC_WITHOUT_HEAD(curtainctl_overflow_items);
 ATF_TC_BODY(curtainctl_overflow_items, tc)
 {
-	int sysfils[] = { SYSFIL_STDIO };
+	enum curtain_ability abilities[] = { CURTAINABL_STDIO };
 	unsigned long ioctls[CURTAINCTL_MAX_ITEMS + 1];
 	struct curtainreq reqs[] = {
 		{
-			.type = CURTAINTYP_SYSFIL,
+			.type = CURTAINTYP_ABILITY,
 			.flags = CURTAINREQ_ON_SELF,
-			.data = sysfils,
-			.size = sizeof sysfils,
+			.data = abilities,
+			.size = sizeof abilities,
 		},
 		{
 			.type = CURTAINTYP_IOCTL,

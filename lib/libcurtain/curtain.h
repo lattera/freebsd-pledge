@@ -5,7 +5,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <sys/sysfil.h>
+#include <sys/curtain_ability.h>
 #include <sys/unveil.h>
 
 struct curtain_slot;
@@ -47,7 +47,7 @@ int curtain_enforce(void);
 void curtain_reinit(void);
 
 int curtain_default(struct curtain_slot *slot, unsigned flags);
-int curtain_sysfil(struct curtain_slot *, int sysfil, int flags);
+int curtain_ability(struct curtain_slot *, enum curtain_ability ability, int flags);
 int curtain_ioctl(struct curtain_slot *, unsigned long ioctl, int flags);
 int curtain_ioctls(struct curtain_slot *, const unsigned long *ioctls, int flags);
 int curtain_sockaf(struct curtain_slot *, int af, int flags);

@@ -5,6 +5,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include <sys/curtain_ability.h>
+
 struct curtain_config {
 	struct curtain_config_tag *tags_pending, *tags_current, *tags_visited;
 	const char *old_tmpdir;
@@ -28,10 +30,10 @@ extern const struct privent {
 	int priv;
 } curtain_privtab[];
 
-extern const struct sysfilent {
+extern const struct abilityent {
 	const char *name;
-	int sysfil;
-} curtain_sysfiltab[];
+	enum curtain_ability ability;
+} curtain_abilitytab[];
 
 extern const struct socklvlent {
 	const char *name;

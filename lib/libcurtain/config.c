@@ -347,10 +347,10 @@ parse_unveil(struct parser *par, struct word *w)
 }
 
 static void
-parse_sysfil(struct parser *par, struct word *w)
+parse_ability(struct parser *par, struct word *w)
 {
 	while (w) {
-		const struct sysfilent *e;
+		const struct abilityent *e;
 		unsigned flags;
 		flags = 0;
 		switch (w->len ? w->ptr[w->len - 1] : '\0') {
@@ -363,13 +363,13 @@ parse_sysfil(struct parser *par, struct word *w)
 			w->len--;
 			break;
 		}
-		for (e = curtain_sysfiltab; e->name; e++)
+		for (e = curtain_abilitytab; e->name; e++)
 			if (strmemcmp(e->name, w->ptr, w->len) == 0)
 				break;
 		if (!e->name)
-			parse_error(par, "unknown sysfil");
+			parse_error(par, "unknown ability");
 		else if (par->apply)
-			curtain_sysfil(par->slot, e->sysfil, flags);
+			curtain_ability(par->slot, e->ability, flags);
 		w = w->next;
 	}
 }
@@ -470,7 +470,7 @@ static const struct {
 	{ "merge", parse_push },
 	{ "push", parse_push },
 	{ "unveil", parse_unveil },
-	{ "sysfil", parse_sysfil },
+	{ "ability", parse_ability },
 	{ "sysctl", parse_sysctl },
 	{ "priv", parse_priv },
 	{ "ioctl", parse_ioctls },

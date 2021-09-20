@@ -10,7 +10,6 @@
 #include <sys/param.h>
 #include <sys/curtain.h>
 #include <sys/unveil.h>
-#include <sys/sysfil.h>
 
 #include <curtain.h>
 
@@ -38,7 +37,7 @@ struct simple_node {
 	struct simple_node *next;
 	struct simple_mode *modes;
 	union simple_key {
-		int sysfil;
+		enum curtain_ability ability;
 		unsigned long ioctl;
 		int sockaf;
 		int socklvl;
@@ -275,32 +274,32 @@ fill_simple(struct simple_type *type,
 
 
 static int
-cmp_sysfil(const union simple_key *key0, const union simple_key *key1)
+cmp_ability(const union simple_key *key0, const union simple_key *key1)
 {
-	return (key0->sysfil - key1->sysfil);
+	return (key0->ability - key1->ability);
 }
 
 static void
-fill_sysfil(void **dest, struct simple_node *node)
+fill_ability(void **dest, struct simple_node *node)
 {
 	unsigned *fill = *dest;
-	*fill++ = node->key.sysfil;
+	*fill++ = node->key.ability;
 	*dest = fill;
 }
 
-static struct simple_type sysfils_type = {
-	.type = CURTAINTYP_SYSFIL,
+static struct simple_type abilities_type = {
+	.type = CURTAINTYP_ABILITY,
 	.ent_size = sizeof (int),
-	.cmp = cmp_sysfil,
-	.fill = fill_sysfil,
+	.cmp = cmp_ability,
+	.fill = fill_ability,
 };
 
 int
-curtain_sysfil(struct curtain_slot *slot, int sysfil, int flags)
+curtain_ability(struct curtain_slot *slot, enum curtain_ability ability, int flags)
 {
 	struct simple_mode *mode;
-	mode = get_simple(&sysfils_type, slot,
-	    (union simple_key){ .sysfil = sysfil });
+	mode = get_simple(&abilities_type, slot,
+	    (union simple_key){ .ability = ability });
 	if (!mode)
 		return (-1);
 	mode->level = flags2level(flags);
@@ -824,7 +823,7 @@ fill_unveils(struct curtainent_unveil *ents[CURTAIN_ON_COUNT], enum curtain_stat
 
 
 static struct simple_type *const simple_types[] = {
-	&sysfils_type,
+	&abilities_type,
 	&ioctls_type,
 	&sockafs_type,
 	&socklvls_type,
