@@ -11,12 +11,6 @@
 #include <security/mac/mac_framework.h>
 #endif
 
-/*
- * The first 3 sysfils cannot be directly controlled by the user.  Following a
- * (successful) curtainctl() call to restrict the process, SYSFIL_DEFAULT is
- * always disabled, SYSFIL_UNCAPSICUM is always unaffected and SYSFIL_ALWAYS is
- * always left enabled.
- */
 /* Fallback for miscellaneous operations that must be restricted. */
 #define	SYSFIL_DEFAULT		0
 /* Represents the state of NOT being in Capsicum capability mode. */
@@ -84,8 +78,8 @@
 #define	SYSFIL__UNUSED6		60
 #define	SYSFIL__UNUSED7		61
 #define	SYSFIL_PROT_EXEC_LOOSE	62
-#define	SYSFIL_LAST		62 /* UPDATE ME!!! */
 
+#define	SYSFIL_LAST		62 /* UPDATE ME!!! */
 #define	SYSFIL_COUNT		(SYSFIL_LAST + 1)
 
 #ifdef _KERNEL
@@ -137,7 +131,7 @@ CTASSERT(SYSFIL_LAST < SYSFIL_SIZE);
 static inline int
 sysfil_match_cred(const struct ucred *cr, int sf) {
 #ifndef NOSYSFIL
-	return (BIT_ISSET(SYSFILSET_BITS, sf, &cr->cr_sysfilset));
+	return ((cr->cr_sysfilset & ((sysfilset_t)1 << sf)) != 0);
 #else
 	return (1);
 #endif
@@ -181,7 +175,7 @@ static inline void
 sysfil_cred_init(struct ucred *cr)
 {
 #ifndef NOSYSFIL
-	BIT_FILL(SYSFILSET_BITS, &cr->cr_sysfilset);
+	cr->cr_sysfilset = ~(sysfilset_t)0;
 #endif
 }
 

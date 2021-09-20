@@ -155,9 +155,9 @@ kvm_proclist(kvm_t *kd, int what, int arg, struct proc *p,
 			kp->ki_rgid = ucred.cr_rgid;
 			kp->ki_svgid = ucred.cr_svgid;
 			kp->ki_cr_flags = 0;
-			if (SYSFILSET_IS_RESTRICTED(&ucred.cr_sysfilset))
+			if (SYSFILSET_IS_RESTRICTED(ucred.cr_sysfilset))
 				kp->ki_cr_flags |= KI_CRF_RESTRICTED_MODE;
-			if (SYSFILSET_IN_CAPABILITY_MODE(&ucred.cr_sysfilset))
+			if (SYSFILSET_IN_CAPABILITY_MODE(ucred.cr_sysfilset))
 				kp->ki_cr_flags |= KI_CRF_CAPABILITY_MODE;
 			if (ucred.cr_ngroups > KI_NGROUPS) {
 				kp->ki_ngroups = KI_NGROUPS;

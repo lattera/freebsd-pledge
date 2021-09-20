@@ -98,9 +98,9 @@ struct ucred {
 #define	CRED_IN_CAPABILITY_MODE(cr) 0
 #else
 #define	CRED_IN_RESTRICTED_MODE(cr) \
-	SYSFILSET_IS_RESTRICTED(&(cr)->cr_sysfilset)
+	SYSFILSET_IS_RESTRICTED((cr)->cr_sysfilset)
 #define	CRED_IN_CAPABILITY_MODE(cr) \
-	SYSFILSET_IN_CAPABILITY_MODE(&(cr)->cr_sysfilset)
+	SYSFILSET_IN_CAPABILITY_MODE((cr)->cr_sysfilset)
 #endif
 
 #endif /* _KERNEL || _WANT_UCRED */

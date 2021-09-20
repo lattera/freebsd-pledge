@@ -704,7 +704,7 @@ int	mac_generic_check_vm_prot(struct ucred *cred, struct file *fp,
 int	mac_generic_ipc_name_prefix(struct ucred *cred, char **prefix, char *end);
 
 int	mac_sysfil_check(struct ucred *cred, int sf);
-int	mac_sysfil_update_mask(struct proc *p, const sysfilset_t *mask_sfs);
+int	mac_sysfil_update_mask(struct proc *p, sysfilset_t mask_sfs);
 
 int	mac_proc_check_exec_sugid(struct ucred *cred, struct proc *p);
 

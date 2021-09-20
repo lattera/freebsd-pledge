@@ -113,10 +113,9 @@ sys_cap_enter(struct thread *td, struct cap_enter_args *uap)
 	if (IN_CAPABILITY_MODE(td))
 		return (0);
 	p = td->td_proc;
-	BIT_FILL(SYSFILSET_BITS, &mask);
-	BIT_CLR(SYSFILSET_BITS, SYSFIL_UNCAPSICUM, &mask);
+	mask = ~((sysfilset_t)1 << SYSFIL_UNCAPSICUM);
 #ifdef MAC
-	error = mac_sysfil_update_mask(p, &mask);
+	error = mac_sysfil_update_mask(p, mask);
 	if (error != 0)
 		return (error);
 #else

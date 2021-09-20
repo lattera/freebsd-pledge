@@ -490,7 +490,7 @@ mac_sysfil_check(struct ucred *cred, int sf)
 }
 
 int
-mac_sysfil_update_mask(struct proc *p, const sysfilset_t *mask_sfs)
+mac_sysfil_update_mask(struct proc *p, sysfilset_t mask_sfs)
 {
 	struct ucred *cred, *oldcred;
 	do {
@@ -498,7 +498,7 @@ mac_sysfil_update_mask(struct proc *p, const sysfilset_t *mask_sfs)
 		cred = crget();
 		PROC_LOCK(p);
 		oldcred = crcopysafe(p, cred);
-		BIT_AND(SYSFILSET_BITS, &cred->cr_sysfilset, mask_sfs);
+		cred->cr_sysfilset &= mask_sfs;
 		crhold(oldcred);
 		PROC_UNLOCK(p);
 		MAC_POLICY_CHECK(sysfil_update_mask, cred);

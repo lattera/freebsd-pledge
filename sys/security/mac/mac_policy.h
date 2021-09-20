@@ -66,7 +66,6 @@
 #include <sys/acl.h>	/* XXX acl_type_t */
 #include <sys/types.h>	/* XXX accmode_t */
 #include <vm/vm.h>	/* vm_prot_t */
-#include <sys/_sysfil.h>	/* sysfilset_t */
 
 struct acl;
 struct auditinfo;

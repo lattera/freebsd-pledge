@@ -668,10 +668,10 @@ curtain_is_restricted_on_exec(const struct curtain *ct)
 static void
 curtain_to_sysfilset(const struct curtain *ct, sysfilset_t *sfs)
 {
-	BIT_ZERO(SYSFILSET_BITS, sfs);
+	*sfs = 0;
 	for (int sf = 0; sf <= SYSFIL_LAST; sf++)
 		if (ct->ct_sysfils[sf].on_self == CURTAINACT_ALLOW)
-			BIT_SET(SYSFILSET_BITS, sf, sfs);
+			*sfs |= (sysfilset_t)1 << sf;
 }
 
 static void
@@ -688,13 +688,13 @@ curtain_cred_sysfil_update(struct ucred *cr, const struct curtain *ct)
 {
 	if (curtain_is_restricted_on_self(ct)) {
 		curtain_to_sysfilset(ct, &cr->cr_sysfilset);
-		MPASS(SYSFILSET_IS_RESTRICTED(&cr->cr_sysfilset));
+		MPASS(SYSFILSET_IS_RESTRICTED(cr->cr_sysfilset));
 		MPASS(CRED_IN_RESTRICTED_MODE(cr));
 	} else {
 		/* NOTE: Unrestricted processes must have their whole sysfilset
 		 * filled, not just the bits for existing sysfils. */
-		BIT_FILL(SYSFILSET_BITS, &cr->cr_sysfilset);
-		MPASS(!SYSFILSET_IS_RESTRICTED(&cr->cr_sysfilset));
+		cr->cr_sysfilset = ~(sysfilset_t)0;
+		MPASS(!SYSFILSET_IS_RESTRICTED(cr->cr_sysfilset));
 		MPASS(!CRED_IN_RESTRICTED_MODE(cr));
 	}
 }
@@ -727,13 +727,13 @@ curtain_harden(struct curtain *ct)
 }
 
 static void
-curtain_mask_sysfils(struct curtain *ct, const sysfilset_t *sfs)
+curtain_mask_sysfils(struct curtain *ct, sysfilset_t sfs)
 {
 	struct curtain_mode deny;
 	mode_set(&deny, CURTAINACT_DENY);
 	KASSERT(ct->ct_ref == 1, ("modifying shared curtain"));
 	for (int sf = 0; sf <= SYSFIL_LAST; sf++)
-		if (!BIT_ISSET(SYSFILSET_BITS, sf, sfs))
+		if (!(sfs & ((sysfilset_t)1 << sf)))
 			mode_mask(&ct->ct_sysfils[sf], deny);
 	curtain_dirty(ct);
 }
@@ -1102,7 +1102,7 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 		if (CRED_SLOT(cr))
 			curtain_mask(ct, CRED_SLOT(cr));
 		else
-			curtain_mask_sysfils(ct, &cr->cr_sysfilset);
+			curtain_mask_sysfils(ct, cr->cr_sysfilset);
 		SDT_PROBE1(curtain,, do_curtainctl, mask, ct);
 		new_ct = curtain_dup_compact(ct);
 		if (CRED_SLOT(cr))
@@ -2352,7 +2352,7 @@ curtain_sysfil_update_mask(struct ucred *cr)
 	if (!CRED_SLOT(cr))
 		return (0);
 	ct = curtain_dup_child(CRED_SLOT(cr));
-	curtain_mask_sysfils(ct, &cr->cr_sysfilset);
+	curtain_mask_sysfils(ct, cr->cr_sysfilset);
 	curtain_cache_update(ct);
 	MPASS(ct->ct_finalized);
 	curtain_free(CRED_SLOT(cr));
