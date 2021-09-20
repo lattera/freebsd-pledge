@@ -584,7 +584,6 @@ curtain_dup_compact(const struct curtain *src)
 static const sysfilset_t abilities_sysfils[] = {
 	[CURTAINABL_UNCAPSICUM] = SYSFIL_UNCAPSICUM,
 	[CURTAINABL_DEFAULT] = SYSFIL_DEFAULT,
-	[CURTAINABL_ALWAYS] = SYSFIL_ALWAYS,
 	[CURTAINABL_STDIO] = SYSFIL_STDIO,
 	[CURTAINABL_VFS_MISC] = SYSFIL_VFS_MISC,
 	[CURTAINABL_VFS_READ] = SYSFIL_VFS_READ,
@@ -853,7 +852,7 @@ curtain_cred_visible(const struct ucred *subject, const struct ucred *target,
 
 
 /* Some abilities shouldn't be disabled via curtainctl(2). */
-static const int abilities_always[] = { CURTAINABL_ALWAYS, CURTAINABL_UNCAPSICUM };
+static const int abilities_always[] = { CURTAINABL_UNCAPSICUM };
 /* Some abilities don't make much sense without some others. */
 static const int abilities_expand[][2] = {
 	/* NOTE: Make sure dependencies can be handled in a single pass! */
@@ -2199,8 +2198,7 @@ curtain_generic_check_ioctl(struct ucred *cr, struct file *fp, u_long com, void 
 	case FIOGETOWN:
 	case FIODTYPE:
 		/* always allowed ioctls */
-		abl = CURTAINABL_ALWAYS;
-		break;
+		return (0);
 	case TIOCGETA:
 		/* needed for isatty(3) */
 		abl = CURTAINABL_STDIO;
