@@ -629,6 +629,7 @@ static const sysfilset_t abilities_sysfils[] = {
 	[CURTAINABL_AUDIT] = SYSFIL_AUDIT,
 	[CURTAINABL_RFORK] = SYSFIL_RFORK,
 	[CURTAINABL_PROT_EXEC_LOOSE] = SYSFIL_PROT_EXEC_LOOSE,
+	[CURTAINABL_KMOD] = SYSFIL_KMOD,
 };
 
 static enum curtain_ability

@@ -1553,54 +1553,54 @@
 		    _Out_ struct freebsd11_stat *sb
 		);
 	}
-300	AUE_NULL	STD {
+300	AUE_NULL	STD|SYSFIL_KMOD {
 		int modnext(
 		    int modid
 		);
 	}
-301	AUE_NULL	STD {
+301	AUE_NULL	STD|SYSFIL_KMOD {
 		int modstat(
 		    int modid,
 		    _Out_ struct module_stat *stat
 		);
 	}
-302	AUE_NULL	STD {
+302	AUE_NULL	STD|SYSFIL_KMOD {
 		int modfnext(
 		    int modid
 		);
 	}
-303	AUE_NULL	STD {
+303	AUE_NULL	STD|SYSFIL_KMOD {
 		int modfind(
 		    _In_z_ const char *name
 		);
 	}
-304	AUE_MODLOAD	STD {
+304	AUE_MODLOAD	STD|SYSFIL_KMOD {
 		int kldload(
 		    _In_z_ const char *file
 		);
 	}
-305	AUE_MODUNLOAD	STD {
+305	AUE_MODUNLOAD	STD|SYSFIL_KMOD {
 		int kldunload(
 		    int fileid
 		);
 	}
-306	AUE_NULL	STD {
+306	AUE_NULL	STD|SYSFIL_KMOD {
 		int kldfind(
 		    _In_z_ const char *file
 		);
 	}
-307	AUE_NULL	STD {
+307	AUE_NULL	STD|SYSFIL_KMOD {
 		int kldnext(
 		    int fileid
 		);
 	}
-308	AUE_NULL	STD {
+308	AUE_NULL	STD|SYSFIL_KMOD {
 		int kldstat(
 		    int fileid,
 		    _Out_ struct kld_file_stat *stat
 		);
 	}
-309	AUE_NULL	STD {
+309	AUE_NULL	STD|SYSFIL_KMOD {
 		int kldfirstmod(
 		    int fileid
 		);
@@ -1745,7 +1745,7 @@
 		    int flags
 		);
 	}
-337	AUE_NULL	STD {
+337	AUE_NULL	STD|SYSFIL_KMOD {
 		int kldsym(
 		    int fileid,
 		    int cmd,
@@ -2346,7 +2346,7 @@
 		    long id
 		);
 	}
-444	AUE_MODUNLOAD	STD {
+444	AUE_MODUNLOAD	STD|SYSFIL_KMOD {
 		int kldunloadf(
 		    int fileid,
 		    int flags
