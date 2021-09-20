@@ -188,7 +188,7 @@ struct sysent sysent[] = {
 	{ compat(AS(otruncate_args),truncate), .sy_auevent = AUE_TRUNCATE, .sy_flags = SYF_SYSFILS(SYSFIL_VFS_WRITE | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 129 = old truncate */
 	{ compat(AS(oftruncate_args),ftruncate), .sy_auevent = AUE_FTRUNCATE, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 130 = old ftruncate */
 	{ .sy_narg = AS(flock_args), .sy_call = (sy_call_t *)sys_flock, .sy_auevent = AUE_FLOCK, .sy_flags = SYF_SYSFILS(SYSFIL_FLOCK), .sy_thrcnt = SY_THR_STATIC },	/* 131 = flock */
-	{ .sy_narg = AS(mkfifo_args), .sy_call = (sy_call_t *)sys_mkfifo, .sy_auevent = AUE_MKFIFO, .sy_flags = SYF_SYSFILS(SYSFIL_MKFIFO | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 132 = mkfifo */
+	{ .sy_narg = AS(mkfifo_args), .sy_call = (sy_call_t *)sys_mkfifo, .sy_auevent = AUE_MKFIFO, .sy_flags = SYF_SYSFILS(SYSFIL_VFS_CREATE | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 132 = mkfifo */
 	{ .sy_narg = AS(sendto_args), .sy_call = (sy_call_t *)sys_sendto, .sy_auevent = AUE_SENDTO, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 133 = sendto */
 	{ .sy_narg = AS(shutdown_args), .sy_call = (sy_call_t *)sys_shutdown, .sy_auevent = AUE_SHUTDOWN, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 134 = shutdown */
 	{ .sy_narg = AS(socketpair_args), .sy_call = (sy_call_t *)sys_socketpair, .sy_auevent = AUE_SOCKETPAIR, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 135 = socketpair */
@@ -553,7 +553,7 @@ struct sysent sysent[] = {
 	{ .sy_narg = AS(futimesat_args), .sy_call = (sy_call_t *)sys_futimesat, .sy_auevent = AUE_FUTIMESAT, .sy_flags = SYF_SYSFILS(SYSFIL_FATTR), .sy_thrcnt = SY_THR_STATIC },	/* 494 = futimesat */
 	{ .sy_narg = AS(linkat_args), .sy_call = (sy_call_t *)sys_linkat, .sy_auevent = AUE_LINKAT, .sy_flags = SYF_SYSFILS(SYSFIL_VFS_CREATE), .sy_thrcnt = SY_THR_STATIC },	/* 495 = linkat */
 	{ .sy_narg = AS(mkdirat_args), .sy_call = (sy_call_t *)sys_mkdirat, .sy_auevent = AUE_MKDIRAT, .sy_flags = SYF_SYSFILS(SYSFIL_VFS_CREATE), .sy_thrcnt = SY_THR_STATIC },	/* 496 = mkdirat */
-	{ .sy_narg = AS(mkfifoat_args), .sy_call = (sy_call_t *)sys_mkfifoat, .sy_auevent = AUE_MKFIFOAT, .sy_flags = SYF_SYSFILS(SYSFIL_MKFIFO), .sy_thrcnt = SY_THR_STATIC },	/* 497 = mkfifoat */
+	{ .sy_narg = AS(mkfifoat_args), .sy_call = (sy_call_t *)sys_mkfifoat, .sy_auevent = AUE_MKFIFOAT, .sy_flags = SYF_SYSFILS(SYSFIL_VFS_CREATE), .sy_thrcnt = SY_THR_STATIC },	/* 497 = mkfifoat */
 	{ compat11(AS(freebsd11_mknodat_args),mknodat), .sy_auevent = AUE_MKNODAT, .sy_flags = SYF_SYSFILS(SYSFIL_VFS_CREATE), .sy_thrcnt = SY_THR_STATIC },	/* 498 = freebsd11 mknodat */
 	{ .sy_narg = AS(openat_args), .sy_call = (sy_call_t *)sys_openat, .sy_auevent = AUE_OPENAT_RWTC, .sy_flags = SYF_SYSFILS(SYSFIL_VFS_MISC), .sy_thrcnt = SY_THR_STATIC },	/* 499 = openat */
 	{ .sy_narg = AS(readlinkat_args), .sy_call = (sy_call_t *)sys_readlinkat, .sy_auevent = AUE_READLINKAT, .sy_flags = SYF_SYSFILS(SYSFIL_VFS_READ), .sy_thrcnt = SY_THR_STATIC },	/* 500 = readlinkat */

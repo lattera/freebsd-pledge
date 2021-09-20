@@ -836,7 +836,7 @@
 		    int how
 		);
 	}
-132	AUE_MKFIFO	STD|SYSFIL_MKFIFO {
+132	AUE_MKFIFO	STD|SYSFIL_VFS_CREATE {
 		int mkfifo(
 		    _In_z_ const char *path,
 		    mode_t mode
@@ -2700,7 +2700,7 @@
 		    mode_t mode
 		);
 	}
-497	AUE_MKFIFOAT	STD|SYSFIL_MKFIFO|CAPENABLED {
+497	AUE_MKFIFOAT	STD|SYSFIL_VFS_CREATE|CAPENABLED {
 		int mkfifoat(
 		    int fd,
 		    _In_z_ const char *path,
