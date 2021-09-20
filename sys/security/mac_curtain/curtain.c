@@ -2260,10 +2260,6 @@ curtain_priv_check(struct ucred *cr, int priv)
 	act = curtain_cred_action(cr, CURTAINTYP_PRIV, (ctkey){ .priv = priv });
 	if (act == CURTAINACT_ALLOW)
 		return (0);
-	/*
-	 * Mostly a subset of what's being allowed for jails (see
-	 * prison_priv_check()) with some extra conditions based on sysfils.
-	 */
 	switch (priv) {
 	case PRIV_AUDIT_CONTROL:
 	case PRIV_AUDIT_FAILSTOP:
@@ -2272,6 +2268,13 @@ curtain_priv_check(struct ucred *cr, int priv)
 	case PRIV_AUDIT_SUBMIT:
 		abl = CURTAINABL_AUDIT;
 		break;
+	case PRIV_SCHED_SETPRIORITY:
+		abl = CURTAINABL_SCHED;
+		break;
+	/*
+	 * Mostly a subset of what's being allowed for jails (see
+	 * prison_priv_check()) with some extra conditions based on sysfils.
+	 */
 	case PRIV_CRED_SETUID:
 	case PRIV_CRED_SETEUID:
 	case PRIV_CRED_SETGID:
