@@ -154,8 +154,11 @@ kvm_proclist(kvm_t *kd, int what, int arg, struct proc *p,
 			kp->ki_svuid = ucred.cr_svuid;
 			kp->ki_rgid = ucred.cr_rgid;
 			kp->ki_svgid = ucred.cr_svgid;
-			/* XXX should probably use the KI_CRF_* flags instead */
-			kp->ki_cr_flags = ucred.cr_flags;
+			kp->ki_cr_flags = 0;
+			if (SYSFILSET_IS_RESTRICTED(&ucred.cr_sysfilset))
+				kp->ki_cr_flags |= KI_CRF_RESTRICTED_MODE;
+			if (SYSFILSET_IN_CAPABILITY_MODE(&ucred.cr_sysfilset))
+				kp->ki_cr_flags |= KI_CRF_CAPABILITY_MODE;
 			if (ucred.cr_ngroups > KI_NGROUPS) {
 				kp->ki_ngroups = KI_NGROUPS;
 				kp->ki_cr_flags |= KI_CRF_GRP_OVERFLOW;
