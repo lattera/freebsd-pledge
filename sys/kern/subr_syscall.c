@@ -63,9 +63,6 @@ syscallenter(struct thread *td)
 	struct syscall_args *sa;
 	struct sysent *se;
 	int error, traced;
-#ifndef NOSYSFIL
-	int sysfil;
-#endif
 	bool sy_thr_static;
 
 	VM_CNT_INC(v_syscall);
@@ -122,27 +119,24 @@ syscallenter(struct thread *td)
 		}
 	}
 
-#ifdef CAPABILITY_MODE
-	/*
-	 * In capability mode, we only allow access to system calls
-	 * flagged with SYF_CAPENABLED.
-	 */
-	if (__predict_false(IN_CAPABILITY_MODE(td) &&
-	    (se->sy_flags & SYF_CAPENABLED) == 0)) {
-		td->td_errno = error = ECAPMODE;
-		goto retval;
-	}
-#endif
 #ifndef NOSYSFIL
-	/*
-	 * In addition to that, check that the system call's filter index is
-	 * enabled in the process' sysfilset.
-	 */
-	sysfil = (se->sy_flags & SYF_SYSFIL_MASK) >> SYF_SYSFIL_SHIFT;
-	if (__predict_false(!sysfil_match_cred(td->td_ucred, sysfil))) {
-		td->td_errno = error = sysfil_check(td, sysfil);
-		MPASS(error != 0);
-		goto retval;
+	if (__predict_false(!sysfil_match_sy_flags(td->td_ucred, se->sy_flags))) {
+#ifdef CAPABILITY_MODE
+		/*
+		 * In capability mode, we only allow access to system calls
+		 * flagged with SYF_CAPENABLED.
+		 */
+		if (__predict_false(IN_CAPABILITY_MODE(td) &&
+		    (se->sy_flags & SYF_CAPENABLED) == 0)) {
+			td->td_errno = error = ECAPMODE;
+			goto retval;
+		}
+#endif
+		error = sysfil_check_sy_flags(td->td_ucred, se->sy_flags);
+		if (error) {
+			td->td_errno = error;
+			goto retval;
+		}
 	}
 #endif
 

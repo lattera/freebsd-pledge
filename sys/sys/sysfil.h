@@ -1,9 +1,10 @@
 #ifndef _SYS_SYSFIL_H_
 #define	_SYS_SYSFIL_H_
 
+#include <sys/_sysfil.h>
+
 #ifdef _KERNEL
 #include <sys/types.h>
-#include <sys/_sysfil.h>
 #include <sys/proc.h>
 #include <sys/ucred.h>
 #include <sys/lock.h>
@@ -11,10 +12,10 @@
 #include <security/mac/mac_framework.h>
 #endif
 
-/* Fallback for miscellaneous operations that must be restricted. */
-#define	SYSFIL_DEFAULT		0
 /* Represents the state of NOT being in Capsicum capability mode. */
-#define	SYSFIL_UNCAPSICUM	1
+#define	SYSFIL_UNCAPSICUM	0
+/* Fallback for miscellaneous operations that must be restricted. */
+#define	SYSFIL_DEFAULT		1
 /* Various operations that should always be allowed. */
 #define	SYSFIL_ALWAYS		2
 
@@ -128,12 +129,42 @@ CTASSERT(SYSFIL_LAST < SYSFIL_SIZE);
 
 #define	SYSFIL_FAILED_ERRNO	EPERM
 
+static inline bool
+sysfil_match_sy_flags(const struct ucred *cr, sysfilset_t sy_flags)
+{
+	return ((sy_flags | cr->cr_sysfilset) == (sysfilset_t)-1);
+}
+
 static inline int
+sysfil_check_sy_flags(struct ucred *cr, sysfilset_t sy_flags)
+{
+#ifdef MAC
+	sysfilset_t violated;
+	int error;
+	violated = ~(sy_flags | cr->cr_sysfilset);
+	error = 0;
+	while (violated) {
+		int sf, error1;
+		sf = ffsll(violated) - 1;
+		if (sf > SYSFIL_LAST)
+			break;
+		violated ^= (sysfilset_t)1 << sf;
+		error1 = mac_sysfil_check(cr, sf);
+		/* XXX There should be a MAC hook for this. */
+		error = MAX(error, error1);
+	}
+	return (error);
+#else
+	return (sysfil_match_sy_flags(cr, sy_flags) ? 0 : SYSFIL_FAILED_ERRNO);
+#endif
+}
+
+static inline bool
 sysfil_match_cred(const struct ucred *cr, int sf) {
 #ifndef NOSYSFIL
 	return ((cr->cr_sysfilset & ((sysfilset_t)1 << sf)) != 0);
 #else
-	return (1);
+	return (true);
 #endif
 }
 

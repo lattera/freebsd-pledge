@@ -915,7 +915,7 @@ process_syscall_def = function(line)
 	local sysstart, sysend, flags, funcname, sysflags
 	local thr_flag, syscallret
 	local orig = line
-	local sysflags_list = {}
+	local sysfils_list = {}
 	flags = 0
 	thr_flag = "SY_THR_STATIC"
 
@@ -951,13 +951,16 @@ process_syscall_def = function(line)
 	-- Split flags
 	for flag in allflags:gmatch("([^|]+)") do
 		if flag:match("^SYSFIL_") then
-			sysflags_list[#sysflags_list + 1] = "(" .. flag .. " << SYF_SYSFIL_SHIFT)"
+			sysfils_list[#sysfils_list + 1] = flag
 		else
 			if known_flags[flag] == nil then
 				abort(1, "Unknown flag " .. flag .. " for " ..  sysnum)
 			end
 			flags = flags | known_flags[flag]
 		end
+	end
+	if #sysfils_list == 0 then
+		sysfils_list[#sysfils_list + 1] = "SYSFIL_DEFAULT"
 	end
 
 	if (flags & get_mask({"RESERVED", "UNIMPL"})) == 0 and sysnum == nil then
@@ -1063,17 +1066,17 @@ process_syscall_def = function(line)
 	-- If applicable; strip the ABI prefix from the name
 	local stripped_name = strip_abi_prefix(funcname)
 
-	if flags & known_flags['CAPENABLED'] ~= 0 or
+	if not (flags & known_flags['CAPENABLED'] ~= 0 or
 	    config["capenabled"][funcname] ~= nil or
-	    config["capenabled"][stripped_name] ~= nil then
-		sysflags_list[#sysflags_list + 1] = "SYF_CAPENABLED"
+	    config["capenabled"][stripped_name] ~= nil) then
+		sysfils_list[#sysfils_list + 1] = "SYSFIL_UNCAPSICUM"
 	end
 
-	local sysflags
-	sysflags = table.concat(sysflags_list, " | ")
-	if sysflags == '' then
-		sysflags = "0"
+	local sysfils_tmp = { }
+	for _, v in pairs(sysfils_list) do
+		sysfils_tmp[#sysfils_tmp + 1] = "SYF_SYSFIL(" .. v .. ")"
 	end
+	local sysflags = "SYF_SYSFILS(" .. (table.concat(sysfils_tmp, " | ")) .. ")"
 
 	local funcargs = {}
 	if args ~= nil then
