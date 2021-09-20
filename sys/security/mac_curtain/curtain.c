@@ -389,7 +389,6 @@ curtain_dirty(struct curtain *ct)
 
 #define CURTAIN_KEY_INVALID_TYPE_CASES	\
 	case CURTAINTYP_DEFAULT:	\
-	case CURTAINTYP_SYSFIL:		\
 	case CURTAINTYP_UNVEIL:		\
 	case CURTAINTYP_ABILITY:
 
@@ -1003,21 +1002,6 @@ curtain_build(size_t reqc, const struct curtainreq *reqv)
 		switch (req->type) {
 		case CURTAINTYP_DEFAULT:
 			break; /* handled earlier */
-		case CURTAINTYP_SYSFIL: {
-			int *sfp = req->data;
-			size_t sfc = req->size / sizeof *sfp;
-			while (sfc--) {
-				int sf = *sfp++;
-				if (!SYSFIL_USER_VALID(sf))
-					goto fail;
-				for (enum curtain_ability abl = 0;
-				    abl < nitems(abilities_sysfils);
-				    abl++)
-					if (abilities_sysfils[abl] == sf)
-						curtain_build_ability(ct, req, abl);
-			}
-			break;
-		}
 		case CURTAINTYP_ABILITY: {
 			enum curtain_ability *ablp = req->data;
 			size_t ablc = req->size / sizeof *ablp;
