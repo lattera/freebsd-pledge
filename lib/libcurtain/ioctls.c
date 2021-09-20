@@ -76,6 +76,7 @@ const unsigned long curtain_ioctls_net_route[] = {
 	SIOCGIFDSTADDR,
 	SIOCGIFNETMASK,
 	SIOCGIFALIAS,
+	SIOCGHWADDR,
 #endif
 #ifdef AF_INET6
 	SIOCGIFAFLAG_IN6,
