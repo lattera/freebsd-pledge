@@ -1072,11 +1072,7 @@ process_syscall_def = function(line)
 		sysfils_list[#sysfils_list + 1] = "SYSFIL_UNCAPSICUM"
 	end
 
-	local sysfils_tmp = { }
-	for _, v in pairs(sysfils_list) do
-		sysfils_tmp[#sysfils_tmp + 1] = "SYF_SYSFIL(" .. v .. ")"
-	end
-	local sysflags = "SYF_SYSFILS(" .. (table.concat(sysfils_tmp, " | ")) .. ")"
+	local sysflags = "SYF_SYSFILS(" .. (table.concat(sysfils_list, " | ")) .. ")"
 
 	local funcargs = {}
 	if args ~= nil then
