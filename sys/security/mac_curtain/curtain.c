@@ -390,7 +390,8 @@ curtain_dirty(struct curtain *ct)
 #define CURTAIN_KEY_INVALID_TYPE_CASES	\
 	case CURTAINTYP_DEFAULT:	\
 	case CURTAINTYP_SYSFIL:		\
-	case CURTAINTYP_UNVEIL:
+	case CURTAINTYP_UNVEIL:		\
+	case CURTAINTYP_ABILITY:
 
 static unsigned
 curtain_key_hash(enum curtain_type type, union curtain_key key)
@@ -559,7 +560,7 @@ curtain_dup_compact(const struct curtain *src)
 		dst->ct_cached = src->ct_cached;
 	dst->ct_serial = src->ct_serial;
 	memcpy(dst->ct_barriers, src->ct_barriers, sizeof dst->ct_barriers);
-	memcpy(dst->ct_sysfils, src->ct_sysfils, sizeof dst->ct_sysfils);
+	memcpy(dst->ct_abilities, src->ct_abilities, sizeof dst->ct_abilities);
 	for (si = src->ct_slots; si < &src->ct_slots[src->ct_nslots]; si++)
 		if (si->type != 0) {
 			bool inserted;
@@ -581,27 +582,88 @@ curtain_dup_compact(const struct curtain *src)
 	return (dst);
 }
 
-static int
-sysfil_fallback(enum curtain_type type)
+static const int abilities_sysfils[] = {
+	[CURTAINABL_UNCAPSICUM] = SYSFIL_UNCAPSICUM,
+	[CURTAINABL_DEFAULT] = SYSFIL_DEFAULT,
+	[CURTAINABL_ALWAYS] = SYSFIL_ALWAYS,
+	[CURTAINABL_STDIO] = SYSFIL_STDIO,
+	[CURTAINABL_VFS_MISC] = SYSFIL_VFS_MISC,
+	[CURTAINABL_VFS_READ] = SYSFIL_VFS_READ,
+	[CURTAINABL_VFS_WRITE] = SYSFIL_VFS_WRITE,
+	[CURTAINABL_VFS_CREATE] = SYSFIL_VFS_CREATE,
+	[CURTAINABL_VFS_DELETE] = SYSFIL_VFS_DELETE,
+	[CURTAINABL_FATTR] = SYSFIL_FATTR,
+	[CURTAINABL_FLOCK] = SYSFIL_FLOCK,
+	[CURTAINABL_TTY] = SYSFIL_TTY,
+	[CURTAINABL_NET] = SYSFIL_NET,
+	[CURTAINABL_PROC] = SYSFIL_PROC,
+	[CURTAINABL_THREAD] = SYSFIL_THREAD,
+	[CURTAINABL_EXEC] = SYSFIL_EXEC,
+	[CURTAINABL_CURTAIN] = SYSFIL_CURTAIN,
+	[CURTAINABL_RLIMIT] = SYSFIL_RLIMIT,
+	[CURTAINABL_SETTIME] = SYSFIL_SETTIME,
+	[CURTAINABL_ID] = SYSFIL_ID,
+	[CURTAINABL_CHOWN] = SYSFIL_CHOWN,
+	[CURTAINABL_MLOCK] = SYSFIL_MLOCK,
+	[CURTAINABL_AIO] = SYSFIL_AIO,
+	[CURTAINABL_EXTATTR] = SYSFIL_EXTATTR,
+	[CURTAINABL_ACL] = SYSFIL_ACL,
+	[CURTAINABL_CPUSET] = SYSFIL_CPUSET,
+	[CURTAINABL_SYSVIPC] = SYSFIL_SYSVIPC,
+	[CURTAINABL_POSIXIPC] = SYSFIL_POSIXIPC,
+	[CURTAINABL_POSIXRT] = SYSFIL_POSIXRT,
+	[CURTAINABL_MAC] = SYSFIL_MAC,
+	[CURTAINABL_CHROOT] = SYSFIL_CHROOT,
+	[CURTAINABL_JAIL] = SYSFIL_JAIL,
+	[CURTAINABL_SCHED] = SYSFIL_SCHED,
+	[CURTAINABL_MKFIFO] = SYSFIL_MKFIFO,
+	[CURTAINABL_PS] = SYSFIL_PS,
+	[CURTAINABL_DEBUG] = SYSFIL_DEBUG,
+	[CURTAINABL_UNIX] = SYSFIL_UNIX,
+	[CURTAINABL_MAKEDEV] = SYSFIL_MAKEDEV,
+	[CURTAINABL_ANY_SYSCTL] = SYSFIL_ANY_SYSCTL,
+	[CURTAINABL_CHMOD_SPECIAL] = SYSFIL_CHMOD_SPECIAL,
+	[CURTAINABL_SYSFLAGS] = SYSFIL_SYSFLAGS,
+	[CURTAINABL_ANY_SOCKAF] = SYSFIL_ANY_SOCKAF,
+	[CURTAINABL_ANY_PRIV] = SYSFIL_ANY_PRIV,
+	[CURTAINABL_SENDFILE] = SYSFIL_SENDFILE,
+	[CURTAINABL_MOUNT] = SYSFIL_MOUNT,
+	[CURTAINABL_QUOTA] = SYSFIL_QUOTA,
+	[CURTAINABL_FH] = SYSFIL_FH,
+	[CURTAINABL_RECVFD] = SYSFIL_RECVFD,
+	[CURTAINABL_SENDFD] = SYSFIL_SENDFD,
+	[CURTAINABL_PROT_EXEC] = SYSFIL_PROT_EXEC,
+	[CURTAINABL_RSUGID_EXEC] = SYSFIL_RSUGID_EXEC,
+	[CURTAINABL_ANY_IOCTL] = SYSFIL_ANY_IOCTL,
+	[CURTAINABL_ANY_SOCKOPT] = SYSFIL_ANY_SOCKOPT,
+	[CURTAINABL_REAP] = SYSFIL_REAP,
+	[CURTAINABL_FFCLOCK] = SYSFIL_FFCLOCK,
+	[CURTAINABL_AUDIT] = SYSFIL_AUDIT,
+	[CURTAINABL_RFORK] = SYSFIL_RFORK,
+	[CURTAINABL_PROT_EXEC_LOOSE] = SYSFIL_PROT_EXEC_LOOSE,
+};
+
+static enum curtain_ability
+ability_fallback(enum curtain_type type)
 {
 	switch (type) {
 	CURTAIN_KEY_INVALID_TYPE_CASES
 		break;
 	case CURTAINTYP_IOCTL:
-		return (SYSFIL_ANY_IOCTL);
+		return (CURTAINABL_ANY_IOCTL);
 	case CURTAINTYP_SOCKAF:
-		return (SYSFIL_ANY_SOCKAF);
+		return (CURTAINABL_ANY_SOCKAF);
 	case CURTAINTYP_SOCKLVL:
-		return (SYSFIL_ANY_SOCKOPT);
+		return (CURTAINABL_ANY_SOCKOPT);
 	case CURTAINTYP_SOCKOPT:
-		return (SYSFIL_ANY_SOCKOPT);
+		return (CURTAINABL_ANY_SOCKOPT);
 	case CURTAINTYP_PRIV:
-		return (SYSFIL_ANY_PRIV);
+		return (CURTAINABL_ANY_PRIV);
 	case CURTAINTYP_SYSCTL:
-		return (SYSFIL_ANY_SYSCTL);
+		return (CURTAINABL_ANY_SYSCTL);
 	}
 	MPASS(0);
-	return (SYSFIL_DEFAULT);
+	return (CURTAINABL_DEFAULT);
 }
 
 typedef union curtain_key ctkey;
@@ -610,8 +672,8 @@ static bool
 curtain_need_exec_switch(const struct curtain *ct)
 {
 	const struct curtain_item *item;
-	for (int sf = 0; sf <= SYSFIL_LAST; sf++)
-		if (mode_need_exec_switch(ct->ct_sysfils[sf]))
+	for (enum curtain_ability abl = 0; abl <= CURTAINABL_LAST; abl++)
+		if (mode_need_exec_switch(ct->ct_abilities[abl]))
 			return (true);
 	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
 		if (item->type != 0 && mode_need_exec_switch(item->mode))
@@ -626,8 +688,8 @@ static inline bool
 curtain_is_restricted(const struct curtain *ct, struct curtain_mode mode)
 {
 	const struct curtain_item *item;
-	for (int sf = 0; sf <= SYSFIL_LAST; sf++)
-		if (mode_restricts(ct->ct_sysfils[sf], mode))
+	for (enum curtain_ability abl = 0; abl <= CURTAINABL_LAST; abl++)
+		if (mode_restricts(ct->ct_abilities[abl], mode))
 			return (true);
 	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
 		if (item->type != 0 && mode_restricts(item->mode, mode))
@@ -669,9 +731,9 @@ static void
 curtain_to_sysfilset(const struct curtain *ct, sysfilset_t *sfs)
 {
 	*sfs = 0;
-	for (int sf = 0; sf <= SYSFIL_LAST; sf++)
-		if (ct->ct_sysfils[sf].on_self == CURTAINACT_ALLOW)
-			*sfs |= (sysfilset_t)1 << sf;
+	for (enum curtain_ability abl = 0; abl < nitems(abilities_sysfils); abl++)
+		if (ct->ct_abilities[abl].on_self == CURTAINACT_ALLOW)
+			*sfs |= (sysfilset_t)1 << abilities_sysfils[abl];
 }
 
 static void
@@ -703,8 +765,8 @@ static void
 curtain_exec_switch(struct curtain *ct)
 {
 	struct curtain_item *item;
-	for (int sf = 0; sf <= SYSFIL_LAST; sf++)
-		mode_exec_switch(&ct->ct_sysfils[sf]);
+	for (enum curtain_ability abl = 0; abl <= CURTAINABL_LAST; abl++)
+		mode_exec_switch(&ct->ct_abilities[abl]);
 	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
 		if (item->type != 0)
 			mode_exec_switch(&item->mode);
@@ -722,8 +784,8 @@ curtain_harden(struct curtain *ct)
 	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
 		if (item->type != 0)
 			mode_harden(&item->mode);
-	for (int sf = 0; sf <= SYSFIL_LAST; sf++)
-		mode_harden(&ct->ct_sysfils[sf]);
+	for (enum curtain_ability abl = 0; abl <= CURTAINABL_LAST; abl++)
+		mode_harden(&ct->ct_abilities[abl]);
 }
 
 static void
@@ -732,9 +794,9 @@ curtain_mask_sysfils(struct curtain *ct, sysfilset_t sfs)
 	struct curtain_mode deny;
 	mode_set(&deny, CURTAINACT_DENY);
 	KASSERT(ct->ct_ref == 1, ("modifying shared curtain"));
-	for (int sf = 0; sf <= SYSFIL_LAST; sf++)
-		if (!(sfs & ((sysfilset_t)1 << sf)))
-			mode_mask(&ct->ct_sysfils[sf], deny);
+	for (enum curtain_ability abl = 0; abl < nitems(abilities_sysfils); abl++)
+		if (!(sfs & ((sysfilset_t)1 << abilities_sysfils[abl])))
+			mode_mask(&ct->ct_abilities[abl], deny);
 	curtain_dirty(ct);
 }
 
@@ -746,7 +808,7 @@ curtain_lookup_fallback_mode(const struct curtain *ct,
 	if (type == CURTAINTYP_SOCKOPT)
 		item = curtain_lookup(ct, CURTAINTYP_SOCKLVL,
 		    (ctkey){ .socklvl = key.sockopt.level });
-	return (item ? item->mode : ct->ct_sysfils[sysfil_fallback(type)]);
+	return (item ? item->mode : ct->ct_abilities[ability_fallback(type)]);
 }
 
 static struct curtain_mode
@@ -776,8 +838,8 @@ curtain_mask(struct curtain *dst, const struct curtain *src)
 	for (di = dst->ct_slots; di < &dst->ct_slots[dst->ct_nslots]; di++)
 		if (di->type != 0)
 			mode_mask(&di->mode, curtain_lookup_mode(src, di->type, di->key));
-	for (int sf = 0; sf <= SYSFIL_LAST; sf++)
-		mode_mask(&dst->ct_sysfils[sf], src->ct_sysfils[sf]);
+	for (enum curtain_ability abl = 0; abl <= CURTAINABL_LAST; abl++)
+		mode_mask(&dst->ct_abilities[abl], src->ct_abilities[abl]);
 	curtain_dirty(dst);
 	curtain_invariants(dst);
 }
@@ -791,54 +853,54 @@ curtain_cred_visible(const struct ucred *subject, const struct ucred *target,
 }
 
 
-/* Some sysfils shouldn't be disabled via curtainctl(2). */
-static const int sysfils_always[] = { SYSFIL_ALWAYS, SYSFIL_UNCAPSICUM };
-/* Some sysfils don't make much sense without some others. */
-static const int sysfils_expand[][2] = {
+/* Some abilities shouldn't be disabled via curtainctl(2). */
+static const int abilities_always[] = { CURTAINABL_ALWAYS, CURTAINABL_UNCAPSICUM };
+/* Some abilities don't make much sense without some others. */
+static const int abilities_expand[][2] = {
 	/* NOTE: Make sure dependencies can be handled in a single pass! */
-	{ SYSFIL_VFS_READ,	SYSFIL_VFS_MISC		},
-	{ SYSFIL_VFS_WRITE,	SYSFIL_VFS_MISC		},
-	{ SYSFIL_VFS_CREATE,	SYSFIL_VFS_MISC		},
-	{ SYSFIL_VFS_DELETE,	SYSFIL_VFS_MISC		},
-	{ SYSFIL_FATTR,		SYSFIL_VFS_MISC		},
-	{ SYSFIL_PROT_EXEC,	SYSFIL_PROT_EXEC_LOOSE	},
-	{ SYSFIL_UNIX,		SYSFIL_NET		},
-	{ SYSFIL_CPUSET,	SYSFIL_SCHED		},
+	{ CURTAINABL_VFS_READ,		CURTAINABL_VFS_MISC		},
+	{ CURTAINABL_VFS_WRITE,		CURTAINABL_VFS_MISC		},
+	{ CURTAINABL_VFS_CREATE,	CURTAINABL_VFS_MISC		},
+	{ CURTAINABL_VFS_DELETE,	CURTAINABL_VFS_MISC		},
+	{ CURTAINABL_FATTR,		CURTAINABL_VFS_MISC		},
+	{ CURTAINABL_PROT_EXEC,		CURTAINABL_PROT_EXEC_LOOSE	},
+	{ CURTAINABL_UNIX,		CURTAINABL_NET			},
+	{ CURTAINABL_CPUSET,		CURTAINABL_SCHED		},
 };
 
 static void
 curtain_build_expand(struct curtain *ct)
 {
-	for (size_t i = 0; i < nitems(sysfils_always); i++) {
-		ct->ct_sysfils[sysfils_always[i]].on_self = CURTAINACT_ALLOW;
-		ct->ct_sysfils[sysfils_always[i]].on_exec = CURTAINACT_ALLOW;
+	for (size_t i = 0; i < nitems(abilities_always); i++) {
+		ct->ct_abilities[abilities_always[i]].on_self = CURTAINACT_ALLOW;
+		ct->ct_abilities[abilities_always[i]].on_exec = CURTAINACT_ALLOW;
 	}
-	for (size_t i = 0; i < nitems(sysfils_expand); i++) {
-		ct->ct_sysfils[sysfils_expand[i][1]].on_self =
-		    MIN(ct->ct_sysfils[sysfils_expand[i][0]].on_self,
-		        ct->ct_sysfils[sysfils_expand[i][1]].on_self);
-		ct->ct_sysfils[sysfils_expand[i][1]].on_exec =
-		    MIN(ct->ct_sysfils[sysfils_expand[i][0]].on_exec,
-		        ct->ct_sysfils[sysfils_expand[i][1]].on_exec);
+	for (size_t i = 0; i < nitems(abilities_expand); i++) {
+		ct->ct_abilities[abilities_expand[i][1]].on_self =
+		    MIN(ct->ct_abilities[abilities_expand[i][0]].on_self,
+		        ct->ct_abilities[abilities_expand[i][1]].on_self);
+		ct->ct_abilities[abilities_expand[i][1]].on_exec =
+		    MIN(ct->ct_abilities[abilities_expand[i][0]].on_exec,
+		        ct->ct_abilities[abilities_expand[i][1]].on_exec);
 	}
-	ct->ct_sysfils[SYSFIL_PROT_EXEC_LOOSE].on_exec =
-	    MIN(MIN(ct->ct_sysfils[SYSFIL_EXEC].on_self,
-	            ct->ct_sysfils[SYSFIL_EXEC].on_exec),
-		ct->ct_sysfils[SYSFIL_PROT_EXEC_LOOSE].on_exec);
+	ct->ct_abilities[CURTAINABL_PROT_EXEC_LOOSE].on_exec =
+	    MIN(MIN(ct->ct_abilities[CURTAINABL_EXEC].on_self,
+	            ct->ct_abilities[CURTAINABL_EXEC].on_exec),
+		ct->ct_abilities[CURTAINABL_PROT_EXEC_LOOSE].on_exec);
 }
 
 static void
 curtain_build_restrict(struct curtain *ct, struct ucred *cr)
 {
 	if (curtain_is_restricted_on_self(ct))
-		if (ct->ct_sysfils[SYSFIL_DEFAULT].on_self < CURTAINACT_DENY)
-			ct->ct_sysfils[SYSFIL_DEFAULT].on_self = CURTAINACT_DENY;
+		if (ct->ct_abilities[CURTAINABL_DEFAULT].on_self < CURTAINACT_DENY)
+			ct->ct_abilities[CURTAINABL_DEFAULT].on_self = CURTAINACT_DENY;
 	if (curtain_is_restricted_on_exec(ct)) {
-		if (ct->ct_sysfils[SYSFIL_DEFAULT].on_exec < CURTAINACT_DENY)
-			ct->ct_sysfils[SYSFIL_DEFAULT].on_exec = CURTAINACT_DENY;
-		if (ct->ct_sysfils[SYSFIL_RSUGID_EXEC].on_exec < CURTAINACT_DENY &&
+		if (ct->ct_abilities[CURTAINABL_DEFAULT].on_exec < CURTAINACT_DENY)
+			ct->ct_abilities[CURTAINABL_DEFAULT].on_exec = CURTAINACT_DENY;
+		if (ct->ct_abilities[CURTAINABL_RSUGID_EXEC].on_exec < CURTAINACT_DENY &&
 		    priv_check_cred(cr, PRIV_VFS_CHROOT) != 0)
-			ct->ct_sysfils[SYSFIL_RSUGID_EXEC].on_exec = CURTAINACT_DENY;
+			ct->ct_abilities[CURTAINABL_RSUGID_EXEC].on_exec = CURTAINACT_DENY;
 	}
 }
 
@@ -872,19 +934,20 @@ build_mode(struct curtain_mode *mode, const struct curtainreq *req)
 }
 
 static inline void
-curtain_build_sysfil(struct curtain *ct, const struct curtainreq *req, int sf)
+curtain_build_ability(struct curtain *ct, const struct curtainreq *req,
+    enum curtain_ability abl)
 {
 	enum barrier_type type;
 	enum curtain_barrier bar;
-	build_mode(&ct->ct_sysfils[sf], req);
-	switch (sf) {
-	case SYSFIL_PROC:	type = BARRIER_PROC_SIGNAL;	break;
-	case SYSFIL_PS:		type = BARRIER_PROC_STATUS;	break;
-	case SYSFIL_SCHED:	type = BARRIER_PROC_SCHED;	break;
-	case SYSFIL_DEBUG:	type = BARRIER_PROC_DEBUG;	break;
-	case SYSFIL_NET:	type = BARRIER_SOCKET;		break;
-	case SYSFIL_POSIXIPC:	type = BARRIER_POSIXIPC;	break;
-	case SYSFIL_SYSVIPC:	type = BARRIER_SYSVIPC;		break;
+	build_mode(&ct->ct_abilities[abl], req);
+	switch (abl) {
+	case CURTAINABL_PROC:		type = BARRIER_PROC_SIGNAL;	break;
+	case CURTAINABL_PS:		type = BARRIER_PROC_STATUS;	break;
+	case CURTAINABL_SCHED:		type = BARRIER_PROC_SCHED;	break;
+	case CURTAINABL_DEBUG:		type = BARRIER_PROC_DEBUG;	break;
+	case CURTAINABL_NET:		type = BARRIER_SOCKET;		break;
+	case CURTAINABL_POSIXIPC:	type = BARRIER_POSIXIPC;	break;
+	case CURTAINABL_SYSVIPC:	type = BARRIER_SYSVIPC;		break;
 	default:
 		return;
 	}
@@ -927,9 +990,9 @@ curtain_build(size_t reqc, const struct curtainreq *reqv)
 				def_on_exec = req->level;
 		}
 	}
-	for (int sf = 0; sf <= SYSFIL_LAST; sf++) {
-		ct->ct_sysfils[sf].on_self = lvl2act[def_on_self];
-		ct->ct_sysfils[sf].on_exec = lvl2act[def_on_exec];
+	for (enum curtain_ability abl = 0; abl <= CURTAINABL_LAST; abl++) {
+		ct->ct_abilities[abl].on_self = lvl2act[def_on_self];
+		ct->ct_abilities[abl].on_exec = lvl2act[def_on_exec];
 	}
 	for (size_t i = 0; i < BARRIER_COUNT; i++) {
 		ct->ct_barriers[i].on_self = lvl2bar[def_on_self];
@@ -947,7 +1010,22 @@ curtain_build(size_t reqc, const struct curtainreq *reqv)
 				int sf = *sfp++;
 				if (!SYSFIL_USER_VALID(sf))
 					goto fail;
-				curtain_build_sysfil(ct, req, sf);
+				for (enum curtain_ability abl = 0;
+				    abl < nitems(abilities_sysfils);
+				    abl++)
+					if (abilities_sysfils[abl] == sf)
+						curtain_build_ability(ct, req, abl);
+			}
+			break;
+		}
+		case CURTAINTYP_ABILITY: {
+			enum curtain_ability *ablp = req->data;
+			size_t ablc = req->size / sizeof *ablp;
+			while (ablc--) {
+				enum curtain_ability abl = *ablp++;
+				if (!CURTAINABL_USER_VALID(abl))
+					goto fail;
+				curtain_build_ability(ct, req, abl);
 			}
 			break;
 		}
@@ -1267,8 +1345,8 @@ curtain_cred_action(const struct ucred *cr, enum curtain_type type, union curtai
 {
 	const struct curtain *ct;
 	if ((ct = CRED_SLOT(cr))) {
-		if (type == CURTAINTYP_SYSFIL) {
-			return (ct->ct_sysfils[key.sysfil].on_self);
+		if (type == CURTAINTYP_ABILITY) {
+			return (ct->ct_abilities[key.ability].on_self);
 		} else {
 			const struct curtain_item *item;
 			item = curtain_lookup(ct, type, key);
@@ -1277,17 +1355,24 @@ curtain_cred_action(const struct ucred *cr, enum curtain_type type, union curtai
 		}
 		return (CURTAINACT_KILL);
 	} else {
-		if (type == CURTAINTYP_SYSFIL)
-			if (sysfil_match_cred(cr, key.sysfil))
+		if (type == CURTAINTYP_ABILITY)
+			if (key.ability < nitems(abilities_sysfils) &&
+			    sysfil_match_cred(cr, abilities_sysfils[key.ability]))
 				return (CURTAINACT_ALLOW);
 		return (CURTAINACT_DENY);
 	}
 }
 
 static enum curtain_action
-curtain_cred_sysfil_action(const struct ucred *cr, int sf)
+curtain_cred_ability_action(const struct ucred *cr, enum curtain_ability abl)
 {
-	return (curtain_cred_action(cr, CURTAINTYP_SYSFIL, (ctkey){ .sysfil = sf }));
+	return (curtain_cred_action(cr, CURTAINTYP_ABILITY, (ctkey){ .ability = abl }));
+}
+
+static int
+ability_check_cred(const struct ucred *cr, enum curtain_ability abl)
+{
+	return (act2err[curtain_cred_ability_action(cr, abl)]);
 }
 
 
@@ -1347,7 +1432,7 @@ static int
 curtain_proc_check_signal(struct ucred *cr, struct proc *p, int signum)
 {
 	int error;
-	if ((error = sysfil_check_cred(cr, SYSFIL_PROC)))
+	if ((error = ability_check_cred(cr, CURTAINABL_PROC)))
 		return (error);
 	if (!curtain_visible(CRED_SLOT(cr), CRED_SLOT(p->p_ucred), BARRIER_PROC_SIGNAL))
 		return (ESRCH);
@@ -1358,7 +1443,7 @@ static int
 curtain_proc_check_sched(struct ucred *cr, struct proc *p)
 {
 	int error;
-	if ((error = sysfil_check_cred(cr, SYSFIL_SCHED)))
+	if ((error = ability_check_cred(cr, CURTAINABL_SCHED)))
 		return (error);
 	if (!curtain_visible(CRED_SLOT(cr), CRED_SLOT(p->p_ucred), BARRIER_PROC_SCHED))
 		return (ESRCH);
@@ -1369,7 +1454,7 @@ static int
 curtain_proc_check_debug(struct ucred *cr, struct proc *p)
 {
 	int error;
-	if ((error = sysfil_check_cred(cr, SYSFIL_DEBUG)))
+	if ((error = ability_check_cred(cr, CURTAINABL_DEBUG)))
 		return (error);
 	if (!curtain_visible(CRED_SLOT(cr), CRED_SLOT(p->p_ucred), BARRIER_PROC_DEBUG))
 		return (ESRCH);
@@ -1384,7 +1469,7 @@ curtain_socket_check_create(struct ucred *cr, int domain, int type, int protocol
 	act = curtain_cred_action(cr, CURTAINTYP_SOCKAF, (ctkey){ .sockaf = domain });
 	if (act == CURTAINACT_ALLOW)
 		return (0);
-	act = MIN(act, curtain_cred_sysfil_action(cr, SYSFIL_ANY_SOCKAF));
+	act = MIN(act, curtain_cred_ability_action(cr, CURTAINABL_ANY_SOCKAF));
 	if (act == CURTAINACT_ALLOW)
 		return (0);
 	CURTAIN_CRED_LOG(cr, act, "sockaf %d", domain);
@@ -1401,7 +1486,7 @@ curtain_socket_check_connect(struct ucred *cr, struct socket *so, struct label *
 	act = curtain_cred_action(cr, CURTAINTYP_SOCKAF, (ctkey){ .sockaf = domain });
 	if (act == CURTAINACT_ALLOW)
 		return (0);
-	act = MIN(act, curtain_cred_sysfil_action(cr, SYSFIL_ANY_SOCKAF));
+	act = MIN(act, curtain_cred_ability_action(cr, CURTAINABL_ANY_SOCKAF));
 	if (act == CURTAINACT_ALLOW)
 		return (0);
 	CURTAIN_CRED_LOG(cr, act, "sockaf %d", domain);
@@ -1424,7 +1509,7 @@ curtain_socket_check_sockopt(struct ucred *cr, struct socket *so, struct label *
 	    (ctkey){ .socklvl = action }));
 	if (act == CURTAINACT_ALLOW)
 		return (0);
-	act = MIN(act, curtain_cred_sysfil_action(cr, SYSFIL_ANY_SOCKOPT));
+	act = MIN(act, curtain_cred_ability_action(cr, CURTAINABL_ANY_SOCKOPT));
 	if (act == CURTAINACT_ALLOW)
 		return (0);
 	CURTAIN_CRED_LOG(cr, act, "sockopt %d:%d", action, name);
@@ -1435,7 +1520,7 @@ static int
 curtain_socket_check_visible(struct ucred *cr, struct socket *so, struct label *solabel)
 {
 	int error;
-	if ((error = sysfil_check_cred(cr, SYSFIL_NET)))
+	if ((error = ability_check_cred(cr, CURTAINABL_NET)))
 		return (error);
 	error = 0;
 	SOCK_LOCK(so);
@@ -1450,7 +1535,7 @@ static int
 curtain_inpcb_check_visible(struct ucred *cr, struct inpcb *inp, struct label *inplabel)
 {
 	int error;
-	if ((error = sysfil_check_cred(cr, SYSFIL_NET)))
+	if ((error = ability_check_cred(cr, CURTAINABL_NET)))
 		return (error);
 	if (!curtain_visible(CRED_SLOT(cr), SLOT(inplabel), BARRIER_SOCKET))
 		return (ENOENT);
@@ -1481,7 +1566,7 @@ check_fmode(struct ucred *cr, unveil_perms uperms, mode_t mode)
 {
 	int error;
 	if (mode & ~ACCESSPERMS) {
-		if ((error = sysfil_check_cred(cr, SYSFIL_CHMOD_SPECIAL)))
+		if ((error = ability_check_cred(cr, CURTAINABL_CHMOD_SPECIAL)))
 			return (error);
 		if ((error = unveil_check_uperms(uperms, UPERM_SETATTR)))
 			return (error);
@@ -1539,18 +1624,17 @@ curtain_vnode_check_open(struct ucred *cr,
 	}
 
 	if (vp->v_type == VSOCK) {
-		if ((error = sysfil_check_cred(cr, SYSFIL_UNIX)))
+		if ((error = ability_check_cred(cr, CURTAINABL_UNIX)))
 			return (error);
 	} else {
-		if (accmode & VREAD && (error = sysfil_check_cred(cr, SYSFIL_VFS_READ)))
+		if (accmode & VREAD && (error = ability_check_cred(cr, CURTAINABL_VFS_READ)))
 			return (error);
-		if (accmode & VWRITE && (error = sysfil_check_cred(cr, SYSFIL_VFS_WRITE)))
+		if (accmode & VWRITE && (error = ability_check_cred(cr, CURTAINABL_VFS_WRITE)))
 			return (error);
-		if (accmode & VEXEC) {
-			int sf = vp->v_type == VDIR ? SYSFIL_VFS_READ : SYSFIL_EXEC;
-			if ((error = sysfil_check_cred(cr, sf)))
-				return (error);
-		}
+		if (accmode & VEXEC &&
+		    (error = ability_check_cred(cr, vp->v_type == VDIR ?
+		    CURTAINABL_VFS_READ : CURTAINABL_EXEC)))
+			return (error);
 	}
 
 	return (0);
@@ -1568,7 +1652,7 @@ curtain_vnode_check_read(struct ucred *cr, struct ucred *file_cr,
 	if (!(uperms & UPERM_TMPDIR_CHILD && vp->v_type == VREG) &&
 	    (error = unveil_check_uperms(uperms, UPERM_READ)))
 		return (error);
-	if ((error = sysfil_check_cred(cr, SYSFIL_VFS_READ)))
+	if ((error = ability_check_cred(cr, CURTAINABL_VFS_READ)))
 		return (error);
 	return (0);
 }
@@ -1585,7 +1669,7 @@ curtain_vnode_check_write(struct ucred *cr, struct ucred *file_cr,
 	if (!(uperms & UPERM_TMPDIR_CHILD && vp->v_type == VREG) &&
 	    (error = unveil_check_uperms(uperms, UPERM_WRITE)))
 		return (error);
-	if ((error = sysfil_check_cred(cr, SYSFIL_VFS_WRITE)))
+	if ((error = ability_check_cred(cr, CURTAINABL_VFS_WRITE)))
 		return (error);
 	return (0);
 }
@@ -1613,14 +1697,14 @@ curtain_vnode_check_create(struct ucred *cr,
 	}
 
 	if (vap->va_type == VSOCK) {
-		if ((error = sysfil_check_cred(cr, SYSFIL_UNIX)))
+		if ((error = ability_check_cred(cr, CURTAINABL_UNIX)))
 			return (error);
 	} else {
 		if (vap->va_type == VFIFO) {
-			if ((error = sysfil_check_cred(cr, SYSFIL_MKFIFO)))
+			if ((error = ability_check_cred(cr, CURTAINABL_MKFIFO)))
 				return (error);
 		}
-		if ((error = sysfil_check_cred(cr, SYSFIL_VFS_CREATE)))
+		if ((error = ability_check_cred(cr, CURTAINABL_VFS_CREATE)))
 			return (error);
 	}
 
@@ -1654,7 +1738,7 @@ curtain_vnode_check_link(struct ucred *cr,
 		return (error);
 	if ((error = unveil_check_uperms(get_vp_uperms(to_dvp), UPERM_CREATE)))
 		return (error);
-	if ((error = sysfil_check_cred(cr, SYSFIL_VFS_CREATE)))
+	if ((error = ability_check_cred(cr, CURTAINABL_VFS_CREATE)))
 		return (error);
 	return (0);
 }
@@ -1680,10 +1764,10 @@ curtain_vnode_check_unlink(struct ucred *cr,
 	}
 
 	if (vp->v_type == VSOCK) {
-		if ((error = sysfil_check_cred(cr, SYSFIL_UNIX)))
+		if ((error = ability_check_cred(cr, CURTAINABL_UNIX)))
 			return (error);
 	} else {
-		if ((error = sysfil_check_cred(cr, SYSFIL_VFS_DELETE)))
+		if ((error = ability_check_cred(cr, CURTAINABL_VFS_DELETE)))
 			return (error);
 	}
 
@@ -1704,7 +1788,7 @@ curtain_vnode_check_rename_from(struct ucred *cr,
 	 */
 	if ((error = unveil_check_uperms(get_vp_uperms(vp), UPERM_DELETE | UPERM_READ)))
 		return (error);
-	if ((error = sysfil_check_cred(cr, SYSFIL_VFS_DELETE)))
+	if ((error = ability_check_cred(cr, CURTAINABL_VFS_DELETE)))
 		return (error);
 	return (0);
 }
@@ -1720,9 +1804,9 @@ curtain_vnode_check_rename_to(struct ucred *cr,
 		return (error);
 	if ((error = unveil_check_uperms(get_vp_uperms(vp ? vp : dvp), UPERM_CREATE)))
 		return (error);
-	if (vp && (error = sysfil_check_cred(cr, SYSFIL_VFS_DELETE)))
+	if (vp && (error = ability_check_cred(cr, CURTAINABL_VFS_DELETE)))
 		return (error);
-	if ((error = sysfil_check_cred(cr, SYSFIL_VFS_CREATE)))
+	if ((error = ability_check_cred(cr, CURTAINABL_VFS_CREATE)))
 		return (error);
 	return (0);
 }
@@ -1733,7 +1817,7 @@ curtain_vnode_check_chdir(struct ucred *cr, struct vnode *dvp, struct label *dvp
 	int error;
 	if ((error = unveil_check_uperms(get_vp_uperms(dvp), UPERM_SEARCH)))
 		return (error);
-	if ((error = sysfil_check_cred(cr, SYSFIL_VFS_READ)))
+	if ((error = ability_check_cred(cr, CURTAINABL_VFS_READ)))
 		return (error);
 	return (0);
 }
@@ -1750,7 +1834,7 @@ curtain_vnode_check_stat(struct ucred *cr, struct ucred *file_cr,
 	if (!(uperms & UPERM_TMPDIR_CHILD && vp->v_type == VREG) &&
 	    (error = unveil_check_uperms(uperms, UPERM_STATUS)))
 		return (error);
-	if ((error = sysfil_check_cred(cr, SYSFIL_VFS_READ)))
+	if ((error = ability_check_cred(cr, CURTAINABL_VFS_READ)))
 		return (error);
 	return (0);
 }
@@ -1762,7 +1846,7 @@ curtain_vnode_check_lookup(struct ucred *cr,
 	int error;
 	if ((error = unveil_check_uperms(get_vp_uperms(dvp), UPERM_TRAVERSE)))
 		return (error);
-	if ((error = sysfil_check_cred(cr, SYSFIL_VFS_MISC)))
+	if ((error = ability_check_cred(cr, CURTAINABL_VFS_MISC)))
 		return (error);
 	return (0);
 }
@@ -1773,7 +1857,7 @@ curtain_vnode_check_readlink(struct ucred *cr, struct vnode *vp, struct label *v
 	int error;
 	if ((error = unveil_check_uperms(get_vp_uperms(vp), UPERM_TRAVERSE)))
 		return (error);
-	if ((error = sysfil_check_cred(cr, SYSFIL_VFS_MISC)))
+	if ((error = ability_check_cred(cr, CURTAINABL_VFS_MISC)))
 		return (error);
 	return (0);
 }
@@ -1785,7 +1869,7 @@ curtain_vnode_check_setflags(struct ucred *cr,
 	int error;
 	if ((error = unveil_check_uperms(get_vp_uperms(vp), UPERM_SETATTR)))
 		return (error);
-	if ((error = sysfil_check_cred(cr, SYSFIL_FATTR)))
+	if ((error = ability_check_cred(cr, CURTAINABL_FATTR)))
 		return (error);
 	return (0);
 }
@@ -1801,7 +1885,7 @@ curtain_vnode_check_setmode(struct ucred *cr,
 		return (error);
 	if ((error = unveil_check_uperms(uperms, UPERM_SETATTR)))
 		return (error);
-	if ((error = sysfil_check_cred(cr, SYSFIL_FATTR)))
+	if ((error = ability_check_cred(cr, CURTAINABL_FATTR)))
 		return (error);
 	return (0);
 }
@@ -1813,7 +1897,7 @@ curtain_vnode_check_setowner(struct ucred *cr,
 	int error;
 	if ((error = unveil_check_uperms(get_vp_uperms(vp), UPERM_SETATTR)))
 		return (error);
-	if ((error = sysfil_check_cred(cr, SYSFIL_FATTR)))
+	if ((error = ability_check_cred(cr, CURTAINABL_FATTR)))
 		return (error);
 	return (0);
 }
@@ -1826,7 +1910,7 @@ curtain_vnode_check_setutimes(struct ucred *cr,
 	int error;
 	if ((error = unveil_check_uperms(get_vp_uperms(vp), UPERM_SETATTR)))
 		return (error);
-	if ((error = sysfil_check_cred(cr, SYSFIL_FATTR)))
+	if ((error = ability_check_cred(cr, CURTAINABL_FATTR)))
 		return (error);
 	return (0);
 }
@@ -1838,9 +1922,9 @@ curtain_vnode_check_listextattr(struct ucred *cr,
 	int error;
 	if ((error = unveil_check_uperms(get_vp_uperms(vp), UPERM_READ)))
 		return (error);
-	if ((error = sysfil_check_cred(cr, SYSFIL_EXTATTR)))
+	if ((error = ability_check_cred(cr, CURTAINABL_EXTATTR)))
 		return (error);
-	if ((error = sysfil_check_cred(cr, SYSFIL_VFS_READ)))
+	if ((error = ability_check_cred(cr, CURTAINABL_VFS_READ)))
 		return (error);
 	return (0);
 }
@@ -1852,9 +1936,9 @@ curtain_vnode_check_getextattr(struct ucred *cr,
 	int error;
 	if ((error = unveil_check_uperms(get_vp_uperms(vp), UPERM_READ)))
 		return (error);
-	if ((error = sysfil_check_cred(cr, SYSFIL_EXTATTR)))
+	if ((error = ability_check_cred(cr, CURTAINABL_EXTATTR)))
 		return (error);
-	if ((error = sysfil_check_cred(cr, SYSFIL_VFS_READ)))
+	if ((error = ability_check_cred(cr, CURTAINABL_VFS_READ)))
 		return (error);
 	return (0);
 }
@@ -1866,9 +1950,9 @@ curtain_vnode_check_setextattr(struct ucred *cr,
 	int error;
 	if ((error = unveil_check_uperms(get_vp_uperms(vp), UPERM_SETATTR)))
 		return (error);
-	if ((error = sysfil_check_cred(cr, SYSFIL_EXTATTR)))
+	if ((error = ability_check_cred(cr, CURTAINABL_EXTATTR)))
 		return (error);
-	if ((error = sysfil_check_cred(cr, SYSFIL_FATTR)))
+	if ((error = ability_check_cred(cr, CURTAINABL_FATTR)))
 		return (error);
 	return (0);
 }
@@ -1880,9 +1964,9 @@ curtain_vnode_check_deleteextattr(struct ucred *cr,
 	int error;
 	if ((error = unveil_check_uperms(get_vp_uperms(vp), UPERM_SETATTR)))
 		return (error);
-	if ((error = sysfil_check_cred(cr, SYSFIL_EXTATTR)))
+	if ((error = ability_check_cred(cr, CURTAINABL_EXTATTR)))
 		return (error);
-	if ((error = sysfil_check_cred(cr, SYSFIL_FATTR)))
+	if ((error = ability_check_cred(cr, CURTAINABL_FATTR)))
 		return (error);
 	return (0);
 }
@@ -1894,9 +1978,9 @@ curtain_vnode_check_getacl(struct ucred *cr,
 	int error;
 	if ((error = unveil_check_uperms(get_vp_uperms(vp), UPERM_READ)))
 		return (error);
-	if ((error = sysfil_check_cred(cr, SYSFIL_ACL)))
+	if ((error = ability_check_cred(cr, CURTAINABL_ACL)))
 		return (error);
-	if ((error = sysfil_check_cred(cr, SYSFIL_VFS_READ)))
+	if ((error = ability_check_cred(cr, CURTAINABL_VFS_READ)))
 		return (error);
 	return (0);
 }
@@ -1908,9 +1992,9 @@ curtain_vnode_check_setacl(struct ucred *cr,
 	int error;
 	if ((error = unveil_check_uperms(get_vp_uperms(vp), UPERM_SETATTR)))
 		return (error);
-	if ((error = sysfil_check_cred(cr, SYSFIL_ACL)))
+	if ((error = ability_check_cred(cr, CURTAINABL_ACL)))
 		return (error);
-	if ((error = sysfil_check_cred(cr, SYSFIL_FATTR)))
+	if ((error = ability_check_cred(cr, CURTAINABL_FATTR)))
 		return (error);
 	return (0);
 }
@@ -1922,9 +2006,9 @@ curtain_vnode_check_deleteacl(struct ucred *cr,
 	int error;
 	if ((error = unveil_check_uperms(get_vp_uperms(vp), UPERM_SETATTR)))
 		return (error);
-	if ((error = sysfil_check_cred(cr, SYSFIL_ACL)))
+	if ((error = ability_check_cred(cr, CURTAINABL_ACL)))
 		return (error);
-	if ((error = sysfil_check_cred(cr, SYSFIL_FATTR)))
+	if ((error = ability_check_cred(cr, CURTAINABL_FATTR)))
 		return (error);
 	return (0);
 }
@@ -1936,9 +2020,9 @@ curtain_vnode_check_relabel(struct ucred *cr,
 	int error;
 	if ((error = unveil_check_uperms(get_vp_uperms(vp), UPERM_SETATTR)))
 		return (error);
-	if ((error = sysfil_check_cred(cr, SYSFIL_MAC)))
+	if ((error = ability_check_cred(cr, CURTAINABL_MAC)))
 		return (error);
-	if ((error = sysfil_check_cred(cr, SYSFIL_FATTR)))
+	if ((error = ability_check_cred(cr, CURTAINABL_FATTR)))
 		return (error);
 	return (0);
 }
@@ -1949,7 +2033,7 @@ curtain_vnode_check_revoke(struct ucred *cr, struct vnode *vp, struct label *vpl
 	int error;
 	if ((error = unveil_check_uperms(get_vp_uperms(vp), UPERM_SETATTR)))
 		return (error);
-	if ((error = sysfil_check_cred(cr, SYSFIL_TTY)))
+	if ((error = ability_check_cred(cr, CURTAINABL_TTY)))
 		return (error);
 	return (0);
 }
@@ -1962,7 +2046,7 @@ curtain_vnode_check_exec(struct ucred *cr,
 	int error;
 	if ((error = unveil_check_uperms(get_vp_uperms(vp), UPERM_EXECUTE)))
 		return (error);
-	if ((error = sysfil_check_cred(cr, SYSFIL_EXEC)))
+	if ((error = ability_check_cred(cr, CURTAINABL_EXEC)))
 		return (error);
 	return (0);
 }
@@ -2116,7 +2200,7 @@ static int
 curtain_generic_check_ioctl(struct ucred *cr, struct file *fp, u_long com, void *data)
 {
 	enum curtain_action act;
-	int sf;
+	enum curtain_ability abl;
 	act = curtain_cred_action(cr, CURTAINTYP_IOCTL, (ctkey){ .ioctl = com });
 	if (act == CURTAINACT_ALLOW)
 		return (0);
@@ -2131,27 +2215,27 @@ curtain_generic_check_ioctl(struct ucred *cr, struct file *fp, u_long com, void 
 	case FIOGETOWN:
 	case FIODTYPE:
 		/* always allowed ioctls */
-		sf = SYSFIL_ALWAYS;
+		abl = CURTAINABL_ALWAYS;
 		break;
 	case TIOCGETA:
 		/* needed for isatty(3) */
-		sf = SYSFIL_STDIO;
+		abl = CURTAINABL_STDIO;
 		break;
 	case FIOSETOWN:
 		/* also checked in setown() */
-		sf = SYSFIL_PROC;
+		abl = CURTAINABL_PROC;
 		break;
 	default:
-		sf = SYSFIL_ANY_IOCTL;
+		abl = CURTAINABL_ANY_IOCTL;
 		break;
 	}
-	if (sf != SYSFIL_ANY_IOCTL) {
-		act = MIN(act, curtain_cred_sysfil_action(cr, sf));
+	if (abl != CURTAINABL_ANY_IOCTL) {
+		act = MIN(act, curtain_cred_ability_action(cr, abl));
 		if (act == CURTAINACT_ALLOW)
 			return (0);
-		sf = SYSFIL_ANY_IOCTL;
+		abl = CURTAINABL_ANY_IOCTL;
 	}
-	act = MIN(act, curtain_cred_sysfil_action(cr, sf));
+	act = MIN(act, curtain_cred_ability_action(cr, abl));
 	if (act == CURTAINACT_ALLOW)
 		return (0);
 	CURTAIN_CRED_LOG(cr, act, "ioctl %#jx", (uintmax_t)com);
@@ -2162,9 +2246,10 @@ static int
 curtain_generic_check_vm_prot(struct ucred *cr, struct file *fp, vm_prot_t prot)
 {
 	if (prot & VM_PROT_EXECUTE) {
-		bool loose = fp && fp->f_ops == &vnops;
-		return (sysfil_check_cred(cr, loose && !(prot & VM_PROT_WRITE) ?
-		    SYSFIL_PROT_EXEC_LOOSE : SYSFIL_PROT_EXEC));
+		enum curtain_ability abl;
+		abl = fp && fp->f_ops == &vnops && !(prot & VM_PROT_WRITE) ?
+		    CURTAINABL_PROT_EXEC_LOOSE : CURTAINABL_PROT_EXEC;
+		return (act2err[curtain_cred_ability_action(cr, abl)]);
 	}
 	return (0);
 }
@@ -2175,6 +2260,7 @@ curtain_system_check_sysctl(struct ucred *cr,
     struct sysctl_oid *oidp, void *arg1, int arg2,
     struct sysctl_req *req)
 {
+	enum curtain_action act;
 	if (oidp->oid_kind & (CTLFLAG_RESTRICT|CTLFLAG_CAPRW))
 		return (0);
 	if (CRED_SLOT(cr))
@@ -2185,8 +2271,11 @@ curtain_system_check_sysctl(struct ucred *cr,
 			if (item && item->mode.on_self == CURTAINACT_ALLOW)
 				return (0);
 		} while ((oidp = SYSCTL_PARENT(oidp))); /* XXX locking */
-	/* TODO handle levels here too */
-	return (sysfil_probe_cred(cr, sysfil_fallback(CURTAINTYP_SYSCTL)));
+	act = curtain_cred_ability_action(cr, ability_fallback(CURTAINTYP_SYSCTL));
+	if (act == CURTAINACT_ALLOW)
+		return (0);
+	act = CURTAINACT_DENY; /* XXX */
+	return (act2err[act]);
 }
 
 
@@ -2194,7 +2283,7 @@ static int
 curtain_priv_check(struct ucred *cr, int priv)
 {
 	enum curtain_action act;
-	int sf;
+	enum curtain_ability abl;
 	act = curtain_cred_action(cr, CURTAINTYP_PRIV, (ctkey){ .priv = priv });
 	if (act == CURTAINACT_ALLOW)
 		return (0);
@@ -2208,7 +2297,7 @@ curtain_priv_check(struct ucred *cr, int priv)
 	case PRIV_AUDIT_GETAUDIT:
 	case PRIV_AUDIT_SETAUDIT:
 	case PRIV_AUDIT_SUBMIT:
-		sf = SYSFIL_AUDIT;
+		abl = CURTAINABL_AUDIT;
 		break;
 	case PRIV_CRED_SETUID:
 	case PRIV_CRED_SETEUID:
@@ -2221,25 +2310,25 @@ curtain_priv_check(struct ucred *cr, int priv)
 	case PRIV_CRED_SETRESGID:
 	case PRIV_PROC_SETLOGIN:
 	case PRIV_PROC_SETLOGINCLASS:
-		sf = SYSFIL_ID;
+		abl = CURTAINABL_ID;
 		break;
 	case PRIV_SEEOTHERGIDS:
 	case PRIV_SEEOTHERUIDS:
-		sf = SYSFIL_PS;
+		abl = CURTAINABL_PS;
 		break;
 	case PRIV_DEBUG_DIFFCRED:
 	case PRIV_DEBUG_SUGID:
 	case PRIV_DEBUG_UNPRIV:
-		sf = SYSFIL_DEBUG;
+		abl = CURTAINABL_DEBUG;
 		break;
 	case PRIV_PROC_LIMIT:
 	case PRIV_PROC_SETRLIMIT:
-		sf = SYSFIL_RLIMIT;
+		abl = CURTAINABL_RLIMIT;
 		break;
 	case PRIV_JAIL_ATTACH:
 	case PRIV_JAIL_SET:
 	case PRIV_JAIL_REMOVE:
-		sf = SYSFIL_JAIL;
+		abl = CURTAINABL_JAIL;
 		break;
 	case PRIV_VFS_READ:
 	case PRIV_VFS_WRITE:
@@ -2251,69 +2340,69 @@ curtain_priv_check(struct ucred *cr, int priv)
 	case PRIV_VFS_LINK:
 	case PRIV_VFS_STAT:
 	case PRIV_VFS_STICKYFILE:
-		sf = SYSFIL_VFS_MISC;
+		abl = CURTAINABL_VFS_MISC;
 		break;
 	case PRIV_VFS_SYSFLAGS:
 #if 0
 	case PRIV_VFS_EXTATTR_SYSTEM:
 #endif
-		sf = SYSFIL_SYSFLAGS;
+		abl = CURTAINABL_SYSFLAGS;
 		break;
 	case PRIV_VFS_READ_DIR:
 		/* Let other policies handle this (like is done for jails). */
-		sf = SYSFIL_VFS_MISC;
+		abl = CURTAINABL_VFS_MISC;
 		break;
 	case PRIV_VFS_CHOWN:
 	case PRIV_VFS_SETGID:
 	case PRIV_VFS_RETAINSUGID:
-		sf = SYSFIL_CHOWN;
+		abl = CURTAINABL_CHOWN;
 		break;
 	case PRIV_VFS_CHROOT:
 	case PRIV_VFS_FCHROOT:
-		sf = SYSFIL_CHROOT;
+		abl = CURTAINABL_CHROOT;
 		break;
 	case PRIV_VFS_MKNOD_DEV:
-		sf = SYSFIL_MAKEDEV;
+		abl = CURTAINABL_MAKEDEV;
 		break;
 	case PRIV_VM_MLOCK:
 	case PRIV_VM_MUNLOCK:
-		sf = SYSFIL_MLOCK;
+		abl = CURTAINABL_MLOCK;
 		break;
 	case PRIV_NETINET_RESERVEDPORT:
 #if 0
 	case PRIV_NETINET_REUSEPORT:
 	case PRIV_NETINET_SETHDROPTS:
 #endif
-		sf = SYSFIL_NET;
+		abl = CURTAINABL_NET;
 		break;
 #if 0
 	case PRIV_NETINET_GETCRED:
-		sf = SYSFIL_NET;
+		abl = CURTAINABL_NET;
 		break;
 #endif
 	case PRIV_ADJTIME:
 	case PRIV_NTP_ADJTIME:
 	case PRIV_CLOCK_SETTIME:
-		sf = SYSFIL_SETTIME;
+		abl = CURTAINABL_SETTIME;
 		break;
 	case PRIV_VFS_GETFH:
 	case PRIV_VFS_FHOPEN:
 	case PRIV_VFS_FHSTAT:
 	case PRIV_VFS_FHSTATFS:
 	case PRIV_VFS_GENERATION:
-		sf = SYSFIL_FH;
+		abl = CURTAINABL_FH;
 		break;
 	default:
-		sf = SYSFIL_ANY_PRIV;
+		abl = CURTAINABL_ANY_PRIV;
 		break;
 	}
-	if (sf != SYSFIL_ANY_PRIV) {
-		act = MIN(act, curtain_cred_sysfil_action(cr, sf));
+	if (abl != CURTAINABL_ANY_PRIV) {
+		act = MIN(act, curtain_cred_ability_action(cr, abl));
 		if (act == CURTAINACT_ALLOW)
 			return (0);
-		sf = SYSFIL_ANY_PRIV;
+		abl = CURTAINABL_ANY_PRIV;
 	}
-	act = MIN(act, curtain_cred_sysfil_action(cr, sf));
+	act = MIN(act, curtain_cred_ability_action(cr, abl));
 	if (act == CURTAINACT_ALLOW)
 		return (0);
 	/*
@@ -2337,8 +2426,14 @@ curtain_priv_check(struct ucred *cr, int priv)
 static int
 curtain_sysfil_check(struct ucred *cr, int sf)
 {
+	struct curtain *ct;
 	enum curtain_action act;
-	act = curtain_cred_sysfil_action(cr, sf);
+	if (!(ct = CRED_SLOT(cr)))
+		return (sysfil_probe_cred(cr, sf));
+	act = CURTAINACT_ALLOW;
+	for (enum curtain_ability abl = 0; abl < nitems(abilities_sysfils); abl++)
+		if (sf == abilities_sysfils[abl])
+			act = MAX(act, ct->ct_abilities[abl].on_self);
 	if (act == CURTAINACT_ALLOW)
 		return (0);
 	CURTAIN_CRED_LOG(cr, act, "sysfil %d", sf);
@@ -2369,7 +2464,7 @@ curtain_proc_check_exec_sugid(struct ucred *cr, struct proc *p)
 	if ((ct = CRED_SLOT(cr))) {
 		MPASS(ct->ct_finalized);
 		if (ct->ct_cached.is_restricted_on_exec)
-			act = ct->ct_sysfils[SYSFIL_RSUGID_EXEC].on_exec;
+			act = ct->ct_abilities[CURTAINABL_RSUGID_EXEC].on_exec;
 		else
 			act = CURTAINACT_ALLOW;
 	} else if (CRED_IN_RESTRICTED_MODE(cr))

@@ -133,6 +133,7 @@ syscallenter(struct thread *td)
 		}
 #endif
 		error = sysfil_check_sy_flags(td->td_ucred, se->sy_flags);
+		KASSERT(error, ("sysfil checks inconsistent"));
 		if (error) {
 			td->td_errno = error;
 			goto retval;
