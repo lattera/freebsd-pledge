@@ -675,7 +675,7 @@ sys_procctl(struct thread *td, struct procctl_args *uap)
 		struct procctl_reaper_pids rp;
 		struct procctl_reaper_kill rk;
 	} x;
-	int error, error1, flags, signum, sysfil;
+	int error, error1, flags, signum;
 
 	switch (uap->com) {
 	case PROC_REAP_ACQUIRE:
@@ -685,13 +685,12 @@ sys_procctl(struct thread *td, struct procctl_args *uap)
 	case PROC_REAP_KILL:
 	case PROC_PDEATHSIG_CTL:
 	case PROC_PDEATHSIG_STATUS:
-		sysfil = SYSFIL_REAP;
+		error = sysfil_check(td, SYSFIL_REAP);
 		break;
 	default:
-		sysfil = SYSFIL_DEFAULT;
+		error = sysfil_check(td, SYSFIL_DEFAULT);
 		break;
 	}
-	error = sysfil_check(td, sysfil);
 	if (error)
 		return (error);
 

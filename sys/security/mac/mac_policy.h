@@ -66,6 +66,7 @@
 #include <sys/acl.h>	/* XXX acl_type_t */
 #include <sys/types.h>	/* XXX accmode_t */
 #include <vm/vm.h>	/* vm_prot_t */
+#include <sys/_sysfil.h>		/* sysfilset_t */
 
 struct acl;
 struct auditinfo;
@@ -685,7 +686,7 @@ typedef int	(*mpo_generic_check_vm_prot_t)(struct ucred *cred,
 typedef int	(*mpo_generic_ipc_name_prefix_t)(struct ucred *cred,
 		    char **prefix, char *end);
 
-typedef int	(*mpo_sysfil_check_t)(struct ucred *cred, int sf);
+typedef int	(*mpo_sysfil_check_t)(struct ucred *cred, sysfilset_t sfs);
 typedef int	(*mpo_sysfil_update_mask_t)(struct ucred *newcred);
 
 typedef int	(*mpo_proc_check_exec_sugid_t)(struct ucred *cred,

@@ -480,11 +480,11 @@ mac_generic_ipc_name_prefix(struct ucred *cred, char **prefix, char *end)
 }
 
 int
-mac_sysfil_check(struct ucred *cred, int sf)
+mac_sysfil_check(struct ucred *cred, sysfilset_t sfs)
 {
 	int error;
 
-	MAC_POLICY_CHECK_NOSLEEP(sysfil_check, cred, sf);
+	MAC_POLICY_CHECK_NOSLEEP(sysfil_check, cred, sfs);
 
 	return (error);
 }

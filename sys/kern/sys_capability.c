@@ -113,7 +113,7 @@ sys_cap_enter(struct thread *td, struct cap_enter_args *uap)
 	if (IN_CAPABILITY_MODE(td))
 		return (0);
 	p = td->td_proc;
-	mask = ~((sysfilset_t)1 << SYSFIL_UNCAPSICUM);
+	mask = ~SYSFIL_UNCAPSICUM;
 #ifdef MAC
 	error = mac_sysfil_update_mask(p, mask);
 	if (error != 0)
@@ -122,7 +122,7 @@ sys_cap_enter(struct thread *td, struct cap_enter_args *uap)
 	newcred = crget();
 	PROC_LOCK(p);
 	oldcred = crcopysafe(p, newcred);
-	BIT_AND(SYSFILSET_BITS, &cred->cr_sysfilset, mask_sfs);
+	cred->cr_sysfilset &= mask_sfs;
 	MPASS(CRED_IN_CAPABILITY_MODE(newcred));
 	MPASS(CRED_IN_RESTRICTED_MODE(newcred));
 	proc_set_cred(p, newcred);

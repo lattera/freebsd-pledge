@@ -581,7 +581,7 @@ curtain_dup_compact(const struct curtain *src)
 	return (dst);
 }
 
-static const int abilities_sysfils[] = {
+static const sysfilset_t abilities_sysfils[] = {
 	[CURTAINABL_UNCAPSICUM] = SYSFIL_UNCAPSICUM,
 	[CURTAINABL_DEFAULT] = SYSFIL_DEFAULT,
 	[CURTAINABL_ALWAYS] = SYSFIL_ALWAYS,
@@ -732,7 +732,7 @@ curtain_to_sysfilset(const struct curtain *ct, sysfilset_t *sfs)
 	*sfs = 0;
 	for (enum curtain_ability abl = 0; abl < nitems(abilities_sysfils); abl++)
 		if (ct->ct_abilities[abl].on_self == CURTAINACT_ALLOW)
-			*sfs |= (sysfilset_t)1 << abilities_sysfils[abl];
+			*sfs |= abilities_sysfils[abl];
 }
 
 static void
@@ -794,7 +794,7 @@ curtain_mask_sysfils(struct curtain *ct, sysfilset_t sfs)
 	mode_set(&deny, CURTAINACT_DENY);
 	KASSERT(ct->ct_ref == 1, ("modifying shared curtain"));
 	for (enum curtain_ability abl = 0; abl < nitems(abilities_sysfils); abl++)
-		if (!(sfs & ((sysfilset_t)1 << abilities_sysfils[abl])))
+		if (abilities_sysfils[abl] & ~sfs)
 			mode_mask(&ct->ct_abilities[abl], deny);
 	curtain_dirty(ct);
 }
@@ -2408,19 +2408,20 @@ curtain_priv_check(struct ucred *cr, int priv)
 
 
 static int
-curtain_sysfil_check(struct ucred *cr, int sf)
+curtain_sysfil_check(struct ucred *cr, sysfilset_t sfs)
 {
 	struct curtain *ct;
 	enum curtain_action act;
 	if (!(ct = CRED_SLOT(cr)))
-		return (sysfil_probe_cred(cr, sf));
-	act = CURTAINACT_ALLOW;
+		return (sysfil_probe_cred(cr, sfs));
+	act = CURTAINACT_KILL;
 	for (enum curtain_ability abl = 0; abl < nitems(abilities_sysfils); abl++)
-		if (sf == abilities_sysfils[abl])
-			act = MAX(act, ct->ct_abilities[abl].on_self);
-	if (act == CURTAINACT_ALLOW)
-		return (0);
-	CURTAIN_CRED_LOG(cr, act, "sysfil %d", sf);
+		if (!(sfs & ~SYSFIL_UNCAPSICUM & ~abilities_sysfils[abl])) {
+			act = MIN(act, ct->ct_abilities[abl].on_self);
+			if (act == CURTAINACT_ALLOW)
+				return (0);
+		}
+	CURTAIN_CRED_LOG(cr, act, "sysfil %#jx", (uintmax_t)sfs);
 	return (act2err[act]);
 }
 

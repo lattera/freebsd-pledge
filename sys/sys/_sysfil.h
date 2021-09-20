@@ -7,12 +7,6 @@
 #include <sys/stdint.h>
 #endif
 
-#define	SYSFIL_SHIFT		6	/* enough for 64 */
-#define	SYSFIL_SIZE		(1U << SYSFIL_SHIFT)
-#define	SYSFIL_MASK		(SYSFIL_SIZE - 1)
-
-#define	SYSFILSET_BITS		(1U << SYSFIL_SHIFT)
-
 typedef uint64_t sysfilset_t;
 
 #define	SYSFILSET_IS_RESTRICTED(sfs) (~(sfs) != 0)
