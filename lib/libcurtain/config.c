@@ -219,10 +219,15 @@ static int
 do_include_callback(void *ctx, char *path)
 {
 	struct parser *par = ctx;
-	if (*path && path[strlen(path) - 1] == '/')
-		process_dir(par->cfg, path);
-	else
-		process_file(par->cfg, path);
+	if (*path) {
+		if (path[0] == '/') {
+			if (path[strlen(path) - 1] == '/')
+				process_dir(par->cfg, path);
+			else
+				process_file(par->cfg, path);
+		} else
+			parse_error(par, "include path must be absolute");
+	}
 	return (0);
 }
 
