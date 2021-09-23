@@ -517,9 +517,9 @@ mac_sysfil_update_mask(struct proc *p, sysfilset_t mask_sfs)
 		crfree(oldcred);
 		crfree(cred);
 	} while (true);
-	crfree(oldcred);
 	proc_set_cred(p, cred);
 	PROC_UNLOCK(p);
+	crfree(oldcred);
 	return (0);
 }
 

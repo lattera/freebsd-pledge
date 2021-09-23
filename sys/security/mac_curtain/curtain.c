@@ -1092,7 +1092,7 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 {
 	struct proc *p = td->td_proc;
 	struct ucred *cr, *old_cr;
-	struct curtain *ct;
+	struct curtain *ct, *old_ct;
 	int error = 0;
 #ifdef UNVEIL_SUPPORT
 	struct unveil_base *base;
@@ -1164,7 +1164,7 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 		PROC_LOCK(p);
 		if (old_cr == p->p_ucred) {
 			crfree(old_cr);
-			curtain_free(ct);
+			old_ct = ct;
 			ct = new_ct;
 			break;
 		}
@@ -1192,10 +1192,11 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 	if (CRED_SLOT(old_cr))
 		curtain_link(ct, CRED_SLOT(old_cr));
 	proc_set_cred(p, cr);
-	crfree(old_cr);
 	if (CRED_IN_RESTRICTED_MODE(cr) != PROC_IN_RESTRICTED_MODE(p))
 		panic("PROC_IN_RESTRICTED_MODE() bogus");
 	PROC_UNLOCK(p);
+	crfree(old_cr);
+	curtain_free(old_ct);
 	SDT_PROBE1(curtain,, do_curtainctl, assign, ct);
 
 #ifdef UNVEIL_SUPPORT
@@ -1236,6 +1237,7 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 out1:
 	PROC_UNLOCK(p);
 	crfree(cr);
+	curtain_free(old_ct);
 out2:
 #ifdef UNVEIL_SUPPORT
 	unveil_base_write_end(base);
