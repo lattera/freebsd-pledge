@@ -830,9 +830,6 @@ curtain_config_load(struct curtain_config *cfg)
 			process_file(cfg, path);
 		}
 
-		process_dir(cfg, _PATH_LOCALBASE "/etc/curtain.d");
-		process_file(cfg, _PATH_LOCALBASE "/etc/curtain.conf");
-
 		process_dir(cfg, _PATH_ETC "/curtain.d");
 		process_file(cfg, _PATH_ETC "/curtain.conf");
 
