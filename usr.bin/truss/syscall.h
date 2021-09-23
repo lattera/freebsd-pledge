@@ -191,26 +191,6 @@ enum Argtype {
 	Timeval2,
 	Utrace,
 
-	CloudABIAdvice,
-	CloudABIClockID,
-	CloudABIFDSFlags,
-	CloudABIFDStat,
-	CloudABIFileStat,
-	CloudABIFileType,
-	CloudABIFSFlags,
-	CloudABILookup,
-	CloudABIMFlags,
-	CloudABIMProt,
-	CloudABIMSFlags,
-	CloudABIOFlags,
-	CloudABISDFlags,
-	CloudABISignal,
-	CloudABISockStat,
-	CloudABISSFlags,
-	CloudABITimestamp,
-	CloudABIULFlags,
-	CloudABIWhence,
-
 	MAX_ARG_TYPE,
 };
 

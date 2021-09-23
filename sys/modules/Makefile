@@ -87,9 +87,6 @@ SUBDIR=	\
 	${_cfi} \
 	${_chromebook_platform} \
 	${_ciss} \
-	cloudabi \
-	${_cloudabi32} \
-	${_cloudabi64} \
 	${_coretemp} \
 	${_cp} \
 	${_cpsw} \
@@ -265,6 +262,7 @@ SUBDIR=	\
 	mxge \
 	my \
 	${_nctgpio} \
+	${_neta} \
 	${_netgraph} \
 	${_nfe} \
 	nfscl \
@@ -627,6 +625,7 @@ _rockchip=	rockchip
 .if ${MACHINE_CPUARCH} == "aarch64" || ${MACHINE_CPUARCH} == "arm"
 _sdhci_fdt=	sdhci_fdt
 _e6000sw=	e6000sw
+_neta=		neta
 .endif
 
 .if ${MACHINE_CPUARCH} == "i386" || ${MACHINE_CPUARCH} == "amd64"
@@ -818,14 +817,6 @@ _nvram=		opal_nvram
 .if ${MACHINE_CPUARCH} == "powerpc" && ${MACHINE_ARCH} != "powerpcspe"
 # Don't build powermac_nvram for powerpcspe, it's never supported.
 _nvram+=	powermac_nvram
-.endif
-
-.if (${MACHINE_CPUARCH} == "aarch64" || ${MACHINE_CPUARCH} == "amd64" || \
-     ${MACHINE_ARCH:Marmv[67]*} != "" || ${MACHINE_CPUARCH} == "i386")
-_cloudabi32=	cloudabi32
-.endif
-.if ${MACHINE_CPUARCH} == "aarch64" || ${MACHINE_CPUARCH} == "amd64"
-_cloudabi64=	cloudabi64
 .endif
 
 .endif
