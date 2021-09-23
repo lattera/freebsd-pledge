@@ -466,7 +466,6 @@ static const struct {
 	const char name[16];
 	void (*func)(struct parser *, struct word *);
 } directives[] = {
-	{ "include", parse_include },
 	{ "merge", parse_push },
 	{ "push", parse_push },
 	{ "unveil", parse_unveil },
@@ -484,28 +483,37 @@ parse_directive(struct parser *par, char *p)
 {
 	char *dir, *dir_end;
 	int unsafety;
+
 	dir = p = skip_spaces(p);
 	dir_end = p = skip_word(p, "!:");
 	if (*p == ':') /* intended for argv directives */
 		p++;
+
 	unsafety = 0;
 	while (*p == '!')
 		p++, unsafety++;
+	if (unsafety > par->cfg->unsafety)
+		return;
+
+	if (strmemcmp("include", dir, dir_end - dir) == 0) {
+		/*
+		 * Always process included files (when the include directive is
+		 * in a matched section) even if they already have been
+		 * processed before because the file could contain sections for
+		 * newly enabled tags that haven't been applied yet.
+		 */
+		if (par->matched)
+			parse_words(par, p, parse_include);
+		return;
+	}
+
+	if (par->skip)
+		return;
 	for (size_t i = 0; i < nitems(directives); i++)
 		if (strmemcmp(directives[i].name, dir, dir_end - dir) == 0) {
-			if (unsafety > par->cfg->unsafety)
-				return;
-			/*
-			 * Always process included files (when the include
-			 * directive is in a matched section) even if they
-			 * already have been processed before because the file
-			 * could contain sections for newly enabled tags that
-			 * haven't been applied yet.
-			 */
-			if (directives[i].func == parse_include ? !par->matched : par->skip)
-				return;
 			need_slot(par);
-			return (parse_words(par, p, directives[i].func));
+			parse_words(par, p, directives[i].func);
+			return;
 		}
 	parse_error(par, "unknown directive");
 }
