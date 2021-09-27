@@ -299,7 +299,7 @@ curtain_free(struct curtain *ct)
 
 static struct curtain *
 curtain_find_barrier_locked(struct curtain *ct,
-    enum barrier_type type, enum curtain_barrier bar)
+    enum barrier_type type, enum barrier_stop bar)
 {
 	while (ct && ct->ct_barriers[type].on_self <= bar)
 		ct = ct->ct_parent;
@@ -308,7 +308,7 @@ curtain_find_barrier_locked(struct curtain *ct,
 
 static struct curtain *
 curtain_find_barrier(struct curtain *ct,
-    enum barrier_type type, enum curtain_barrier bar)
+    enum barrier_type type, enum barrier_stop bar)
 {
 	rw_rlock(&curtain_tree_lock);
 	ct = curtain_find_barrier_locked(ct, type, bar);
@@ -902,7 +902,7 @@ static const enum curtain_action lvl2act[CURTAINLVL_COUNT] = {
 	[CURTAINLVL_KILL] = CURTAINACT_KILL,
 };
 
-static const enum curtain_barrier lvl2bar[CURTAINLVL_COUNT] = {
+static const enum barrier_stop lvl2bar[CURTAINLVL_COUNT] = {
 	[CURTAINLVL_PASS] = CURTAINBAR_PASS,
 	[CURTAINLVL_GATE] = CURTAINBAR_GATE,
 	[CURTAINLVL_WALL] = CURTAINBAR_WALL,
@@ -927,7 +927,7 @@ curtain_build_ability(struct curtain *ct, const struct curtainreq *req,
     enum curtain_ability abl)
 {
 	enum barrier_type type;
-	enum curtain_barrier bar;
+	enum barrier_stop bar;
 	build_mode(&ct->ct_abilities[abl], req);
 	switch (abl) {
 	case CURTAINABL_PROC:		type = BARRIER_PROC_SIGNAL;	break;
