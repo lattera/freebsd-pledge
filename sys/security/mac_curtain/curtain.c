@@ -372,15 +372,6 @@ curtain_dup(const struct curtain *src)
 	return (dst);
 }
 
-static struct curtain *
-curtain_dup_child(struct curtain *src)
-{
-	struct curtain *dst;
-	dst = curtain_dup_unlinked(src);
-	curtain_link(dst, src);
-	return (dst);
-}
-
 static inline void
 curtain_dirty(struct curtain *ct)
 {
@@ -2425,7 +2416,8 @@ curtain_sysfil_update_mask(struct ucred *cr)
 	struct curtain *ct;
 	if (!CRED_SLOT(cr))
 		return (0);
-	ct = curtain_dup_child(CRED_SLOT(cr));
+	ct = curtain_dup_unlinked(CRED_SLOT(cr));
+	curtain_link(ct, CRED_SLOT(cr));
 	curtain_mask_sysfils(ct, cr->cr_sysfilset);
 	curtain_cache_update(ct);
 	MPASS(ct->ct_finalized);
