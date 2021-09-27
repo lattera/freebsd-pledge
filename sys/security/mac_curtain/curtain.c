@@ -38,7 +38,8 @@ __FBSDID("$FreeBSD$");
 #include <sys/filio.h>
 #include <sys/tty.h>
 
-static MALLOC_DEFINE(M_CURTAIN, "curtain", "curtain restrictions");
+static MALLOC_DEFINE(M_CURTAIN, "curtain", "curtain structures");
+static MALLOC_DEFINE(M_BARRIER, "barrier", "barrier structures");
 
 SDT_PROVIDER_DEFINE(curtain);
 SDT_PROBE_DEFINE2(curtain,, curtain_build, begin,
@@ -87,14 +88,25 @@ STATNODE_COUNTER(long_probes, curtain_stats_long_probes, "");
 
 CTASSERT(CURTAINCTL_MAX_ITEMS <= (curtain_index)-1);
 
-static volatile uint64_t curtain_serial = 1;
+static volatile uint64_t barrier_serial = 1;
 
 static int __read_mostly curtain_slot;
-#define	SLOT(l) ((l) ? (struct curtain *)mac_label_get((l), curtain_slot) : NULL)
+#define	SLOT_CTH(l) ((l) ? (struct curtain_head *)mac_label_get((l), curtain_slot) : NULL)
+#define	SLOT_CT(l) ((struct curtain *)SLOT_CTH(l))
+#define	SLOT(l) ({ \
+	struct curtain *__ct = SLOT_CT(l); \
+	MPASS(!__ct || __ct->ct_magic == CURTAIN_MAGIC); \
+	__ct; \
+	})
 #define	SLOT_SET(l, val) mac_label_set((l), curtain_slot, (uintptr_t)(val))
+#define	SLOT_BR(l) ({ \
+	struct curtain_head *__cth = SLOT_CTH(l); \
+	__cth ? __cth->cth_barrier : NULL; \
+})
 #define	CRED_SLOT(cr) SLOT((cr)->cr_label)
+#define	CRED_SLOT_BR(cr) SLOT_BR((cr)->cr_label)
 
-
+
 static inline void
 mode_set(struct curtain_mode *mode, enum curtain_action act)
 {
@@ -141,6 +153,225 @@ mode_restricts(struct curtain_mode mode1, struct curtain_mode mode2)
 	        mode1.on_exec_max > mode2.on_exec_max);
 }
 
+
+static void
+barrier_init(struct barrier *br)
+{
+	*br = (struct barrier){
+		.br_head = { .cth_barrier = br },
+		.br_ref = 1,
+		.br_parent = NULL,
+		.br_children = SLIST_HEAD_INITIALIZER(br.br_children),
+		.br_nchildren = 0,
+	};
+	br->br_serial = atomic_fetchadd_64(&barrier_serial, 1);
+}
+
+static inline void
+barrier_invariants(const struct barrier *br)
+{
+	MPASS(br);
+	MPASS(br->br_head.cth_barrier == br);
+	MPASS(br->br_parent != br);
+	MPASS(br->br_ref > 0);
+}
+
+static void
+barrier_invariants_sync(const struct barrier *br)
+{
+	barrier_invariants(br);
+	MPASS(LIST_EMPTY(&br->br_children) == (br->br_nchildren == 0));
+}
+
+static struct barrier *
+barrier_alloc(void)
+{
+	struct barrier *br;
+	br = malloc(sizeof *br, M_BARRIER, M_WAITOK);
+	return (br);
+}
+
+static struct barrier *
+barrier_make()
+{
+	struct barrier *br;
+	br = barrier_alloc();
+	barrier_init(br);
+	barrier_invariants_sync(br);
+	return (br);
+}
+
+static struct rwlock __exclusive_cache_line barrier_tree_lock;
+
+static struct barrier *
+barrier_hold(struct barrier *br)
+{
+	refcount_acquire(&br->br_ref);
+	return (br);
+}
+
+static void
+barrier_bump(struct barrier *br)
+{
+	br->br_serial = atomic_fetchadd_64(&barrier_serial, 1);
+}
+
+static void
+barrier_link(struct barrier *child, struct barrier *parent)
+{
+	rw_wlock(&barrier_tree_lock);
+	barrier_invariants_sync(child);
+#ifdef INVARIANTS
+	if (parent)
+		for (const struct barrier *iter = child; iter; iter = iter->br_parent)
+			MPASS(iter != parent);
+#endif
+	if ((child->br_parent = parent)) {
+		barrier_invariants_sync(parent);
+		parent->br_nchildren++;
+		if (parent->br_nchildren == 0)
+			panic("barrier nchildren overflow");
+		LIST_INSERT_HEAD(&parent->br_children, child, br_sibling);
+		barrier_invariants_sync(parent);
+	} else {
+#ifdef INVARIANTS
+		memset(&child->br_sibling, -1, sizeof child->br_sibling);
+#endif
+	}
+	barrier_invariants_sync(child);
+	rw_wunlock(&barrier_tree_lock);
+}
+
+static void
+barrier_collapse(struct barrier *src, struct barrier *dst)
+{
+	for (size_t i = 0; i < BARRIER_COUNT; i++) {
+		dst->br_barriers[i].on_self = MAX(src->br_barriers[i].on_self,
+		                                  dst->br_barriers[i].on_self);
+		dst->br_barriers[i].on_exec = MAX(src->br_barriers[i].on_self,
+		                                  dst->br_barriers[i].on_exec);
+	}
+}
+
+static void
+barrier_unlink(struct barrier *victim)
+{
+	struct barrier *child;
+	rw_wlock(&barrier_tree_lock);
+	MPASS(LIST_EMPTY(&victim->br_children) == (victim->br_nchildren == 0));
+	if (victim->br_parent) {
+		barrier_invariants_sync(victim->br_parent);
+		LIST_REMOVE(victim, br_sibling);
+		MPASS(victim->br_parent->br_nchildren != 0);
+		victim->br_parent->br_nchildren--;
+		barrier_invariants_sync(victim->br_parent);
+	}
+	while (!LIST_EMPTY(&victim->br_children)) {
+		child = LIST_FIRST(&victim->br_children);
+		MPASS(child->br_parent == victim);
+		barrier_invariants_sync(child);
+		MPASS(victim->br_nchildren != 0);
+		victim->br_nchildren--;
+		LIST_REMOVE(child, br_sibling);
+		if ((child->br_parent = victim->br_parent)) {
+			LIST_INSERT_HEAD(&child->br_parent->br_children, child, br_sibling);
+			child->br_parent->br_nchildren++;
+			MPASS(child->br_parent->br_nchildren != 0);
+		}
+		/*
+		 * TODO: This may cutoff child processes from objects they had
+		 * access to before a parent process died.  It would be better
+		 * to keep some intermediate barriers around (and "collapse"
+		 * them when appropriate to prevent them from building up).
+		 */
+		barrier_collapse(victim, child);
+		barrier_invariants_sync(child);
+	}
+	MPASS(victim->br_nchildren == 0);
+	victim->br_parent = NULL;
+	rw_wunlock(&barrier_tree_lock);
+}
+
+static void
+barrier_free(struct barrier *br)
+{
+	barrier_invariants(br);
+	if (refcount_release(&br->br_ref)) {
+		barrier_unlink(br);
+		free(br, M_BARRIER);
+	}
+}
+
+static struct barrier *
+barrier_cross_locked(struct barrier *br,
+    enum barrier_type type, enum barrier_stop bar)
+{
+	while (br && br->br_barriers[type].on_self <= bar)
+		br = br->br_parent;
+	return (br);
+}
+
+static struct barrier *
+barrier_cross(struct barrier *br,
+    enum barrier_type type, enum barrier_stop bar)
+{
+	rw_rlock(&barrier_tree_lock);
+	br = barrier_cross_locked(br, type, bar);
+	rw_runlock(&barrier_tree_lock);
+	return (br);
+}
+
+static bool
+barrier_visible(struct barrier *subject, const struct barrier *target,
+    enum barrier_type type)
+{
+	/*
+	 * NOTE: One or both of subject and target may be NULL (indicating
+	 * credentials with no curtain restrictions).
+	 */
+	if (subject)
+		barrier_invariants(subject);
+	if (target)
+		barrier_invariants(target);
+	if (subject == target) /* fast path */
+		return (true);
+	rw_rlock(&barrier_tree_lock);
+	subject = barrier_cross_locked(subject, type, BARRIER_PASS);
+	while (target && subject != target)
+		target = target->br_parent;
+	rw_runlock(&barrier_tree_lock);
+	return (subject == target);
+
+}
+
+static void
+barrier_copy(struct barrier *dst, const struct barrier *src)
+{
+	memcpy(dst, src, sizeof *src);
+	dst->br_head.cth_barrier = dst;
+	dst->br_ref = 1;
+	dst->br_parent = NULL;
+	dst->br_nchildren = 0;
+	LIST_INIT(&dst->br_children);
+#ifdef INVARIANTS
+	memset(&dst->br_sibling, -1, sizeof dst->br_sibling);
+#endif
+	barrier_invariants_sync(dst);
+}
+
+static struct barrier *
+barrier_dup(const struct barrier *src)
+{
+	struct barrier *dst;
+	barrier_invariants(src);
+	dst = barrier_alloc();
+	barrier_copy(dst, src);
+	return (dst);
+}
+
+
+#define	CURTAIN_BARRIER(ct) ((ct)->ct_head.cth_barrier)
+#define	CURTAIN_MAGIC 0xa9ac86bcU
 
 static void
 curtain_init(struct curtain *ct, size_t nslots)
@@ -148,17 +379,17 @@ curtain_init(struct curtain *ct, size_t nslots)
 	if (nslots != (curtain_index)nslots)
 		panic("invalid curtain nslots %zu", nslots);
 	*ct = (struct curtain){
+		.ct_head = { .cth_barrier = NULL },
+#ifdef INVARIANTS
+		.ct_magic = CURTAIN_MAGIC,
+#endif
 		.ct_ref = 1,
-		.ct_parent = NULL,
-		.ct_children = SLIST_HEAD_INITIALIZER(ct.ct_children),
-		.ct_nchildren = 0,
 		.ct_finalized = false,
 		.ct_nitems = 0,
 		.ct_nslots = nslots,
 		.ct_modulo = nslots,
 		.ct_cellar = nslots,
 	};
-	ct->ct_serial = atomic_fetchadd_64(&curtain_serial, 1);
 	for (curtain_index i = 0; i < nslots; i++)
 		ct->ct_slots[i].type = 0;
 }
@@ -167,18 +398,19 @@ static void
 curtain_invariants(const struct curtain *ct)
 {
 	MPASS(ct);
-	MPASS(ct->ct_parent != ct);
+	MPASS(ct->ct_magic == CURTAIN_MAGIC);
 	MPASS(ct->ct_ref > 0);
 	MPASS(ct->ct_nslots >= ct->ct_nitems);
 	MPASS(ct->ct_nslots >= ct->ct_modulo);
 	MPASS(ct->ct_nslots >= ct->ct_cellar);
+	barrier_invariants(CURTAIN_BARRIER(ct));
 }
 
 static void
 curtain_invariants_sync(const struct curtain *ct)
 {
 	curtain_invariants(ct);
-	MPASS(LIST_EMPTY(&ct->ct_children) == (ct->ct_nchildren == 0));
+	barrier_invariants_sync(CURTAIN_BARRIER(ct));
 }
 
 static struct curtain *
@@ -190,7 +422,7 @@ curtain_alloc(size_t nslots)
 }
 
 static struct curtain *
-curtain_make(size_t nitems)
+curtain_make_nb(size_t nitems)
 {
 	size_t nslots;
 	struct curtain *ct;
@@ -198,11 +430,18 @@ curtain_make(size_t nitems)
 	ct = curtain_alloc(nslots);
 	curtain_init(ct, nslots);
 	ct->ct_modulo = nitems + nitems/16;
-	curtain_invariants_sync(ct);
 	return (ct);
 }
 
-static struct rwlock __exclusive_cache_line curtain_tree_lock;
+static struct curtain *
+curtain_make(size_t nitems)
+{
+	struct curtain *ct;
+	ct = curtain_make_nb(nitems);
+	ct->ct_head.cth_barrier = barrier_make();
+	curtain_invariants_sync(ct);
+	return (ct);
+}
 
 static struct curtain *
 curtain_hold(struct curtain *ct)
@@ -212,154 +451,31 @@ curtain_hold(struct curtain *ct)
 }
 
 static void
-curtain_link(struct curtain *child, struct curtain *parent)
-{
-	rw_wlock(&curtain_tree_lock);
-	curtain_invariants_sync(child);
-#ifdef INVARIANTS
-	if (parent)
-		for (const struct curtain *iter = child; iter; iter = iter->ct_parent)
-			MPASS(iter != parent);
-#endif
-	if ((child->ct_parent = parent)) {
-		curtain_invariants_sync(parent);
-		parent->ct_nchildren++;
-		MPASS(parent->ct_nchildren != 0);
-		LIST_INSERT_HEAD(&parent->ct_children, child, ct_sibling);
-		curtain_invariants_sync(parent);
-	} else {
-#ifdef INVARIANTS
-		memset(&child->ct_sibling, -1, sizeof child->ct_sibling);
-#endif
-	}
-	curtain_invariants_sync(child);
-	rw_wunlock(&curtain_tree_lock);
-}
-
-static void
-curtain_barrier_propagate(struct curtain *src, struct curtain *dst)
-{
-	for (size_t i = 0; i < BARRIER_COUNT; i++) {
-		dst->ct_barriers[i].on_self = MAX(src->ct_barriers[i].on_self,
-		                                  dst->ct_barriers[i].on_self);
-		dst->ct_barriers[i].on_exec = MAX(src->ct_barriers[i].on_self,
-		                                  dst->ct_barriers[i].on_exec);
-	}
-}
-
-static void
-curtain_unlink(struct curtain *victim)
-{
-	struct curtain *child;
-	rw_wlock(&curtain_tree_lock);
-	MPASS(LIST_EMPTY(&victim->ct_children) == (victim->ct_nchildren == 0));
-	if (victim->ct_parent) {
-		curtain_invariants_sync(victim->ct_parent);
-		LIST_REMOVE(victim, ct_sibling);
-		MPASS(victim->ct_parent->ct_nchildren != 0);
-		victim->ct_parent->ct_nchildren--;
-		curtain_invariants_sync(victim->ct_parent);
-	}
-	while (!LIST_EMPTY(&victim->ct_children)) {
-		child = LIST_FIRST(&victim->ct_children);
-		MPASS(child->ct_parent == victim);
-		curtain_invariants_sync(child);
-		MPASS(victim->ct_nchildren != 0);
-		victim->ct_nchildren--;
-		LIST_REMOVE(child, ct_sibling);
-		if ((child->ct_parent = victim->ct_parent)) {
-			LIST_INSERT_HEAD(&child->ct_parent->ct_children, child, ct_sibling);
-			child->ct_parent->ct_nchildren++;
-			MPASS(child->ct_parent->ct_nchildren != 0);
-		}
-		/*
-		 * This may cutoff child processes from objects they had access
-		 * to before the parent process died.  It would be better to
-		 * keep some intermediate curtains around (and "collapse" them
-		 * as needed).  Only the hierarchical and barrier information
-		 * would need to be preserved in these intermediate curtains.
-		 */
-		curtain_barrier_propagate(victim, child);
-		curtain_invariants_sync(child);
-	}
-	MPASS(victim->ct_nchildren == 0);
-	victim->ct_parent = NULL;
-	rw_wunlock(&curtain_tree_lock);
-}
-
-static void
 curtain_free(struct curtain *ct)
 {
 	curtain_invariants(ct);
 	if (refcount_release(&ct->ct_ref)) {
-		curtain_unlink(ct);
+		if (CURTAIN_BARRIER(ct))
+			barrier_free(CURTAIN_BARRIER(ct));
 		free(ct, M_CURTAIN);
 	}
 }
 
-static struct curtain *
-curtain_find_barrier_locked(struct curtain *ct,
-    enum barrier_type type, enum barrier_stop bar)
-{
-	while (ct && ct->ct_barriers[type].on_self <= bar)
-		ct = ct->ct_parent;
-	return (ct);
-}
-
-static struct curtain *
-curtain_find_barrier(struct curtain *ct,
-    enum barrier_type type, enum barrier_stop bar)
-{
-	rw_rlock(&curtain_tree_lock);
-	ct = curtain_find_barrier_locked(ct, type, bar);
-	rw_runlock(&curtain_tree_lock);
-	return (ct);
-}
-
-static bool
-curtain_visible(struct curtain *subject, const struct curtain *target,
-    enum barrier_type type)
-{
-	/*
-	 * NOTE: One or both of subject and target may be NULL (indicating
-	 * credentials with no curtain restrictions).
-	 */
-	if (subject)
-		curtain_invariants(subject);
-	if (target)
-		curtain_invariants(target);
-	if (subject == target) /* fast path */
-		return (true);
-	rw_rlock(&curtain_tree_lock);
-	subject = curtain_find_barrier_locked(subject, type, BARRIER_PASS);
-	while (target && subject != target)
-		target = target->ct_parent;
-	rw_runlock(&curtain_tree_lock);
-	return (subject == target);
-
-}
-
 static void
-curtain_copy(struct curtain *dst, const struct curtain *src)
+curtain_copy_without_barrier(struct curtain *dst, const struct curtain *src)
 {
 	memcpy(dst, src, sizeof *src + src->ct_nslots * sizeof *src->ct_slots);
 	dst->ct_ref = 1;
-	dst->ct_parent = NULL;
-	dst->ct_nchildren = 0;
-	LIST_INIT(&dst->ct_children);
-#ifdef INVARIANTS
-	memset(&dst->ct_sibling, -1, sizeof dst->ct_sibling);
-#endif
-	curtain_invariants_sync(dst);
+	dst->ct_head.cth_barrier = NULL;
 }
 
 static struct curtain *
-curtain_dup_unlinked(const struct curtain *src)
+curtain_dup_without_barrier(const struct curtain *src)
 {
 	struct curtain *dst;
 	curtain_invariants(src);
 	dst = curtain_alloc(src->ct_nslots);
-	curtain_copy(dst, src);
+	curtain_copy_without_barrier(dst, src);
 	return (dst);
 }
 
@@ -367,8 +483,19 @@ static struct curtain *
 curtain_dup(const struct curtain *src)
 {
 	struct curtain *dst;
-	dst = curtain_dup_unlinked(src);
-	curtain_link(dst, src->ct_parent);
+	dst = curtain_dup_without_barrier(src);
+	dst->ct_head.cth_barrier = barrier_dup(CURTAIN_BARRIER(src));
+	curtain_invariants(dst);
+	return (dst);
+}
+
+static struct curtain *
+curtain_dup_with_shared_barrier(struct curtain *src)
+{
+	struct curtain *dst;
+	dst = curtain_dup_without_barrier(src);
+	dst->ct_head.cth_barrier = barrier_hold(CURTAIN_BARRIER(src));
+	curtain_invariants(dst);
 	return (dst);
 }
 
@@ -544,12 +671,11 @@ curtain_dup_compact(const struct curtain *src)
 	const struct curtain_item *si;
 	struct curtain *dst;
 	curtain_invariants(src);
-	dst = curtain_make(src->ct_nitems);
+	dst = curtain_make_nb(src->ct_nitems);
+	dst->ct_head.cth_barrier = barrier_dup(CURTAIN_BARRIER(src));
 	dst->ct_overflowed = src->ct_overflowed;
 	if ((dst->ct_finalized = src->ct_finalized))
 		dst->ct_cached = src->ct_cached;
-	dst->ct_serial = src->ct_serial;
-	memcpy(dst->ct_barriers, src->ct_barriers, sizeof dst->ct_barriers);
 	memcpy(dst->ct_abilities, src->ct_abilities, sizeof dst->ct_abilities);
 	for (si = src->ct_slots; si < &src->ct_slots[src->ct_nslots]; si++)
 		if (si->type != 0) {
@@ -567,7 +693,6 @@ curtain_dup_compact(const struct curtain *src)
 			MPASS(memcmp(&di->mode, &si->mode, sizeof di->mode) == 0);
 		}
 #endif
-	curtain_link(dst, src->ct_parent);
 	curtain_invariants_sync(dst);
 	return (dst);
 }
@@ -651,6 +776,7 @@ typedef union curtain_key ctkey;
 static bool
 curtain_need_exec_switch(const struct curtain *ct)
 {
+	const struct barrier *br;
 	const struct curtain_item *item;
 	for (enum curtain_ability abl = 0; abl <= CURTAINABL_LAST; abl++)
 		if (mode_need_exec_switch(ct->ct_abilities[abl]))
@@ -658,8 +784,9 @@ curtain_need_exec_switch(const struct curtain *ct)
 	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
 		if (item->type != 0 && mode_need_exec_switch(item->mode))
 			return (true);
+	br = CURTAIN_BARRIER(ct);
 	for (size_t i = 0; i < BARRIER_COUNT; i++)
-		if (ct->ct_barriers[i].on_exec > BARRIER_PASS)
+		if (br->br_barriers[i].on_exec > BARRIER_PASS)
 			return (true);
 	return (false);
 }
@@ -680,14 +807,16 @@ curtain_is_restricted(const struct curtain *ct, struct curtain_mode mode)
 static bool
 curtain_is_restricted_on_self(const struct curtain *ct)
 {
+	const struct barrier *br;
 	const struct curtain_mode mode = {
 		.on_self = CURTAINACT_ALLOW, .on_self_max = CURTAINACT_ALLOW,
 		.on_exec = CURTAINACT_KILL, .on_exec_max = CURTAINACT_KILL,
 	};
 	if (curtain_is_restricted(ct, mode))
 		return (true);
+	br = CURTAIN_BARRIER(ct);
 	for (size_t i = 0; i < BARRIER_COUNT; i++)
-		if (ct->ct_barriers[i].on_self > BARRIER_PASS)
+		if (br->br_barriers[i].on_self > BARRIER_PASS)
 			return (true);
 	return (false);
 }
@@ -695,14 +824,16 @@ curtain_is_restricted_on_self(const struct curtain *ct)
 static bool
 curtain_is_restricted_on_exec(const struct curtain *ct)
 {
+	const struct barrier *br;
 	const struct curtain_mode mode = {
 		.on_self = CURTAINACT_KILL, .on_self_max = CURTAINACT_KILL,
 		.on_exec = CURTAINACT_ALLOW, .on_exec_max = CURTAINACT_ALLOW,
 	};
 	if (curtain_is_restricted(ct, mode))
 		return (true);
+	br = CURTAIN_BARRIER(ct);
 	for (size_t i = 0; i < BARRIER_COUNT; i++)
-		if (ct->ct_barriers[i].on_exec > BARRIER_PASS)
+		if (br->br_barriers[i].on_exec > BARRIER_PASS)
 			return (true);
 	return (false);
 }
@@ -744,15 +875,17 @@ curtain_cred_sysfil_update(struct ucred *cr, const struct curtain *ct)
 static void
 curtain_exec_switch(struct curtain *ct)
 {
+	struct barrier *br;
 	struct curtain_item *item;
 	for (enum curtain_ability abl = 0; abl <= CURTAINABL_LAST; abl++)
 		mode_exec_switch(&ct->ct_abilities[abl]);
 	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
 		if (item->type != 0)
 			mode_exec_switch(&item->mode);
+	br = CURTAIN_BARRIER(ct);
 	for (size_t i = 0; i < BARRIER_COUNT; i++) {
-		ct->ct_barriers[i].on_self = ct->ct_barriers[i].on_exec;
-		ct->ct_barriers[i].on_exec = BARRIER_PASS;
+		br->br_barriers[i].on_self = br->br_barriers[i].on_exec;
+		br->br_barriers[i].on_exec = BARRIER_PASS;
 	}
 	curtain_dirty(ct);
 }
@@ -829,7 +962,7 @@ bool
 curtain_cred_visible(const struct ucred *subject, const struct ucred *target,
     enum barrier_type type)
 {
-	return (curtain_visible(CRED_SLOT(subject), CRED_SLOT(target), type));
+	return (barrier_visible(CRED_SLOT_BR(subject), CRED_SLOT_BR(target), type));
 }
 
 
@@ -917,6 +1050,7 @@ static inline void
 curtain_build_ability(struct curtain *ct, const struct curtainreq *req,
     enum curtain_ability abl)
 {
+	struct barrier *br;
 	enum barrier_type type;
 	enum barrier_stop bar;
 	build_mode(&ct->ct_abilities[abl], req);
@@ -931,11 +1065,13 @@ curtain_build_ability(struct curtain *ct, const struct curtainreq *req,
 	default:
 		return;
 	}
+	br = CURTAIN_BARRIER(ct);
+	MPASS(br);
 	bar = lvl2bar[req->level];
 	if (req->flags & CURTAINREQ_ON_SELF)
-		ct->ct_barriers[type].on_self = bar;
+		br->br_barriers[type].on_self = bar;
 	if (req->flags & CURTAINREQ_ON_EXEC)
-		ct->ct_barriers[type].on_exec = bar;
+		br->br_barriers[type].on_exec = bar;
 }
 
 static struct curtain_item *
@@ -952,6 +1088,7 @@ static struct curtain *
 curtain_build(size_t reqc, const struct curtainreq *reqv)
 {
 	struct curtain *ct;
+	struct barrier *br;
 	const struct curtainreq *req;
 	enum curtain_level def_on_self, def_on_exec;
 
@@ -974,9 +1111,10 @@ curtain_build(size_t reqc, const struct curtainreq *reqv)
 		ct->ct_abilities[abl].on_self = lvl2act[def_on_self];
 		ct->ct_abilities[abl].on_exec = lvl2act[def_on_exec];
 	}
+	br = CURTAIN_BARRIER(ct);
 	for (size_t i = 0; i < BARRIER_COUNT; i++) {
-		ct->ct_barriers[i].on_self = lvl2bar[def_on_self];
-		ct->ct_barriers[i].on_exec = lvl2bar[def_on_exec];
+		br->br_barriers[i].on_self = lvl2bar[def_on_self];
+		br->br_barriers[i].on_exec = lvl2bar[def_on_exec];
 	}
 
 	for (req = reqv; req < &reqv[reqc]; req++) {
@@ -1181,7 +1319,7 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 
 	/* Install new ucred and curtain. */
 	if (CRED_SLOT(old_cr))
-		curtain_link(ct, CRED_SLOT(old_cr));
+		barrier_link(CURTAIN_BARRIER(ct), CURTAIN_BARRIER(CRED_SLOT(old_cr)));
 	proc_set_cred(p, cr);
 	if (CRED_IN_RESTRICTED_MODE(cr) != PROC_IN_RESTRICTED_MODE(p))
 		panic("PROC_IN_RESTRICTED_MODE() bogus");
@@ -1354,10 +1492,11 @@ static void
 curtain_copy_label(struct label *src, struct label *dst)
 {
 	if (dst) {
-		if (SLOT(dst))
-			curtain_free(SLOT(dst));
-		if (src && SLOT(src))
-			SLOT_SET(dst, curtain_hold(SLOT(src)));
+		struct curtain *ct;
+		if ((ct = SLOT(dst)))
+			curtain_free(ct);
+		if (src && (ct = SLOT(src)))
+			SLOT_SET(dst, curtain_hold(ct));
 		else
 			SLOT_SET(dst, NULL);
 	}
@@ -1367,8 +1506,9 @@ static void
 curtain_destroy_label(struct label *label)
 {
 	if (label) {
-		if (SLOT(label))
-			curtain_free(SLOT(label));
+		struct curtain *ct;
+		if ((ct = SLOT(label)))
+			curtain_free(ct);
 		SLOT_SET(label, NULL);
 	}
 }
@@ -1378,11 +1518,46 @@ curtain_externalize_label(struct label *label, char *element_name,
     struct sbuf *sb, int *claimed)
 {
 	struct curtain *ct;
+	struct barrier *br;
 	if (!(ct = SLOT(label)) || strcmp("curtain", element_name) != 0)
 		return (0);
 	(*claimed)++;
-	sbuf_printf(sb, "%ju", (uintmax_t)ct->ct_serial);
+	br = CURTAIN_BARRIER(ct);
+	sbuf_printf(sb, "%ju", (uintmax_t)br->br_serial);
 	return (sbuf_error(sb) ? EINVAL : 0);
+}
+
+
+static void
+curtain_init_label_barrier(struct label *label)
+{
+	if (label)
+		SLOT_SET(label, NULL);
+}
+
+static void
+curtain_copy_label_barrier(struct label *src, struct label *dst)
+{
+	if (dst) {
+		struct barrier *br;
+		if ((br = SLOT_BR(dst)))
+			barrier_free(br);
+		if (src && (br = SLOT_BR(src)))
+			SLOT_SET(dst, barrier_hold(br));
+		else
+			SLOT_SET(dst, NULL);
+	}
+}
+
+static void
+curtain_destroy_label_barrier(struct label *label)
+{
+	if (label) {
+		struct barrier *br;
+		if ((br = SLOT_BR(label)))
+			barrier_free(br);
+		SLOT_SET(label, NULL);
+	}
 }
 
 
@@ -1390,7 +1565,7 @@ static int
 curtain_cred_check_visible(struct ucred *cr1, struct ucred *cr2)
 {
 	/* XXX This makes a few more things visible than just processes. */
-	if (!curtain_visible(CRED_SLOT(cr1), CRED_SLOT(cr2), BARRIER_PROC_STATUS))
+	if (!barrier_visible(CRED_SLOT_BR(cr1), CRED_SLOT_BR(cr2), BARRIER_PROC_STATUS))
 		return (ESRCH);
 	return (0);
 }
@@ -1401,7 +1576,7 @@ curtain_proc_check_signal(struct ucred *cr, struct proc *p, int signum)
 	int error;
 	if ((error = ability_check_cred(cr, CURTAINABL_PROC)))
 		return (error);
-	if (!curtain_visible(CRED_SLOT(cr), CRED_SLOT(p->p_ucred), BARRIER_PROC_SIGNAL))
+	if (!barrier_visible(CRED_SLOT_BR(cr), CRED_SLOT_BR(p->p_ucred), BARRIER_PROC_SIGNAL))
 		return (ESRCH);
 	return (0);
 }
@@ -1412,7 +1587,7 @@ curtain_proc_check_sched(struct ucred *cr, struct proc *p)
 	int error;
 	if ((error = ability_check_cred(cr, CURTAINABL_SCHED)))
 		return (error);
-	if (!curtain_visible(CRED_SLOT(cr), CRED_SLOT(p->p_ucred), BARRIER_PROC_SCHED))
+	if (!barrier_visible(CRED_SLOT_BR(cr), CRED_SLOT_BR(p->p_ucred), BARRIER_PROC_SCHED))
 		return (ESRCH);
 	return (0);
 }
@@ -1423,7 +1598,7 @@ curtain_proc_check_debug(struct ucred *cr, struct proc *p)
 	int error;
 	if ((error = ability_check_cred(cr, CURTAINABL_DEBUG)))
 		return (error);
-	if (!curtain_visible(CRED_SLOT(cr), CRED_SLOT(p->p_ucred), BARRIER_PROC_DEBUG))
+	if (!barrier_visible(CRED_SLOT_BR(cr), CRED_SLOT_BR(p->p_ucred), BARRIER_PROC_DEBUG))
 		return (ESRCH);
 	return (0);
 }
@@ -1491,7 +1666,7 @@ curtain_socket_check_visible(struct ucred *cr, struct socket *so, struct label *
 		return (error);
 	error = 0;
 	SOCK_LOCK(so);
-	if (!curtain_visible(CRED_SLOT(cr), SLOT(solabel), BARRIER_SOCKET))
+	if (!barrier_visible(CRED_SLOT_BR(cr), SLOT_BR(solabel), BARRIER_SOCKET))
 		error = ENOENT;
 	SOCK_UNLOCK(so);
 	return (error);
@@ -1504,7 +1679,7 @@ curtain_inpcb_check_visible(struct ucred *cr, struct inpcb *inp, struct label *i
 	int error;
 	if ((error = ability_check_cred(cr, CURTAINABL_NET)))
 		return (error);
-	if (!curtain_visible(CRED_SLOT(cr), SLOT(inplabel), BARRIER_SOCKET))
+	if (!barrier_visible(CRED_SLOT_BR(cr), SLOT_BR(inplabel), BARRIER_SOCKET))
 		return (ENOENT);
 	return (0);
 }
@@ -2022,7 +2197,7 @@ curtain_vnode_check_exec(struct ucred *cr,
 static void curtain_posixshm_create(struct ucred *cr,
     struct shmfd *shmfd, struct label *shmlabel)
 {
-	curtain_copy_label(cr->cr_label, shmlabel);
+	curtain_copy_label_barrier(cr->cr_label, shmlabel);
 }
 
 static int
@@ -2030,7 +2205,7 @@ curtain_posixshm_check_open(struct ucred *cr,
     struct shmfd *shmfd, struct label *shmlabel,
     accmode_t accmode)
 {
-	if (!curtain_visible(CRED_SLOT(cr), SLOT(shmlabel), BARRIER_POSIXIPC))
+	if (!barrier_visible(CRED_SLOT_BR(cr), SLOT_BR(shmlabel), BARRIER_POSIXIPC))
 		return (ENOENT);
 	return (0);
 }
@@ -2039,7 +2214,7 @@ static int
 curtain_posixshm_check_unlink(struct ucred *cr,
     struct shmfd *shmfd, struct label *shmlabel)
 {
-	if (!curtain_visible(CRED_SLOT(cr), SLOT(shmlabel), BARRIER_POSIXIPC))
+	if (!barrier_visible(CRED_SLOT_BR(cr), SLOT_BR(shmlabel), BARRIER_POSIXIPC))
 		return (ENOENT);
 	return (0);
 }
@@ -2048,14 +2223,14 @@ curtain_posixshm_check_unlink(struct ucred *cr,
 static void curtain_posixsem_create(struct ucred *cr,
     struct ksem *sem, struct label *semlabel)
 {
-	curtain_copy_label(cr->cr_label, semlabel);
+	curtain_copy_label_barrier(cr->cr_label, semlabel);
 }
 
 static int
 curtain_posixsem_check_open_unlink(struct ucred *cr,
     struct ksem *sem, struct label *semlabel)
 {
-	if (!curtain_visible(CRED_SLOT(cr), SLOT(semlabel), BARRIER_POSIXIPC))
+	if (!barrier_visible(CRED_SLOT_BR(cr), SLOT_BR(semlabel), BARRIER_POSIXIPC))
 		return (ENOENT);
 	return (0);
 }
@@ -2065,14 +2240,14 @@ static void
 curtain_sysvshm_create(struct ucred *cr,
     struct shmid_kernel *shm, struct label *shmlabel)
 {
-	curtain_copy_label(cr->cr_label, shmlabel);
+	curtain_copy_label_barrier(cr->cr_label, shmlabel);
 }
 
 static int
 curtain_sysvshm_check_something(struct ucred *cr,
     struct shmid_kernel *shm, struct label *shmlabel, int something)
 {
-	if (!curtain_visible(CRED_SLOT(cr), SLOT(shmlabel), BARRIER_SYSVIPC))
+	if (!barrier_visible(CRED_SLOT_BR(cr), SLOT_BR(shmlabel), BARRIER_SYSVIPC))
 		return (ENOENT);
 	return (0);
 }
@@ -2083,7 +2258,7 @@ static void
 curtain_sysvsem_create(struct ucred *cr,
     struct semid_kernel *sem, struct label *semlabel)
 {
-	curtain_copy_label(cr->cr_label, semlabel);
+	curtain_copy_label_barrier(cr->cr_label, semlabel);
 }
 
 static int
@@ -2091,7 +2266,7 @@ curtain_sysvsem_check_semctl(struct ucred *cr,
     struct semid_kernel *sem, struct label *semlabel,
     int cmd)
 {
-	if (!curtain_visible(CRED_SLOT(cr), SLOT(semlabel), BARRIER_SYSVIPC))
+	if (!barrier_visible(CRED_SLOT_BR(cr), SLOT_BR(semlabel), BARRIER_SYSVIPC))
 		return (ENOENT);
 	return (0);
 }
@@ -2100,7 +2275,7 @@ static int
 curtain_sysvsem_check_semget(struct ucred *cr,
     struct semid_kernel *sem, struct label *semlabel)
 {
-	if (!curtain_visible(CRED_SLOT(cr), SLOT(semlabel), BARRIER_SYSVIPC))
+	if (!barrier_visible(CRED_SLOT_BR(cr), SLOT_BR(semlabel), BARRIER_SYSVIPC))
 		return (ENOENT);
 	return (0);
 }
@@ -2110,7 +2285,7 @@ curtain_sysvsem_check_semop(struct ucred *cr,
     struct semid_kernel *sem, struct label *semlabel,
     size_t accesstype)
 {
-	if (!curtain_visible(CRED_SLOT(cr), SLOT(semlabel), BARRIER_SYSVIPC))
+	if (!barrier_visible(CRED_SLOT_BR(cr), SLOT_BR(semlabel), BARRIER_SYSVIPC))
 		return (ENOENT);
 	return (0);
 }
@@ -2120,14 +2295,14 @@ static void
 curtain_sysvmsq_create(struct ucred *cr,
     struct msqid_kernel *msq, struct label *msqlabel)
 {
-	curtain_copy_label(cr->cr_label, msqlabel);
+	curtain_copy_label_barrier(cr->cr_label, msqlabel);
 }
 
 static int
 curtain_sysvmsq_check_1(struct ucred *cr,
     struct msqid_kernel *msq, struct label *msqlabel)
 {
-	if (!curtain_visible(CRED_SLOT(cr), SLOT(msqlabel), BARRIER_SYSVIPC))
+	if (!barrier_visible(CRED_SLOT_BR(cr), SLOT_BR(msqlabel), BARRIER_SYSVIPC))
 		return (ENOENT);
 	return (0);
 }
@@ -2136,7 +2311,7 @@ static int
 curtain_sysvmsq_check_2(struct ucred *cr,
     struct msqid_kernel *msq, struct label *msqlabel, int something)
 {
-	if (!curtain_visible(CRED_SLOT(cr), SLOT(msqlabel), BARRIER_SYSVIPC))
+	if (!barrier_visible(CRED_SLOT_BR(cr), SLOT_BR(msqlabel), BARRIER_SYSVIPC))
 		return (ENOENT);
 	return (0);
 }
@@ -2145,15 +2320,14 @@ curtain_sysvmsq_check_2(struct ucred *cr,
 static int
 curtain_generic_ipc_name_prefix(struct ucred *cr, char **prefix, char *end)
 {
-	struct curtain *ct;
+	struct barrier *br;
 	size_t n, m;
 	m = end - *prefix;
-	ct = CRED_SLOT(cr);
-	ct = curtain_find_barrier(ct, BARRIER_POSIXIPC, BARRIER_GATE);
-	if (ct) {
+	br = barrier_cross(CRED_SLOT_BR(cr), BARRIER_POSIXIPC, BARRIER_GATE);
+	if (br) {
 		ssize_t r;
 		r = snprintf(*prefix, m,
-		    "/curtain/%ju", (uintmax_t)ct->ct_serial);
+		    "/curtain/%ju", (uintmax_t)br->br_serial);
 		n = r > 0 ? r : 0;
 	} else
 		n = 0;
@@ -2416,8 +2590,7 @@ curtain_sysfil_update_mask(struct ucred *cr)
 	struct curtain *ct;
 	if (!CRED_SLOT(cr))
 		return (0);
-	ct = curtain_dup_unlinked(CRED_SLOT(cr));
-	curtain_link(ct, CRED_SLOT(cr));
+	ct = curtain_dup_with_shared_barrier(CRED_SLOT(cr));
 	curtain_mask_sysfils(ct, cr->cr_sysfilset);
 	curtain_cache_update(ct);
 	MPASS(ct->ct_finalized);
@@ -2472,10 +2645,11 @@ curtain_proc_exec_adjust(struct image_params *imgp)
 	}
 
 	ct = curtain_dup(ct);
-	ct->ct_serial = atomic_fetchadd_64(&curtain_serial, 1);
+	barrier_bump(CURTAIN_BARRIER(ct));
 	curtain_exec_switch(ct);
 	curtain_cache_update(ct);
 	curtain_cred_sysfil_update(cr, ct);
+	barrier_link(CURTAIN_BARRIER(ct), CURTAIN_BARRIER(CRED_SLOT(cr))->br_parent);
 	curtain_free(CRED_SLOT(cr));
 	SLOT_SET(cr->cr_label, ct);
 	MPASS(CRED_IN_RESTRICTED_MODE(cr));
@@ -2530,37 +2704,37 @@ static struct mac_policy_ops curtain_policy_ops = {
 	.mpo_vnode_check_exec = curtain_vnode_check_exec,
 	.mpo_vnode_check_revoke = curtain_vnode_check_revoke,
 
-	.mpo_posixshm_init_label = curtain_init_label,
-	.mpo_posixshm_destroy_label = curtain_destroy_label,
+	.mpo_posixshm_init_label = curtain_init_label_barrier,
+	.mpo_posixshm_destroy_label = curtain_destroy_label_barrier,
 	.mpo_posixshm_create = curtain_posixshm_create,
 	.mpo_posixshm_check_open = curtain_posixshm_check_open,
 	.mpo_posixshm_check_unlink = curtain_posixshm_check_unlink,
 
-	.mpo_posixsem_init_label = curtain_init_label,
-	.mpo_posixsem_destroy_label = curtain_destroy_label,
+	.mpo_posixsem_init_label = curtain_init_label_barrier,
+	.mpo_posixsem_destroy_label = curtain_destroy_label_barrier,
 	.mpo_posixsem_create = curtain_posixsem_create,
 	.mpo_posixsem_check_open = curtain_posixsem_check_open_unlink,
 	.mpo_posixsem_check_unlink = curtain_posixsem_check_open_unlink,
 
-	.mpo_sysvshm_init_label = curtain_init_label,
-	.mpo_sysvshm_cleanup = curtain_destroy_label,
-	.mpo_sysvshm_destroy_label = curtain_destroy_label,
+	.mpo_sysvshm_init_label = curtain_init_label_barrier,
+	.mpo_sysvshm_cleanup = curtain_destroy_label_barrier,
+	.mpo_sysvshm_destroy_label = curtain_destroy_label_barrier,
 	.mpo_sysvshm_create = curtain_sysvshm_create,
 	.mpo_sysvshm_check_shmat = curtain_sysvshm_check_something,
 	.mpo_sysvshm_check_shmctl = curtain_sysvshm_check_something,
 	.mpo_sysvshm_check_shmget = curtain_sysvshm_check_something,
 
-	.mpo_sysvsem_init_label = curtain_init_label,
-	.mpo_sysvsem_cleanup = curtain_destroy_label,
-	.mpo_sysvsem_destroy_label = curtain_destroy_label,
+	.mpo_sysvsem_init_label = curtain_init_label_barrier,
+	.mpo_sysvsem_cleanup = curtain_destroy_label_barrier,
+	.mpo_sysvsem_destroy_label = curtain_destroy_label_barrier,
 	.mpo_sysvsem_create = curtain_sysvsem_create,
 	.mpo_sysvsem_check_semctl = curtain_sysvsem_check_semctl,
 	.mpo_sysvsem_check_semget = curtain_sysvsem_check_semget,
 	.mpo_sysvsem_check_semop = curtain_sysvsem_check_semop,
 
-	.mpo_sysvmsq_init_label = curtain_init_label,
-	.mpo_sysvmsq_cleanup = curtain_destroy_label,
-	.mpo_sysvmsq_destroy_label = curtain_destroy_label,
+	.mpo_sysvmsq_init_label = curtain_init_label_barrier,
+	.mpo_sysvmsq_cleanup = curtain_destroy_label_barrier,
+	.mpo_sysvmsq_destroy_label = curtain_destroy_label_barrier,
 	.mpo_sysvmsq_create = curtain_sysvmsq_create,
 	.mpo_sysvmsq_check_msqctl = curtain_sysvmsq_check_2,
 	.mpo_sysvmsq_check_msqget = curtain_sysvmsq_check_1,
@@ -2592,7 +2766,7 @@ static void
 curtain_sysinit(void *arg)
 {
 	int error;
-	rw_init(&curtain_tree_lock, "curtain_tree");
+	rw_init(&barrier_tree_lock, "barrier_tree");
 	error = syscall_helper_register(curtain_syscalls,
 	    SY_THR_STATIC_KLD | SY_HLP_PRESERVE_SYFLAGS);
 	if (error)
@@ -2603,7 +2777,7 @@ static void
 curtain_sysuninit(void *arg __unused)
 {
 	syscall_helper_unregister(curtain_syscalls);
-	rw_destroy(&curtain_tree_lock);
+	rw_destroy(&barrier_tree_lock);
 }
 
 SYSINIT(curtain_sysinit, SI_SUB_MAC_POLICY, SI_ORDER_ANY, curtain_sysinit, NULL);

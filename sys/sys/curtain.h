@@ -125,11 +125,26 @@ struct barrier_mode {
 	uint8_t on_self : 2, on_exec : 2;
 };
 
+struct curtain_head {
+	struct barrier *cth_barrier;
+};
+
+struct barrier {
+	struct curtain_head br_head;
+	struct barrier *br_parent;
+	LIST_HEAD(, barrier) br_children;
+	LIST_ENTRY(barrier) br_sibling;
+	unsigned br_nchildren;
+	volatile int br_ref;
+	uint64_t br_serial;
+	struct barrier_mode br_barriers[BARRIER_COUNT];
+};
+
 struct curtain {
-	struct curtain *ct_parent;
-	LIST_HEAD(, curtain) ct_children;
-	LIST_ENTRY(curtain) ct_sibling;
-	size_t ct_nchildren;
+	struct curtain_head ct_head;
+#ifdef INVARIANTS
+	unsigned ct_magic;
+#endif
 	volatile int ct_ref;
 	curtain_index ct_nslots;
 	curtain_index ct_nitems;
@@ -142,8 +157,6 @@ struct curtain {
 		bool is_restricted_on_self;
 		bool is_restricted_on_exec;
 	} ct_cached;
-	uint64_t ct_serial;
-	struct barrier_mode ct_barriers[BARRIER_COUNT];
 	struct curtain_mode ct_abilities[CURTAINABL_COUNT];
 	struct curtain_item ct_slots[];
 };
