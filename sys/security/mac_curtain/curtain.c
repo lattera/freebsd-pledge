@@ -91,13 +91,17 @@ CTASSERT(CURTAINCTL_MAX_ITEMS <= (curtain_index)-1);
 static volatile uint64_t barrier_serial = 1;
 
 static int __read_mostly curtain_slot;
+#define	CTH_IS_CT(cth) ((cth) != &(cth)->cth_barrier->br_head)
 #define	SLOT_CTH(l) ((l) ? (struct curtain_head *)mac_label_get((l), curtain_slot) : NULL)
 #define	SLOT_CT(l) ((struct curtain *)SLOT_CTH(l))
 #define	SLOT(l) ({ \
-	struct curtain *__ct = SLOT_CT(l); \
+	struct curtain_head *__cth; \
+	struct curtain *__ct; \
+	__cth = SLOT_CTH(l); \
+	__ct = __cth && CTH_IS_CT(__cth) ? (struct curtain *)__cth : NULL; \
 	MPASS(!__ct || __ct->ct_magic == CURTAIN_MAGIC); \
 	__ct; \
-	})
+})
 #define	SLOT_SET(l, val) mac_label_set((l), curtain_slot, (uintptr_t)(val))
 #define	SLOT_BR(l) ({ \
 	struct curtain_head *__cth = SLOT_CTH(l); \
@@ -1482,39 +1486,50 @@ ability_check_cred(const struct ucred *cr, enum curtain_ability abl)
 
 
 static void
-curtain_init_label(struct label *label)
+curtain_cred_init_label(struct label *label)
 {
 	if (label)
 		SLOT_SET(label, NULL);
 }
 
 static void
-curtain_copy_label(struct label *src, struct label *dst)
+curtain_cred_copy_label(struct label *src, struct label *dst)
 {
 	if (dst) {
-		struct curtain *ct;
-		if ((ct = SLOT(dst)))
-			curtain_free(ct);
-		if (src && (ct = SLOT(src)))
-			SLOT_SET(dst, curtain_hold(ct));
-		else
+		struct curtain_head *cth;
+		if ((cth = SLOT_CTH(dst))) {
+			if (CTH_IS_CT(cth))
+				curtain_free((struct curtain *)cth);
+			else
+				barrier_free((struct barrier *)cth);
+		}
+		if (src && (cth = SLOT_CTH(src))) {
+			if (CTH_IS_CT(cth))
+				SLOT_SET(dst, curtain_hold((struct curtain *)cth));
+			else
+				SLOT_SET(dst, barrier_hold((struct barrier *)cth));
+		} else
 			SLOT_SET(dst, NULL);
 	}
 }
 
 static void
-curtain_destroy_label(struct label *label)
+curtain_cred_destroy_label(struct label *label)
 {
 	if (label) {
-		struct curtain *ct;
-		if ((ct = SLOT(label)))
-			curtain_free(ct);
+		struct curtain_head *cth;
+		if ((cth = SLOT_CTH(label))) {
+			if (CTH_IS_CT(cth))
+				curtain_free((struct curtain *)cth);
+			else
+				barrier_free((struct barrier *)cth);
+		}
 		SLOT_SET(label, NULL);
 	}
 }
 
 static int
-curtain_externalize_label(struct label *label, char *element_name,
+curtain_cred_externalize_label(struct label *label, char *element_name,
     struct sbuf *sb, int *claimed)
 {
 	struct curtain *ct;
@@ -1560,7 +1575,6 @@ curtain_destroy_label_barrier(struct label *label)
 	}
 }
 
-
 static int
 curtain_cred_check_visible(struct ucred *cr1, struct ucred *cr2)
 {
@@ -1569,6 +1583,19 @@ curtain_cred_check_visible(struct ucred *cr1, struct ucred *cr2)
 		return (ESRCH);
 	return (0);
 }
+
+static void
+curtain_cred_trim(struct ucred *cr)
+{
+	struct curtain *ct;
+	struct barrier *br;
+	if (!(ct = CRED_SLOT(cr)))
+		return;
+	br = barrier_hold(CURTAIN_BARRIER(ct));
+	SLOT_SET(cr->cr_label, &br->br_head);
+	curtain_free(ct);
+}
+
 
 static int
 curtain_proc_check_signal(struct ucred *cr, struct proc *p, int signum)
@@ -2658,11 +2685,12 @@ curtain_proc_exec_adjust(struct image_params *imgp)
 
 
 static struct mac_policy_ops curtain_policy_ops = {
-	.mpo_cred_init_label = curtain_init_label,
-	.mpo_cred_copy_label = curtain_copy_label,
-	.mpo_cred_destroy_label = curtain_destroy_label,
-	.mpo_cred_externalize_label = curtain_externalize_label,
+	.mpo_cred_init_label = curtain_cred_init_label,
+	.mpo_cred_copy_label = curtain_cred_copy_label,
+	.mpo_cred_destroy_label = curtain_cred_destroy_label,
+	.mpo_cred_externalize_label = curtain_cred_externalize_label,
 	.mpo_cred_check_visible = curtain_cred_check_visible,
+	.mpo_cred_trim = curtain_cred_trim,
 
 	.mpo_proc_check_signal = curtain_proc_check_signal,
 	.mpo_proc_check_sched = curtain_proc_check_sched,

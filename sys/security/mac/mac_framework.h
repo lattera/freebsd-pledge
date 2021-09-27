@@ -697,6 +697,8 @@ void	mac_vnode_relabel(struct ucred *cred, struct vnode *vp,
 int	vop_stdsetlabel_ea(struct vop_setlabel_args *ap);
 
 
+void	mac_cred_trim(struct ucred *cred);
+
 int	mac_generic_check_ioctl(struct ucred *cred, struct file *fp,
 	    unsigned long cmd, void *data);
 int	mac_generic_check_vm_prot(struct ucred *cred, struct file *fp,

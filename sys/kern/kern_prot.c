@@ -1892,6 +1892,9 @@ crunuse(struct thread *td)
 	if (cr->cr_users == 0) {
 		KASSERT(cr->cr_ref > 0, ("%s: ref %d not > 0 on cred %p",
 		    __func__, cr->cr_ref, cr));
+#ifdef MAC
+		mac_cred_trim(cr);
+#endif
 		crold = cr;
 	} else {
 		cr->cr_ref--;
@@ -1922,6 +1925,9 @@ crunusebatch(struct ucred *cr, int users, int ref)
 	    __func__, cr->cr_ref, cr));
 	if (cr->cr_ref > 0) {
 		mtx_unlock(&cr->cr_mtx);
+#ifdef MAC
+		mac_cred_trim(cr);
+#endif
 		return;
 	}
 	crfree_final(cr);
