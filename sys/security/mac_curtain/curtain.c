@@ -331,7 +331,7 @@ curtain_visible(struct curtain *subject, const struct curtain *target,
 	if (subject == target) /* fast path */
 		return (true);
 	rw_rlock(&curtain_tree_lock);
-	subject = curtain_find_barrier_locked(subject, type, CURTAINBAR_PASS);
+	subject = curtain_find_barrier_locked(subject, type, BARRIER_PASS);
 	while (target && subject != target)
 		target = target->ct_parent;
 	rw_runlock(&curtain_tree_lock);
@@ -668,7 +668,7 @@ curtain_need_exec_switch(const struct curtain *ct)
 		if (item->type != 0 && mode_need_exec_switch(item->mode))
 			return (true);
 	for (size_t i = 0; i < BARRIER_COUNT; i++)
-		if (ct->ct_barriers[i].on_exec > CURTAINBAR_PASS)
+		if (ct->ct_barriers[i].on_exec > BARRIER_PASS)
 			return (true);
 	return (false);
 }
@@ -696,7 +696,7 @@ curtain_is_restricted_on_self(const struct curtain *ct)
 	if (curtain_is_restricted(ct, mode))
 		return (true);
 	for (size_t i = 0; i < BARRIER_COUNT; i++)
-		if (ct->ct_barriers[i].on_self > CURTAINBAR_PASS)
+		if (ct->ct_barriers[i].on_self > BARRIER_PASS)
 			return (true);
 	return (false);
 }
@@ -711,7 +711,7 @@ curtain_is_restricted_on_exec(const struct curtain *ct)
 	if (curtain_is_restricted(ct, mode))
 		return (true);
 	for (size_t i = 0; i < BARRIER_COUNT; i++)
-		if (ct->ct_barriers[i].on_exec > CURTAINBAR_PASS)
+		if (ct->ct_barriers[i].on_exec > BARRIER_PASS)
 			return (true);
 	return (false);
 }
@@ -761,7 +761,7 @@ curtain_exec_switch(struct curtain *ct)
 			mode_exec_switch(&item->mode);
 	for (size_t i = 0; i < BARRIER_COUNT; i++) {
 		ct->ct_barriers[i].on_self = ct->ct_barriers[i].on_exec;
-		ct->ct_barriers[i].on_exec = CURTAINBAR_PASS;
+		ct->ct_barriers[i].on_exec = BARRIER_PASS;
 	}
 	curtain_dirty(ct);
 }
@@ -903,12 +903,12 @@ static const enum curtain_action lvl2act[CURTAINLVL_COUNT] = {
 };
 
 static const enum barrier_stop lvl2bar[CURTAINLVL_COUNT] = {
-	[CURTAINLVL_PASS] = CURTAINBAR_PASS,
-	[CURTAINLVL_GATE] = CURTAINBAR_GATE,
-	[CURTAINLVL_WALL] = CURTAINBAR_WALL,
-	[CURTAINLVL_DENY] = CURTAINBAR_WALL,
-	[CURTAINLVL_TRAP] = CURTAINBAR_WALL,
-	[CURTAINLVL_KILL] = CURTAINBAR_WALL,
+	[CURTAINLVL_PASS] = BARRIER_PASS,
+	[CURTAINLVL_GATE] = BARRIER_GATE,
+	[CURTAINLVL_WALL] = BARRIER_WALL,
+	[CURTAINLVL_DENY] = BARRIER_WALL,
+	[CURTAINLVL_TRAP] = BARRIER_WALL,
+	[CURTAINLVL_KILL] = BARRIER_WALL,
 };
 
 static inline void
@@ -2158,7 +2158,7 @@ curtain_generic_ipc_name_prefix(struct ucred *cr, char **prefix, char *end)
 	size_t n, m;
 	m = end - *prefix;
 	ct = CRED_SLOT(cr);
-	ct = curtain_find_barrier(ct, BARRIER_POSIXIPC, CURTAINBAR_GATE);
+	ct = curtain_find_barrier(ct, BARRIER_POSIXIPC, BARRIER_GATE);
 	if (ct) {
 		ssize_t r;
 		r = snprintf(*prefix, m,

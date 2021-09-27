@@ -103,9 +103,9 @@ struct curtain_item {
 CTASSERT(sizeof(struct curtain_item) <= 12);
 
 enum barrier_stop {
-	CURTAINBAR_PASS = 0,
-	CURTAINBAR_GATE = 1,
-	CURTAINBAR_WALL = 2,
+	BARRIER_PASS = 0,
+	BARRIER_GATE = 1,
+	BARRIER_WALL = 2,
 };
 
 enum barrier_type {
