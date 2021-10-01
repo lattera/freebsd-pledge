@@ -330,8 +330,7 @@ namei_setup(struct nameidata *ndp, struct vnode **dpp, struct pwd **pwdp)
 #ifdef UNVEIL_SUPPORT
 	if (unveil_active(td) || ndp->ni_unveil) {
 		ndp->ni_lcf |= NI_LCF_UNVEIL_TRAVERSE;
-		if (ndp->ni_startdir || /* NDINIT_ATVP() */
-		    ndp->ni_cnd.cn_flags & NOUNVEILCHECK)
+		if (ndp->ni_cnd.cn_flags & UNVEILBYPASS)
 			ndp->ni_lcf |= NI_LCF_UNVEIL_BYPASSED;
 	}
 #endif

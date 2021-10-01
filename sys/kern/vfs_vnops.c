@@ -214,6 +214,10 @@ open2nameif(int fmode, u_int vn_open_flags)
 		res |= AUDITVNODE1;
 	if ((vn_open_flags & VN_OPEN_NOCAPCHECK) != 0)
 		res |= NOCAPCHECK;
+#ifdef UNVEIL_SUPPORT
+	if ((vn_open_flags & VN_OPEN_UNVEILBYPASS) != 0)
+		res |= UNVEILBYPASS;
+#endif
 	return (res);
 }
 

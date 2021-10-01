@@ -192,7 +192,7 @@ int	cache_fplookup(struct nameidata *ndp, enum cache_fpl_status *status,
 #define	NOCAPCHECK	0x00100000 /* do not perform capability checks */
 #define	OPENREAD	0x00200000 /* open for reading */
 #define	OPENWRITE	0x00400000 /* open for writing */
-#define	NOUNVEILCHECK	0x00800000 /* do not enforce unveil restrictions */
+#define	UNVEILBYPASS	0x00800000 /* bypass unveil checks on looked up file */
 #define	HASBUF		0x01000000 /* has allocated pathname buffer */
 #define	NOEXECCHECK	0x02000000 /* do not perform exec check on dir */
 #define	MAKEENTRY	0x04000000 /* entry is to be added to name cache */
