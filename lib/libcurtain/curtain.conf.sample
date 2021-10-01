@@ -56,6 +56,7 @@
 @push _pty
 @push _session
 
+
 [sh, ksh, ksh93, mksh, oksh, dash, bash, zsh : _bourne]
 
 [_shell _bourne]
@@ -96,6 +97,32 @@ ${ZDOTDIR:-~/}/.zlogout			: r
 /etc/csh.log{in,out}			: r
 ~/.log{in,out}				: r
 
+[_login]
+@push _spwddb
+/var/run/nologin
+/var/run/motd
+/etc/login.conf{,.db}
+/etc/login.access
+/etc/fbtab
+/etc/shells
+/etc/pam.{conf,d/}
+[_login _localbase]
+/usr/local/etc/pam.d/
+
+[su : _login]
+@ability id any_id
+@ability audit
+@ability! rsugid_exec
+@push _syslog
+
+[doas : _login]
+@ability id any_id
+@ability! rsugid_exec
+@push _syslog
+[doas _localbase]
+/usr/local/etc/doas.conf
+
+
 [vi : _editor]
 ~/.{n,}exrc				: r
 /etc/vi.exrc				: r
@@ -109,6 +136,7 @@ ${ZDOTDIR:-~/}/.zlogout			: r
 [tcpdump]
 @ability id
 @push _bpf
+
 
 [wireshark]
 @push _bpf
@@ -248,6 +276,7 @@ ${ZDOTDIR:-~/}/.zlogout			: r
 [st : _terminal]
 @push! _pwddb
 
+
 [_ports_build]
 @push _pwddb
 /etc/make.conf
@@ -265,3 +294,45 @@ ${ZDOTDIR:-~/}/.zlogout			: r
 /usr/src/
 /usr/include/
 /usr/obj/usr/src/			: rxw
+
+
+[sendmail : _daemon]
+@push _login
+@push _syslog
+@push _shared_tmpdir # mail.local(8) uses /tmp directly
+@ability id any_id chown
+/etc/mail/
+/etc/aliases
+/var/run/sendmail.pid : rw
+/var/spool/{client,}mqueue/ : rw
+/var/mail/ : rw
+#~user/.forward
+
+[ftpd]
+@push _login
+@push _syslog
+@ability id any_id chown
+/etc/ftpusers
+/etc/ftpchroot
+/etc/ftphosts
+/etc/ftpwelcome
+/etc/ftpmotd
+/var/run/ : b # pidfile(3)
+/var/run/ftpd.pid : rw
+/var/log/ftpd : rw
+~ftp/
+#~user/ : rw
+
+[samba]
+# NOTE: Needs `curtain -f`, will access the TMPDIR under different UIDs.
+@push _login
+@push _syslog
+@ability id any_id chown
+@ability extattr acl quota
+@sysctl kern.corefile
+/usr/local/etc/smb4.conf
+/var/db/samba4/ ! rwu
+/var/run/samba4/ ! rwu
+/var/log/samba4/ ! rw
+#/stuff/ : rw
+#~user/ : rw

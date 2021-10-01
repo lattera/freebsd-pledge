@@ -2,3 +2,4 @@
 
 @include /usr/local/etc/curtain.{conf,d/}
 
+#@include /usr/share/examples/curtain/curtain.conf.sample
