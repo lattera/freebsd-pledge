@@ -756,11 +756,11 @@ unveil_on(enum curtain_on on, const char *path, const char *perms)
 }
 
 int
-unveilself(const char *path, const char *perms)
+unveil_self(const char *path, const char *perms)
 { return (unveil_on(CURTAIN_ON_SELF, path, perms)); }
 
 int
-unveilexec(const char *path, const char *perms)
+unveil_exec(const char *path, const char *perms)
 { return (unveil_on(CURTAIN_ON_EXEC, path, perms)); }
 
 int

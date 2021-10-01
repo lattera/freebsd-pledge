@@ -36,7 +36,7 @@ main(int argc, char *argv[])
 				*perms++ = '\0';
 			else
 				perms = __DECONST(char *, "rx");
-			r = unveilexec(optarg, perms);
+			r = unveil_exec(optarg, perms);
 			if (r < 0)
 				err(EX_OSERR, "unveil %s", optarg);
 			break;

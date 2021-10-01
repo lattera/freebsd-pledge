@@ -143,9 +143,9 @@ ATF_TC_BODY(suid_unveils, tc)
 	const char *suid_check_path = prepare_suid_check(tc);
 	pid_t pid = atf_utils_fork();
 	if (pid == 0) {
-		ATF_REQUIRE(unveilexec("/", "rx") >= 0);
-		ATF_REQUIRE(unveilexec("/etc", "") >= 0);
-		ATF_REQUIRE(unveilexec(NULL, NULL) >= 0);
+		ATF_REQUIRE(unveil_exec("/", "rx") >= 0);
+		ATF_REQUIRE(unveil_exec("/etc", "") >= 0);
+		ATF_REQUIRE(unveil_exec(NULL, NULL) >= 0);
 		ATF_REQUIRE(execl(suid_check_path, suid_check_path, (char *)NULL) >= 0);
 		_exit(127);
 	}
@@ -158,8 +158,8 @@ ATF_TC_BODY(suid_unveils_unfinalized, tc)
 	const char *suid_check_path = prepare_suid_check(tc);
 	pid_t pid = atf_utils_fork();
 	if (pid == 0) {
-		ATF_REQUIRE(unveilexec("/", "rx") >= 0);
-		ATF_REQUIRE(unveilexec("/etc", "") >= 0);
+		ATF_REQUIRE(unveil_exec("/", "rx") >= 0);
+		ATF_REQUIRE(unveil_exec("/etc", "") >= 0);
 		ATF_REQUIRE(execl(suid_check_path, suid_check_path, (char *)NULL) >= 0);
 		_exit(127);
 	}

@@ -478,7 +478,7 @@ main(int argc, char *argv[])
 		r = pledge(NULL, promises);
 		if (r < 0)
 			err(EX_NOPERM, "pledge");
-		r = unveilexec(NULL, NULL);
+		r = unveil_exec(NULL, NULL);
 		if (r < 0)
 			err(EX_NOPERM, "unveil");
 	} else {

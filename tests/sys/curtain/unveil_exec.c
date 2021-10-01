@@ -21,13 +21,13 @@ ATF_TC_BODY(unveil_unrestrict, tc)
 	atf_utils_wait(pid, 0, "", "");
 }
 
-ATF_TC_WITHOUT_HEAD(unveilself_unrestrict);
-ATF_TC_BODY(unveilself_unrestrict, tc)
+ATF_TC_WITHOUT_HEAD(unveil_self_unrestrict);
+ATF_TC_BODY(unveil_self_unrestrict, tc)
 {
 	pid_t pid = atf_utils_fork();
 	if (pid == 0) {
-		ATF_REQUIRE(unveilself("/", "x") >= 0);
-		ATF_REQUIRE(unveilself(NULL, NULL) >= 0);
+		ATF_REQUIRE(unveil_self("/", "x") >= 0);
+		ATF_REQUIRE(unveil_self(NULL, NULL) >= 0);
 		ATF_REQUIRE(execlp("test", "test", "-r", "/etc/rc", NULL) >= 0);
 		_exit(127);
 	}
@@ -149,7 +149,7 @@ ATF_TC_BODY(fexec_path_deny_2, tc)
 ATF_TP_ADD_TCS(tp)
 {
 	ATF_TP_ADD_TC(tp, unveil_unrestrict);
-	ATF_TP_ADD_TC(tp, unveilself_unrestrict);
+	ATF_TP_ADD_TC(tp, unveil_self_unrestrict);
 	ATF_TP_ADD_TC(tp, exec_path_allow);
 	ATF_TP_ADD_TC(tp, exec_path_deny);
 	ATF_TP_ADD_TC(tp, fexec_path_allow_1);
