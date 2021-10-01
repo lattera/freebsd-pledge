@@ -7,7 +7,7 @@
 ATF_TC_WITHOUT_HEAD(hides_fs);
 ATF_TC_BODY(hides_fs, tc)
 {
-	ATF_REQUIRE(unveil(NULL, NULL) >= 0);
+	ATF_REQUIRE(unveil_freeze() >= 0);
 	ATF_REQUIRE(pledge("stdio", "") >= 0);
 	check_access("/", "d");
 	check_access("/dev", "d");
@@ -18,7 +18,7 @@ ATF_TC_BODY(hides_fs, tc)
 ATF_TC_WITHOUT_HEAD(stdio_paths);
 ATF_TC_BODY(stdio_paths, tc)
 {
-	ATF_REQUIRE(unveil(NULL, NULL) >= 0);
+	ATF_REQUIRE(unveil_freeze() >= 0);
 	ATF_REQUIRE(pledge("stdio", "") >= 0);
 	check_access("/dev/null", "rw");
 	check_access("/dev/random", "r");

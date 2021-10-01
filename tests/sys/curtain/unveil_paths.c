@@ -11,6 +11,18 @@
  * known to the pledge()/unveil() library.
  */
 
+ATF_TC_WITHOUT_HEAD(do_nothing);
+ATF_TC_BODY(do_nothing, tc)
+{
+	/* unveil(NULL, NULL) does nothing if no unveils were done */
+	ATF_REQUIRE(unveil(NULL, NULL) >= 0);
+	check_access("/", "dr+");
+	check_access("/dev", "dr+");
+	check_access("/etc", "dr+");
+	check_access("/var", "dr+");
+	check_access(".", "drw");
+}
+
 ATF_TC_WITHOUT_HEAD(unveil_one_i);
 ATF_TC_BODY(unveil_one_i, tc)
 {
@@ -70,7 +82,7 @@ ATF_TC_BODY(unveil_one_b, tc)
 ATF_TC_WITHOUT_HEAD(hide_all);
 ATF_TC_BODY(hide_all, tc)
 {
-	ATF_REQUIRE(unveil(NULL, NULL) >= 0);
+	ATF_REQUIRE(unveil_freeze() >= 0);
 	check_access("/", "d");
 	check_access("/dev", "d");
 	check_access("/etc", "d");
@@ -190,7 +202,7 @@ ATF_TC_BODY(chdir1, tc)
 ATF_TC_WITHOUT_HEAD(cwd_deny);
 ATF_TC_BODY(cwd_deny, tc)
 {
-	ATF_REQUIRE(unveil(NULL, NULL) >= 0);
+	ATF_REQUIRE(unveil_freeze() >= 0);
 	check_access(".", "d");
 }
 
@@ -385,7 +397,7 @@ ATF_TC_BODY(dev_stdout, tc)
 ATF_TC_WITHOUT_HEAD(keep_stdio_hidden);
 ATF_TC_BODY(keep_stdio_hidden, tc)
 {
-	ATF_REQUIRE(unveil(NULL, NULL) >= 0);
+	ATF_REQUIRE(unveil_freeze() >= 0);
 	/* Those files could be unveiled with a pledge, but must not be by default. */
 	check_access("/dev/null", "");
 	check_access("/dev/random", "");
@@ -602,6 +614,7 @@ ATF_TC_BODY(renameat_both_fds, tc)
 
 ATF_TP_ADD_TCS(tp)
 {
+	ATF_TP_ADD_TC(tp, do_nothing);
 	ATF_TP_ADD_TC(tp, unveil_one_i);
 	ATF_TP_ADD_TC(tp, unveil_one_r);
 	ATF_TP_ADD_TC(tp, unveil_one_w);

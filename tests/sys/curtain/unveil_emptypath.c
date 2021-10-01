@@ -176,7 +176,7 @@ ATF_TC_BODY(open_empty_path_regain_preopened_none, tc)
 	int fd;
 	ATF_REQUIRE(try_creat("f") >= 0);
 	ATF_REQUIRE((fd = open("f", O_PATH)) >= 0);
-	ATF_REQUIRE(unveil(NULL, NULL) >= 0);
+	ATF_REQUIRE(unveil_freeze() >= 0);
 	ATF_CHECK_ERRNO(ENOENT, openat(fd, "", O_EMPTY_PATH | O_RDONLY) < 0);
 	ATF_CHECK_ERRNO(ENOENT, openat(fd, "", O_EMPTY_PATH | O_WRONLY) < 0);
 	ATF_CHECK_ERRNO(ENOENT, openat(fd, "", O_EMPTY_PATH | O_RDWR) < 0);
@@ -188,7 +188,7 @@ ATF_TC_BODY(open_empty_path_regain_preopened_read, tc)
 {
 	int fd;
 	ATF_REQUIRE((fd = open("f", O_RDONLY|O_CREAT, 0777)) >= 0);
-	ATF_REQUIRE(unveil(NULL, NULL) >= 0);
+	ATF_REQUIRE(unveil_freeze() >= 0);
 	ATF_CHECK(openat(fd, "", O_EMPTY_PATH | O_RDONLY) >= 0);
 	ATF_CHECK_ERRNO(EACCES, openat(fd, "", O_EMPTY_PATH | O_WRONLY) < 0);
 	ATF_CHECK_ERRNO(EACCES, openat(fd, "", O_EMPTY_PATH | O_RDWR) < 0);
@@ -200,7 +200,7 @@ ATF_TC_BODY(open_empty_path_regain_preopened_read_write, tc)
 {
 	int fd;
 	ATF_REQUIRE((fd = open("f", O_RDWR|O_CREAT, 0777)) >= 0);
-	ATF_REQUIRE(unveil(NULL, NULL) >= 0);
+	ATF_REQUIRE(unveil_freeze() >= 0);
 	ATF_CHECK(openat(fd, "", O_EMPTY_PATH | O_RDONLY) >= 0);
 	ATF_CHECK(openat(fd, "", O_EMPTY_PATH | O_WRONLY) >= 0);
 	ATF_CHECK(openat(fd, "", O_EMPTY_PATH | O_RDWR) >= 0);
@@ -212,7 +212,7 @@ ATF_TC_BODY(open_empty_path_regain_preopened_write, tc)
 {
 	int fd;
 	ATF_REQUIRE((fd = open("f", O_WRONLY|O_CREAT, 0777)) >= 0);
-	ATF_REQUIRE(unveil(NULL, NULL) >= 0);
+	ATF_REQUIRE(unveil_freeze() >= 0);
 	ATF_CHECK(openat(fd, "", O_EMPTY_PATH | O_WRONLY) >= 0);
 	ATF_CHECK_ERRNO(EACCES, openat(fd, "", O_EMPTY_PATH | O_RDONLY) < 0);
 	ATF_CHECK_ERRNO(EACCES, openat(fd, "", O_EMPTY_PATH | O_RDWR) < 0);
@@ -224,7 +224,7 @@ ATF_TC_BODY(open_empty_path_regain_preopened_exec, tc)
 {
 	int fd;
 	ATF_REQUIRE((fd = open("f", O_EXEC|O_CREAT, 0777)) >= 0);
-	ATF_REQUIRE(unveil(NULL, NULL) >= 0);
+	ATF_REQUIRE(unveil_freeze() >= 0);
 	ATF_CHECK(openat(fd, "", O_EMPTY_PATH | O_EXEC) >= 0);
 	ATF_CHECK_ERRNO(EACCES, openat(fd, "", O_EMPTY_PATH | O_WRONLY) < 0);
 	ATF_CHECK_ERRNO(EACCES, openat(fd, "", O_EMPTY_PATH | O_RDONLY) < 0);

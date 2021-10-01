@@ -72,7 +72,7 @@ ATF_TC_WITHOUT_HEAD(stdio_path_not_hidden);
 ATF_TC_BODY(stdio_path_not_hidden, tc)
 {
 	ATF_REQUIRE(pledge("stdio rpath wpath unveil", "") >= 0);
-	ATF_REQUIRE(unveil(NULL, NULL) >= 0);
+	ATF_REQUIRE(unveil_freeze() >= 0);
 	check_access("/dev/null", "rw");
 }
 
