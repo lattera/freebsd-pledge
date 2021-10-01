@@ -149,7 +149,8 @@ expand_homedir(struct pathexp *a, const char *p, char *e, size_t depth)
 			return (toobig(a));
 		memcpy(e, home, len);
 		e += len;
-	}
+	} else
+		return (0);
 	return (expand(a, q, e, depth));
 }
 
