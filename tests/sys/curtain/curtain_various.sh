@@ -181,6 +181,30 @@ unenforced_unveil_body() {
 	atf_check -s not-exit:0 -o empty -e not-empty curtain -U -a curtain -a curtain -u / cat f
 }
 
+atf_test_case extattrs
+extattrs_body() {
+	atf_check touch f
+	lsextattr user f || atf_skip "extended attributes not supported?"
+	atf_check -o save:exp-ls-0 lsextattr user f
+	atf_check setextattr user k V f
+	atf_check -o save:exp-get-0 getextattr user k f
+	atf_check setextattr user k v f
+	atf_check -o save:exp-ls-1 lsextattr user f
+	atf_check -o save:exp-get-1 getextattr user k f
+	atf_check -s not-exit:0 -e not-empty curtain lsextattr user f
+	atf_check -s not-exit:0 -e not-empty curtain getextattr user k f
+	atf_check -s not-exit:0 -e not-empty curtain setextattr user k V f
+	atf_check -s not-exit:0 -e not-empty curtain rmextattr user k f
+	atf_check -o file:exp-ls-1 curtain -@ability:extattr -u f lsextattr user f
+	atf_check -o file:exp-get-1 curtain -@ability:extattr -u f getextattr user k f
+	atf_check -s not-exit:0 -e not-empty curtain -@ability:extattr -u f:r setextattr user k V f
+	atf_check curtain -@ability:extattr -u f:rw setextattr user k V f
+	atf_check -o file:exp-get-0 curtain -@ability:extattr -u f getextattr user k f
+	atf_check -s not-exit:0 -e not-empty curtain -@ability:extattr -u f:r rmextattr user k f
+	atf_check curtain -@ability:extattr -u f:rw rmextattr user k f
+	atf_check -o file:exp-ls-0 curtain -@ability:extattr -u f lsextattr user f
+}
+
 atf_init_test_cases() {
 	atf_add_test_case cmd_true
 	atf_add_test_case cmd_false
@@ -205,4 +229,5 @@ atf_init_test_cases() {
 	atf_add_test_case cmd_timeout
 	atf_add_test_case cmd_id
 	atf_add_test_case unenforced_unveil
+	atf_add_test_case extattrs
 }
