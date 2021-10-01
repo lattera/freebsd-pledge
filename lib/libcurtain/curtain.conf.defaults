@@ -47,8 +47,6 @@
 
 @push _libs
 
-@include /usr/local/etc/curtain.{conf,d/}
-
 [_basic]
 @push _acl
 @push _tty
