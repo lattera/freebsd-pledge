@@ -288,7 +288,8 @@ restart:
 #ifdef UNVEIL_SUPPORT
 			if (error == 0 && unveil_active(td))
 				unveil_ops->tracker_substitute(td,
-				    ndp->ni_dvp, ndp->ni_vp);
+				    ndp->ni_dvp, ndp->ni_vp,
+				    ndp->ni_cnd.cn_uperms);
 #endif
 			vp = ndp->ni_vp;
 			if (error == 0 && (fmode & O_EXCL) != 0 &&

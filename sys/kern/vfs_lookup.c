@@ -706,8 +706,7 @@ namei(struct nameidata *ndp)
 #ifdef UNVEIL_SUPPORT
 			if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE) {
 				unveil_perms uperms;
-				uperms = unveil_ops->traverse_uperms(
-				    td, ndp->ni_unveil, ndp->ni_vp);
+				uperms = unveil_ops->traverse_uperms(td, ndp->ni_unveil);
 				if (!(uperms & ~UPERM_TRAVERSE))
 					error = ENOENT;
 				if (ndp->ni_unveil == &utrav)

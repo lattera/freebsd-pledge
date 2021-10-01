@@ -36,7 +36,7 @@ ATF_TC_BODY(curtainctl_overflow_reqs, tc)
 			.data = abilities,
 			.size = sizeof abilities,
 		};
-	ATF_CHECK_ERRNO(EINVAL, curtainctl(flags, nitems(reqs), reqs) < 0);
+	ATF_CHECK_ERRNO(E2BIG, curtainctl(flags, nitems(reqs), reqs) < 0);
 }
 
 ATF_TC_WITHOUT_HEAD(curtainctl_overflow_size);
@@ -54,7 +54,7 @@ ATF_TC_BODY(curtainctl_overflow_size, tc)
 			.data = abilities,
 			.size = sizeof abilities,
 		};
-	ATF_CHECK_ERRNO(EINVAL, curtainctl(flags, nitems(reqs), reqs) < 0);
+	ATF_CHECK_ERRNO(E2BIG, curtainctl(flags, nitems(reqs), reqs) < 0);
 }
 
 ATF_TC_WITHOUT_HEAD(curtainctl_overflow_items);
@@ -79,7 +79,7 @@ ATF_TC_BODY(curtainctl_overflow_items, tc)
 	int flags = CURTAINCTL_ENFORCE;
 	for (size_t i = 0; i < nitems(ioctls); i++)
 		ioctls[i] = 1 + i;
-	ATF_CHECK_ERRNO(EINVAL, curtainctl(flags, nitems(reqs), reqs) < 0);
+	ATF_CHECK_ERRNO(E2BIG, curtainctl(flags, nitems(reqs), reqs) < 0);
 }
 
 ATF_TP_ADD_TCS(tp)

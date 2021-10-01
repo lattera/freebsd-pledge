@@ -12,10 +12,9 @@
 #include <sys/capsicum.h>
 #include <sys/proc.h>
 #include <sys/namei.h>
-#include <sys/curtain.h>
+#include <sys/sysfil.h>
 #endif
 
-#define	UPERM_NONE		(0)
 #define	UPERM_EXPOSE		(1 <<  0)
 #define	UPERM_TRAVERSE		(1 <<  1)
 #define	UPERM_SEARCH		(1 <<  2)
@@ -96,6 +95,8 @@ struct curtainent_unveil {
 
 #ifdef _KERNEL
 
+struct unveil_base;
+
 enum unveil_on {
 	UNVEIL_ON_SELF,
 	UNVEIL_ON_EXEC,
@@ -114,8 +115,6 @@ unveil_active(struct thread *td)
 
 struct unveil_base *unveil_proc_get_base(struct proc *, bool create);
 void unveil_proc_drop_base(struct proc *);
-void unveil_proc_exec_switch(struct proc *);
-bool unveil_proc_need_exec_switch(struct proc *);
 
 void unveil_base_init(struct unveil_base *);
 void unveil_base_copy(struct unveil_base *dst, struct unveil_base *src);
@@ -125,14 +124,6 @@ void unveil_base_free(struct unveil_base *);
 
 void unveil_base_write_begin(struct unveil_base *);
 void unveil_base_write_end(struct unveil_base *);
-
-void unveil_base_enable(struct unveil_base *, enum unveil_on);
-void unveil_base_disable(struct unveil_base *, enum unveil_on);
-void unveil_base_freeze(struct unveil_base *, enum unveil_on);
-int unveil_index_set(struct unveil_base *, enum unveil_on, unsigned index, unveil_perms);
-int unveil_index_check(struct unveil_base *, unsigned index);
-
-void unveil_lockdown_fd(struct thread *);
 
 #ifdef UNVEIL_SUPPORT
 
@@ -149,21 +140,29 @@ struct unveil_ops {
 	    struct vnode *dvp);
 	void (*traverse_replace)(struct thread *, struct unveil_traversal *,
 	    struct vnode *from_vp, struct vnode *to_vp);
-	unveil_perms (*traverse_uperms)(struct thread *, struct unveil_traversal *,
-	    struct vnode *vp);
+	unveil_perms (*traverse_uperms)(struct thread *, struct unveil_traversal *);
 	void (*traverse_end)(struct thread *, struct unveil_traversal *);
 	unveil_perms (*tracker_find)(struct thread *, struct vnode *);
 	void (*tracker_substitute)(struct thread *,
-	    struct vnode *old_vp, struct vnode *new_vp);
+	    struct vnode *old_vp, struct vnode *new_vp, unveil_perms);
 	void (*tracker_push_file)(struct thread *, struct file *);
 	void (*tracker_save_file)(struct thread *, struct file *, struct vnode *);
-	void (*tracker_clear)(struct thread *);
+};
+
+#define	UNVEIL_ON_COUNT	2
+
+struct unveil_base_flags {
+	struct {
+		bool frozen;
+		bool wanted;
+	} on[UNVEIL_ON_COUNT];
 };
 
 struct unveil_traversal {
 	struct unveil_tree *tree;
 	struct unveil_save *save;
 	struct unveil_node *cover;
+	struct unveil_base_flags flags;
 	unveil_perms actual_uperms;
 	unveil_perms wanted_uperms;
 	unsigned fill;
@@ -171,6 +170,27 @@ struct unveil_traversal {
 	bool uncharted;
 	bool wanted_valid;
 };
+
+struct unveil_stash {
+	volatile uint64_t lockdown_gen;
+	struct unveil_tree *tree;
+	struct unveil_base_flags flags;
+};
+
+void unveil_stash_init(struct unveil_stash *);
+void unveil_stash_copy(struct unveil_stash *dst, const struct unveil_stash *src);
+void unveil_stash_free(struct unveil_stash *);
+
+void unveil_stash_begin(struct unveil_stash *, struct unveil_base *base);
+int unveil_stash_update(struct unveil_stash *, enum unveil_on, unsigned index, unveil_perms);
+void unveil_stash_exec_switch(struct unveil_stash *);
+bool unveil_stash_need_exec_switch(const struct unveil_stash *);
+void unveil_stash_switch(struct unveil_stash *, enum unveil_on, enum unveil_on);
+void unveil_stash_enable(struct unveil_stash *, enum unveil_on);
+void unveil_stash_disable(struct unveil_stash *, enum unveil_on);
+void unveil_stash_sweep(struct unveil_stash *, enum unveil_on);
+void unveil_stash_freeze(struct unveil_stash *, enum unveil_on);
+void unveil_stash_commit(struct unveil_stash *, struct unveil_base *);
 
 #endif
 

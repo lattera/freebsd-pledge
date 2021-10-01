@@ -69,8 +69,6 @@ STATNODE_COUNTER(ascent_total_depth, unveil_stats_ascent_total_depth, "");
 
 static volatile uint64_t unveil_lockdown_gen = 1;
 
-enum { UNVEIL_ON_COUNT = 2 };
-
 struct unveil_node {
 	struct unveil_node *cover;
 	RB_ENTRY(unveil_node) entry;
@@ -108,6 +106,7 @@ struct unveil_save {
 
 struct unveil_tracker {
 #define	UNVEIL_TRACKER_ENTRIES_COUNT 2
+	uint64_t lockdown_gen;
 	struct unveil_tracker_entry {
 		struct vnode *vp;
 		unsigned vp_nchash, vp_hash;
@@ -127,14 +126,9 @@ struct unveil_cache {
 };
 
 struct unveil_base {
-	volatile uint64_t lockdown_gen;
 	struct sx sx;
 	struct unveil_tree *tree;
-	bool modified;
-	struct unveil_base_flags {
-		bool frozen;
-		bool wanted;
-	} on[UNVEIL_ON_COUNT];
+	struct unveil_base_flags flags;
 	struct unveil_cache cover_cache;
 };
 
@@ -308,10 +302,7 @@ unveil_base_tree_snap(struct unveil_base *base)
 void
 unveil_base_copy(struct unveil_base *dst, struct unveil_base *src)
 {
-	dst->modified = src->modified;
-	dst->lockdown_gen = src->lockdown_gen;
-	for (int i = 0; i < UNVEIL_ON_COUNT; i++)
-		dst->on[i] = src->on[i];
+	dst->flags = src->flags;
 	if (src->tree) {
 		struct unveil_tree *old_tree = dst->tree;
 		dst->tree = unveil_base_tree_snap(src);
@@ -347,9 +338,7 @@ void
 unveil_base_reset(struct unveil_base *base)
 {
 	unveil_base_clear(base);
-	base->modified = false;
-	for (int i = 0; i < UNVEIL_ON_COUNT; i++)
-		base->on[i] = (struct unveil_base_flags){ 0 };
+	base->flags = (struct unveil_base_flags){ 0 };
 }
 
 void
@@ -357,6 +346,168 @@ unveil_base_free(struct unveil_base *base)
 {
 	unveil_base_clear(base);
 	sx_destroy(&base->sx);
+}
+
+
+static unveil_perms
+unveil_node_wanted_uperms(struct unveil_node *node, enum unveil_on on)
+{
+	if (node->wanted[on])
+		return (node->wanted_uperms[on]);
+	while ((node = node->cover))
+		if (node->wanted[on])
+			return (uperms_inherit(node->wanted_uperms[on]));
+	return (UPERM_NONE);
+}
+
+#define	UNVEIL_FOREACH(node, base) \
+	if ((base)->tree) \
+		RB_FOREACH(node, unveil_node_tree, &(base)->tree->root)
+
+
+void
+unveil_stash_init(struct unveil_stash *stash)
+{
+	*stash = (struct unveil_stash){ 0 };
+}
+
+void
+unveil_stash_copy(struct unveil_stash *dst, const struct unveil_stash *src)
+{
+	dst->lockdown_gen = src->lockdown_gen;
+	dst->tree = src->tree ? unveil_tree_hold(src->tree) : NULL;
+	dst->flags = src->flags;
+}
+
+void
+unveil_stash_free(struct unveil_stash *stash)
+{
+	if (stash->tree)
+		unveil_tree_free(stash->tree);
+}
+
+static void
+unveil_stash_check(struct unveil_stash *stash)
+{
+	if (stash->tree) {
+		MPASS(stash->tree->refcount != 0);
+		MPASS((stash->tree->node_count == 0) == RB_EMPTY(&stash->tree->root));
+	}
+}
+
+
+void
+unveil_stash_enable(struct unveil_stash *stash, enum unveil_on on)
+{
+	stash->flags.on[on].wanted = true;
+}
+
+void
+unveil_stash_disable(struct unveil_stash *stash, enum unveil_on on)
+{
+	if (stash->flags.on[on].wanted) {
+		struct unveil_node *node;
+		stash->flags.on[on].wanted = false;
+		UNVEIL_FOREACH(node, stash) {
+			node->wanted[on] = false;
+			node->wanted_uperms[on] = UPERM_NONE;
+		}
+	}
+}
+
+void
+unveil_stash_sweep(struct unveil_stash *stash, enum unveil_on on)
+{
+	struct unveil_node *node;
+	stash->flags.on[on].wanted = false;
+	UNVEIL_FOREACH(node, stash) {
+		node->wanted_uperms[on] = UPERM_NONE;
+		node->wanted[on] = false;
+	}
+	unveil_stash_check(stash);
+}
+
+void
+unveil_stash_freeze(struct unveil_stash *stash, enum unveil_on on)
+{
+	struct unveil_node *node;
+	stash->flags.on[on].frozen = true;
+	UNVEIL_FOREACH(node, stash)
+		node->frozen_uperms[on] &= unveil_node_wanted_uperms(node, on);
+	unveil_stash_check(stash);
+}
+
+bool
+unveil_stash_need_exec_switch(const struct unveil_stash *stash)
+{
+	const int s = UNVEIL_ON_EXEC, d = UNVEIL_ON_SELF;
+	struct unveil_node *node;
+	UNVEIL_FOREACH(node, stash)
+		if (node->frozen_uperms[d] != node->frozen_uperms[s] ||
+		    node->wanted_uperms[d] != node->wanted_uperms[s] ||
+		    node->wanted[d] != node->wanted[s])
+			return (true);
+	return (false);
+}
+
+void
+unveil_stash_exec_switch(struct unveil_stash *stash)
+{
+	const int s = UNVEIL_ON_EXEC, d = UNVEIL_ON_SELF;
+	struct unveil_node *node;
+
+	UNVEIL_FOREACH(node, stash) {
+		node->frozen_uperms[d] = node->frozen_uperms[s];
+		node->wanted_uperms[d] = node->wanted_uperms[s];
+		node->wanted[d] = node->wanted[s];
+	}
+	stash->flags.on[d] = stash->flags.on[s];
+	unveil_stash_check(stash);
+}
+
+int
+unveil_stash_update(struct unveil_stash *stash,
+    unsigned index, enum unveil_on on, unveil_perms uperms)
+{
+	struct unveil_node *node;
+	UNVEIL_FOREACH(node, stash) {
+		if (node->index == index) /* XXX */ {
+			node->wanted[on] = true;
+			node->wanted_uperms[on] = uperms_expand(uperms);
+			return (0);
+		}
+	}
+	return (ENOENT);
+}
+
+void
+unveil_stash_begin(struct unveil_stash *stash, struct unveil_base *base)
+{
+	MPASS(!stash->tree);
+	stash->tree = unveil_tree_dup(base->tree);
+	stash->flags = base->flags;
+	for (int i = 0; i < UNVEIL_ON_COUNT; i++)
+		unveil_stash_sweep(stash, i);
+}
+
+void
+unveil_stash_commit(struct unveil_stash *stash, struct unveil_base *base)
+{
+	stash->lockdown_gen = atomic_fetchadd_64(&unveil_lockdown_gen, 1);
+	if (base->tree)
+		unveil_tree_free(base->tree);
+	base->tree = unveil_tree_hold(stash->tree);
+	base->flags = stash->flags;
+}
+
+
+static struct unveil_stash *
+unveil_stash_get(struct thread *td)
+{
+	struct curtain *ct;
+	if ((ct = curtain_from_cred(td->td_ucred)))
+		return (&ct->ct_ustash);
+	return (NULL);
 }
 
 
@@ -378,17 +529,37 @@ unveil_fflags_uperms(enum vtype type, int fflags)
 	return (uperms_expand(uperms));
 }
 
+static struct unveil_tracker *
+unveil_tracker_prep(struct thread *td)
+{
+	struct unveil_tracker *track;
+	if ((track = td->td_unveil_tracker)) {
+		struct unveil_stash *stash;
+		stash = unveil_stash_get(td);
+		if (__predict_false(stash && track->lockdown_gen != stash->lockdown_gen))
+			*track = (struct unveil_tracker){
+				.lockdown_gen = stash->lockdown_gen,
+			};
+		return (track);
+	}
+	return (NULL);
+}
+
 static unveil_perms
 unveil_tracker_find(struct thread *td, struct vnode *vp)
 {
 	struct unveil_tracker *track;
 	MPASS(vp);
-	if ((track = td->td_unveil_tracker))
-		for (size_t i = MIN(track->fill, UNVEIL_TRACKER_ENTRIES_COUNT); i--;)
+	if ((track = unveil_tracker_prep(td))) {
+		unsigned j = UNVEIL_TRACKER_ENTRIES_COUNT - 1;
+		do {
+			unsigned i = (track->fill + j) % UNVEIL_TRACKER_ENTRIES_COUNT;
 			if (track->entries[i].vp == vp &&
 			    track->entries[i].vp_nchash == vp->v_nchash &&
 			    track->entries[i].vp_hash == vp->v_hash)
 				return (track->entries[i].uperms);
+		} while (j--);
+	}
 	return (UPERM_NONE);
 }
 
@@ -397,7 +568,7 @@ unveil_tracker_last(struct thread *td)
 {
 	struct unveil_tracker *track;
 	track = td->td_unveil_tracker;
-	return ((track->fill - 1) % UNVEIL_TRACKER_ENTRIES_COUNT);
+	return ((track->fill != 0 ? track->fill : UNVEIL_TRACKER_ENTRIES_COUNT) - 1);
 }
 
 static unveil_perms
@@ -436,15 +607,21 @@ unveil_tracker_replace(struct thread *td, size_t i, struct vnode *vp)
 }
 
 static void
-unveil_tracker_substitute(struct thread *td, struct vnode *old_vp, struct vnode *new_vp)
+unveil_tracker_substitute(struct thread *td,
+    struct vnode *old_vp, struct vnode *new_vp, unveil_perms uperms)
 {
 	struct unveil_tracker *track;
-	if ((track = td->td_unveil_tracker))
-		for (size_t i = MIN(track->fill, UNVEIL_TRACKER_ENTRIES_COUNT); i--;)
+	if ((track = unveil_tracker_prep(td))) {
+		unsigned j = UNVEIL_TRACKER_ENTRIES_COUNT - 1;
+		do {
+			unsigned i = (track->fill + j) % UNVEIL_TRACKER_ENTRIES_COUNT;
 			if (track->entries[i].vp == old_vp) {
 				unveil_tracker_replace(td, i, new_vp);
+				track->entries[i].uperms = uperms;
 				break;
 			}
+		} while (j--);
+	}
 }
 
 static size_t
@@ -452,12 +629,18 @@ unveil_tracker_push(struct thread *td, struct vnode *vp, unveil_perms uperms)
 {
 	struct unveil_tracker *track;
 	size_t i;
-	if (!(track = td->td_unveil_tracker)) {
+	if (__predict_false(!td->td_unveil_tracker)) {
+		struct unveil_stash *stash;
+		stash = unveil_stash_get(td);
 		track = malloc(sizeof *track, M_UNVEIL, M_WAITOK);
-		track->fill = 0;
+		*track = (struct unveil_tracker){
+			.lockdown_gen = stash ? stash->lockdown_gen : 0,
+		};
 		td->td_unveil_tracker = track;
-	}
-	i = track->fill++ % UNVEIL_TRACKER_ENTRIES_COUNT;
+	} else
+		track = unveil_tracker_prep(td);
+	i = track->fill++;
+	track->fill %= UNVEIL_TRACKER_ENTRIES_COUNT;
 	unveil_tracker_set(td, i, vp, uperms);
 	return (i);
 }
@@ -465,13 +648,13 @@ unveil_tracker_push(struct thread *td, struct vnode *vp, unveil_perms uperms)
 static void
 unveil_tracker_push_file(struct thread *td, struct file *fp)
 {
-	struct unveil_base *base;
+	struct unveil_stash *stash;
 	unveil_perms uperms;
 	if (!fp->f_vnode)
 		return;
 	uperms = fp->f_uperms;
-	if ((base = unveil_proc_get_base(td->td_proc, false)) &&
-	    fp->f_uldgen != atomic_load_64(&base->lockdown_gen))
+	if ((stash = unveil_stash_get(td)) &&
+	    fp->f_uldgen != stash->lockdown_gen)
 		uperms &= unveil_fflags_uperms(fp->f_vnode->v_type, fp->f_flag);
 	unveil_tracker_push(td, fp->f_vnode, uperms);
 }
@@ -479,91 +662,13 @@ unveil_tracker_push_file(struct thread *td, struct file *fp)
 static void
 unveil_tracker_save_file(struct thread *td, struct file *fp, struct vnode *vp)
 {
-	struct unveil_base *base;
-	base = unveil_proc_get_base(td->td_proc, false);
-	fp->f_uldgen = base ? atomic_load_64(&base->lockdown_gen) : 0;
+	struct unveil_stash *stash;
+	stash = unveil_stash_get(td);
+	fp->f_uldgen = stash ? stash->lockdown_gen : 0;
 	fp->f_uperms = unveil_active(td) ? unveil_tracker_find(td, vp) : UPERM_ALL;
 }
 
-static void
-unveil_tracker_clear(struct thread *td)
-{
-	struct unveil_tracker *track;
-	if ((track = td->td_unveil_tracker))
-		track->fill = 0;
-}
-
 
-static unveil_perms
-unveil_node_wanted_uperms(struct unveil_node *node, enum unveil_on on)
-{
-	if (node->wanted[on])
-		return (node->wanted_uperms[on]);
-	while ((node = node->cover))
-		if (node->wanted[on])
-			return (uperms_inherit(node->wanted_uperms[on]));
-	return (UPERM_NONE);
-}
-
-
-#define	UNVEIL_FOREACH(node, base) \
-	if ((base)->tree) \
-		RB_FOREACH(node, unveil_node_tree, &(base)->tree->root)
-
-bool
-unveil_proc_need_exec_switch(struct proc *p)
-{
-	struct unveil_base *base;
-	if (!(base = p->p_unveils))
-		return (false);
-	return (base->modified);
-}
-
-void
-unveil_proc_drop_base(struct proc *p)
-{
-	struct unveil_base *base;
-	if ((base = p->p_unveils)) {
-		unveil_base_free(base);
-		free(base, M_UNVEIL);
-		p->p_unveils = NULL;
-	}
-}
-
-void
-unveil_proc_exec_switch(struct proc *p)
-{
-	const int s = UNVEIL_ON_EXEC, d = UNVEIL_ON_SELF;
-	struct unveil_base *base;
-	struct unveil_node *node;
-
-	if (!(base = p->p_unveils))
-		return;
-	if (!base->modified)
-		return;
-
-	unveil_base_own(base);
-	if (base->on[s].wanted) {
-		base->on[s].wanted = false;
-		/* Must be done in separate phase due to inheritance. */
-		UNVEIL_FOREACH(node, base)
-			node->frozen_uperms[s] &= unveil_node_wanted_uperms(node, s);
-	}
-	base->on[s].frozen = true;
-
-	UNVEIL_FOREACH(node, base) {
-		node->wanted_uperms[s] = UPERM_NONE;
-		node->wanted[s] = false;
-		node->frozen_uperms[d] = node->frozen_uperms[s];
-		node->wanted_uperms[d] = node->wanted_uperms[s];
-		node->wanted[d] = node->wanted[s];
-	}
-	base->on[d] = base->on[s];
-	base->modified = false;
-	unveil_base_check(base);
-}
-
-
 static void
 unveil_save_prefix(struct unveil_save *save, struct unveil_node *cover)
 {
@@ -640,7 +745,7 @@ unveil_save(struct unveil_base *base, struct unveil_traversal *trav,
 			node->wanted_uperms[i] = UPERM_NONE;
 			node->frozen_uperms[i] =
 			    trav->cover ? uperms_inherit(trav->cover->frozen_uperms[i]) :
-			    base->on[i].frozen ? UPERM_NONE : UPERM_ALL;
+			    trav->flags.on[i].frozen ? UPERM_NONE : UPERM_ALL;
 		}
 
 	if (trav->save->ter) {
@@ -650,7 +755,6 @@ unveil_save(struct unveil_base *base, struct unveil_traversal *trav,
 	} else
 		trav->save->te_overflow = true;
 
-	base->modified = true;
 	return (node);
 }
 
@@ -767,16 +871,15 @@ static void
 unveil_traverse_begin(struct thread *td, struct unveil_traversal *trav,
     bool bypass, bool reuse)
 {
-	struct unveil_base *base;
-	if (!(base = unveil_proc_get_base(td->td_proc, false)))
-		return;
+	struct unveil_stash *stash;
 	counter_u64_add(unveil_stats_traversals, 1);
-	if ((trav->bypass = bypass)) {
-		trav->tree = NULL;
+	if (!(trav->bypass = bypass) && (stash = unveil_stash_get(td))) {
+		unveil_stash_check(stash);
+		trav->tree = stash->tree;
+		trav->flags = stash->flags;
 	} else {
-		sx_slock(&base->sx);
-		trav->tree = unveil_base_tree_snap(base);
-		sx_sunlock(&base->sx);
+		trav->tree = NULL;
+		trav->flags = (struct unveil_base_flags){ 0 };
 	}
 	trav->save = NULL;
 	trav->fill = reuse ? unveil_tracker_last(td)
@@ -793,6 +896,7 @@ unveil_traverse_begin_save(struct thread *td, struct unveil_traversal *trav,
 	MPASS(base);
 	counter_u64_add(unveil_stats_traversals, 1);
 	sx_assert(&base->sx, SA_XLOCKED);
+	trav->flags = base->flags;
 	trav->tree = base->tree;
 	trav->save = save;
 	trav->fill = unveil_tracker_push(td, NULL, UPERM_NONE);
@@ -805,10 +909,12 @@ unveil_traverse_start(struct thread *td, struct unveil_traversal *trav,
 {
 	const enum unveil_on on = UNVEIL_ON_SELF;
 	struct unveil_base *base;
+	struct unveil_stash *stash;
 	int error;
 	unsigned depth;
 	MPASS(dvp);
 	base = td->td_proc->p_unveils;
+	stash = unveil_stash_get(td);
 	if (trav->bypass) {
 		trav->cover = NULL;
 		trav->uncharted = true;
@@ -819,7 +925,7 @@ unveil_traverse_start(struct thread *td, struct unveil_traversal *trav,
 	}
 	depth = 0;
 	trav->cover = NULL;
-	if (unveil_cover_cache_enabled) {
+	if (unveil_cover_cache_enabled && stash) {
 		struct unveil_cache_entry *ent;
 		ent = NULL;
 		for (size_t i = 0; i < UNVEIL_CACHE_ENTRIES_COUNT; i++)
@@ -833,7 +939,7 @@ unveil_traverse_start(struct thread *td, struct unveil_traversal *trav,
 			if (ent->vp == dvp &&
 			    ent->vp_nchash == dvp->v_nchash &&
 			    ent->vp_hash == dvp->v_hash &&
-			    base->cover_cache.lockdown_gen == base->lockdown_gen) {
+			    base->cover_cache.lockdown_gen == stash->lockdown_gen) {
 				trav->cover = ent->cover;
 				depth = -1;
 				counter_u64_add(unveil_stats_ascents_cached, 1);
@@ -849,7 +955,7 @@ unveil_traverse_start(struct thread *td, struct unveil_traversal *trav,
 		if (depth > 0) {
 			counter_u64_add(unveil_stats_ascents, 1);
 			counter_u64_add(unveil_stats_ascent_total_depth, depth);
-			if (unveil_cover_cache_enabled && trav->cover) {
+			if (unveil_cover_cache_enabled && trav->cover && stash) {
 				struct unveil_cache_entry *ent;
 				if (trav->save)
 					sx_assert(&base->sx, SA_XLOCKED);
@@ -861,7 +967,7 @@ unveil_traverse_start(struct thread *td, struct unveil_traversal *trav,
 				ent->vp = dvp;
 				ent->vp_nchash = dvp->v_nchash;
 				ent->vp_hash = dvp->v_hash;
-				base->cover_cache.lockdown_gen = base->lockdown_gen;
+				base->cover_cache.lockdown_gen = stash->lockdown_gen;
 				if (!trav->save)
 					sx_xunlock(&base->sx);
 			}
@@ -877,7 +983,7 @@ unveil_traverse_start(struct thread *td, struct unveil_traversal *trav,
 	}
 	if (trav->cover) {
 		const enum unveil_on on = UNVEIL_ON_SELF;
-		bool wanted_needed = !trav->save && base->on[on].wanted;
+		bool wanted_needed = !trav->save && trav->flags.on[on].wanted;
 		trav->actual_uperms = trav->cover->frozen_uperms[on];
 		if (depth != 0) {
 			trav->actual_uperms = uperms_inherit(trav->actual_uperms);
@@ -893,7 +999,7 @@ unveil_traverse_start(struct thread *td, struct unveil_traversal *trav,
 		}
 	} else {
 		trav->actual_uperms =
-		    (trav->save ? base->on[on].frozen : unveil_active(td)) ?
+		    (trav->save ? trav->flags.on[on].frozen : unveil_active(td)) ?
 		    UPERM_NONE : UPERM_ALL;
 	}
 	unveil_traverse_track(td, trav, dvp);
@@ -906,7 +1012,7 @@ unveil_traverse_enter(struct unveil_base *base, struct unveil_traversal *trav,
     struct unveil_node *node)
 {
 	const enum unveil_on on = UNVEIL_ON_SELF;
-	bool wanted_needed = !trav->save && base->on[on].wanted;
+	bool wanted_needed = !trav->save && trav->flags.on[on].wanted;
 	if (node) {
 		trav->cover = node;
 		trav->uncharted = false;
@@ -993,7 +1099,9 @@ unveil_traverse_component(struct thread *td, struct unveil_traversal *trav,
 	}
 
 	unveil_traverse_enter(base, trav, node);
-	unveil_traverse_track(td, trav, vp ? vp : dvp);
+	if (vp)
+		unveil_traverse_track(td, trav, vp);
+	cnp->cn_uperms = trav->actual_uperms;
 }
 
 static void
@@ -1005,10 +1113,9 @@ unveil_traverse_replace(struct thread *td, struct unveil_traversal *trav,
 }
 
 static unveil_perms
-unveil_traverse_uperms(struct thread *td, struct unveil_traversal *trav,
-    struct vnode *vp)
+unveil_traverse_uperms(struct thread *td, struct unveil_traversal *trav)
 {
-	return (unveil_tracker_get(td, trav->fill));
+	return (trav->actual_uperms);
 }
 
 static void
@@ -1020,8 +1127,7 @@ unveil_traverse_end(struct thread *td, struct unveil_traversal *trav)
 	if (trav->save) {
 		MPASS(base->tree == trav->tree);
 		sx_assert(&base->sx, SA_XLOCKED);
-	} else if (trav->tree)
-		unveil_tree_free(trav->tree);
+	}
 }
 
 
@@ -1046,6 +1152,17 @@ unveil_proc_get_base(struct proc *p, bool create)
 }
 
 void
+unveil_proc_drop_base(struct proc *p)
+{
+	struct unveil_base *base;
+	if ((base = p->p_unveils)) {
+		unveil_base_free(base);
+		free(base, M_UNVEIL);
+		p->p_unveils = NULL;
+	}
+}
+
+void
 unveil_base_write_begin(struct unveil_base *base)
 {
 	sx_xlock(&base->sx);
@@ -1056,73 +1173,6 @@ void
 unveil_base_write_end(struct unveil_base *base)
 {
 	sx_xunlock(&base->sx);
-}
-
-void
-unveil_base_enable(struct unveil_base *base, enum unveil_on on)
-{
-	base->modified = true;
-	base->on[on].wanted = true;
-}
-
-void
-unveil_base_disable(struct unveil_base *base, enum unveil_on on)
-{
-	base->modified = true;
-	if (base->on[on].wanted) {
-		struct unveil_node *node;
-		base->on[on].wanted = false;
-		UNVEIL_FOREACH(node, base) {
-			node->wanted[on] = false;
-			node->wanted_uperms[on] = UPERM_NONE;
-		}
-	}
-}
-
-void
-unveil_base_freeze(struct unveil_base *base, enum unveil_on on)
-{
-	struct unveil_node *node;
-	base->modified = true;
-	base->on[on].frozen = true;
-	UNVEIL_FOREACH(node, base)
-		node->frozen_uperms[on] &= unveil_node_wanted_uperms(node, on);
-}
-
-
-int
-unveil_index_check(struct unveil_base *base, unsigned index)
-{
-	struct unveil_node *node;
-	UNVEIL_FOREACH(node, base)
-		if (node->index == index) /* XXX */
-			return (0);
-	return (EINVAL);
-}
-
-int
-unveil_index_set(struct unveil_base *base,
-    unsigned index, enum unveil_on on, unveil_perms uperms)
-{
-	struct unveil_node *node;
-	sx_assert(&base->sx, SA_XLOCKED);
-	UNVEIL_FOREACH(node, base) {
-		if (node->index == index) /* XXX */ {
-			base->modified = true;
-			node->wanted[on] = true;
-			node->wanted_uperms[on] = uperms_expand(uperms);
-			return (0);
-		}
-	}
-	return (EINVAL);
-}
-
-
-void
-unveil_lockdown_fd(struct thread *td)
-{
-	struct unveil_base *base = td->td_proc->p_unveils;
-	atomic_store_64(&base->lockdown_gen, atomic_fetchadd_64(&unveil_lockdown_gen, 1));
 }
 
 
@@ -1203,7 +1253,7 @@ sys_unveilreg(struct thread *td, struct unveilreg_args *uap)
 			goto out;
 	}
 out:	unveil_base_check(base);
-	sx_xunlock(&base->sx);
+	unveil_base_write_end(base);
 	return (error);
 }
 
@@ -1264,7 +1314,6 @@ static struct unveil_ops unveil_ops_here = {
 	.tracker_substitute = unveil_tracker_substitute,
 	.tracker_push_file = unveil_tracker_push_file,
 	.tracker_save_file = unveil_tracker_save_file,
-	.tracker_clear = unveil_tracker_clear,
 };
 
 static struct syscall_helper_data unveil_syscalls[] = {

@@ -58,6 +58,7 @@ int curtainctl(int flags, size_t reqc, struct curtainreq *reqv);
 #include <sys/sysctl.h>
 #include <sys/proc.h>
 #include <sys/queue.h>
+#include <sys/unveil.h>
 
 enum curtain_action {
 	CURTAINACT_ALLOW = 0,
@@ -157,12 +158,16 @@ struct curtain {
 		bool is_restricted_on_self;
 		bool is_restricted_on_exec;
 	} ct_cached;
+#ifdef UNVEIL_SUPPORT
+	struct unveil_stash ct_ustash;
+#endif
 	struct curtain_mode ct_abilities[CURTAINABL_COUNT];
 	struct curtain_item ct_slots[];
 };
 
 bool	curtain_cred_visible(const struct ucred *subject, const struct ucred *target,
 	    enum barrier_type);
+struct curtain *curtain_from_cred(struct ucred *);
 
 #endif
 

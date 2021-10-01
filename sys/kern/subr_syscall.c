@@ -54,7 +54,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/ktrace.h>
 #endif
 #include <security/audit/audit.h>
-#include <sys/unveil.h> /* XXX */
 
 static inline void
 syscallenter(struct thread *td)
@@ -139,11 +138,6 @@ syscallenter(struct thread *td)
 			goto retval;
 		}
 	}
-#endif
-
-#ifdef UNVEIL_SUPPORT /* XXX find way to get rid of this */
-	if (unveil_ops && td->td_unveil_tracker)
-		unveil_ops->tracker_clear(td);
 #endif
 
 	/*

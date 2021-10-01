@@ -60,6 +60,9 @@ struct componentname {
 	char	*cn_pnbuf;	/* pathname buffer */
 	char	*cn_nameptr;	/* pointer to looked up name */
 	long	cn_namelen;	/* length of looked up component */
+#ifdef UNVEIL_SUPPORT
+	unveil_perms cn_uperms;
+#endif
 };
 
 struct nameicap_tracker;
@@ -257,6 +260,7 @@ int	cache_fplookup(struct nameidata *ndp, enum cache_fpl_status *status,
 #ifdef UNVEIL_SUPPORT
 #define	NDINIT_UNVEIL(_ndp) do { \
 	_ndp->ni_unveil = NULL; \
+	_ndp->ni_cnd.cn_uperms = UPERM_NONE; \
 } while (0)
 #else
 #define	NDINIT_UNVEIL(ndp) do { } while (0)
