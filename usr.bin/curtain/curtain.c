@@ -264,7 +264,8 @@ main(int argc, char *argv[])
 	     login_shell = false,
 	     new_session = false,
 	     new_pgrp = false,
-	     no_network = false;
+	     no_network = false,
+	     unenforced = false;
 	enum { X11_NONE, X11_UNTRUSTED, X11_TRUSTED } x11_mode = X11_NONE;
 	bool wayland = false;
 	bool dbus = false;
@@ -281,7 +282,7 @@ main(int argc, char *argv[])
 	curtain_enable((main_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 	curtain_enable((unveils_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 
-	while ((ch = getopt(argc, argv, "@:vfkgneaA!t:p:u:0:SslXYWD")) != -1)
+	while ((ch = getopt(argc, argv, "@:vfkgneaA!t:p:u:0:SslUXYWD")) != -1)
 		switch (ch) {
 		case '@':
 			curtain_config_directive(cfg, optarg);
@@ -376,6 +377,9 @@ main(int argc, char *argv[])
 			  break;
 		case 'f':
 			  no_fork = true;
+			  break;
+		case 'U':
+			  unenforced = true;
 			  break;
 		case 'X':
 			  x11_mode = X11_UNTRUSTED;
@@ -482,7 +486,7 @@ main(int argc, char *argv[])
 		if (r < 0)
 			err(EX_NOPERM, "unveil");
 	} else {
-		r = curtain_enforce();
+		r = unenforced ? curtain_engage() : curtain_enforce();
 		if (r < 0)
 			err(EX_NOPERM, "curtain_enforce");
 	}

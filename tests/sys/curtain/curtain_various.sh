@@ -170,6 +170,17 @@ cmd_id_body() {
 	atf_check -o file:exp curtain -t _pwddb id
 }
 
+atf_test_case unenforced_unveil
+unenforced_unveil_body() {
+	atf_check -o save:f echo test
+	atf_check -o file:f curtain -U -a curtain -u f cat f
+	atf_check -o file:f curtain -U -a curtain -u / cat f
+	atf_check -o file:f curtain -U -a curtain -U -a curtain -u f cat f
+	atf_check -o file:f curtain -U -a curtain -U -a curtain -u / cat f
+	atf_check -s not-exit:0 -o empty -e not-empty curtain -U -a curtain -a curtain -u f cat f
+	atf_check -s not-exit:0 -o empty -e not-empty curtain -U -a curtain -a curtain -u / cat f
+}
+
 atf_init_test_cases() {
 	atf_add_test_case cmd_true
 	atf_add_test_case cmd_false
@@ -193,4 +204,5 @@ atf_init_test_cases() {
 	atf_add_test_case posixshm_restriction
 	atf_add_test_case cmd_timeout
 	atf_add_test_case cmd_id
+	atf_add_test_case unenforced_unveil
 }
