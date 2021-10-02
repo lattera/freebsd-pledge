@@ -798,13 +798,13 @@ filt_timervalidate(struct knote *kn, sbintime_t *to)
 		return (EINVAL);
 
 	*to = timer2sbintime(kn->kn_sdata, kn->kn_sfflags);
+	if (*to < 0)
+		return (EINVAL);
 	if ((kn->kn_sfflags & NOTE_ABSTIME) != 0) {
 		getboottimebin(&bt);
 		sbt = bttosbt(bt);
-		*to -= sbt;
+		*to = MAX(0, *to - sbt);
 	}
-	if (*to < 0)
-		return (EINVAL);
 	return (0);
 }
 
@@ -815,9 +815,14 @@ filt_timerattach(struct knote *kn)
 	sbintime_t to;
 	int error;
 
+	to = -1;
 	error = filt_timervalidate(kn, &to);
 	if (error != 0)
 		return (error);
+	KASSERT((kn->kn_flags & EV_ONESHOT) != 0 || to > 0,
+	    ("%s: periodic timer has a calculated zero timeout", __func__));
+	KASSERT(to >= 0,
+	    ("%s: timer has a calculated negative timeout", __func__));
 
 	if (atomic_fetchadd_int(&kq_ncallouts, 1) + 1 > kq_calloutmax) {
 		atomic_subtract_int(&kq_ncallouts, 1);
@@ -1496,6 +1501,13 @@ kqueue_register(struct kqueue *kq, struct kevent *kev, struct thread *td,
 		return EINVAL;
 
 	if (kev->flags & EV_ADD) {
+		/* Reject an invalid flag pair early */
+		if (kev->flags & EV_KEEPUDATA) {
+			tkn = NULL;
+			error = EINVAL;
+			goto done;
+		}
+
 		/*
 		 * Prevent waiting with locks.  Non-sleepable
 		 * allocation failures are handled in the loop, only
@@ -1684,7 +1696,8 @@ findkn:
 	kn_enter_flux(kn);
 	KQ_UNLOCK(kq);
 	knl = kn_list_lock(kn);
-	kn->kn_kevent.udata = kev->udata;
+	if ((kev->flags & EV_KEEPUDATA) == 0)
+		kn->kn_kevent.udata = kev->udata;
 	if (!fops->f_isfd && fops->f_touch != NULL) {
 		fops->f_touch(kn, kev, EVENT_REGISTER);
 	} else {

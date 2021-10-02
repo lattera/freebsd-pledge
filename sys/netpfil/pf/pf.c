@@ -94,6 +94,13 @@ __FBSDID("$FreeBSD$");
 #include <netinet/udp.h>
 #include <netinet/udp_var.h>
 
+/* dummynet */
+#include <netinet/ip_dummynet.h>
+#include <netinet/ip_fw.h>
+#include <netpfil/ipfw/dn_heap.h>
+#include <netpfil/ipfw/ip_fw_private.h>
+#include <netpfil/ipfw/ip_dn_private.h>
+
 #ifdef INET6
 #include <netinet/ip6.h>
 #include <netinet/icmp6.h>
@@ -493,6 +500,15 @@ pf_set_protostate(struct pf_kstate *s, int which, u_int8_t newstate)
 		s->dst.state = newstate;
 	if (which == PF_PEER_DST)
 		return;
+	if (s->src.state == newstate)
+		return;
+	if (s->creatorid == V_pf_status.hostid &&
+	    s->key[PF_SK_STACK] != NULL &&
+	    s->key[PF_SK_STACK]->proto == IPPROTO_TCP &&
+	    !(TCPS_HAVEESTABLISHED(s->src.state) ||
+	    s->src.state == TCPS_CLOSED) &&
+	    (TCPS_HAVEESTABLISHED(newstate) || newstate == TCPS_CLOSED))
+		atomic_add_32(&V_pf_status.states_halfopen, -1);
 
 	s->src.state = newstate;
 }
@@ -1924,6 +1940,11 @@ pf_unlink_state(struct pf_kstate *s, u_int flags)
 
 	s->timeout = PFTM_UNLINKED;
 
+	/* Ensure we remove it from the list of halfopen states, if needed. */
+	if (s->key[PF_SK_STACK] != NULL &&
+	    s->key[PF_SK_STACK]->proto == IPPROTO_TCP)
+		pf_set_protostate(s, PF_PEER_BOTH, TCPS_CLOSED);
+
 	PF_HASHROW_UNLOCK(ih);
 
 	pf_detach_state(s);
@@ -3310,6 +3331,12 @@ pf_rule_to_actions(struct pf_krule *r, struct pf_rule_actions *a)
 		a->qid = r->qid;
 	if (r->pqid)
 		a->pqid = r->pqid;
+	if (r->dnpipe)
+		a->dnpipe = r->dnpipe;
+	if (r->dnrpipe)
+		a->dnpipe = r->dnrpipe;
+	if (r->free_flags & PFRULE_DN_IS_PIPE)
+		a->flags |= PFRULE_DN_IS_PIPE;
 }
 
 int
@@ -3982,6 +4009,9 @@ pf_create_state(struct pf_krule *r, struct pf_krule *nr, struct pf_krule *a,
 	s->sync_state = PFSYNC_S_NONE;
 	s->qid = pd->act.qid;
 	s->pqid = pd->act.pqid;
+	s->dnpipe = pd->act.dnpipe;
+	s->dnrpipe = pd->act.dnrpipe;
+	s->state_flags |= pd->act.flags;
 	if (nr != NULL)
 		s->log |= nr->log & PF_LOG_ALL;
 	switch (pd->proto) {
@@ -4019,6 +4049,7 @@ pf_create_state(struct pf_krule *r, struct pf_krule *nr, struct pf_krule *a,
 		pf_set_protostate(s, PF_PEER_SRC, TCPS_SYN_SENT);
 		pf_set_protostate(s, PF_PEER_DST, TCPS_CLOSED);
 		s->timeout = PFTM_TCP_FIRST_PACKET;
+		atomic_add_32(&V_pf_status.states_halfopen, 1);
 		break;
 	case IPPROTO_UDP:
 		pf_set_protostate(s, PF_PEER_SRC, PFUDPS_SINGLE);
@@ -6226,6 +6257,64 @@ pf_check_proto_cksum(struct mbuf *m, int off, int len, u_int8_t p, sa_family_t a
 	return (0);
 }
 
+static bool
+pf_pdesc_to_dnflow(int dir, const struct pf_pdesc *pd,
+    const struct pf_krule *r, const struct pf_kstate *s,
+    struct ip_fw_args *dnflow)
+{
+	int dndir = r->direction;
+
+	if (s && dndir == PF_INOUT)
+		dndir = s->direction;
+
+	memset(dnflow, 0, sizeof(*dnflow));
+
+	if (pd->dport != NULL)
+		dnflow->f_id.dst_port = ntohs(*pd->dport);
+	if (pd->sport != NULL)
+		dnflow->f_id.src_port = ntohs(*pd->sport);
+
+	if (dir == PF_IN)
+		dnflow->flags |= IPFW_ARGS_IN;
+	else
+		dnflow->flags |= IPFW_ARGS_OUT;
+
+	if (dir != dndir && pd->act.dnrpipe) {
+		dnflow->rule.info = pd->act.dnrpipe;
+	}
+	else if (dir == dndir) {
+		dnflow->rule.info = pd->act.dnpipe;
+	}
+	else {
+		return (false);
+	}
+
+	dnflow->rule.info |= IPFW_IS_DUMMYNET;
+	if (r->free_flags & PFRULE_DN_IS_PIPE)
+		dnflow->rule.info |= IPFW_IS_PIPE;
+
+	dnflow->f_id.proto = pd->proto;
+	dnflow->f_id.extra = dnflow->rule.info;
+	switch (pd->af) {
+	case AF_INET:
+		dnflow->f_id.addr_type = 4;
+		dnflow->f_id.src_ip = ntohl(pd->src->v4.s_addr);
+		dnflow->f_id.dst_ip = ntohl(pd->dst->v4.s_addr);
+		break;
+	case AF_INET6:
+		dnflow->flags |= IPFW_ARGS_IP6;
+		dnflow->f_id.addr_type = 6;
+		dnflow->f_id.src_ip6 = pd->src->v6;
+		dnflow->f_id.dst_ip6 = pd->dst->v6;
+		break;
+	default:
+		panic("Invalid AF");
+		break;
+	}
+
+	return (true);
+}
+
 #ifdef INET
 int
 pf_test(int dir, int pflags, struct ifnet *ifp, struct mbuf **m0, struct inpcb *inp)
@@ -6267,10 +6356,11 @@ pf_test(int dir, int pflags, struct ifnet *ifp, struct mbuf **m0, struct inpcb *
 
 	PF_RULES_RLOCK();
 
-	if (__predict_false(ip_divert_ptr != NULL) &&
+	if ((__predict_false(ip_divert_ptr != NULL) || ip_dn_io_ptr != NULL) &&
 	    ((ipfwtag = m_tag_locate(m, MTAG_IPFW_RULE, 0, NULL)) != NULL)) {
 		struct ipfw_rule_ref *rr = (struct ipfw_rule_ref *)(ipfwtag+1);
-		if (rr->info & IPFW_IS_DIVERT && rr->rulenum == 0) {
+		if ((rr->info & IPFW_IS_DIVERT && rr->rulenum == 0) ||
+		    (rr->info & IPFW_IS_DUMMYNET)) {
 			if (pd.pf_mtag == NULL &&
 			    ((pd.pf_mtag = pf_get_mtag(m)) == NULL)) {
 				action = PF_DROP;
@@ -6405,6 +6495,8 @@ pf_test(int dir, int pflags, struct ifnet *ifp, struct mbuf **m0, struct inpcb *
 			log = action != PF_PASS;
 			goto done;
 		}
+		pd.sport = &pd.hdr.udp.uh_sport;
+		pd.dport = &pd.hdr.udp.uh_dport;
 		if (pd.hdr.udp.uh_dport == 0 ||
 		    ntohs(pd.hdr.udp.uh_ulen) > m->m_pkthdr.len - off ||
 		    ntohs(pd.hdr.udp.uh_ulen) < sizeof(struct udphdr)) {
@@ -6523,6 +6615,47 @@ done:
 		}
 	}
 #endif /* ALTQ */
+
+	if (s && (s->dnpipe || s->dnrpipe)) {
+		pd.act.dnpipe = s->dnpipe;
+		pd.act.dnrpipe = s->dnrpipe;
+		pd.act.flags = s->state_flags;
+	} else if (r->dnpipe || r->dnrpipe) {
+		pd.act.dnpipe = r->dnpipe;
+		pd.act.dnrpipe = r->dnrpipe;
+		pd.act.flags = r->free_flags;
+	}
+	if ((pd.act.dnpipe || pd.act.dnrpipe) && !PACKET_LOOPED(&pd)) {
+		if (ip_dn_io_ptr == NULL) {
+			action = PF_DROP;
+			REASON_SET(&reason, PFRES_MEMORY);
+		} else {
+			struct ip_fw_args dnflow;
+
+			if (pd.pf_mtag == NULL &&
+			    ((pd.pf_mtag = pf_get_mtag(m)) == NULL)) {
+				action = PF_DROP;
+				REASON_SET(&reason, PFRES_MEMORY);
+				if (s)
+					PF_STATE_UNLOCK(s);
+				return (action);
+			}
+
+			if (pf_pdesc_to_dnflow(dir, &pd, r, s, &dnflow)) {
+				ip_dn_io_ptr(m0, &dnflow);
+
+				if (*m0 == NULL) {
+					if (s)
+						PF_STATE_UNLOCK(s);
+					return (action);
+				} else {
+					/* This is dummynet fast io processing */
+					m_tag_delete(*m0, m_tag_first(*m0));
+					pd.pf_mtag->flags &= ~PF_PACKET_LOOPED;
+				}
+			}
+		}
+	}
 
 	/*
 	 * connections redirected to loopback should not match sockets
@@ -6684,6 +6817,7 @@ pf_test6(int dir, int pflags, struct ifnet *ifp, struct mbuf **m0, struct inpcb 
 	u_short			 action, reason = 0, log = 0;
 	struct mbuf		*m = *m0, *n = NULL;
 	struct m_tag		*mtag;
+	struct m_tag		*ipfwtag;
 	struct ip6_hdr		*h = NULL;
 	struct pf_krule		*a = NULL, *r = &V_pf_default_rule, *tr, *nr;
 	struct pf_kstate	*s = NULL;
@@ -6719,7 +6853,19 @@ pf_test6(int dir, int pflags, struct ifnet *ifp, struct mbuf **m0, struct inpcb 
 	PF_RULES_RLOCK();
 
 	/* We do IP header normalization and packet reassembly here */
-	if (pf_normalize_ip6(m0, dir, kif, &reason, &pd) != PF_PASS) {
+	if (ip_dn_io_ptr != NULL &&
+	    ((ipfwtag = m_tag_locate(m, MTAG_IPFW_RULE, 0, NULL)) != NULL)) {
+		struct ipfw_rule_ref *rr = (struct ipfw_rule_ref *)(ipfwtag+1);
+		if (rr->info & IPFW_IS_DUMMYNET) {
+			if (pd.pf_mtag == NULL &&
+			    ((pd.pf_mtag = pf_get_mtag(m)) == NULL)) {
+				action = PF_DROP;
+				goto done;
+			}
+			pd.pf_mtag->flags |= PF_PACKET_LOOPED;
+			m_tag_delete(m, ipfwtag);
+		}
+	} else if (pf_normalize_ip6(m0, dir, kif, &reason, &pd) != PF_PASS) {
 		action = PF_DROP;
 		goto done;
 	}
@@ -6828,6 +6974,8 @@ pf_test6(int dir, int pflags, struct ifnet *ifp, struct mbuf **m0, struct inpcb 
 			goto done;
 		}
 		pd.p_len = pd.tot_len - off - (pd.hdr.tcp.th_off << 2);
+		pd.sport = &pd.hdr.tcp.th_sport;
+		pd.dport = &pd.hdr.tcp.th_dport;
 		action = pf_normalize_tcp(dir, kif, m, 0, off, h, &pd);
 		if (action == PF_DROP)
 			goto done;
@@ -6851,6 +6999,8 @@ pf_test6(int dir, int pflags, struct ifnet *ifp, struct mbuf **m0, struct inpcb 
 			log = action != PF_PASS;
 			goto done;
 		}
+		pd.sport = &pd.hdr.udp.uh_sport;
+		pd.dport = &pd.hdr.udp.uh_dport;
 		if (pd.hdr.udp.uh_dport == 0 ||
 		    ntohs(pd.hdr.udp.uh_ulen) > m->m_pkthdr.len - off ||
 		    ntohs(pd.hdr.udp.uh_ulen) < sizeof(struct udphdr)) {
@@ -6973,6 +7123,47 @@ done:
 		}
 	}
 #endif /* ALTQ */
+
+	if (s && (s->dnpipe || s->dnrpipe)) {
+		pd.act.dnpipe = s->dnpipe;
+		pd.act.dnrpipe = s->dnrpipe;
+		pd.act.flags = s->state_flags;
+	} else {
+		pd.act.dnpipe = r->dnpipe;
+		pd.act.dnrpipe = r->dnrpipe;
+		pd.act.flags = r->free_flags;
+	}
+	if ((pd.act.dnpipe || pd.act.dnrpipe) && !PACKET_LOOPED(&pd)) {
+		if (ip_dn_io_ptr == NULL) {
+			action = PF_DROP;
+			REASON_SET(&reason, PFRES_MEMORY);
+		} else {
+			struct ip_fw_args dnflow;
+
+			if (pd.pf_mtag == NULL &&
+			    ((pd.pf_mtag = pf_get_mtag(m)) == NULL)) {
+				action = PF_DROP;
+				REASON_SET(&reason, PFRES_MEMORY);
+				if (s)
+					PF_STATE_UNLOCK(s);
+				return (action);
+			}
+
+			if (pf_pdesc_to_dnflow(dir, &pd, r, s, &dnflow)) {
+				ip_dn_io_ptr(m0, &dnflow);
+
+				if (*m0 == NULL) {
+					if (s)
+						PF_STATE_UNLOCK(s);
+					return (action);
+				} else {
+					/* This is dummynet fast io processing */
+					m_tag_delete(*m0, m_tag_first(*m0));
+					pd.pf_mtag->flags &= ~PF_PACKET_LOOPED;
+				}
+			}
+		}
+	}
 
 	if (dir == PF_IN && action == PF_PASS && (pd.proto == IPPROTO_TCP ||
 	    pd.proto == IPPROTO_UDP) && s != NULL && s->nat_rule.ptr != NULL &&

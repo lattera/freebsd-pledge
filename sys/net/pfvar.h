@@ -563,6 +563,9 @@ struct pf_kpool {
 struct pf_rule_actions {
 	uint16_t	 qid;
 	uint16_t	 pqid;
+	uint16_t	 dnpipe;
+	uint16_t	 dnrpipe;	/* Reverse direction pipe */
+	uint32_t	 flags;
 };
 
 union pf_krule_ptr {
@@ -608,6 +611,9 @@ struct pf_krule {
 	}			 max_src_conn_rate;
 	u_int16_t		 qid;
 	u_int16_t		 pqid;
+	u_int16_t		 dnpipe;
+	u_int16_t		 dnrpipe;
+	u_int32_t		 free_flags;
 	u_int32_t		 nr;
 	u_int32_t		 prob;
 	uid_t			 cuid;
@@ -755,6 +761,8 @@ struct pf_state_cmp {
 /*  was	PFSTATE_PFLOW		0x04 */
 #define	PFSTATE_NOSYNC		0x08
 #define	PFSTATE_ACK		0x10
+#define	PFRULE_DN_IS_PIPE	0x40
+#define	PFRULE_DN_IS_QUEUE	0x80
 #define	PFSTATE_SETPRIO		0x0200
 #define	PFSTATE_SETMASK   (PFSTATE_SETPRIO)
 
@@ -858,6 +866,8 @@ struct pf_kstate {
 	u_int32_t		 pfsync_time;
 	u_int16_t                qid;
 	u_int16_t                pqid;
+	u_int16_t		 dnpipe;
+	u_int16_t		 dnrpipe;
 	u_int16_t		 tag;
 	u_int8_t		 log;
 };
@@ -1372,8 +1382,12 @@ struct pf_pdesc {
 enum pf_syncookies_mode {
 	PF_SYNCOOKIES_NEVER = 0,
 	PF_SYNCOOKIES_ALWAYS = 1,
-	PF_SYNCOOKIES_MODE_MAX = PF_SYNCOOKIES_ALWAYS
+	PF_SYNCOOKIES_ADAPTIVE = 2,
+	PF_SYNCOOKIES_MODE_MAX = PF_SYNCOOKIES_ADAPTIVE
 };
+
+#define	PF_SYNCOOKIES_HIWATPCT	25
+#define	PF_SYNCOOKIES_LOWATPCT	(PF_SYNCOOKIES_HIWATPCT / 2)
 
 #ifdef _KERNEL
 struct pf_kstatus {
@@ -1392,6 +1406,8 @@ struct pf_kstatus {
 	bool		keep_counters;
 	enum pf_syncookies_mode	syncookies_mode;
 	bool		syncookies_active;
+	uint64_t	syncookies_inflight[2];
+	uint32_t	states_halfopen;
 };
 #endif
 

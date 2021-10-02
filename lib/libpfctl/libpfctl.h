@@ -114,6 +114,9 @@ struct pfctl_rule {
 	}			 max_src_conn_rate;
 	u_int32_t		 qid;
 	u_int32_t		 pqid;
+	u_int16_t		 dnpipe;
+	u_int16_t		 dnrpipe;
+	u_int32_t		 free_flags;
 	u_int32_t		 nr;
 	u_int32_t		 prob;
 	uid_t			 cuid;
@@ -273,11 +276,15 @@ struct pfctl_states {
 
 enum pfctl_syncookies_mode {
 	PFCTL_SYNCOOKIES_NEVER,
-	PFCTL_SYNCOOKIES_ALWAYS
+	PFCTL_SYNCOOKIES_ALWAYS,
+	PFCTL_SYNCOOKIES_ADAPTIVE
 };
+extern const char* PFCTL_SYNCOOKIES_MODE_NAMES[];
 
 struct pfctl_syncookies {
 	enum pfctl_syncookies_mode	mode;
+	uint8_t				highwater;	/* Percent */
+	uint8_t				lowwater;	/* Percent */
 };
 
 struct pfctl_status* pfctl_get_status(int dev);
