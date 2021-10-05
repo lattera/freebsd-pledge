@@ -718,7 +718,7 @@ curtain_dup_compact(const struct curtain *src)
 	return (dst);
 }
 
-static const sysfilset_t abilities_sysfils[] = {
+static const sysfilset_t abilities_sysfils[CURTAINABL_COUNT] = {
 	[CURTAINABL_UNCAPSICUM] = SYSFIL_UNCAPSICUM,
 	[CURTAINABL_DEFAULT] = SYSFIL_DEFAULT,
 	[CURTAINABL_STDIO] = SYSFIL_STDIO,
@@ -1495,8 +1495,7 @@ curtain_cred_action(const struct ucred *cr, enum curtain_type type, union curtai
 		return (CURTAINACT_KILL);
 	} else {
 		if (type == CURTAINTYP_ABILITY)
-			if (key.ability < nitems(abilities_sysfils) &&
-			    sysfil_match_cred(cr, abilities_sysfils[key.ability]))
+			if (sysfil_match_cred(cr, abilities_sysfils[key.ability]))
 				return (CURTAINACT_ALLOW);
 		return (CURTAINACT_DENY);
 	}
@@ -2082,6 +2081,8 @@ curtain_vnode_check_setflags(struct ucred *cr,
 	if ((error = unveil_check_uperms(get_vp_uperms(vp), UPERM_SETATTR)))
 		return (error);
 	if ((error = ability_check_cred(cr, CURTAINABL_FATTR)))
+		return (error);
+	if ((error = ability_check_cred(cr, CURTAINABL_CHFLAGS)))
 		return (error);
 	return (0);
 }

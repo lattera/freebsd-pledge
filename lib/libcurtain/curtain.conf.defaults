@@ -75,12 +75,16 @@
 @ability chroot
 @ability chown
 @ability id any_id
-@ability! sysflags
 # May allow privilege escalations if untrusted processes have access to paths
 # writable by the sandboxed process.
 @ability! chmod_special
+@push _fflags
 @push _pty
 @push _cryptodev
+
+[_fflags]
+@ability chflags
+@ability! sysflags
 
 [_rtld]
 /etc/libmap.conf			: r
