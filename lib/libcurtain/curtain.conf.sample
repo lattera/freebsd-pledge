@@ -133,10 +133,24 @@ ${ZDOTDIR:-~/}/.zlogout			: r
 [git]
 ~/.gitconfig				: r
 
+[ping, ping6]
+@ability id
+@priv net_raw netinet_raw
+@socklvl icmpv6
+
+[traceroute, traceroute6]
+@ability id
+@priv net_raw netinet_raw
+@sysctl net.inet.ip.ttl
+@sysctl net.inet6.ip6.hlim
+
+[mtr]
+@ability id
+@priv net_raw netinet_raw
+
 [tcpdump]
 @ability id
 @push _bpf
-
 
 [wireshark]
 @push _bpf
