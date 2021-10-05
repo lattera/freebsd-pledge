@@ -41,6 +41,7 @@ const unsigned long curtain_ioctls_tty_basic[] = {
 	TIOCFLUSH,
 	TIOCGWINSZ,
 	TIOCSWINSZ,
+	FIODGNAME,
 	-1
 };
 
@@ -48,7 +49,6 @@ const unsigned long curtain_ioctls_tty_pts[] = {
 	TIOCPKT,
 	TIOCGPTN,
 	TIOCPTMASTER,
-	FIODGNAME,
 	-1
 };
 
