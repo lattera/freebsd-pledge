@@ -310,6 +310,9 @@ ${ZDOTDIR:-~/}/.zlogout			: r
 /usr/obj/usr/src/			: rxw
 
 
+# XXX It may not be enough just to run the daemons under curtain, the suid
+# binaries and periodic scripts also should be run under curtain or disabled.
+
 [sendmail : _daemon]
 @push _login
 @push _syslog
@@ -322,7 +325,20 @@ ${ZDOTDIR:-~/}/.zlogout			: r
 /var/mail/ : rw
 #~user/.forward
 
-[ftpd]
+[exim : _daemon]
+@push _login
+@push _syslog
+@ability id any_id chown
+/etc/aliases
+/usr/local/etc/exim/
+/var/run/ : b
+/var/run/exim.pid : rw
+/var/spool/exim/ : rwu
+/var/log/exim/ : rw
+/var/mail/ : rw
+#~user/.forward
+
+[ftpd : _daemon]
 @push _login
 @push _syslog
 @ability id any_id chown
@@ -337,7 +353,7 @@ ${ZDOTDIR:-~/}/.zlogout			: r
 ~ftp/
 #~user/ : rw
 
-[samba]
+[samba : _daemon]
 # NOTE: Needs `curtain -f`, will access the TMPDIR under different UIDs.
 @push _login
 @push _syslog
