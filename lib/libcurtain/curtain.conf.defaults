@@ -196,8 +196,6 @@ ${TMPDIR:-/tmp}/krb5cc_%u		:
 /var/db/services.db			: r
 /etc/ssl/				: r
 /etc/ssl/private/			:
-/usr/local/etc/ssl/			: r
-/usr/local/etc/ssl/private/		:
 @ability net
 @sockaf inet inet6
 # XXX Socket options should be more restricted.
@@ -207,6 +205,9 @@ ${TMPDIR:-/tmp}/krb5cc_%u		:
 @sysctl net.routetable
 @ioctls net_basic
 @ioctls net_route
+[_network _localbase]
+/usr/local/etc/ssl/			: r
+/usr/local/etc/ssl/private/		:
 
 [_syslog]
 # XXX Should only allow to connect, not bind/unlink.
