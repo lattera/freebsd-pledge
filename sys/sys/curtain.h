@@ -13,6 +13,7 @@ enum curtainreq_type {
 	CURTAINTYP_PRIV = 8,
 	CURTAINTYP_SYSCTL = 9,
 	CURTAINTYP_ABILITY = 10,
+#define	CURTAINTYP_COUNT 11 /* UPDATE ME!!! */
 };
 
 enum curtainreq_level {
@@ -23,6 +24,7 @@ enum curtainreq_level {
 	CURTAINLVL_TRAP = 4,
 	CURTAINLVL_KILL = 5,
 #define	CURTAINLVL_COUNT 6
+#define	CURTAINLVL_LEAST CURTAINLVL_KILL
 };
 
 struct curtainreq {
@@ -49,6 +51,15 @@ int curtainctl(int flags, size_t reqc, struct curtainreq *reqv);
 #define	CURTAINREQ_ON_SELF	(1 << 16)
 #define	CURTAINREQ_ON_EXEC	(1 << 17)
 #define	CURTAINREQ_ON_BOTH	(CURTAINREQ_ON_SELF | CURTAINREQ_ON_EXEC)
+
+static const enum curtain_ability curtain_type_fallback[CURTAINTYP_COUNT] = {
+	[CURTAINTYP_IOCTL] = CURTAINABL_ANY_IOCTL,
+	[CURTAINTYP_SOCKAF] = CURTAINABL_ANY_SOCKAF,
+	[CURTAINTYP_SOCKLVL] = CURTAINABL_ANY_SOCKOPT,
+	[CURTAINTYP_SOCKOPT] = CURTAINABL_ANY_SOCKOPT,
+	[CURTAINTYP_PRIV] = CURTAINABL_ANY_PRIV,
+	[CURTAINTYP_SYSCTL] = CURTAINABL_ANY_SYSCTL,
+};
 
 #ifdef _KERNEL
 

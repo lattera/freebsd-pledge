@@ -769,29 +769,6 @@ static const sysfilset_t abilities_sysfils[CURTAINABL_COUNT] = {
 	[CURTAINABL_KMOD] = SYSFIL_KMOD,
 };
 
-static enum curtain_ability
-ability_fallback(enum curtainreq_type type)
-{
-	switch (type) {
-	CURTAIN_KEY_INVALID_TYPE_CASES
-		break;
-	case CURTAINTYP_IOCTL:
-		return (CURTAINABL_ANY_IOCTL);
-	case CURTAINTYP_SOCKAF:
-		return (CURTAINABL_ANY_SOCKAF);
-	case CURTAINTYP_SOCKLVL:
-		return (CURTAINABL_ANY_SOCKOPT);
-	case CURTAINTYP_SOCKOPT:
-		return (CURTAINABL_ANY_SOCKOPT);
-	case CURTAINTYP_PRIV:
-		return (CURTAINABL_ANY_PRIV);
-	case CURTAINTYP_SYSCTL:
-		return (CURTAINABL_ANY_SYSCTL);
-	}
-	MPASS(0);
-	return (CURTAINABL_DEFAULT);
-}
-
 typedef union curtain_key ctkey;
 
 static bool
@@ -949,7 +926,7 @@ curtain_lookup_fallback_mode(const struct curtain *ct,
 	if (type == CURTAINTYP_SOCKOPT)
 		item = curtain_lookup(ct, CURTAINTYP_SOCKLVL,
 		    (ctkey){ .socklvl = key.sockopt.level });
-	return (item ? item->mode : ct->ct_abilities[ability_fallback(type)]);
+	return (item ? item->mode : ct->ct_abilities[curtain_type_fallback[type]]);
 }
 
 static struct curtain_mode
@@ -2482,7 +2459,7 @@ curtain_system_check_sysctl(struct ucred *cr,
 			if (item && item->mode.on_self == CURTAINACT_ALLOW)
 				return (0);
 		} while ((oidp = SYSCTL_PARENT(oidp))); /* XXX locking */
-	act = curtain_cred_ability_action(cr, ability_fallback(CURTAINTYP_SYSCTL));
+	act = curtain_cred_ability_action(cr, curtain_type_fallback[CURTAINTYP_SYSCTL]);
 	if (act == CURTAINACT_ALLOW)
 		return (0);
 	act = CURTAINACT_DENY; /* XXX */
