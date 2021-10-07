@@ -111,6 +111,32 @@ static int __read_mostly curtain_slot;
 #define	CRED_SLOT_BR(cr) SLOT_BR((cr)->cr_label)
 
 
+struct get_sysctl_serial_ctx {
+	uint64_t *serial;
+	int *name;
+	unsigned namelen;
+	int error;
+};
+
+static void
+get_sysctl_serial_cb(void *ptr)
+{
+	struct get_sysctl_serial_ctx *ctx = ptr;
+	struct sysctl_oid *oidp;
+	ctx->error = sysctl_find_oid(ctx->name, ctx->namelen, &oidp, NULL, NULL);
+	if (!ctx->error)
+		*ctx->serial = oidp->oid_serial;
+}
+
+static uint64_t
+get_sysctl_serial(int *name, unsigned name_len, uint64_t *serial)
+{
+	struct get_sysctl_serial_ctx ctx = { serial, name, name_len };
+	sysctl_call_with_rlock(get_sysctl_serial_cb, &ctx);
+	return (ctx.error);
+}
+
+
 static inline void
 mode_set(struct curtain_mode *mode, enum curtain_action act)
 {
@@ -1188,19 +1214,19 @@ curtain_fill(struct curtain *ct, size_t reqc, const struct curtainreq *reqv)
 			int *namep = req->data;
 			size_t namec = req->size / sizeof *namep, namei = 0;
 			while (namei < namec) {
-				struct sysctl_oid *oidp;
+				uint64_t serial;
 				if (namep[namei] >= 0) {
 					namei++;
 					continue;
 				}
-				error = sysctl_lookup(namep, namei, &oidp, NULL, NULL);
+				error = get_sysctl_serial(namep, namei, &serial);
 				if (error && error != ENOENT)
 					goto fail;
 				namep += namei + 1;
 				namec -= namei + 1;
 				namei = 0;
 				curtain_fill_item(ct, req,
-				    (ctkey){ .sysctl = { .serial = oidp->oid_serial } });
+				    (ctkey){ .sysctl = { .serial = serial } });
 			}
 			break;
 		}
@@ -2451,18 +2477,23 @@ curtain_system_check_sysctl(struct ucred *cr,
 	enum curtain_action act;
 	if (oidp->oid_kind & (CTLFLAG_RESTRICT|CTLFLAG_CAPRW))
 		return (0);
-	if (CRED_SLOT(cr))
+	if (CRED_SLOT(cr)) {
+		struct sysctl_oid *p = oidp;
 		do {
 			const struct curtain_item *item;
 			item = curtain_lookup(CRED_SLOT(cr), CURTAINTYP_SYSCTL,
-			    (ctkey){ .sysctl = { .serial = oidp->oid_serial } });
+			    (ctkey){ .sysctl = { .serial = p->oid_serial } });
 			if (item && item->mode.on_self == CURTAINACT_ALLOW)
 				return (0);
-		} while ((oidp = SYSCTL_PARENT(oidp))); /* XXX locking */
+		} while ((p = SYSCTL_PARENT(p)));
+	}
 	act = curtain_cred_ability_action(cr, curtain_type_fallback[CURTAINTYP_SYSCTL]);
 	if (act == CURTAINACT_ALLOW)
 		return (0);
 	act = CURTAINACT_DENY; /* XXX */
+#if 0
+	CURTAIN_CRED_LOG(cr, act, "sysctl %ju", (uintmax_t)oidp->oid_serial); /* XXX */
+#endif
 	return (act2err[act]);
 }
 

@@ -2208,17 +2208,13 @@ sysctl_find_oid(int *name, u_int namelen, struct sysctl_oid **noid,
 	return (ENOENT);
 }
 
-int
-sysctl_lookup(int *name, u_int namelen, struct sysctl_oid **noid,
-    int *nindx, struct sysctl_req *req)
+void
+sysctl_call_with_rlock(void (*cb)(void *ctx), void *ctx)
 {
 	struct rm_priotracker tracker;
-	int error;
 	SYSCTL_RLOCK(&tracker);
-	error = sysctl_find_oid(name, namelen, noid, nindx, req);
+	cb(ctx);
 	SYSCTL_RUNLOCK(&tracker);
-	/* XXX *noid may become invalid after unlocking */
-	return (error);
 }
 
 /*

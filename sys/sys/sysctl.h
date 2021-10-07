@@ -1174,8 +1174,7 @@ int	userland_sysctl(struct thread *td, int *name, u_int namelen, void *old,
 	    size_t *retval, int flags);
 int	sysctl_find_oid(int *name, u_int namelen, struct sysctl_oid **noid,
 	    int *nindx, struct sysctl_req *req);
-int	sysctl_lookup(int *name, u_int namelen, struct sysctl_oid **noid,
-	    int *nindx, struct sysctl_req *req);
+void	sysctl_call_with_rlock(void (*cb)(void *ctx), void *ctx);
 void	sysctl_wlock(void);
 void	sysctl_wunlock(void);
 int	sysctl_wire_old_buffer(struct sysctl_req *req, size_t len);
