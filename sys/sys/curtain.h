@@ -13,7 +13,7 @@ enum curtainreq_type {
 	CURTAINTYP_PRIV = 8,
 	CURTAINTYP_SYSCTL = 9,
 	CURTAINTYP_ABILITY = 10,
-#define	CURTAINTYP_COUNT 11 /* UPDATE ME!!! */
+#define	CURTAINTYP_LAST 10 /* UPDATE ME!!! */
 };
 
 enum curtainreq_level {
@@ -52,7 +52,7 @@ int curtainctl(int flags, size_t reqc, struct curtainreq *reqv);
 #define	CURTAINREQ_ON_EXEC	(1 << 17)
 #define	CURTAINREQ_ON_BOTH	(CURTAINREQ_ON_SELF | CURTAINREQ_ON_EXEC)
 
-static const enum curtain_ability curtain_type_fallback[CURTAINTYP_COUNT] = {
+static const enum curtain_ability curtain_type_fallback[CURTAINTYP_LAST + 1] = {
 	[CURTAINTYP_IOCTL] = CURTAINABL_ANY_IOCTL,
 	[CURTAINTYP_SOCKAF] = CURTAINABL_ANY_SOCKAF,
 	[CURTAINTYP_SOCKLVL] = CURTAINABL_ANY_SOCKOPT,

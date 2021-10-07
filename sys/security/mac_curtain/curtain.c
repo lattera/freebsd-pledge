@@ -191,7 +191,7 @@ barrier_init(struct barrier *br)
 		.br_head = { .cth_barrier = br },
 		.br_ref = 1,
 		.br_parent = NULL,
-		.br_children = SLIST_HEAD_INITIALIZER(br.br_children),
+		.br_children = LIST_HEAD_INITIALIZER(br.br_children),
 		.br_nchildren = 0,
 	};
 	br->br_serial = atomic_fetchadd_64(&barrier_serial, 1);
