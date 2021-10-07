@@ -964,6 +964,17 @@ curtain_lookup_mode(const struct curtain *ct,
 	return (item ? item->mode : curtain_lookup_fallback_mode(ct, type, key));
 }
 
+static struct curtain_item *
+curtain_spread(struct curtain *ct, enum curtainreq_type type, union curtain_key key)
+{
+	struct curtain_item *item;
+	bool inserted;
+	item = curtain_search(ct, type, key, &inserted);
+	if (item && inserted)
+		item->mode = curtain_lookup_fallback_mode(ct, type, key);
+	return (item);
+}
+
 static void
 curtain_mask(struct curtain *dst, const struct curtain *src)
 {
@@ -971,14 +982,10 @@ curtain_mask(struct curtain *dst, const struct curtain *src)
 	const struct curtain_item *si;
 	curtain_invariants(src);
 	KASSERT(dst->ct_ref == 1, ("modifying shared curtain"));
-	for (si = src->ct_slots; si < &src->ct_slots[src->ct_nslots]; si++) {
-		bool inserted;
-		if (si->type != 0 &&
-		    (di = curtain_search(dst, si->type, si->key, &inserted)) &&
-		    inserted)
-			/* Insert missing items and mask them in the next loop. */
-			di->mode = curtain_lookup_fallback_mode(dst, si->type, si->key);
-	}
+	for (si = src->ct_slots; si < &src->ct_slots[src->ct_nslots]; si++)
+		/* Insert missing items and mask them in the next loop. */
+		if (si->type != 0)
+			curtain_spread(dst, si->type, si->key);
 	for (di = dst->ct_slots; di < &dst->ct_slots[dst->ct_nslots]; di++)
 		if (di->type != 0)
 			mode_mask(&di->mode, curtain_lookup_mode(src, di->type, di->key));
