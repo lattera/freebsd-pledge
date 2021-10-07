@@ -702,7 +702,7 @@ curtain_search(struct curtain *ct, enum curtainreq_type type, union curtain_key 
 		curtain_hash_init(ct, item);
 		if (prev)
 			curtain_hash_link(ct, prev, item);
-		mode_set(&item->mode, CURTAINACT_ALLOW);
+		mode_set(&item->mode, CURTAINACT_KILL);
 	} else if (inserted)
 		*inserted = false;
 	return (item);
@@ -1088,6 +1088,7 @@ fill_mode(struct curtain_mode *mode, const struct curtainreq *req)
 		mode->on_self = act;
 	if (req->flags & CURTAINREQ_ON_EXEC)
 		mode->on_exec = act;
+	mode->on_self_max = mode->on_exec_max = CURTAINACT_ALLOW;
 }
 
 static inline void
@@ -1122,7 +1123,7 @@ static struct curtain_item *
 curtain_fill_item(struct curtain *ct, const struct curtainreq *req, union curtain_key key)
 {
 	struct curtain_item *item;
-	item = curtain_search(ct, req->type, key, NULL);
+	item = curtain_spread(ct, req->type, key);
 	if (item)
 		fill_mode(&item->mode, req);
 	return (item);
@@ -1135,21 +1136,50 @@ curtain_fill(struct curtain *ct, size_t reqc, const struct curtainreq *reqv)
 	const struct curtainreq *req;
 	enum curtainreq_level def_on_self, def_on_exec;
 	int error;
+	unsigned short group_counts[CURTAINTYP_LAST + 1] = { 0 },
+	               group_jumps[CURTAINTYP_LAST + 1],
+	               group_fills[CURTAINTYP_LAST + 1],
+	               group_entries[reqc], /* CURTAINCTL_MAX_REQS */
+	               group_index;
 
 	SDT_PROBE2(curtain,, curtain_fill, begin, reqc, reqv);
 
-	def_on_self = def_on_exec = CURTAINLVL_DENY;
+	/* Validate and group requests by type. */
 	for (req = reqv; req < &reqv[reqc]; req++) {
-		if (!(req->level >= 0 && req->level < CURTAINLVL_COUNT)) {
+		if (!(req->level >= 0 && req->level < CURTAINLVL_COUNT) ||
+		    !(req->type >= CURTAINTYP_DEFAULT && req->type <= CURTAINTYP_LAST)) {
 			error = EINVAL;
 			goto fail;
 		}
-		if (req->type == CURTAINTYP_DEFAULT) {
-			if (req->flags & CURTAINREQ_ON_SELF)
-				def_on_self = req->level;
-			if (req->flags & CURTAINREQ_ON_EXEC)
-				def_on_exec = req->level;
-		}
+		group_counts[req->type]++;
+	}
+	group_jumps[0] = group_fills[0] = 0;
+	for (int i = 0; i < CURTAINTYP_LAST; i++)
+		group_jumps[i + 1] = group_fills[i + 1] = group_counts[i] + group_jumps[i];
+	for (size_t reqi = 0; reqi < reqc; reqi++)
+		group_entries[group_fills[reqv[reqi].type]++] = reqi;
+#ifdef INVARIANTS
+	for (int i = 0; i <= CURTAINTYP_LAST; i++)
+		MPASS(group_fills[i] == group_jumps[i] + group_counts[i]);
+#endif
+
+	/*
+	 * Requests for items of a certain type must be processed before
+	 * requests for items of types that can inherit from them.
+	 */
+
+#define	GROUP_FOREACH(t, req) \
+	for (group_index = group_jumps[t]; \
+	    group_index < group_fills[t] && (req = &reqv[group_entries[group_index]]); \
+	    group_index++)
+
+	def_on_self = def_on_exec = CURTAINLVL_DENY;
+	GROUP_FOREACH(CURTAINTYP_DEFAULT, req) {
+		MPASS(req->type == CURTAINTYP_DEFAULT);
+		if (req->flags & CURTAINREQ_ON_SELF)
+			def_on_self = req->level;
+		if (req->flags & CURTAINREQ_ON_EXEC)
+			def_on_exec = req->level;
 	}
 	for (enum curtain_ability abl = 0; abl <= CURTAINABL_LAST; abl++) {
 		ct->ct_abilities[abl].on_self = lvl2act[def_on_self];
@@ -1161,115 +1191,111 @@ curtain_fill(struct curtain *ct, size_t reqc, const struct curtainreq *reqv)
 		br->br_barriers[i].on_exec = lvl2bar[def_on_exec];
 	}
 
-	for (req = reqv; req < &reqv[reqc]; req++) {
-		switch (req->type) {
-		case CURTAINTYP_DEFAULT:
-			break; /* handled earlier */
-		case CURTAINTYP_ABILITY: {
-			enum curtain_ability *ablp = req->data;
-			size_t ablc = req->size / sizeof *ablp;
-			while (ablc--) {
-				enum curtain_ability abl = *ablp++;
-				if (!CURTAINABL_USER_VALID(abl)) {
-					error = EINVAL;
-					goto fail;
-				}
-				curtain_fill_ability(ct, req, abl);
+	GROUP_FOREACH(CURTAINTYP_ABILITY, req) {
+		MPASS(req->type == CURTAINTYP_ABILITY);
+		enum curtain_ability *ablp = req->data;
+		size_t ablc = req->size / sizeof *ablp;
+		while (ablc--) {
+			enum curtain_ability abl = *ablp++;
+			if (!CURTAINABL_USER_VALID(abl)) {
+				error = EINVAL;
+				goto fail;
 			}
-			break;
-		}
-		case CURTAINTYP_IOCTL: {
-			unsigned long *p = req->data;
-			size_t c = req->size / sizeof *p;
-			while (c--)
-				curtain_fill_item(ct, req, (ctkey){ .ioctl = *p++ });
-			break;
-		}
-		case CURTAINTYP_SOCKAF: {
-			int *p = req->data;
-			size_t c = req->size / sizeof *p;
-			while (c--)
-				curtain_fill_item(ct, req, (ctkey){ .sockaf = *p++ });
-			break;
-		}
-		case CURTAINTYP_SOCKLVL: {
-			int *p = req->data;
-			size_t c = req->size / sizeof *p;
-			while (c--)
-				curtain_fill_item(ct, req, (ctkey){ .socklvl = *p++ });
-			break;
-		}
-		case CURTAINTYP_SOCKOPT: {
-			int (*p)[2] = req->data;
-			size_t c = req->size / sizeof *p;
-			while (c--) {
-				curtain_fill_item(ct, req,
-				    (ctkey){ .sockopt = { (*p)[0], (*p)[1] } });
-				p++;
-			}
-			break;
-		}
-		case CURTAINTYP_PRIV: {
-			int *p = req->data;
-			size_t c = req->size / sizeof *p;
-			while (c--)
-				curtain_fill_item(ct, req,
-				    (ctkey){ .priv = *p++ });
-			break;
-		}
-		case CURTAINTYP_SYSCTL: {
-			int *namep = req->data;
-			size_t namec = req->size / sizeof *namep, namei = 0;
-			while (namei < namec) {
-				uint64_t serial;
-				if (namep[namei] >= 0) {
-					namei++;
-					continue;
-				}
-				error = get_sysctl_serial(namep, namei, &serial);
-				if (error && error != ENOENT)
-					goto fail;
-				namep += namei + 1;
-				namec -= namei + 1;
-				namei = 0;
-				curtain_fill_item(ct, req,
-				    (ctkey){ .sysctl = { .serial = serial } });
-			}
-			break;
-		}
-#ifdef UNVEIL_SUPPORT
-		case CURTAINTYP_UNVEIL: {
-			struct curtainent_unveil *entp = req->data;
-			size_t entc = req->size / sizeof *entp;
-			while (entc--) {
-				if (req->flags & CURTAINREQ_ON_SELF) {
-					error = unveil_stash_update(&ct->ct_ustash,
-					    entp->index, UNVEIL_ON_SELF, entp->uperms);
-					if (error)
-						goto fail;
-				}
-				if (req->flags & CURTAINREQ_ON_EXEC) {
-					error = unveil_stash_update(&ct->ct_ustash,
-					    entp->index, UNVEIL_ON_EXEC, entp->uperms);
-					if (error)
-						goto fail;
-				}
-				entp++;
-			}
-			break;
-		}
-#endif
-		default:
-			error = EINVAL;
-			goto fail;
-		}
-		if (ct->ct_overflowed) {
-			error = E2BIG;
-			goto fail;
+			curtain_fill_ability(ct, req, abl);
 		}
 	}
 
-	if (ct->ct_nitems > CURTAINCTL_MAX_ITEMS) {
+	GROUP_FOREACH(CURTAINTYP_IOCTL, req) {
+		MPASS(req->type == CURTAINTYP_IOCTL);
+		unsigned long *p = req->data;
+		size_t c = req->size / sizeof *p;
+		while (c--)
+			curtain_fill_item(ct, req, (ctkey){ .ioctl = *p++ });
+	}
+
+	GROUP_FOREACH(CURTAINTYP_SOCKAF, req) {
+		MPASS(req->type == CURTAINTYP_SOCKAF);
+		int *p = req->data;
+		size_t c = req->size / sizeof *p;
+		while (c--)
+			curtain_fill_item(ct, req, (ctkey){ .sockaf = *p++ });
+	}
+
+	GROUP_FOREACH(CURTAINTYP_SOCKLVL, req) {
+		MPASS(req->type == CURTAINTYP_SOCKLVL);
+		int *p = req->data;
+		size_t c = req->size / sizeof *p;
+		while (c--)
+			curtain_fill_item(ct, req, (ctkey){ .socklvl = *p++ });
+	}
+
+	GROUP_FOREACH(CURTAINTYP_SOCKOPT, req) {
+		MPASS(req->type == CURTAINTYP_SOCKOPT);
+		int (*p)[2] = req->data;
+		size_t c = req->size / sizeof *p;
+		while (c--) {
+			curtain_fill_item(ct, req,
+			    (ctkey){ .sockopt = { (*p)[0], (*p)[1] } });
+			p++;
+		}
+	}
+
+	GROUP_FOREACH(CURTAINTYP_PRIV, req) {
+		MPASS(req->type == CURTAINTYP_PRIV);
+		int *p = req->data;
+		size_t c = req->size / sizeof *p;
+		while (c--)
+			curtain_fill_item(ct, req,
+			    (ctkey){ .priv = *p++ });
+	}
+
+	GROUP_FOREACH(CURTAINTYP_SYSCTL, req) {
+		MPASS(req->type == CURTAINTYP_SYSCTL);
+		int *namep = req->data;
+		size_t namec = req->size / sizeof *namep, namei = 0;
+		while (namei < namec) {
+			uint64_t serial;
+			if (namep[namei] >= 0) {
+				namei++;
+				continue;
+			}
+			error = get_sysctl_serial(namep, namei, &serial);
+			if (error && error != ENOENT)
+				goto fail;
+			namep += namei + 1;
+			namec -= namei + 1;
+			namei = 0;
+			curtain_fill_item(ct, req,
+			    (ctkey){ .sysctl = { .serial = serial } });
+		}
+	}
+
+#ifdef UNVEIL_SUPPORT
+	GROUP_FOREACH(CURTAINTYP_UNVEIL, req) {
+		MPASS(req->type == CURTAINTYP_UNVEIL);
+		struct curtainent_unveil *entp = req->data;
+		size_t entc = req->size / sizeof *entp;
+		while (entc--) {
+			if (req->flags & CURTAINREQ_ON_SELF) {
+				error = unveil_stash_update(&ct->ct_ustash,
+				    entp->index, UNVEIL_ON_SELF, entp->uperms);
+				if (error)
+					goto fail;
+			}
+			if (req->flags & CURTAINREQ_ON_EXEC) {
+				error = unveil_stash_update(&ct->ct_ustash,
+				    entp->index, UNVEIL_ON_EXEC, entp->uperms);
+				if (error)
+					goto fail;
+			}
+			entp++;
+		}
+	}
+#endif
+
+#undef	GROUP_FOREACH
+
+	if (ct->ct_overflowed || ct->ct_nitems > CURTAINCTL_MAX_ITEMS) {
 		error = E2BIG;
 		goto fail;
 	}
