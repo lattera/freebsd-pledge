@@ -23,14 +23,14 @@ struct curtain_slot {
 struct default_mode {
 	struct curtain_slot *slot;
 	struct default_mode *next;
-	enum curtain_level level;
+	enum curtainreq_level level;
 };
 
 struct simple_mode {
 	struct curtain_slot *slot;
 	struct simple_node *node;
 	struct simple_mode *node_next;
-	enum curtain_level level;
+	enum curtainreq_level level;
 };
 
 struct simple_node {
@@ -122,7 +122,7 @@ curtain_state(struct curtain_slot *slot, enum curtain_on on, enum curtain_state 
 
 enum { CURTAIN_LEVEL_COUNT = CURTAINLVL_COUNT };
 
-static enum curtain_level
+static enum curtainreq_level
 flags2level(int flags)
 {
 	switch (flags & CURTAIN_LEVEL_MASK) {
@@ -166,7 +166,7 @@ curtain_default(struct curtain_slot *slot, unsigned flags)
 }
 
 static void
-fill_defaults(enum curtain_level level_on[CURTAIN_ON_COUNT], enum curtain_state min_state)
+fill_defaults(enum curtainreq_level level_on[CURTAIN_ON_COUNT], enum curtain_state min_state)
 {
 	struct default_mode *mode;
 	for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++) {
@@ -179,7 +179,7 @@ fill_defaults(enum curtain_level level_on[CURTAIN_ON_COUNT], enum curtain_state 
 
 
 struct simple_type {
-	enum curtain_type type;
+	enum curtainreq_type type;
 	size_t ent_size;
 	size_t count;
 	struct simple_node *list;
@@ -260,7 +260,7 @@ fill_simple(struct simple_type *type,
 	struct simple_mode *mode;
 	for (node = type->list; node; node = node->next)
 		for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++) {
-			enum curtain_level lvl;
+			enum curtainreq_level lvl;
 			bool any = false;
 			for (mode = node->modes; mode; mode = mode->node_next)
 				if (mode->slot->state_on[on] >= min_state) {
@@ -852,7 +852,7 @@ static int
 curtain_submit_1(int flags, bool neutral_on[CURTAIN_ON_COUNT], enum curtain_state min_state)
 {
 	struct curtainreq reqv[1 + 2 * CURTAIN_ON_COUNT + nitems(simple_types) * CURTAIN_ON_COUNT * CURTAIN_LEVEL_COUNT], *reqp = reqv;
-	enum curtain_level levels_on[CURTAIN_ON_COUNT];
+	enum curtainreq_level levels_on[CURTAIN_ON_COUNT];
 
 	struct curtainent_unveil unveils_v[CURTAIN_ON_COUNT][unveils_count];
 	struct curtainent_unveil *unveils_p[CURTAIN_ON_COUNT];
@@ -868,7 +868,7 @@ curtain_submit_1(int flags, bool neutral_on[CURTAIN_ON_COUNT], enum curtain_stat
 	char buffer[total_space], *cursor = buffer;
 	for (size_t i = 0; i < nitems(simple_types); i++) {
 		for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++) {
-			for (enum curtain_level lvl = 0; lvl < CURTAIN_LEVEL_COUNT; lvl++) {
+			for (enum curtainreq_level lvl = 0; lvl < CURTAIN_LEVEL_COUNT; lvl++) {
 				base_ptrs[i][on][lvl] = fill_ptrs[i][on][lvl] = cursor;
 				cursor += simple_types[i]->count * simple_types[i]->ent_size;
 			}
@@ -891,7 +891,7 @@ curtain_submit_1(int flags, bool neutral_on[CURTAIN_ON_COUNT], enum curtain_stat
 		if (neutral_on[on])
 			continue;
 		for (size_t i = 0; i < nitems(simple_types); i++) {
-			for (enum curtain_level lvl = 0; lvl < CURTAIN_LEVEL_COUNT; lvl++) {
+			for (enum curtainreq_level lvl = 0; lvl < CURTAIN_LEVEL_COUNT; lvl++) {
 				size_t filled = (char *)fill_ptrs[i][on][lvl] -
 						(char *)base_ptrs[i][on][lvl];
 				if (filled)

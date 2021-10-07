@@ -3,7 +3,7 @@
 
 #include <sys/curtain_ability.h>
 
-enum curtain_type {
+enum curtainreq_type {
 	CURTAINTYP_DEFAULT = 1,
 	CURTAINTYP_UNVEIL = 3,
 	CURTAINTYP_IOCTL = 4,
@@ -15,7 +15,7 @@ enum curtain_type {
 	CURTAINTYP_ABILITY = 10,
 };
 
-enum curtain_level {
+enum curtainreq_level {
 	CURTAINLVL_PASS = 0,
 	CURTAINLVL_GATE = 1,
 	CURTAINLVL_WALL = 2,
@@ -26,8 +26,8 @@ enum curtain_level {
 };
 
 struct curtainreq {
-	enum curtain_type type : 8;
-	enum curtain_level level : 8;
+	enum curtainreq_type type : 8;
+	enum curtainreq_level level : 8;
 	int flags;
 	size_t size;
 	void *data;

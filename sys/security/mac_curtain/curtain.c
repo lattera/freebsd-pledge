@@ -529,7 +529,7 @@ curtain_dirty(struct curtain *ct)
 	case CURTAINTYP_ABILITY:
 
 static unsigned
-curtain_key_hash(enum curtain_type type, union curtain_key key)
+curtain_key_hash(enum curtainreq_type type, union curtain_key key)
 {
 	switch (type) {
 	CURTAIN_KEY_INVALID_TYPE_CASES
@@ -552,7 +552,7 @@ curtain_key_hash(enum curtain_type type, union curtain_key key)
 }
 
 static bool
-curtain_key_same(enum curtain_type type,
+curtain_key_same(enum curtainreq_type type,
     union curtain_key key0, union curtain_key key1)
 {
 	switch (type) {
@@ -613,7 +613,7 @@ curtain_hash_link(struct curtain *ct,
 }
 
 static struct curtain_item *
-curtain_lookup(const struct curtain *ctc, enum curtain_type type, union curtain_key key)
+curtain_lookup(const struct curtain *ctc, enum curtainreq_type type, union curtain_key key)
 {
 	struct curtain *ct = __DECONST(struct curtain *, ctc);
 	struct curtain_item *item;
@@ -641,7 +641,7 @@ curtain_lookup(const struct curtain *ctc, enum curtain_type type, union curtain_
 }
 
 static struct curtain_item *
-curtain_search(struct curtain *ct, enum curtain_type type, union curtain_key key,
+curtain_search(struct curtain *ct, enum curtainreq_type type, union curtain_key key,
     bool *inserted)
 {
 	struct curtain_item *item, *prev;
@@ -770,7 +770,7 @@ static const sysfilset_t abilities_sysfils[CURTAINABL_COUNT] = {
 };
 
 static enum curtain_ability
-ability_fallback(enum curtain_type type)
+ability_fallback(enum curtainreq_type type)
 {
 	switch (type) {
 	CURTAIN_KEY_INVALID_TYPE_CASES
@@ -943,7 +943,7 @@ curtain_mask_sysfils(struct curtain *ct, sysfilset_t sfs)
 
 static struct curtain_mode
 curtain_lookup_fallback_mode(const struct curtain *ct,
-    enum curtain_type type, union curtain_key key)
+    enum curtainreq_type type, union curtain_key key)
 {
 	const struct curtain_item *item = NULL;
 	if (type == CURTAINTYP_SOCKOPT)
@@ -954,7 +954,7 @@ curtain_lookup_fallback_mode(const struct curtain *ct,
 
 static struct curtain_mode
 curtain_lookup_mode(const struct curtain *ct,
-    enum curtain_type type, union curtain_key key)
+    enum curtainreq_type type, union curtain_key key)
 {
 	const struct curtain_item *item;
 	item = curtain_lookup(ct, type, key);
@@ -1123,7 +1123,7 @@ curtain_fill(struct curtain *ct, size_t reqc, const struct curtainreq *reqv)
 {
 	struct barrier *br;
 	const struct curtainreq *req;
-	enum curtain_level def_on_self, def_on_exec;
+	enum curtainreq_level def_on_self, def_on_exec;
 	int error;
 
 	SDT_PROBE2(curtain,, curtain_fill, begin, reqc, reqv);
@@ -1480,7 +1480,7 @@ static const int act2err[] = {
 } while (0)
 
 static enum curtain_action
-curtain_cred_action(const struct ucred *cr, enum curtain_type type, union curtain_key key)
+curtain_cred_action(const struct ucred *cr, enum curtainreq_type type, union curtain_key key)
 {
 	const struct curtain *ct;
 	if ((ct = CRED_SLOT(cr))) {
