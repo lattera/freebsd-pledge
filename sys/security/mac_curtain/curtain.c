@@ -1076,9 +1076,9 @@ curtain_fill_restrict(struct curtain *ct, struct ucred *cr)
 	if (curtain_is_restricted_on_exec(ct)) {
 		if (ct->ct_abilities[CURTAINABL_DEFAULT].on_exec < CURTAINACT_DENY)
 			ct->ct_abilities[CURTAINABL_DEFAULT].on_exec = CURTAINACT_DENY;
-		if (ct->ct_abilities[CURTAINABL_RSUGID_EXEC].on_exec < CURTAINACT_DENY &&
+		if (ct->ct_abilities[CURTAINABL_EXEC_RSUGID].on_exec < CURTAINACT_DENY &&
 		    priv_check_cred(cr, PRIV_VFS_CHROOT) != 0)
-			ct->ct_abilities[CURTAINABL_RSUGID_EXEC].on_exec = CURTAINACT_DENY;
+			ct->ct_abilities[CURTAINABL_EXEC_RSUGID].on_exec = CURTAINACT_DENY;
 	}
 }
 
@@ -2777,7 +2777,7 @@ curtain_proc_check_exec_sugid(struct ucred *cr, struct proc *p)
 	if ((ct = CRED_SLOT(cr))) {
 		MPASS(ct->ct_finalized);
 		if (ct->ct_cached.is_restricted_on_exec)
-			act = ct->ct_abilities[CURTAINABL_RSUGID_EXEC].on_exec;
+			act = ct->ct_abilities[CURTAINABL_EXEC_RSUGID].on_exec;
 		else
 			act = CURTAINACT_ALLOW;
 	} else if (CRED_IN_RESTRICTED_MODE(cr))
