@@ -86,9 +86,9 @@ struct sysent sysent[] = {
 	{ .sy_narg = AS(recvmsg_args), .sy_call = (sy_call_t *)sys_recvmsg, .sy_auevent = AUE_RECVMSG, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 27 = recvmsg */
 	{ .sy_narg = AS(sendmsg_args), .sy_call = (sy_call_t *)sys_sendmsg, .sy_auevent = AUE_SENDMSG, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 28 = sendmsg */
 	{ .sy_narg = AS(recvfrom_args), .sy_call = (sy_call_t *)sys_recvfrom, .sy_auevent = AUE_RECVFROM, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 29 = recvfrom */
-	{ .sy_narg = AS(accept_args), .sy_call = (sy_call_t *)sys_accept, .sy_auevent = AUE_ACCEPT, .sy_flags = SYF_SYSFILS(SYSFIL_NET), .sy_thrcnt = SY_THR_STATIC },	/* 30 = accept */
-	{ .sy_narg = AS(getpeername_args), .sy_call = (sy_call_t *)sys_getpeername, .sy_auevent = AUE_GETPEERNAME, .sy_flags = SYF_SYSFILS(SYSFIL_NET), .sy_thrcnt = SY_THR_STATIC },	/* 31 = getpeername */
-	{ .sy_narg = AS(getsockname_args), .sy_call = (sy_call_t *)sys_getsockname, .sy_auevent = AUE_GETSOCKNAME, .sy_flags = SYF_SYSFILS(SYSFIL_NET), .sy_thrcnt = SY_THR_STATIC },	/* 32 = getsockname */
+	{ .sy_narg = AS(accept_args), .sy_call = (sy_call_t *)sys_accept, .sy_auevent = AUE_ACCEPT, .sy_flags = SYF_SYSFILS(SYSFIL_SOCK), .sy_thrcnt = SY_THR_STATIC },	/* 30 = accept */
+	{ .sy_narg = AS(getpeername_args), .sy_call = (sy_call_t *)sys_getpeername, .sy_auevent = AUE_GETPEERNAME, .sy_flags = SYF_SYSFILS(SYSFIL_SOCK), .sy_thrcnt = SY_THR_STATIC },	/* 31 = getpeername */
+	{ .sy_narg = AS(getsockname_args), .sy_call = (sy_call_t *)sys_getsockname, .sy_auevent = AUE_GETSOCKNAME, .sy_flags = SYF_SYSFILS(SYSFIL_SOCK), .sy_thrcnt = SY_THR_STATIC },	/* 32 = getsockname */
 	{ .sy_narg = AS(access_args), .sy_call = (sy_call_t *)sys_access, .sy_auevent = AUE_ACCESS, .sy_flags = SYF_SYSFILS(SYSFIL_VFS_MISC | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 33 = access */
 	{ .sy_narg = AS(chflags_args), .sy_call = (sy_call_t *)sys_chflags, .sy_auevent = AUE_CHFLAGS, .sy_flags = SYF_SYSFILS(SYSFIL_FATTR | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 34 = chflags */
 	{ .sy_narg = AS(fchflags_args), .sy_call = (sy_call_t *)sys_fchflags, .sy_auevent = AUE_FCHFLAGS, .sy_flags = SYF_SYSFILS(SYSFIL_FATTR), .sy_thrcnt = SY_THR_STATIC },	/* 35 = fchflags */
@@ -153,16 +153,16 @@ struct sysent sysent[] = {
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 94 = reserved for local use */
 	{ .sy_narg = AS(fsync_args), .sy_call = (sy_call_t *)sys_fsync, .sy_auevent = AUE_FSYNC, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 95 = fsync */
 	{ .sy_narg = AS(setpriority_args), .sy_call = (sy_call_t *)sys_setpriority, .sy_auevent = AUE_SETPRIORITY, .sy_flags = SYF_SYSFILS(SYSFIL_SCHED), .sy_thrcnt = SY_THR_STATIC },	/* 96 = setpriority */
-	{ .sy_narg = AS(socket_args), .sy_call = (sy_call_t *)sys_socket, .sy_auevent = AUE_SOCKET, .sy_flags = SYF_SYSFILS(SYSFIL_NET), .sy_thrcnt = SY_THR_STATIC },	/* 97 = socket */
-	{ .sy_narg = AS(connect_args), .sy_call = (sy_call_t *)sys_connect, .sy_auevent = AUE_CONNECT, .sy_flags = SYF_SYSFILS(SYSFIL_NET | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 98 = connect */
-	{ compat(AS(oaccept_args),accept), .sy_auevent = AUE_ACCEPT, .sy_flags = SYF_SYSFILS(SYSFIL_NET), .sy_thrcnt = SY_THR_STATIC },	/* 99 = old accept */
+	{ .sy_narg = AS(socket_args), .sy_call = (sy_call_t *)sys_socket, .sy_auevent = AUE_SOCKET, .sy_flags = SYF_SYSFILS(SYSFIL_SOCK), .sy_thrcnt = SY_THR_STATIC },	/* 97 = socket */
+	{ .sy_narg = AS(connect_args), .sy_call = (sy_call_t *)sys_connect, .sy_auevent = AUE_CONNECT, .sy_flags = SYF_SYSFILS(SYSFIL_SOCK | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 98 = connect */
+	{ compat(AS(oaccept_args),accept), .sy_auevent = AUE_ACCEPT, .sy_flags = SYF_SYSFILS(SYSFIL_SOCK), .sy_thrcnt = SY_THR_STATIC },	/* 99 = old accept */
 	{ .sy_narg = AS(getpriority_args), .sy_call = (sy_call_t *)sys_getpriority, .sy_auevent = AUE_GETPRIORITY, .sy_flags = SYF_SYSFILS(SYSFIL_SCHED), .sy_thrcnt = SY_THR_STATIC },	/* 100 = getpriority */
 	{ compat(AS(osend_args),send), .sy_auevent = AUE_SEND, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 101 = old send */
 	{ compat(AS(orecv_args),recv), .sy_auevent = AUE_RECV, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 102 = old recv */
 	{ compat(AS(osigreturn_args),sigreturn), .sy_auevent = AUE_SIGRETURN, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 103 = old sigreturn */
-	{ .sy_narg = AS(bind_args), .sy_call = (sy_call_t *)sys_bind, .sy_auevent = AUE_BIND, .sy_flags = SYF_SYSFILS(SYSFIL_NET | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 104 = bind */
+	{ .sy_narg = AS(bind_args), .sy_call = (sy_call_t *)sys_bind, .sy_auevent = AUE_BIND, .sy_flags = SYF_SYSFILS(SYSFIL_SOCK | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 104 = bind */
 	{ .sy_narg = AS(setsockopt_args), .sy_call = (sy_call_t *)sys_setsockopt, .sy_auevent = AUE_SETSOCKOPT, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 105 = setsockopt */
-	{ .sy_narg = AS(listen_args), .sy_call = (sy_call_t *)sys_listen, .sy_auevent = AUE_LISTEN, .sy_flags = SYF_SYSFILS(SYSFIL_NET), .sy_thrcnt = SY_THR_STATIC },	/* 106 = listen */
+	{ .sy_narg = AS(listen_args), .sy_call = (sy_call_t *)sys_listen, .sy_auevent = AUE_LISTEN, .sy_flags = SYF_SYSFILS(SYSFIL_SOCK), .sy_thrcnt = SY_THR_STATIC },	/* 106 = listen */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 107 = obsolete vtimes */
 	{ compat(AS(osigvec_args),sigvec), .sy_auevent = AUE_NULL, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 108 = old sigvec */
 	{ compat(AS(osigblock_args),sigblock), .sy_auevent = AUE_NULL, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 109 = old sigblock */
@@ -197,7 +197,7 @@ struct sysent sysent[] = {
 	{ .sy_narg = AS(utimes_args), .sy_call = (sy_call_t *)sys_utimes, .sy_auevent = AUE_UTIMES, .sy_flags = SYF_SYSFILS(SYSFIL_FATTR | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 138 = utimes */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 139 = obsolete 4.2 sigreturn */
 	{ .sy_narg = AS(adjtime_args), .sy_call = (sy_call_t *)sys_adjtime, .sy_auevent = AUE_ADJTIME, .sy_flags = SYF_SYSFILS(SYSFIL_SETTIME_CHECKED | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 140 = adjtime */
-	{ compat(AS(ogetpeername_args),getpeername), .sy_auevent = AUE_GETPEERNAME, .sy_flags = SYF_SYSFILS(SYSFIL_NET), .sy_thrcnt = SY_THR_STATIC },	/* 141 = old getpeername */
+	{ compat(AS(ogetpeername_args),getpeername), .sy_auevent = AUE_GETPEERNAME, .sy_flags = SYF_SYSFILS(SYSFIL_SOCK), .sy_thrcnt = SY_THR_STATIC },	/* 141 = old getpeername */
 	{ compat(0,gethostid), .sy_auevent = AUE_SYSCTL, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 142 = old gethostid */
 	{ compat(AS(osethostid_args),sethostid), .sy_auevent = AUE_SYSCTL, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 143 = old sethostid */
 	{ compat(AS(ogetrlimit_args),getrlimit), .sy_auevent = AUE_GETRLIMIT, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 144 = old getrlimit */
@@ -206,7 +206,7 @@ struct sysent sysent[] = {
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)sys_setsid, .sy_auevent = AUE_SETSID, .sy_flags = SYF_SYSFILS(SYSFIL_PROC), .sy_thrcnt = SY_THR_STATIC },	/* 147 = setsid */
 	{ .sy_narg = AS(quotactl_args), .sy_call = (sy_call_t *)sys_quotactl, .sy_auevent = AUE_QUOTACTL, .sy_flags = SYF_SYSFILS(SYSFIL_QUOTA | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 148 = quotactl */
 	{ compat(0,quota), .sy_auevent = AUE_O_QUOTA, .sy_flags = SYF_SYSFILS(SYSFIL_QUOTA | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 149 = old quota */
-	{ compat(AS(getsockname_args),getsockname), .sy_auevent = AUE_GETSOCKNAME, .sy_flags = SYF_SYSFILS(SYSFIL_NET), .sy_thrcnt = SY_THR_STATIC },	/* 150 = old getsockname */
+	{ compat(AS(getsockname_args),getsockname), .sy_auevent = AUE_GETSOCKNAME, .sy_flags = SYF_SYSFILS(SYSFIL_SOCK), .sy_thrcnt = SY_THR_STATIC },	/* 150 = old getsockname */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 151 = reserved for local use */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 152 = reserved for local use */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 153 = reserved for local use */
@@ -231,7 +231,7 @@ struct sysent sysent[] = {
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 172 = reserved for local use */
 	{ compat6(AS(freebsd6_pread_args),pread), .sy_auevent = AUE_PREAD, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 173 = freebsd6 pread */
 	{ compat6(AS(freebsd6_pwrite_args),pwrite), .sy_auevent = AUE_PWRITE, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 174 = freebsd6 pwrite */
-	{ .sy_narg = AS(setfib_args), .sy_call = (sy_call_t *)sys_setfib, .sy_auevent = AUE_SETFIB, .sy_flags = SYF_SYSFILS(SYSFIL_NET | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 175 = setfib */
+	{ .sy_narg = AS(setfib_args), .sy_call = (sy_call_t *)sys_setfib, .sy_auevent = AUE_SETFIB, .sy_flags = SYF_SYSFILS(SYSFIL_SOCK | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 175 = setfib */
 	{ .sy_narg = AS(ntp_adjtime_args), .sy_call = (sy_call_t *)sys_ntp_adjtime, .sy_auevent = AUE_NTP_ADJTIME, .sy_flags = SYF_SYSFILS(SYSFIL_SETTIME | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 176 = ntp_adjtime */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 177 = reserved for local use */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 178 = reserved for local use */
@@ -594,10 +594,10 @@ struct sysent sysent[] = {
 	{ .sy_narg = AS(cap_ioctls_get_args), .sy_call = (sy_call_t *)sys_cap_ioctls_get, .sy_auevent = AUE_CAP_IOCTLS_GET, .sy_flags = SYF_SYSFILS(SYSFIL_CAPCOMPAT), .sy_thrcnt = SY_THR_STATIC },	/* 535 = cap_ioctls_get */
 	{ .sy_narg = AS(cap_fcntls_limit_args), .sy_call = (sy_call_t *)sys_cap_fcntls_limit, .sy_auevent = AUE_CAP_FCNTLS_LIMIT, .sy_flags = SYF_SYSFILS(SYSFIL_CAPCOMPAT), .sy_thrcnt = SY_THR_STATIC },	/* 536 = cap_fcntls_limit */
 	{ .sy_narg = AS(cap_fcntls_get_args), .sy_call = (sy_call_t *)sys_cap_fcntls_get, .sy_auevent = AUE_CAP_FCNTLS_GET, .sy_flags = SYF_SYSFILS(SYSFIL_CAPCOMPAT), .sy_thrcnt = SY_THR_STATIC },	/* 537 = cap_fcntls_get */
-	{ .sy_narg = AS(bindat_args), .sy_call = (sy_call_t *)sys_bindat, .sy_auevent = AUE_BINDAT, .sy_flags = SYF_SYSFILS(SYSFIL_NET), .sy_thrcnt = SY_THR_STATIC },	/* 538 = bindat */
-	{ .sy_narg = AS(connectat_args), .sy_call = (sy_call_t *)sys_connectat, .sy_auevent = AUE_CONNECTAT, .sy_flags = SYF_SYSFILS(SYSFIL_NET), .sy_thrcnt = SY_THR_STATIC },	/* 539 = connectat */
+	{ .sy_narg = AS(bindat_args), .sy_call = (sy_call_t *)sys_bindat, .sy_auevent = AUE_BINDAT, .sy_flags = SYF_SYSFILS(SYSFIL_SOCK), .sy_thrcnt = SY_THR_STATIC },	/* 538 = bindat */
+	{ .sy_narg = AS(connectat_args), .sy_call = (sy_call_t *)sys_connectat, .sy_auevent = AUE_CONNECTAT, .sy_flags = SYF_SYSFILS(SYSFIL_SOCK), .sy_thrcnt = SY_THR_STATIC },	/* 539 = connectat */
 	{ .sy_narg = AS(chflagsat_args), .sy_call = (sy_call_t *)sys_chflagsat, .sy_auevent = AUE_CHFLAGSAT, .sy_flags = SYF_SYSFILS(SYSFIL_FATTR), .sy_thrcnt = SY_THR_STATIC },	/* 540 = chflagsat */
-	{ .sy_narg = AS(accept4_args), .sy_call = (sy_call_t *)sys_accept4, .sy_auevent = AUE_ACCEPT, .sy_flags = SYF_SYSFILS(SYSFIL_NET), .sy_thrcnt = SY_THR_STATIC },	/* 541 = accept4 */
+	{ .sy_narg = AS(accept4_args), .sy_call = (sy_call_t *)sys_accept4, .sy_auevent = AUE_ACCEPT, .sy_flags = SYF_SYSFILS(SYSFIL_SOCK), .sy_thrcnt = SY_THR_STATIC },	/* 541 = accept4 */
 	{ .sy_narg = AS(pipe2_args), .sy_call = (sy_call_t *)sys_pipe2, .sy_auevent = AUE_PIPE, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 542 = pipe2 */
 	{ .sy_narg = AS(aio_mlock_args), .sy_call = (sy_call_t *)sys_aio_mlock, .sy_auevent = AUE_AIO_MLOCK, .sy_flags = SYF_SYSFILS(SYSFIL_AIO | SYSFIL_MLOCK | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 543 = aio_mlock */
 	{ .sy_narg = AS(procctl_args), .sy_call = (sy_call_t *)sys_procctl, .sy_auevent = AUE_PROCCTL, .sy_flags = SYF_SYSFILS(SYSFIL_PROC | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 544 = procctl */

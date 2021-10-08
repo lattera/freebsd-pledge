@@ -205,7 +205,7 @@ static const struct promise_ability {
 	{ PROMISE_CHMOD_SPECIAL,	CURTAINABL_CHMOD_SPECIAL },
 	{ PROMISE_SYSFLAGS,		CURTAINABL_SYSFLAGS },
 	{ PROMISE_SENDFILE,		CURTAINABL_SENDFILE },
-	{ PROMISE_UNIX,			CURTAINABL_UNIX },
+	{ PROMISE_UNIX,			CURTAINABL_VFS_SOCK },
 	{ PROMISE_INET,			CURTAINABL_NET },
 	{ PROMISE_RECVFD,		CURTAINABL_RECVFD },
 	{ PROMISE_SENDFD,		CURTAINABL_SENDFD },
@@ -449,7 +449,7 @@ abilities_for_uperms(struct curtain_slot *slot, unveil_perms uperms, unsigned fl
 	if (uperms & UPERM_SETATTR)
 		curtain_ability(slot, CURTAINABL_FATTR, flags);
 	if (uperms & UPERM_UNIX)
-		curtain_ability(slot, CURTAINABL_UNIX, flags);
+		curtain_ability(slot, CURTAINABL_VFS_SOCK, flags);
 	if (uperms & UPERM_TMPDIR) {
 		curtain_ability(slot, CURTAINABL_VFS_READ, flags);
 		curtain_ability(slot, CURTAINABL_VFS_WRITE, flags);

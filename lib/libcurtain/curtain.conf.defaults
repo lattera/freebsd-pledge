@@ -138,7 +138,7 @@ merge _pty
 ability acl
 
 [_unix]
-ability unix sendfd recvfd
+ability vfs_sock sendfd recvfd
 sockaf unix
 
 [_tty]
@@ -187,7 +187,12 @@ ${TMPDIR:-/tmp}/krb5cc_%u		:
 [_spwddb : _pwddb]
 /etc/spwd.db				: r
 
-[_network]
+[_network : _network_client _network_server]
+[_network_client : _network_base]
+ability net_client
+[_network_server : _network_base]
+ability net_server
+[_network_base]
 /etc/nsswitch.conf			: r
 /etc/resolv.conf			: r
 /etc/hosts				: r
@@ -196,7 +201,6 @@ ${TMPDIR:-/tmp}/krb5cc_%u		:
 /var/db/services.db			: r
 /etc/ssl/				: r
 /etc/ssl/private/			:
-ability net
 sockaf inet inet6
 # XXX Socket options should be more restricted.
 socklvl socket
@@ -205,7 +209,7 @@ socklvl tcp udp
 sysctl net.routetable
 ioctls net_basic
 ioctls net_route
-[_network _localbase]
+[_network_base _localbase]
 /usr/local/etc/ssl/			: r
 /usr/local/etc/ssl/private/		:
 

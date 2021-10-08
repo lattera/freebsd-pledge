@@ -259,21 +259,21 @@
 		    _Inout_opt_ __socklen_t *fromlenaddr
 		);
 	}
-30	AUE_ACCEPT	STD|SYSFIL_NET|CAPENABLED {
+30	AUE_ACCEPT	STD|SYSFIL_SOCK|CAPENABLED {
 		int accept(
 		    int s,
 		    _Out_writes_bytes_opt_(*anamelen) struct sockaddr *name,
 		    _Inout_opt_ __socklen_t *anamelen
 		);
 	}
-31	AUE_GETPEERNAME	STD|SYSFIL_NET|CAPENABLED {
+31	AUE_GETPEERNAME	STD|SYSFIL_SOCK|CAPENABLED {
 		int getpeername(
 		    int fdes,
 		    _Out_writes_bytes_(*alen) struct sockaddr *asa,
 		    _Inout_opt_ __socklen_t *alen
 		);
 	}
-32	AUE_GETSOCKNAME	STD|SYSFIL_NET|CAPENABLED {
+32	AUE_GETSOCKNAME	STD|SYSFIL_SOCK|CAPENABLED {
 		int getsockname(
 		    int fdes,
 		    _Out_writes_bytes_(*alen) struct sockaddr *asa,
@@ -619,21 +619,21 @@
 		    int prio
 		);
 	}
-97	AUE_SOCKET	STD|SYSFIL_NET|CAPENABLED {
+97	AUE_SOCKET	STD|SYSFIL_SOCK|CAPENABLED {
 		int socket(
 		    int domain,
 		    int type,
 		    int protocol
 		);
 	}
-98	AUE_CONNECT	STD|SYSFIL_NET {
+98	AUE_CONNECT	STD|SYSFIL_SOCK {
 		int connect(
 		    int s,
 		    _In_reads_bytes_(namelen) const struct sockaddr *name,
 		    int namelen
 		);
 	}
-99	AUE_ACCEPT	COMPAT|SYSFIL_NET|CAPENABLED {
+99	AUE_ACCEPT	COMPAT|SYSFIL_SOCK|CAPENABLED {
 		int accept(
 		    int s,
 		    _Out_writes_bytes_opt_(*anamelen) struct sockaddr *name,
@@ -667,7 +667,7 @@
 		    _In_ struct osigcontext *sigcntxp
 		);
 	}
-104	AUE_BIND	STD|SYSFIL_NET {
+104	AUE_BIND	STD|SYSFIL_SOCK {
 		int bind(
 		    int s,
 		    _In_reads_bytes_(namelen) const struct sockaddr *name,
@@ -683,7 +683,7 @@
 		    int valsize
 		);
 	}
-106	AUE_LISTEN	STD|SYSFIL_NET|CAPENABLED {
+106	AUE_LISTEN	STD|SYSFIL_SOCK|CAPENABLED {
 		int listen(
 		    int s,
 		    int backlog
@@ -890,7 +890,7 @@
 		    _Out_opt_ struct timeval *olddelta
 		);
 	}
-141	AUE_GETPEERNAME	COMPAT|SYSFIL_NET|CAPENABLED {
+141	AUE_GETPEERNAME	COMPAT|SYSFIL_SOCK|CAPENABLED {
 		int getpeername(
 		    int fdes,
 		    _Out_writes_bytes_(*alen) struct sockaddr *asa,
@@ -937,7 +937,7 @@
 149	AUE_O_QUOTA	COMPAT|SYSFIL_QUOTA {
 		int quota(void);
 	}
-150	AUE_GETSOCKNAME	COMPAT|NOARGS|SYSFIL_NET|CAPENABLED {
+150	AUE_GETSOCKNAME	COMPAT|NOARGS|SYSFIL_SOCK|CAPENABLED {
 		int getsockname(
 		    int fdec,
 		    _Out_writes_bytes_(*alen) struct sockaddr *asa,
@@ -1087,7 +1087,7 @@
 		    off_t offset
 		);
 	}
-175	AUE_SETFIB	STD|SYSFIL_NET {
+175	AUE_SETFIB	STD|SYSFIL_SOCK {
 		int setfib(
 		    int fibnum
 		);
@@ -2970,7 +2970,7 @@
 		    _Out_ uint32_t *fcntlrightsp
 		);
 	}
-538	AUE_BINDAT	STD|SYSFIL_NET|CAPENABLED {
+538	AUE_BINDAT	STD|SYSFIL_SOCK|CAPENABLED {
 		int bindat(
 		    int fd,
 		    int s,
@@ -2978,7 +2978,7 @@
 		    int namelen
 		);
 	}
-539	AUE_CONNECTAT	STD|SYSFIL_NET|CAPENABLED {
+539	AUE_CONNECTAT	STD|SYSFIL_SOCK|CAPENABLED {
 		int connectat(
 		    int fd,
 		    int s,
@@ -2994,7 +2994,7 @@
 		    int atflag
 		);
 	}
-541	AUE_ACCEPT	STD|SYSFIL_NET|CAPENABLED {
+541	AUE_ACCEPT	STD|SYSFIL_SOCK|CAPENABLED {
 		int accept4(
 		    int s,
 		    _Out_writes_bytes_opt_(*anamelen) struct sockaddr *name,

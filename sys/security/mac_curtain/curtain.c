@@ -756,7 +756,7 @@ static const sysfilset_t abilities_sysfils[CURTAINABL_COUNT] = {
 	[CURTAINABL_FATTR] = SYSFIL_FATTR,
 	[CURTAINABL_FLOCK] = SYSFIL_FLOCK,
 	[CURTAINABL_TTY] = SYSFIL_TTY,
-	[CURTAINABL_NET] = SYSFIL_NET,
+	[CURTAINABL_SOCK] = SYSFIL_SOCK,
 	[CURTAINABL_PROC] = SYSFIL_PROC,
 	[CURTAINABL_THREAD] = SYSFIL_THREAD,
 	[CURTAINABL_EXEC] = SYSFIL_EXEC,
@@ -1038,7 +1038,11 @@ static const int abilities_expand[][2] = {
 	{ CURTAINABL_VFS_DELETE,	CURTAINABL_VFS_MISC		},
 	{ CURTAINABL_FATTR,		CURTAINABL_VFS_MISC		},
 	{ CURTAINABL_PROT_EXEC,		CURTAINABL_PROT_EXEC_LOOSE	},
-	{ CURTAINABL_UNIX,		CURTAINABL_NET			},
+	{ CURTAINABL_VFS_SOCK,		CURTAINABL_SOCK			},
+	{ CURTAINABL_NET,		CURTAINABL_NET_CLIENT		},
+	{ CURTAINABL_NET,		CURTAINABL_NET_SERVER		},
+	{ CURTAINABL_NET_CLIENT,	CURTAINABL_SOCK			},
+	{ CURTAINABL_NET_SERVER,	CURTAINABL_SOCK			},
 	{ CURTAINABL_CPUSET,		CURTAINABL_SCHED		},
 };
 
@@ -1121,7 +1125,7 @@ curtain_fill_ability(struct curtain *ct, const struct curtainreq *req,
 	case CURTAINABL_PS:		type = BARRIER_PROC_STATUS;	break;
 	case CURTAINABL_SCHED:		type = BARRIER_PROC_SCHED;	break;
 	case CURTAINABL_DEBUG:		type = BARRIER_PROC_DEBUG;	break;
-	case CURTAINABL_NET:		type = BARRIER_SOCKET;		break;
+	case CURTAINABL_SOCK:		type = BARRIER_SOCK;		break;
 	case CURTAINABL_POSIXIPC:	type = BARRIER_POSIXIPC;	break;
 	case CURTAINABL_SYSVIPC:	type = BARRIER_SYSVIPC;		break;
 	default:
@@ -1774,10 +1778,32 @@ curtain_socket_check_create(struct ucred *cr, int domain, int type, int protocol
 	return (cred_key_check(cr, CURTAINTYP_SOCKAF, (ctkey){ .sockaf = domain }));
 }
 
+static inline bool
+sockaf_is_net(int sockaf)
+{
+	return (sockaf != AF_LOCAL);
+}
+
+static int
+curtain_socket_check_bind(struct ucred *cr,
+    struct socket *so, struct label *solabel,
+    struct sockaddr *sa)
+{
+	int error;
+	if (sockaf_is_net(sa->sa_family) &&
+	    (error = cred_ability_check(cr, CURTAINABL_NET_SERVER)))
+		return (error);
+	return (cred_key_check(cr, CURTAINTYP_SOCKAF, (ctkey){ .sockaf = sa->sa_family }));
+}
+
 static int
 curtain_socket_check_connect(struct ucred *cr, struct socket *so, struct label *solabel,
     struct sockaddr *sa)
 {
+	int error;
+	if (sockaf_is_net(sa->sa_family) &&
+	    (error = cred_ability_check(cr, CURTAINABL_NET_CLIENT)))
+		return (error);
 	return (cred_key_check(cr, CURTAINTYP_SOCKAF, (ctkey){ .sockaf = sa->sa_family }));
 }
 
@@ -1793,11 +1819,11 @@ static int
 curtain_socket_check_visible(struct ucred *cr, struct socket *so, struct label *solabel)
 {
 	int error;
-	if ((error = cred_ability_check(cr, CURTAINABL_NET)))
+	if ((error = cred_ability_check(cr, CURTAINABL_SOCK)))
 		return (error);
 	error = 0;
 	SOCK_LOCK(so);
-	if (!barrier_visible(CRED_SLOT_BR(cr), SLOT_BR(solabel), BARRIER_SOCKET))
+	if (!barrier_visible(CRED_SLOT_BR(cr), SLOT_BR(solabel), BARRIER_SOCK))
 		error = ENOENT;
 	SOCK_UNLOCK(so);
 	return (error);
@@ -1808,9 +1834,9 @@ static int
 curtain_inpcb_check_visible(struct ucred *cr, struct inpcb *inp, struct label *inplabel)
 {
 	int error;
-	if ((error = cred_ability_check(cr, CURTAINABL_NET)))
+	if ((error = cred_ability_check(cr, CURTAINABL_SOCK)))
 		return (error);
-	if (!barrier_visible(CRED_SLOT_BR(cr), SLOT_BR(inplabel), BARRIER_SOCKET))
+	if (!barrier_visible(CRED_SLOT_BR(cr), SLOT_BR(inplabel), BARRIER_SOCK))
 		return (ENOENT);
 	return (0);
 }
@@ -1910,7 +1936,7 @@ curtain_vnode_check_open(struct ucred *cr,
 	}
 
 	if (vp->v_type == VSOCK) {
-		if ((error = cred_ability_check(cr, CURTAINABL_UNIX)))
+		if ((error = cred_ability_check(cr, CURTAINABL_VFS_SOCK)))
 			return (error);
 	} else {
 		if (accmode & VREAD && (error = cred_ability_check(cr, CURTAINABL_VFS_READ)))
@@ -1983,7 +2009,7 @@ curtain_vnode_check_create(struct ucred *cr,
 	}
 
 	if (vap->va_type == VSOCK) {
-		if ((error = cred_ability_check(cr, CURTAINABL_UNIX)))
+		if ((error = cred_ability_check(cr, CURTAINABL_VFS_SOCK)))
 			return (error);
 	} else {
 		if (vap->va_type == VFIFO) {
@@ -2050,7 +2076,7 @@ curtain_vnode_check_unlink(struct ucred *cr,
 	}
 
 	if (vp->v_type == VSOCK) {
-		if ((error = cred_ability_check(cr, CURTAINABL_UNIX)))
+		if ((error = cred_ability_check(cr, CURTAINABL_VFS_SOCK)))
 			return (error);
 	} else {
 		if ((error = cred_ability_check(cr, CURTAINABL_VFS_DELETE)))
@@ -2653,14 +2679,11 @@ curtain_priv_check(struct ucred *cr, int priv)
 	case PRIV_NETINET_REUSEPORT:
 #if 0
 	case PRIV_NETINET_SETHDROPTS:
-#endif
-		abl = CURTAINABL_NET;
-		break;
-#if 0
+	case PRIV_NETINET_RAW:
 	case PRIV_NETINET_GETCRED:
-		abl = CURTAINABL_NET;
-		break;
 #endif
+		abl = CURTAINABL_SOCK;
+		break;
 	case PRIV_ADJTIME:
 	case PRIV_NTP_ADJTIME:
 	case PRIV_CLOCK_SETTIME:
@@ -2783,6 +2806,7 @@ static struct mac_policy_ops curtain_policy_ops = {
 	.mpo_proc_check_debug = curtain_proc_check_debug,
 
 	.mpo_socket_check_create = curtain_socket_check_create,
+	.mpo_socket_check_bind = curtain_socket_check_bind,
 	.mpo_socket_check_connect = curtain_socket_check_connect,
 	.mpo_socket_check_setsockopt = curtain_socket_check_sockopt,
 	.mpo_socket_check_getsockopt = curtain_socket_check_sockopt,
