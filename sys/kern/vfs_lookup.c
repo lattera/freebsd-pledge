@@ -571,6 +571,8 @@ namei(struct nameidata *ndp)
 	cnp = &ndp->ni_cnd;
 	td = cnp->cn_thread;
 #ifdef INVARIANTS
+	KASSERT(cnp->cn_thread == curthread,
+	    ("namei not using curthread"));
 	KASSERT((ndp->ni_debugflags & NAMEI_DBG_CALLED) == 0,
 	    ("%s: repeated call to namei without NDREINIT", __func__));
 	KASSERT(ndp->ni_debugflags == NAMEI_DBG_INITED,
@@ -625,8 +627,6 @@ namei(struct nameidata *ndp)
 
 #ifdef KTRACE
 	if (KTRPOINT(td, KTR_NAMEI)) {
-		KASSERT(cnp->cn_thread == curthread,
-		    ("namei not using curthread"));
 		ktrnamei(cnp->cn_pnbuf);
 	}
 #endif
