@@ -58,7 +58,7 @@ merge _libs
 merge _exec
 merge _cmds
 
-[_extra]
+[_extra : _basic]
 # Lots of permissions that ought to be safe even for root processes (with
 # proper unveils).
 ability prot_exec
@@ -216,7 +216,7 @@ ioctls net_route
 
 [_bpf]
 ioctls bpf
-unveil /dev/bpf			: rm
+unveil /dev/bpf				: rm
 
 [_audio]
 ioctls oss
