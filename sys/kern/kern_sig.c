@@ -3604,7 +3604,7 @@ corefile_open_last(struct thread *td, char *name, int indexpos,
 	if (oldvp != NULL) {
 		if (nextvp == NULL) {
 			if ((td->td_proc->p_flag & P_SUGID) != 0 ||
-			    sysfil_check(td, SYSFIL_DEFAULT) != 0) {
+			    sysfil_probe(td, SYSFIL_DEFAULT) != 0) {
 				error = EFAULT;
 				vn_close(oldvp, FWRITE, td->td_ucred, td);
 			} else {
@@ -3742,7 +3742,7 @@ corefile_open(const char *comm, uid_t uid, pid_t pid, struct thread *td,
 		    (capmode_coredump ? VN_OPEN_NOCAPCHECK : 0);
 		flags = O_CREAT | FWRITE | O_NOFOLLOW;
 		if ((td->td_proc->p_flag & P_SUGID) != 0 ||
-		    sysfil_check(td, SYSFIL_DEFAULT) != 0)
+		    sysfil_probe(td, SYSFIL_DEFAULT) != 0)
 			flags |= O_EXCL;
 
 		NDINIT(&nd, LOOKUP, NOFOLLOW, UIO_SYSSPACE, name, td);
