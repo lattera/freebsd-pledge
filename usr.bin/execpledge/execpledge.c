@@ -44,6 +44,9 @@ main(int argc, char *argv[])
 		default:
 			usage();
 		}
+	r = unveil_exec(NULL, NULL);
+	if (r < 0)
+		err(EX_OSERR, "unveil");
 	argv += optind;
 	argc -= optind;
 

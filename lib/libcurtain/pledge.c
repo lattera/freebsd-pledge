@@ -747,7 +747,7 @@ unveil_on(enum curtain_on on, const char *path, const char *perms)
 	int r;
 	if ((perms == NULL) != (path == NULL))
 		return ((errno = EINVAL), -1);
-	if (!path && !has_customs_on[on] && !has_pledges_on[on])
+	if (!path && !has_customs_on[on])
 		return (0);
 	if (perms) {
 		r = unveil_parse_perms(&uperms, perms);
@@ -782,7 +782,7 @@ unveil(const char *path, const char *perms)
 		 */
 		bool has_custom = false;
 		for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++)
-			if (has_customs_on[on] || has_pledges_on[on]) {
+			if (has_customs_on[on]) {
 				has_custom = true;
 				break;
 			}
