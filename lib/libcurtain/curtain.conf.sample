@@ -236,7 +236,7 @@ ${ZDOTDIR:-~/}/.zlogout			: r
 # NOTE: When running chromium as an "untrusted" X11 client (curtain -X), the
 # setting "Use system title bar and borders" in the "Appearance" section must
 # be enabled.
-@ability posixipc prot_exec
+@ability posixipc prot_exec sendfile
 ~/.config/chromium/			: rw
 ~/.cache/chromium/			: rw
 
