@@ -2391,6 +2391,21 @@ curtain_posixshm_check_unlink(struct ucred *cr,
 	return (0);
 }
 
+static int
+curtain_posixshm_check_setmode(struct ucred *cr,
+    struct shmfd *shmfd, struct label *shmlabel,
+    mode_t mode)
+{
+	return (cred_ability_check(cr, CURTAINABL_FATTR));
+}
+
+static int
+curtain_posixshm_check_setowner(struct ucred *cr,
+    struct shmfd *shmfd, struct label *shmlabel,
+    uid_t uid, gid_t gid)
+{
+	return (cred_ability_check(cr, CURTAINABL_FATTR));
+}
 
 static void curtain_posixsem_create(struct ucred *cr,
     struct ksem *sem, struct label *semlabel)
@@ -2405,6 +2420,22 @@ curtain_posixsem_check_open_unlink(struct ucred *cr,
 	if (!barrier_visible(CRED_SLOT_BR(cr), SLOT_BR(semlabel), BARRIER_POSIXIPC))
 		return (ENOENT);
 	return (0);
+}
+
+static int
+curtain_posixsem_check_setmode(struct ucred *cr,
+    struct ksem *ks, struct label *shmlabel,
+    mode_t mode)
+{
+	return (cred_ability_check(cr, CURTAINABL_FATTR));
+}
+
+static int
+curtain_posixsem_check_setowner(struct ucred *cr,
+    struct ksem *ks, struct label *shmlabel,
+    uid_t uid, gid_t gid)
+{
+	return (cred_ability_check(cr, CURTAINABL_FATTR));
 }
 
 
@@ -2847,12 +2878,16 @@ static struct mac_policy_ops curtain_policy_ops = {
 	.mpo_posixshm_create = curtain_posixshm_create,
 	.mpo_posixshm_check_open = curtain_posixshm_check_open,
 	.mpo_posixshm_check_unlink = curtain_posixshm_check_unlink,
+	.mpo_posixshm_check_setmode = curtain_posixshm_check_setmode,
+	.mpo_posixshm_check_setowner = curtain_posixshm_check_setowner,
 
 	.mpo_posixsem_init_label = curtain_init_label_barrier,
 	.mpo_posixsem_destroy_label = curtain_destroy_label_barrier,
 	.mpo_posixsem_create = curtain_posixsem_create,
 	.mpo_posixsem_check_open = curtain_posixsem_check_open_unlink,
 	.mpo_posixsem_check_unlink = curtain_posixsem_check_open_unlink,
+	.mpo_posixsem_check_setmode = curtain_posixsem_check_setmode,
+	.mpo_posixsem_check_setowner = curtain_posixsem_check_setowner,
 
 	.mpo_sysvshm_init_label = curtain_init_label_barrier,
 	.mpo_sysvshm_cleanup = curtain_destroy_label_barrier,
