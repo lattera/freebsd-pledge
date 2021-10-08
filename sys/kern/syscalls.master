@@ -2061,7 +2061,7 @@
 		    int flags
 		);
 	}
-394	AUE_NULL	STD {
+394	AUE_NULL	STD|SYSFIL_MAC {
 		int mac_syscall(
 		    _In_z_ const char *policy,
 		    int call,
