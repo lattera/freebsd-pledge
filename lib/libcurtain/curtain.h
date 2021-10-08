@@ -20,21 +20,19 @@ enum curtain_state {
 	CURTAIN_ENABLED = 2,
 };
 
-enum {
-	CURTAIN_UNVEIL_INHERIT = 1 << 0,
-	CURTAIN_UNVEIL_INSPECT = 1 << 1,
-	CURTAIN_UNVEIL_NOFOLLOW = 1 << 2,
-
-	CURTAIN_LEVEL_SHIFT = 24,
-	CURTAIN_LEVEL_MASK = 0x7 << CURTAIN_LEVEL_SHIFT,
-	CURTAIN_ALLOW = 0 << CURTAIN_LEVEL_SHIFT,
-	CURTAIN_PASS = 1 << CURTAIN_LEVEL_SHIFT,
-	CURTAIN_GATE = 2 << CURTAIN_LEVEL_SHIFT,
-	CURTAIN_WALL = 3 << CURTAIN_LEVEL_SHIFT,
-	CURTAIN_DENY = 4 << CURTAIN_LEVEL_SHIFT,
-	CURTAIN_TRAP = 5 << CURTAIN_LEVEL_SHIFT,
-	CURTAIN_KILL = 6 << CURTAIN_LEVEL_SHIFT,
-};
+#define CURTAIN_LEVEL_SHIFT	(24)
+#define CURTAIN_LEVEL_MASK	(0x7 << CURTAIN_LEVEL_SHIFT)
+#define CURTAIN_ALLOW		(0 << CURTAIN_LEVEL_SHIFT)
+#define CURTAIN_PASS		(1 << CURTAIN_LEVEL_SHIFT)
+#define CURTAIN_GATE		(2 << CURTAIN_LEVEL_SHIFT)
+#define CURTAIN_WALL		(3 << CURTAIN_LEVEL_SHIFT)
+#define CURTAIN_DENY		(4 << CURTAIN_LEVEL_SHIFT)
+#define CURTAIN_TRAP		(5 << CURTAIN_LEVEL_SHIFT)
+#define CURTAIN_KILL		(6 << CURTAIN_LEVEL_SHIFT)
+#define CURTAIN_INHERIT		(1 << 16)
+#define CURTAIN_UNVEIL_INHERIT	(CURTAIN_INHERIT)
+#define CURTAIN_UNVEIL_INSPECT	(1 << 1)
+#define CURTAIN_UNVEIL_NOFOLLOW	(1 << 2)
 
 struct curtain_slot *curtain_slot(void);
 struct curtain_slot *curtain_slot_on(enum curtain_on);
@@ -105,7 +103,8 @@ void curtain_config_load(struct curtain_config *);
 void curtain_config_tags_from_env(struct curtain_config *);
 void curtain_config_tags_clear(struct curtain_config *);
 
-int curtain_config_directive(struct curtain_config *, const char *directive);
+int curtain_config_directive(struct curtain_config *, struct curtain_slot *,
+    const char *directive);
 
 int curtain_config_setup_x11(struct curtain_config *, bool trusted);
 int curtain_config_setup_wayland(struct curtain_config *);

@@ -273,19 +273,18 @@ main(int argc, char *argv[])
 	char abspath[PATH_MAX];
 	size_t abspath_len = 0;
 	struct curtain_config *cfg;
-	struct curtain_slot *unveils_slot, *main_slot;
+	struct curtain_slot *main_slot;
 	bool do_exec, pty_wrap;
 	int status;
 
 	cfg = curtain_config_new(CURTAIN_CONFIG_ON_EXEC_ONLY);
 
 	curtain_enable((main_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
-	curtain_enable((unveils_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 
 	while ((ch = getopt(argc, argv, "@:vfkgneaA!t:p:u:0:SslUXYWD")) != -1)
 		switch (ch) {
 		case '@':
-			curtain_config_directive(cfg, optarg);
+			curtain_config_directive(cfg, main_slot, optarg);
 			break;
 		case 'v':
 			curtain_config_verbosity(cfg, 1);
@@ -354,7 +353,7 @@ main(int argc, char *argv[])
 			r = curtain_parse_unveil_perms(&uperms, perms);
 			if (r < 0)
 				errx(EX_USAGE, "invalid unveil permissions: %s", perms);
-			r = curtain_unveil(unveils_slot, path,
+			r = curtain_unveil(main_slot, path,
 			    CURTAIN_UNVEIL_INSPECT, uperms);
 			if (r < 0 && errno != ENOENT)
 				warn("%s", path);

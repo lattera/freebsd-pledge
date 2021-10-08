@@ -33,6 +33,7 @@ struct parser {
 	char *last_matched_section_path;
 	size_t section_path_offset;
 	bool unveil_create;
+	int directive_flags;
 };
 
 static const struct {
@@ -356,25 +357,13 @@ parse_ability(struct parser *par, struct word *w)
 {
 	while (w) {
 		const struct abilityent *e;
-		unsigned flags;
-		flags = 0;
-		switch (w->len ? w->ptr[w->len - 1] : '\0') {
-		case '!':
-			flags |= CURTAIN_PASS;
-			w->len--;
-			break;
-		case '+':
-			flags |= CURTAIN_GATE;
-			w->len--;
-			break;
-		}
 		for (e = curtain_abilitytab; e->name; e++)
 			if (strmemcmp(e->name, w->ptr, w->len) == 0)
 				break;
 		if (!e->name)
 			parse_error(par, "unknown ability");
 		else if (par->apply)
-			curtain_ability(par->slot, e->ability, flags);
+			curtain_ability(par->slot, e->ability, par->directive_flags);
 		w = w->next;
 	}
 }
@@ -384,7 +373,7 @@ parse_sysctl(struct parser *par, struct word *w)
 {
 	while (w) {
 		if (par->apply)
-			curtain_sysctl(par->slot, w->ptr, 0);
+			curtain_sysctl(par->slot, w->ptr, par->directive_flags);
 		w = w->next;
 	}
 }
@@ -400,7 +389,7 @@ parse_priv(struct parser *par, struct word *w)
 		if (!e->name)
 			parse_error(par, "unknown privilege");
 		else if (par->apply)
-			curtain_priv(par->slot, e->priv, 0);
+			curtain_priv(par->slot, e->priv, par->directive_flags);
 		w = w->next;
 	}
 }
@@ -417,7 +406,7 @@ parse_ioctls(struct parser *par, struct word *w)
 			if (errno || *end)
 				parse_error(par, "invalid ioctl");
 			else if (par->apply)
-				curtain_ioctl(par->slot, n, 0);
+				curtain_ioctl(par->slot, n, par->directive_flags);
 		} else {
 			const unsigned long *bundle;
 			bundle = NULL;
@@ -429,7 +418,7 @@ parse_ioctls(struct parser *par, struct word *w)
 			if (!bundle)
 				parse_error(par, "unknown ioctl bundle");
 			else if (par->apply)
-				curtain_ioctls(par->slot, bundle, 0);
+				curtain_ioctls(par->slot, bundle, par->directive_flags);
 		}
 		w = w->next;
 	}
@@ -446,7 +435,7 @@ parse_sockaf(struct parser *par, struct word *w)
 		if (!e->name)
 			parse_error(par, "unknown address family");
 		else if (par->apply)
-			curtain_sockaf(par->slot, e->sockaf, 0);
+			curtain_sockaf(par->slot, e->sockaf, par->directive_flags);
 		w = w->next;
 	}
 }
@@ -462,7 +451,7 @@ parse_socklvl(struct parser *par, struct word *w)
 		if (!e->name)
 			parse_error(par, "unknown socket level");
 		else if (par->apply)
-			curtain_socklvl(par->slot, e->socklvl, 0);
+			curtain_socklvl(par->slot, e->socklvl, par->directive_flags);
 		w = w->next;
 	}
 }
@@ -471,16 +460,30 @@ static const struct {
 	const char name[16];
 	void (*func)(struct parser *, struct word *);
 } directives[] = {
-	{ "merge", parse_push },
-	{ "push", parse_push },
-	{ "unveil", parse_unveil },
-	{ "ability", parse_ability },
-	{ "sysctl", parse_sysctl },
-	{ "priv", parse_priv },
-	{ "ioctl", parse_ioctls },
-	{ "ioctls", parse_ioctls },
-	{ "sockaf", parse_sockaf },
-	{ "socklvl", parse_socklvl },
+	{ "merge",	parse_push	},
+	{ "push",	parse_push	},
+	{ "unveil",	parse_unveil	},
+	{ "ability",	parse_ability	},
+	{ "sysctl",	parse_sysctl	},
+	{ "priv",	parse_priv	},
+	{ "ioctl",	parse_ioctls	},
+	{ "ioctls",	parse_ioctls	},
+	{ "sockaf",	parse_sockaf	},
+	{ "socklvl",	parse_socklvl	},
+};
+
+static const struct {
+	const char name[8];
+	int flags;
+} directive_flags[] = {
+	{ "allow",	CURTAIN_ALLOW },
+	{ "pass",	CURTAIN_PASS },
+	{ "gate",	CURTAIN_GATE },
+	{ "wall",	CURTAIN_WALL },
+	{ "deny",	CURTAIN_DENY },
+	{ "trap",	CURTAIN_TRAP },
+	{ "kill",	CURTAIN_KILL },
+	{ "inherit",	CURTAIN_INHERIT },
 };
 
 static void
@@ -490,15 +493,35 @@ parse_directive(struct parser *par, char *p)
 	int unsafety;
 
 	dir = p = skip_spaces(p);
-	dir_end = p = skip_word(p, "!:");
-	if (*p == ':') /* intended for argv directives */
-		p++;
+	dir_end = p = skip_word(p, "-!:");
+
+	par->directive_flags = 0;
+	if (*p == '-') {
+		char *q;
+		bool found;
+		q = skip_word(++p, "!:");
+		found = false;
+		for (size_t i = 0; i < nitems(directive_flags); i++)
+			if (strmemcmp(directive_flags[i].name, p, q - p) == 0) {
+				found = true;
+				par->directive_flags |= directive_flags[i].flags;
+				break;
+			}
+		if (!found) {
+			parse_error(par, "unknown directive flag");
+			return;
+		}
+		p = q;
+	}
 
 	unsafety = 0;
 	while (*p == '!')
 		p++, unsafety++;
 	if (unsafety > par->cfg->unsafety)
 		return;
+
+	if (*p == ':') /* intended for argv directives */
+		p++;
 
 	if (strmemcmp("include", dir, dir_end - dir) == 0) {
 		/*
@@ -731,13 +754,15 @@ process_file(struct curtain_config *cfg, const char *path)
 }
 
 int
-curtain_config_directive(struct curtain_config *cfg, const char *directive)
+curtain_config_directive(struct curtain_config *cfg, struct curtain_slot *slot,
+    const char *directive)
 {
 	struct parser par = {
 		.cfg = cfg,
 		.file_name = "argv",
 		.matched = true,
 		.apply = true,
+		.slot = slot,
 	};
 	par.line = strdup(directive);
 	if (!par.line)
