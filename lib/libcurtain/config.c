@@ -33,6 +33,7 @@ struct parser {
 	char *last_matched_section_path;
 	size_t section_path_offset;
 	bool unveil_create;
+	bool explicit_flags;
 	int directive_flags;
 };
 
@@ -456,6 +457,16 @@ parse_socklvl(struct parser *par, struct word *w)
 	}
 }
 
+static void
+parse_default(struct parser *par, struct word *w)
+{
+	if (w)
+		return (parse_error(par, "unexpected word"));
+	if (!par->explicit_flags)
+		return (parse_error(par, "expected flags"));
+	curtain_default(par->slot, par->directive_flags);
+}
+
 static const struct {
 	const char name[16];
 	void (*func)(struct parser *, struct word *);
@@ -470,6 +481,7 @@ static const struct {
 	{ "ioctls",	parse_ioctls	},
 	{ "sockaf",	parse_sockaf	},
 	{ "socklvl",	parse_socklvl	},
+	{ "default",	parse_default	},
 };
 
 static const struct {
@@ -496,14 +508,16 @@ parse_directive(struct parser *par, char *p)
 	dir_end = p = skip_word(p, "-!:");
 
 	par->directive_flags = 0;
-	if (*p == '-') {
+	par->explicit_flags = false;
+	while (*p == '-') {
 		char *q;
 		bool found;
-		q = skip_word(++p, "!:");
+		q = skip_word(++p, "-!:");
 		found = false;
 		for (size_t i = 0; i < nitems(directive_flags); i++)
 			if (strmemcmp(directive_flags[i].name, p, q - p) == 0) {
 				found = true;
+				par->explicit_flags = true;
 				par->directive_flags |= directive_flags[i].flags;
 				break;
 			}
