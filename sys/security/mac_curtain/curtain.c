@@ -1589,6 +1589,7 @@ cred_log_key_failed(const struct ucred *cr, enum curtainreq_type type, union cur
 		case PRIV_VFS_GENERATION:
 		case PRIV_VFS_EXCEEDQUOTA:
 		case PRIV_VFS_SYSFLAGS:
+		case PRIV_NETINET_REUSEPORT:
 			break;
 		default:
 			CURTAIN_CRED_LOG(cr, act, "priv %d", key.priv);
@@ -2649,8 +2650,8 @@ curtain_priv_check(struct ucred *cr, int priv)
 		abl = CURTAINABL_MLOCK;
 		break;
 	case PRIV_NETINET_RESERVEDPORT:
-#if 0
 	case PRIV_NETINET_REUSEPORT:
+#if 0
 	case PRIV_NETINET_SETHDROPTS:
 #endif
 		abl = CURTAINABL_NET;
