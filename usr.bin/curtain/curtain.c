@@ -282,9 +282,10 @@ main(int argc, char *argv[])
 	curtain_enable((main_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 	curtain_enable((args_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 
-	while ((ch = getopt(argc, argv, "@:vfkgneaA!t:p:u:0:SslUXYWD")) != -1)
+	while ((ch = getopt(argc, argv, "@:d:vfkgneaA!t:p:u:0:SslUXYWD")) != -1)
 		switch (ch) {
 		case '@':
+		case 'd':
 			curtain_config_directive(cfg, args_slot, optarg);
 			break;
 		case 'v':

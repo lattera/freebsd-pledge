@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <ctype.h>
 #include <curtain.h>
 #include <dirent.h>
 #include <err.h>
@@ -720,6 +721,8 @@ parse_line(struct parser *par)
 		return;
 	if (p[0] == '@')
 		return (parse_directive(par, p + 1));
+	if (isalnum(*p) || *p == '_')
+		return (parse_directive(par, p));
 	if (par->skip)
 		return;
 	need_slot(par);

@@ -148,20 +148,20 @@ shared_tmpdir_protects_krb5cc_body() {
 
 atf_test_case posixshm_restriction
 posixshm_restriction_body() {
-	atf_check curtain -@ability:posixipc \
+	atf_check curtain -d ability:posixipc \
 		sh -c 'posixshmcontrol create /test && posixshmcontrol dump /test && posixshmcontrol rm /test'
 	local p="/tests/curtain-posix-shm-test"
 	atf_check posixshmcontrol create "$p/test"
 	atf_check posixshmcontrol dump "$p/test"
-	atf_check -s not-exit:0 -e not-empty curtain -@ability:posixipc \
+	atf_check -s not-exit:0 -e not-empty curtain -d ability:posixipc \
 		posixshmcontrol dump "$p/test"
 	atf_check posixshmcontrol rm "$p/test"
 }
 
 atf_test_case cmd_timeout
 cmd_timeout_body() {
-	atf_check -s exit:124 curtain -@ability:reap timeout 0.001 sleep 100
-	atf_check -s exit:124 curtain -@ability:reap -t curtain timeout 0.001 curtain -f sleep 100
+	atf_check -s exit:124 curtain -d ability:reap timeout 0.001 sleep 100
+	atf_check -s exit:124 curtain -d ability:reap -t curtain timeout 0.001 curtain -f sleep 100
 }
 
 atf_test_case cmd_id
@@ -195,14 +195,14 @@ extattrs_body() {
 	atf_check -s not-exit:0 -e not-empty curtain getextattr user k f
 	atf_check -s not-exit:0 -e not-empty curtain setextattr user k V f
 	atf_check -s not-exit:0 -e not-empty curtain rmextattr user k f
-	atf_check -o file:exp-ls-1 curtain -@ability:extattr -u f lsextattr user f
-	atf_check -o file:exp-get-1 curtain -@ability:extattr -u f getextattr user k f
-	atf_check -s not-exit:0 -e not-empty curtain -@ability:extattr -u f:r setextattr user k V f
-	atf_check curtain -@ability:extattr -u f:rw setextattr user k V f
-	atf_check -o file:exp-get-0 curtain -@ability:extattr -u f getextattr user k f
-	atf_check -s not-exit:0 -e not-empty curtain -@ability:extattr -u f:r rmextattr user k f
-	atf_check curtain -@ability:extattr -u f:rw rmextattr user k f
-	atf_check -o file:exp-ls-0 curtain -@ability:extattr -u f lsextattr user f
+	atf_check -o file:exp-ls-1 curtain -d ability:extattr -u f lsextattr user f
+	atf_check -o file:exp-get-1 curtain -d ability:extattr -u f getextattr user k f
+	atf_check -s not-exit:0 -e not-empty curtain -d ability:extattr -u f:r setextattr user k V f
+	atf_check curtain -d ability:extattr -u f:rw setextattr user k V f
+	atf_check -o file:exp-get-0 curtain -d ability:extattr -u f getextattr user k f
+	atf_check -s not-exit:0 -e not-empty curtain -d ability:extattr -u f:r rmextattr user k f
+	atf_check curtain -d ability:extattr -u f:rw rmextattr user k f
+	atf_check -o file:exp-ls-0 curtain -d ability:extattr -u f lsextattr user f
 }
 
 atf_test_case reunveil_inheritance
@@ -223,8 +223,8 @@ chflags_body() {
 	atf_check touch f
 	chflags uchg f || atf_skip "chflags not supported?"
 	atf_check -s not-exit:0 -e not-empty curtain -u f:rw chflags 0 f
-	atf_check -s not-exit:0 -e not-empty curtain -@ability:chflags -u f:r chflags 0 f
-	atf_check curtain -@ability:chflags -u f:rw chflags 0 f
+	atf_check -s not-exit:0 -e not-empty curtain -d ability:chflags -u f:r chflags 0 f
+	atf_check curtain -d ability:chflags -u f:rw chflags 0 f
 }
 
 atf_test_case chflags_system
@@ -232,8 +232,8 @@ chflags_system_body() {
 	atf_check touch f
 	chflags schg f || atf_skip "modifying system flags already disabled"
 	atf_check -s not-exit:0 -e not-empty curtain -u f:rw chflags 0 f
-	atf_check -s not-exit:0 -e not-empty curtain -@ability:chflags -@ability:sysflags -u f:r chflags 0 f
-	atf_check curtain -@ability:chflags -@ability:sysflags -u f:rw chflags 0 f
+	atf_check -s not-exit:0 -e not-empty curtain -d ability:chflags -d ability:sysflags -u f:r chflags 0 f
+	atf_check curtain -d ability:chflags -d ability:sysflags -u f:rw chflags 0 f
 }
 
 atf_init_test_cases() {

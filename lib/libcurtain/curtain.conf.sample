@@ -38,14 +38,14 @@
 ~/Templates/				: rw
 
 [_browser]
-@push _audio
+merge _audio
 ~/Downloads/				: rw
 
 [_p2p]
 ~/Downloads/				: rw
 
 [_player]
-@push _audio
+merge _audio
 ~/Music/				: r
 ~/Videos/				: r
 
@@ -53,8 +53,8 @@
 ~/Pictures/				: r
 
 [_terminal]
-@push _pty
-@push _session
+merge _pty
+merge _session
 
 
 [sh, ksh, ksh93, mksh, oksh, dash, bash, zsh : _bourne]
@@ -98,7 +98,7 @@ ${ZDOTDIR:-~/}/.zlogout			: r
 ~/.log{in,out}				: r
 
 [_login]
-@push _spwddb
+merge _spwddb
 /var/run/nologin
 /var/run/motd
 /etc/login.conf{,.db}
@@ -110,15 +110,15 @@ ${ZDOTDIR:-~/}/.zlogout			: r
 /usr/local/etc/pam.d/
 
 [su : _login]
-@ability id any_id
-@ability audit
-@ability! rsugid_exec
-@push _syslog
+ability id any_id
+ability audit
+ability! rsugid_exec
+merge _syslog
 
 [doas : _login]
-@ability id any_id
-@ability! rsugid_exec
-@push _syslog
+ability id any_id
+ability! rsugid_exec
+merge _syslog
 [doas _localbase]
 /usr/local/etc/doas.conf
 
@@ -127,38 +127,38 @@ ${ZDOTDIR:-~/}/.zlogout			: r
 ~/.{n,}exrc				: r
 /etc/vi.exrc				: r
 # recovery handling needs to be able to read the user database
-@push! _pwddb
-@unveil! /var/tmp/vi.recover/		: rw
+merge! _pwddb
+unveil! /var/tmp/vi.recover/		: rw
 
 [git]
 ~/.gitconfig				: r
 
 [ping, ping6]
-@ability id
-@priv net_raw netinet_raw
-@socklvl icmpv6
+ability id
+priv net_raw netinet_raw
+socklvl icmpv6
 
 [traceroute, traceroute6]
-@ability id
-@priv net_raw netinet_raw
-@sysctl net.inet.ip.ttl
-@sysctl net.inet6.ip6.hlim
+ability id
+priv net_raw netinet_raw
+sysctl net.inet.ip.ttl
+sysctl net.inet6.ip6.hlim
 
 [mtr]
-@ability id
-@priv net_raw netinet_raw
+ability id
+priv net_raw netinet_raw
 
 [tcpdump]
-@ability id
-@push _bpf
+ability id
+merge _bpf
 
 [wireshark]
-@push _bpf
+merge _bpf
 ~/.config/wireshark/			: rw
 
 [emacs : _editor]
 # NOTE: Sometimes crashes with untrusted X11.
-@push! _pwddb
+merge! _pwddb
 ~/.emacs.el				: rw
 ~/.emacs				: rw
 ~/.emacs.d/				: rw
@@ -168,21 +168,21 @@ ${ZDOTDIR:-~/}/.zlogout			: r
 ~/.config/abiword/			: rw
 
 [gimp : _editor]
-@ability sysvipc
+ability sysvipc
 /usr/local/etc/gimp/			: r
 ~/.config/GIMP/				: rw
 ~/.cache/gimp/				: rw
 
 [inkscape : _editor]
-@ability posixipc
+ability posixipc
 ~/.cache/inkscape/			: rw
 ~/.config/inkscape/			: rw
 
 [libreoffice : _editor]
-@ability prot_exec
-@push! _pwddb
+ability prot_exec
+merge! _pwddb
 # LibreOffice ignores $TMPDIR for some things.
-@push!! _unsafe_system_tmpdir
+merge!! _unsafe_system_tmpdir
 ~/.config/libreoffice/			: rw
 
 [xpdf : _viewer]
@@ -228,7 +228,7 @@ ${ZDOTDIR:-~/}/.zlogout			: r
 # NOTE: Sometimes crash due to X11 errors with -X.  Works better under -Y/-W.
 # Run with GDK_BACKEND=wayland for -W.  When giving it DRM access, it sometimes
 # doesn't activate until the second start.
-@ability posixipc prot_exec
+ability posixipc prot_exec
 ~/.mozilla/firefox/			: rw
 ~/.cache/mozilla/firefox/		: rw
 
@@ -236,22 +236,22 @@ ${ZDOTDIR:-~/}/.zlogout			: r
 # NOTE: When running chromium as an "untrusted" X11 client (curtain -X), the
 # setting "Use system title bar and borders" in the "Appearance" section must
 # be enabled.
-@ability posixipc prot_exec sendfile
+ability posixipc prot_exec sendfile
 ~/.config/chromium/			: rw
 ~/.cache/chromium/			: rw
 
 [thunderbird]
-@ability posixipc prot_exec
+ability posixipc prot_exec
 ~/.thunderbird/				: rw
 ~/.cache/thunderbird/			: rw
 
 [falkon : _browser]
 ~/.config/falkon/			: rw
-@ability prot_exec
+ability prot_exec
 ~/.cache/falkon/			: rw
 
 [otter-browser : _browser]
-@ability prot_exec
+ability prot_exec
 ~/.config/otter/			: rw
 ~/.cache/Otter/				: rw
 
@@ -276,23 +276,23 @@ ${ZDOTDIR:-~/}/.zlogout			: r
 ~/.mplayer/				: rw
 
 [vlc : _player]
-@ability sysvipc
-@ability prot_exec
+ability sysvipc
+ability prot_exec
 ~/.config/vlc/				: rw
 ~/.local/share/vlc/			: rw
 
 [xterm : _terminal]
 # Dies with an X11 error when trying to select text under -X.
-@ability id
+ability id
 
 [urxvt : _terminal]
 
 [st : _terminal]
-@push! _pwddb
+merge! _pwddb
 
 
 [_ports_build]
-@push _pwddb
+merge _pwddb
 /etc/make.conf
 /usr/ports/
 /usr/include/
@@ -302,7 +302,7 @@ ${ZDOTDIR:-~/}/.zlogout			: r
 /usr/local/include/
 
 [_src_build]
-@push _pwddb
+merge _pwddb
 /etc/make.conf
 /etc/src.conf
 /usr/src/
@@ -314,10 +314,10 @@ ${ZDOTDIR:-~/}/.zlogout			: r
 # binaries and periodic scripts also should be run under curtain or disabled.
 
 [sendmail : _daemon]
-@push _login
-@push _syslog
-@push _shared_tmpdir # mail.local(8) uses /tmp directly
-@ability id any_id chown
+merge _login
+merge _syslog
+merge _shared_tmpdir # mail.local(8) uses /tmp directly
+ability id any_id chown
 /etc/mail/
 /etc/aliases
 /var/run/sendmail.pid : rw
@@ -326,9 +326,9 @@ ${ZDOTDIR:-~/}/.zlogout			: r
 #~user/.forward
 
 [exim : _daemon]
-@push _login
-@push _syslog
-@ability id any_id chown
+merge _login
+merge _syslog
+ability id any_id chown
 /etc/aliases
 /usr/local/etc/exim/
 /var/run/ : b
@@ -339,9 +339,9 @@ ${ZDOTDIR:-~/}/.zlogout			: r
 #~user/.forward
 
 [ftpd : _daemon]
-@push _login
-@push _syslog
-@ability id any_id chown
+merge _login
+merge _syslog
+ability id any_id chown
 /etc/ftpusers
 /etc/ftpchroot
 /etc/ftphosts
@@ -355,11 +355,11 @@ ${ZDOTDIR:-~/}/.zlogout			: r
 
 [samba : _daemon]
 # NOTE: Needs `curtain -f`, will access the TMPDIR under different UIDs.
-@push _login
-@push _syslog
-@ability id any_id chown
-@ability extattr acl quota
-@sysctl kern.corefile
+merge _login
+merge _syslog
+ability id any_id chown
+ability extattr acl quota
+sysctl kern.corefile
 /usr/local/etc/smb4.conf
 /var/db/samba4/ ! rwu
 /var/run/samba4/ ! rwu

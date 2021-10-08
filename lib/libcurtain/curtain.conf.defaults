@@ -34,57 +34,57 @@
 /etc/localtime				: r
 /etc/malloc.conf			: r
 
-@ability stdio
-@ability thread
-@ability rlimit
-@ability sched
-@ability vfs_read vfs_write vfs_create vfs_delete
-@ability flock fattr
-@ability mkfifo
-@ability proc ps
-@ability posixrt
-@ability curtain
+ability stdio
+ability thread
+ability rlimit
+ability sched
+ability vfs_read vfs_write vfs_create vfs_delete
+ability flock fattr
+ability mkfifo
+ability proc ps
+ability posixrt
+ability curtain
 
-@push _libs
+merge _libs
 
 [_basic]
-@push _acl
-@push _tty
-@push _unix
-@push _network
-@push _localbase
-@push _share
-@push _libs
-@push _exec
-@push _cmds
+merge _acl
+merge _tty
+merge _unix
+merge _network
+merge _localbase
+merge _share
+merge _libs
+merge _exec
+merge _cmds
 
 [_extra]
 # Lots of permissions that ought to be safe even for root processes (with
 # proper unveils).
-@ability prot_exec
-@ability sysvipc
-@ability posixipc
-@ability mlock
-@ability acl
-@ability mac
-@ability extattr
-@ability aio
-@ability sendfile
-@ability reap
-@ability rfork
-@ability chroot
-@ability chown
-@ability id any_id
+ability prot_exec
+ability sysvipc
+ability posixipc
+ability mlock
+ability acl
+ability mac
+ability extattr
+ability aio
+ability sendfile
+ability reap
+ability rfork
+ability chroot
+ability chown
+ability id any_id
 # May allow privilege escalations if untrusted processes have access to paths
 # writable by the sandboxed process.
-@ability! chmod_special
-@push _fflags
-@push _pty
-@push _cryptodev
+ability! chmod_special
+merge _fflags
+merge _pty
+merge _cryptodev
 
 [_fflags]
-@ability chflags
-@ability! sysflags
+ability chflags
+ability! sysflags
 
 [_rtld]
 /etc/libmap.conf			: r
@@ -96,7 +96,7 @@
 /usr/local/etc/libmap.d/		: r
 
 [_exec : _libs]
-@ability exec
+ability exec
 
 [_libs : _rtld]
 /usr/libdata/				: r
@@ -129,32 +129,32 @@
 /usr/local/share/			: rx
 
 [_shell]
-@push curtain
+merge curtain
 
 [_session : _shell]
-@push _pty
+merge _pty
 
 [_acl]
-@ability acl
+ability acl
 
 [_unix]
-@ability unix sendfd recvfd
-@sockaf unix
+ability unix sendfd recvfd
+sockaf unix
 
 [_tty]
 /dev/tty				: rma
 /etc/termcap				: r
-@ability tty
-@ioctls tty_basic
+ability tty
+ioctls tty_basic
 
 [_pty : _tty]
 # NOTE: The /dev/pts directory doesn't exist until a PTY is created.
 /dev/					: D
-@ioctls tty_pts
+ioctls tty_pts
 
 [_cryptodev]
 /dev/crypto				: rm
-@ioctls cryptodev
+ioctls cryptodev
 
 [curtain]
 # Let nested curtain sandboxes find their settings.
@@ -196,15 +196,15 @@ ${TMPDIR:-/tmp}/krb5cc_%u		:
 /var/db/services.db			: r
 /etc/ssl/				: r
 /etc/ssl/private/			:
-@ability net
-@sockaf inet inet6
+ability net
+sockaf inet inet6
 # XXX Socket options should be more restricted.
-@socklvl socket
-@socklvl ip ipv6
-@socklvl tcp udp
-@sysctl net.routetable
-@ioctls net_basic
-@ioctls net_route
+socklvl socket
+socklvl ip ipv6
+socklvl tcp udp
+sysctl net.routetable
+ioctls net_basic
+ioctls net_route
 [_network _localbase]
 /usr/local/etc/ssl/			: r
 /usr/local/etc/ssl/private/		:
@@ -215,21 +215,21 @@ ${TMPDIR:-/tmp}/krb5cc_%u		:
 /var/run/logpriv : u
 
 [_bpf]
-@ioctls bpf
-@unveil /dev/bpf			: rm
+ioctls bpf
+unveil /dev/bpf			: rm
 
 [_audio]
-@ioctls oss
+ioctls oss
 /dev/sndstat				: r
 /dev/dsp				: rm
 /dev/mixer				: rm
 
 [_drm]
-@ability! any_ioctl # XXX
+ability! any_ioctl # XXX
 /dev/drm/				: rm
 /dev/dri/				: rm
 /dev/pci				: r
-@sysctl kern.devname
-@sysctl dev.drm
-@sysctl hw.dri
+sysctl kern.devname
+sysctl dev.drm
+sysctl hw.dri
 

@@ -1,5 +1,5 @@
 # NOTE: Default system configurations are located in /etc/defaults/curtain.conf
 
-@include /usr/local/etc/curtain.{conf,d/}
+include /usr/local/etc/curtain.{conf,d/}
 
-#@include /usr/share/examples/curtain/curtain.conf.sample
+# include /usr/share/examples/curtain/curtain.conf.sample
