@@ -319,6 +319,9 @@ static const struct promise_sysctl {
 	enum promise_type promise;
 	const char *sysctl;
 } sysctls_table[] = {
+#ifdef AF_INET6
+	{ PROMISE_INET, "net.inet6.ip6.addrctlpolicy" },
+#endif
 	{ PROMISE_ROUTE, "net.routetable" },
 };
 
