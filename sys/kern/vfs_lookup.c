@@ -812,9 +812,14 @@ out:
 	nameicap_cleanup(ndp);
 	pwd_drop(pwd);
 #ifdef UNVEIL_SUPPORT
-	if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE &&
-	    ndp->ni_unveil == &utrav)
-		unveil_ops->traverse_end(td, ndp->ni_unveil);
+	if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE) {
+		unveil_perms uperms;
+		uperms = unveil_ops->traverse_uperms(td, ndp->ni_unveil);
+		if (!(uperms & UPERM_EXPOSE))
+			error = ENOENT;
+		if (ndp->ni_unveil == &utrav)
+			unveil_ops->traverse_end(td, ndp->ni_unveil);
+	}
 #endif
 	return (error);
 }
