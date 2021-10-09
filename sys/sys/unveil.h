@@ -143,6 +143,7 @@ struct unveil_ops {
 	unveil_perms (*traverse_uperms)(struct thread *, struct unveil_traversal *);
 	void (*traverse_end)(struct thread *, struct unveil_traversal *);
 	unveil_perms (*tracker_find)(struct thread *, struct vnode *);
+	unveil_perms (*tracker_find_mount)(struct thread *, struct mount *);
 	void (*tracker_substitute)(struct thread *,
 	    struct vnode *old_vp, struct vnode *new_vp, unveil_perms);
 	void (*tracker_push_file)(struct thread *, struct file *);
@@ -180,6 +181,8 @@ struct unveil_stash {
 void unveil_stash_init(struct unveil_stash *);
 void unveil_stash_copy(struct unveil_stash *dst, const struct unveil_stash *src);
 void unveil_stash_free(struct unveil_stash *);
+
+unveil_perms unveil_stash_mount_lookup(struct unveil_stash *, struct mount *);
 
 void unveil_stash_begin(struct unveil_stash *, struct unveil_base *base);
 int unveil_stash_update(struct unveil_stash *, enum unveil_on, unsigned index, unveil_perms);

@@ -109,7 +109,9 @@ struct unveil_tracker {
 	uint64_t lockdown_gen;
 	struct unveil_tracker_entry {
 		struct vnode *vp;
+		struct mount *mp;
 		unsigned vp_nchash, vp_hash;
+		int mp_gen;
 		unveil_perms uperms;
 	} entries[UNVEIL_TRACKER_ENTRIES_COUNT];
 	unsigned fill;
@@ -396,6 +398,21 @@ unveil_stash_check(struct unveil_stash *stash)
 }
 
 
+unveil_perms
+unveil_stash_mount_lookup(struct unveil_stash *stash, struct mount *mp)
+{
+	const enum unveil_on on = UNVEIL_ON_SELF;
+	struct unveil_node *node;
+	unveil_perms uperms;
+	uperms = UPERM_NONE;
+	UNVEIL_FOREACH(node, stash)
+		if (node->vp->v_mount == mp) /* XXX linear search */
+			uperms |= node->frozen_uperms[on] &
+			    (stash->flags.on[on].wanted ?
+			     unveil_node_wanted_uperms(node, on) : UPERM_ALL);
+	return (uperms_expand(uperms));
+}
+
 void
 unveil_stash_enable(struct unveil_stash *stash, enum unveil_on on)
 {
@@ -471,7 +488,7 @@ unveil_stash_update(struct unveil_stash *stash,
 {
 	struct unveil_node *node;
 	UNVEIL_FOREACH(node, stash) {
-		if (node->index == index) /* XXX */ {
+		if (node->index == index) /* XXX linear search */ {
 			node->wanted[on] = true;
 			node->wanted_uperms[on] = uperms_expand(uperms);
 			return (0);
@@ -556,7 +573,26 @@ unveil_tracker_find(struct thread *td, struct vnode *vp)
 			unsigned i = (track->fill + j) % UNVEIL_TRACKER_ENTRIES_COUNT;
 			if (track->entries[i].vp == vp &&
 			    track->entries[i].vp_nchash == vp->v_nchash &&
-			    track->entries[i].vp_hash == vp->v_hash)
+			    track->entries[i].vp_hash == vp->v_hash &&
+			    track->entries[i].mp == vp->v_mount &&
+			    track->entries[i].mp_gen == (vp->v_mount ? vp->v_mount->mnt_gen : 0))
+				return (track->entries[i].uperms);
+		} while (j--);
+	}
+	return (UPERM_NONE);
+}
+
+static unveil_perms
+unveil_tracker_find_mount(struct thread *td, struct mount *mp)
+{
+	struct unveil_tracker *track;
+	MPASS(mp);
+	if ((track = unveil_tracker_prep(td))) {
+		unsigned j = UNVEIL_TRACKER_ENTRIES_COUNT - 1;
+		do {
+			unsigned i = (track->fill + j) % UNVEIL_TRACKER_ENTRIES_COUNT;
+			if (track->entries[i].mp == mp &&
+			    track->entries[i].mp_gen == mp->mnt_gen)
 				return (track->entries[i].uperms);
 		} while (j--);
 	}
@@ -588,6 +624,8 @@ unveil_tracker_set(struct thread *td, size_t i, struct vnode *vp, unveil_perms u
 		.vp = vp,
 		.vp_nchash = vp ? vp->v_nchash : 0,
 		.vp_hash = vp ? vp->v_hash : 0,
+		.mp = vp ? vp->v_mount : NULL,
+		.mp_gen = vp && vp->v_mount ? vp->v_mount->mnt_gen : 0,
 		.uperms = uperms,
 	};
 }
@@ -602,6 +640,8 @@ unveil_tracker_replace(struct thread *td, size_t i, struct vnode *vp)
 		.vp = vp,
 		.vp_nchash = vp->v_nchash,
 		.vp_hash = vp->v_hash,
+		.mp = vp->v_mount,
+		.mp_gen = vp->v_mount ? vp->v_mount->mnt_gen : 0,
 		.uperms = track->entries[i].uperms,
 	};
 }
@@ -1311,6 +1351,7 @@ static struct unveil_ops unveil_ops_here = {
 	.traverse_uperms = unveil_traverse_uperms,
 	.traverse_end = unveil_traverse_end,
 	.tracker_find = unveil_tracker_find,
+	.tracker_find_mount = unveil_tracker_find_mount,
 	.tracker_substitute = unveil_tracker_substitute,
 	.tracker_push_file = unveil_tracker_push_file,
 	.tracker_save_file = unveil_tracker_save_file,

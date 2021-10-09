@@ -30,6 +30,8 @@ __FBSDID("$FreeBSD$");
 #include <sys/sbuf.h>
 #include <sys/stat.h>
 #include <sys/imgact.h>
+#include <sys/vnode.h>
+#include <sys/mount.h>
 #include <sys/unveil.h>
 #include <sys/curtain.h>
 
@@ -2366,6 +2368,33 @@ curtain_vnode_check_exec(struct ucred *cr,
 }
 
 
+static int
+curtain_mount_check_stat(struct ucred *cr,
+    struct mount *mp, struct label *mplabel)
+{
+	unveil_perms uperms;
+	int error;
+#ifdef UNVEIL_SUPPORT
+	if (unveil_active(curthread)) {
+		struct curtain *ct;
+		if (mtx_owned(&mountlist_mtx)) { /* getfsstat(2)? */
+			if ((ct = CRED_SLOT(cr)))
+				uperms = unveil_stash_mount_lookup(&ct->ct_ustash, mp);
+			else
+				uperms = UPERM_NONE;
+		} else
+			uperms = unveil_ops->tracker_find_mount(curthread, mp);
+	} else
+#endif
+		uperms = UPERM_ALL;
+	if ((error = unveil_check_uperms(uperms, UPERM_STATUS)))
+		return (error);
+	if ((error = cred_ability_check(cr, CURTAINABL_VFS_MISC)))
+		return (error);
+	return (0);
+}
+
+
 static void curtain_posixshm_create(struct ucred *cr,
     struct shmfd *shmfd, struct label *shmlabel)
 {
@@ -2872,6 +2901,8 @@ static struct mac_policy_ops curtain_policy_ops = {
 	.mpo_vnode_check_relabel = curtain_vnode_check_relabel,
 	.mpo_vnode_check_exec = curtain_vnode_check_exec,
 	.mpo_vnode_check_revoke = curtain_vnode_check_revoke,
+
+	.mpo_mount_check_stat = curtain_mount_check_stat,
 
 	.mpo_posixshm_init_label = curtain_init_label_barrier,
 	.mpo_posixshm_destroy_label = curtain_destroy_label_barrier,
