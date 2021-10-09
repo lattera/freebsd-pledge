@@ -57,6 +57,23 @@ merge _pty
 merge _session
 
 
+[_x11_trusted]
+ability-gate sysvipc # MIT-SHM
+
+[_wayland]
+merge _drm_render
+
+[_drm_base]
+/dev/drm/				: rm
+/dev/dri/				: rm
+/dev/pci				: r
+sysctl kern.devname
+sysctl dev.drm
+sysctl hw.dri
+[_drm_full : _drm_base]
+ability! any_ioctl # XXX
+
+
 [sh, ksh, ksh93, mksh, oksh, dash, bash, zsh : _bourne]
 
 [_shell _bourne]

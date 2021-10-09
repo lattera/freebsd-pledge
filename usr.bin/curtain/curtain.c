@@ -468,6 +468,8 @@ main(int argc, char *argv[])
 		if (no_fork)
 			errx(EX_USAGE, "X11 mode incompatible with -f");
 		curtain_config_tag_push(cfg, "_x11");
+		curtain_config_tag_push(cfg,
+		    x11_mode == X11_TRUSTED ? "_x11_trusted" : "_x11_untrusted");
 		curtain_config_tag_push(cfg, "_gui");
 		curtain_config_setup_x11(cfg, x11_mode == X11_TRUSTED);
 	};

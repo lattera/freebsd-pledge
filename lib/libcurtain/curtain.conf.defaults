@@ -231,20 +231,12 @@ ioctls net_route
 
 [_bpf]
 ioctls bpf
-unveil /dev/bpf				: rm
+/dev/bpf				: rm
 
 [_audio]
 ioctls oss
 /dev/sndstat				: r
 /dev/dsp				: rm
 /dev/mixer				: rm
-
-[_drm]
-ability! any_ioctl # XXX
-/dev/drm/				: rm
-/dev/dri/				: rm
-/dev/pci				: r
-sysctl kern.devname
-sysctl dev.drm
-sysctl hw.dri
+sysctl hw.snd.default_unit
 
