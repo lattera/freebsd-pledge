@@ -27,6 +27,7 @@ ATF_TESTS_C+=	pledge_prot_exec
 ATF_TESTS_C+=	pledge_netdb
 ATF_TESTS_C+=	pledge_socket
 ATF_TESTS_C+=	pledge_tty
+LIBADD.pledge_tty+= util
 
 ATF_TESTS_C+=	unveil_paths
 ATF_TESTS_C+=	unveil_fork
