@@ -59,6 +59,7 @@ merge _session
 
 [_x11_trusted]
 ability-gate sysvipc # MIT-SHM
+merge _drm_render
 
 [_wayland]
 merge _drm_render
@@ -72,7 +73,9 @@ sysctl dev.drm
 sysctl hw.dri
 [_drm_full : _drm_base]
 ability! any_ioctl # XXX
-
+[_drm_render]
+# Needs platform-dependent ioctls from libdrm.
+# See /usr/share/examples/curtain/make-drm-render-conf.c
 
 [sh, ksh, ksh93, mksh, oksh, dash, bash, zsh : _bourne]
 
