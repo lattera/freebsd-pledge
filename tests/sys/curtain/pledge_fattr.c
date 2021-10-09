@@ -24,7 +24,7 @@ ATF_TC_BODY(chmod_sugid_allow, tc)
 	ATF_REQUIRE((fd = creat(p, m)) >= 0);
 	ATF_REQUIRE(fchown(fd, geteuid(), getegid()) >= 0);
 	ATF_CHECK(!is_sugid(p));
-	ATF_REQUIRE(pledge("error stdio rpath fattr chmod_special", "") >= 0);
+	ATF_REQUIRE(pledge("error stdio rpath fattr fsugid", "") >= 0);
 
 	ATF_CHECK(chmod(p, S_ISUID|m) >= 0);
 	ATF_CHECK(is_sugid(p));

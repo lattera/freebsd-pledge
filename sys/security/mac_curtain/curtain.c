@@ -783,7 +783,7 @@ static const sysfilset_t abilities_sysfils[CURTAINABL_COUNT] = {
 	[CURTAINABL_SCHED] = SYSFIL_SCHED,
 	[CURTAINABL_PS] = SYSFIL_PS,
 	[CURTAINABL_DEBUG] = SYSFIL_DEBUG,
-	[CURTAINABL_CHMOD_SPECIAL] = SYSFIL_CHMOD_SPECIAL,
+	[CURTAINABL_FMODE_SPECIAL] = SYSFIL_FMODE_SPECIAL,
 	[CURTAINABL_SENDFILE] = SYSFIL_SENDFILE,
 	[CURTAINABL_MOUNT] = SYSFIL_MOUNT,
 	[CURTAINABL_QUOTA] = SYSFIL_QUOTA,
@@ -1876,23 +1876,8 @@ get_cnp_uperms(struct vnode *dvp, struct componentname *cnp, struct vnode *vp)
 static int
 check_fmode(struct ucred *cr, unveil_perms uperms, mode_t mode)
 {
-	int error;
-	if (mode & ~ACCESSPERMS) {
-		if ((error = cred_ability_check(cr, CURTAINABL_CHMOD_SPECIAL)))
-			return (error);
-		if ((error = unveil_check_uperms(uperms, UPERM_SETATTR)))
-			return (error);
-	}
-	return (0);
-}
-
-static int
-check_vattr(struct ucred *cr, unveil_perms uperms, struct vattr *vap)
-{
-	int error;
-	if (vap->va_mode != (mode_t)VNOVAL &&
-	    (error = check_fmode(cr, uperms, vap->va_mode)))
-		return (error);
+	if (mode & (S_ISUID|S_ISGID))
+		return (cred_ability_check(cr, CURTAINABL_FSUGID));
 	return (0);
 }
 
@@ -1996,7 +1981,8 @@ curtain_vnode_check_create(struct ucred *cr,
 
 	uperms = get_cnp_uperms(dvp, cnp, NULL);
 
-	if ((error = check_vattr(cr, uperms, vap)))
+	if (vap->va_mode != (mode_t)VNOVAL &&
+	    (error = check_fmode(cr, uperms, vap->va_mode)))
 		return (error);
 
 	if (vap->va_type == VSOCK) {
@@ -2423,6 +2409,9 @@ curtain_posixshm_check_setmode(struct ucred *cr,
     struct shmfd *shmfd, struct label *shmlabel,
     mode_t mode)
 {
+	int error;
+	if ((error = check_fmode(cr, UPERM_ALL, mode)))
+		return (error);
 	return (cred_ability_check(cr, CURTAINABL_FATTR));
 }
 
@@ -2454,6 +2443,9 @@ curtain_posixsem_check_setmode(struct ucred *cr,
     struct ksem *ks, struct label *shmlabel,
     mode_t mode)
 {
+	int error;
+	if ((error = check_fmode(cr, UPERM_ALL, mode)))
+		return (error);
 	return (cred_ability_check(cr, CURTAINABL_FATTR));
 }
 

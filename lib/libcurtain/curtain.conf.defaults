@@ -39,7 +39,7 @@ ability thread
 ability rlimit
 ability sched
 ability vfs_read vfs_write vfs_create vfs_delete
-ability flock fattr
+ability flock fattr fmode_special
 ability mkfifo
 ability proc ps
 ability posixrt
@@ -77,7 +77,7 @@ ability chown
 ability id any_id
 # May allow privilege escalations if untrusted processes have access to paths
 # writable by the sandboxed process.
-ability! chmod_special
+ability! fsugid # chmod ug+s
 merge _fflags
 merge _pty
 merge _cryptodev
