@@ -33,6 +33,19 @@ ATF_TC_BODY(isatty_pipe, tc)
 	ATF_CHECK_EQ(ENOTTY, errno);
 }
 
+static const int misc_test_ioctls[] = {
+	TIOCSBRK,
+	TIOCCBRK,
+	TIOCSDTR,
+	TIOCCDTR,
+	TIOCSTOP,
+	TIOCSTART,
+	TIOCSCTTY,
+	TIOCDRAIN,
+	TIOCEXCL,
+	TIOCNXCL,
+};
+
 ATF_TC_WITHOUT_HEAD(tty_ioctls_pass_enotty);
 ATF_TC_BODY(tty_ioctls_pass_enotty, tc)
 {
@@ -41,16 +54,8 @@ ATF_TC_BODY(tty_ioctls_pass_enotty, tc)
 	ATF_REQUIRE((fd = creat("test", 0666)) >= 0);
 	ATF_REQUIRE(pledge("error stdio tty", "") >= 0);
 	ATF_CHECK_ERRNO(ENOTTY, ioctl(fd, TIOCGWINSZ, &ws) < 0);
-	ATF_CHECK_ERRNO(ENOTTY, ioctl(fd, TIOCSBRK) < 0);
-	ATF_CHECK_ERRNO(ENOTTY, ioctl(fd, TIOCCBRK) < 0);
-	ATF_CHECK_ERRNO(ENOTTY, ioctl(fd, TIOCSDTR) < 0);
-	ATF_CHECK_ERRNO(ENOTTY, ioctl(fd, TIOCCDTR) < 0);
-	ATF_CHECK_ERRNO(ENOTTY, ioctl(fd, TIOCSTOP) < 0);
-	ATF_CHECK_ERRNO(ENOTTY, ioctl(fd, TIOCSTART) < 0);
-	ATF_CHECK_ERRNO(ENOTTY, ioctl(fd, TIOCSCTTY) < 0);
-	ATF_CHECK_ERRNO(ENOTTY, ioctl(fd, TIOCDRAIN) < 0);
-	ATF_CHECK_ERRNO(ENOTTY, ioctl(fd, TIOCEXCL) < 0);
-	ATF_CHECK_ERRNO(ENOTTY, ioctl(fd, TIOCNXCL) < 0);
+	for (size_t i = 0; i < nitems(misc_test_ioctls); i++)
+		ATF_CHECK_ERRNO(ENOTTY, ioctl(fd, misc_test_ioctls[i]) < 0);
 }
 
 ATF_TC_WITHOUT_HEAD(tty_ioctls_deny);
@@ -61,16 +66,8 @@ ATF_TC_BODY(tty_ioctls_deny, tc)
 	ATF_REQUIRE((fd = creat("test", 0666)) >= 0);
 	ATF_REQUIRE(pledge("error stdio", "") >= 0);
 	ATF_CHECK_ERRNO(EPERM, ioctl(fd, TIOCGWINSZ, &ws) < 0);
-	ATF_CHECK_ERRNO(EPERM, ioctl(fd, TIOCSBRK) < 0);
-	ATF_CHECK_ERRNO(EPERM, ioctl(fd, TIOCCBRK) < 0);
-	ATF_CHECK_ERRNO(EPERM, ioctl(fd, TIOCSDTR) < 0);
-	ATF_CHECK_ERRNO(EPERM, ioctl(fd, TIOCCDTR) < 0);
-	ATF_CHECK_ERRNO(EPERM, ioctl(fd, TIOCSTOP) < 0);
-	ATF_CHECK_ERRNO(EPERM, ioctl(fd, TIOCSTART) < 0);
-	ATF_CHECK_ERRNO(EPERM, ioctl(fd, TIOCSCTTY) < 0);
-	ATF_CHECK_ERRNO(EPERM, ioctl(fd, TIOCDRAIN) < 0);
-	ATF_CHECK_ERRNO(EPERM, ioctl(fd, TIOCEXCL) < 0);
-	ATF_CHECK_ERRNO(EPERM, ioctl(fd, TIOCNXCL) < 0);
+	for (size_t i = 0; i < nitems(misc_test_ioctls); i++)
+		ATF_CHECK_ERRNO(EPERM, ioctl(fd, misc_test_ioctls[i]) < 0);
 }
 
 ATF_TP_ADD_TCS(tp)
