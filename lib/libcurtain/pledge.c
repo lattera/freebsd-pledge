@@ -152,6 +152,7 @@ static const struct promise_name {
 };
 
 static const enum promise_type depends_table[][2] = {
+	{ PROMISE_PTS, PROMISE_TTY },
 	{ PROMISE_DNS, PROMISE_INET },
 	{ PROMISE_DNS, PROMISE_ROUTE }, /* XXX */
 	{ PROMISE_INET, PROMISE_NET },
@@ -356,6 +357,7 @@ static const struct promise_unveil {
 	{ _PATH_SERVICES_DB, R,				PROMISE_DNS },
 	{ _PATH_PROTOCOLS, R,				PROMISE_DNS },
 	{ _PATH_TTY, R|W|A,				PROMISE_TTY },
+	{ _PATH_DEV, UPERM_DEVFS,			PROMISE_PTS },
 	{ _PATH_NS_CONF, R,				PROMISE_GETPW },
 	{ _PATH_MP_DB, R,				PROMISE_GETPW },
 	{ _PATH_SMP_DB, R,				PROMISE_GETPW },
