@@ -27,6 +27,8 @@ __FBSDID("$FreeBSD$");
 #include <sys/socket.h>
 #include <sys/socketvar.h>
 #include <sys/sockopt.h>
+#include <sys/domain.h>
+#include <sys/protosw.h>
 #include <sys/sbuf.h>
 #include <sys/stat.h>
 #include <sys/imgact.h>
@@ -1783,33 +1785,26 @@ curtain_socket_check_create(struct ucred *cr, int domain, int type, int protocol
 	return (cred_key_check(cr, CURTAINTYP_SOCKAF, (ctkey){ .sockaf = domain }));
 }
 
-static inline bool
-sockaf_is_net(int sockaf)
-{
-	return (sockaf != AF_LOCAL);
-}
-
 static int
-curtain_socket_check_bind(struct ucred *cr,
-    struct socket *so, struct label *solabel,
+curtain_socket_check_bind(struct ucred *cr, struct socket *so, struct label *solabel,
     struct sockaddr *sa)
 {
-	int error;
-	if (sockaf_is_net(sa->sa_family) &&
-	    (error = cred_ability_check(cr, CURTAINABL_NET_SERVER)))
+	int sockaf, error;
+	sockaf = sa->sa_family == AF_UNSPEC ? so->so_proto->pr_domain->dom_family : sa->sa_family;
+	if (sockaf != AF_LOCAL && (error = cred_ability_check(cr, CURTAINABL_NET_SERVER)))
 		return (error);
-	return (cred_key_check(cr, CURTAINTYP_SOCKAF, (ctkey){ .sockaf = sa->sa_family }));
+	return (cred_key_check(cr, CURTAINTYP_SOCKAF, (ctkey){ .sockaf = sockaf }));
 }
 
 static int
 curtain_socket_check_connect(struct ucred *cr, struct socket *so, struct label *solabel,
     struct sockaddr *sa)
 {
-	int error;
-	if (sockaf_is_net(sa->sa_family) &&
-	    (error = cred_ability_check(cr, CURTAINABL_NET_CLIENT)))
+	int sockaf, error;
+	sockaf = sa->sa_family;
+	if (sockaf != AF_LOCAL && (error = cred_ability_check(cr, CURTAINABL_NET_CLIENT)))
 		return (error);
-	return (cred_key_check(cr, CURTAINTYP_SOCKAF, (ctkey){ .sockaf = sa->sa_family }));
+	return (cred_key_check(cr, CURTAINTYP_SOCKAF, (ctkey){ .sockaf = sockaf }));
 }
 
 static int
