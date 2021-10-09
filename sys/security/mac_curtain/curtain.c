@@ -1777,6 +1777,9 @@ curtain_proc_check_debug(struct ucred *cr, struct proc *p)
 static int
 curtain_socket_check_create(struct ucred *cr, int domain, int type, int protocol)
 {
+	int error;
+	if ((error = cred_ability_check(cr, CURTAINABL_SOCK)))
+		return (error);
 	return (cred_key_check(cr, CURTAINTYP_SOCKAF, (ctkey){ .sockaf = domain }));
 }
 
