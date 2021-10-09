@@ -23,6 +23,8 @@
 # of a fairly permissive pledge() with regard to filesystem access.
 #
 
+[_stdio]
+
 /dev/null				: rm
 /dev/stdin				: r
 /dev/std{out,err}			: rm
@@ -35,21 +37,22 @@
 /etc/malloc.conf			: r
 
 ability stdio
+
+[_basic : _stdio] # enabled by default by curtain(1)
+
 ability thread
 ability rlimit
-ability sched
-ability vfs_read vfs_write vfs_create vfs_delete
-ability flock fattr fmode_special
-ability mkfifo
-ability proc ps
 ability posixrt
+ability sched
+ability flock
+ability vfs_read vfs_write vfs_create vfs_delete
+ability fattr fmode_special
+ability mkfifo
 ability curtain
 
-merge _libs
-
-[_basic]
 merge _acl
 merge _tty
+merge _proc
 merge _unix
 merge _network
 merge _localbase
@@ -61,6 +64,7 @@ merge _cmds
 [_extra : _basic]
 # Lots of permissions that ought to be safe even for root processes (with
 # proper unveils).
+
 ability prot_exec
 ability sysvipc
 ability posixipc
@@ -75,12 +79,18 @@ ability rfork
 ability chroot
 ability chown
 ability id any_id
+
 # May allow privilege escalations if untrusted processes have access to paths
 # writable by the sandboxed process.
 ability! fsugid # chmod ug+s
+
 merge _fflags
 merge _pty
 merge _cryptodev
+
+[_proc]
+ability proc
+ability ps
 
 [_fflags]
 ability chflags
