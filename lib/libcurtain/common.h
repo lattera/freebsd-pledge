@@ -22,7 +22,6 @@ struct curtain_config_tag {
 };
 
 int curtain_cwd_is_within(const char *path);
-int curtain_make_file_or_dir(const char *path);
 
 
 extern const struct privent {

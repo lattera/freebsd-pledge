@@ -56,30 +56,3 @@ curtain_cwd_is_within(const char *path)
 	return (r);
 }
 
-int
-curtain_make_file_or_dir(const char *path)
-{
-	int r, saved_errno;
-	saved_errno = errno;
-	if (path[0] && path[strlen(path) - 1] == '/') {
-		r = mkdir(path, S_IRWXU | S_IRWXG | S_IRWXO);
-		if (r < 0 && errno == EEXIST) {
-			struct stat st;
-			if (stat(path, &st) < 0)
-				return (r);
-			if (S_ISDIR(st.st_mode)) {
-				r = 0;
-				errno = saved_errno;
-			} else
-				errno = EISDIR;
-		}
-	} else {
-		r = open(path, O_WRONLY | O_CREAT, DEFFILEMODE);
-		if (r >= 0) {
-			close(r);
-			r = 0;
-		}
-	}
-	return (r);
-}
-

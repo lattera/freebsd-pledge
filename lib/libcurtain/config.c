@@ -4,12 +4,14 @@
 #include <dirent.h>
 #include <err.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <paths.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <sys/unveil.h>
 #include <sysexits.h>
 #include <unistd.h>
@@ -30,12 +32,14 @@ struct parser {
 	bool visited;
 	bool error;
 	struct curtain_slot *slot;
-	unveil_perms uperms;
 	char *last_matched_section_path;
 	size_t section_path_offset;
-	bool unveil_create;
-	bool explicit_flags;
 	int directive_flags;
+	bool explicit_flags;
+	unveil_perms uperms;
+	bool unveil_create;
+	void *unveil_setmode;
+	char unveil_pending[PATH_MAX];
 };
 
 static const struct {
@@ -264,8 +268,11 @@ parse_push(struct parser *par, struct word *w)
 static int
 do_unveil(struct parser *par, const char *path)
 {
-	int flags;
+	size_t len;
+	int flags, r;
+	bool is_dir;
 	flags = CURTAIN_UNVEIL_INSPECT;
+	len = strlen(path);
 	/*
 	 * Do not follow symlinks on the final path component of the unveil
 	 * (thus unveiling symlinks themselves rather than their targets) when
@@ -277,24 +284,33 @@ do_unveil(struct parser *par, const char *path)
 	 * with the directory vnode (and not its name in the parent directory),
 	 * the application will not be allowed to replace it with a symlink.
 	 */
-	if (par->uperms & UPERM_CREATE && !(path[0] && path[strlen(path) - 1] == '/'))
+	is_dir = len && path[len - 1] == '/';
+	if (par->uperms & UPERM_CREATE && !is_dir)
 		flags |= CURTAIN_UNVEIL_NOFOLLOW;
-	return (curtain_unveil(par->slot, path, flags, par->uperms));
+
+	r = curtain_unveil(par->slot, path, flags, par->uperms);
+	if (par->unveil_create) {
+		if (!is_dir) {
+			struct stat st;
+			r = stat(path, &st);
+		}
+		if (r < 0) {
+			if (errno == ENOENT && !*par->unveil_pending)
+				memcpy(par->unveil_pending, path, len + 1);
+		} else {
+			par->unveil_create = false;
+			*par->unveil_pending = '\0';
+		}
+	}
+	return (r);
 }
 
 static int
 do_unveil_callback(void *ctx, char *path)
 {
 	struct parser *par = ctx;
-	int r;
 	if (path[0] && path[0] != '/' && par->last_matched_section_path)
 		path -= par->section_path_offset;
-	if (par->unveil_create) {
-		/* TODO: make intermediate dirs */
-		r = curtain_make_file_or_dir(path);
-		if (r < 0)
-			warn("%s", path);
-	}
 	do_unveil(par, path);
 	return (0);
 }
@@ -322,36 +338,102 @@ do_unveils(struct parser *par, const char *pattern)
 }
 
 static void
+do_unveil_pending(struct parser *par)
+{
+	char *path, *next, delim;
+	struct stat st;
+	bool created;
+	int r;
+	path = par->unveil_pending;
+	if (!*path)
+		return;
+	next = path;
+	do {
+		created = false;
+		next = strchrnul(next, '/');
+		delim = *next;
+		*next = '\0';
+		if (delim == '/') {
+			r = mkdir(*path ? path : "/", S_IRWXU | S_IRWXG | S_IRWXO);
+			if (r >= 0)
+				created = true;
+			else if (errno == EISDIR || errno == EEXIST)
+				r = 0;
+		} else {
+			r = open(path, O_WRONLY | O_CREAT | O_EXCL, DEFFILEMODE);
+			if ((created = r >= 0))
+				close(r);
+			else if (errno == EEXIST)
+				r = 0;
+		}
+		if (r < 0)
+			break;
+		*next = delim;
+		while (*next == '/')
+			next++;
+	} while (*next);
+	if (created) {
+		if (par->cfg->verbosity >= 1)
+			fprintf(stderr, "%s: %s:%ju: created path: %s\n",
+			    getprogname(), par->file_name, (uintmax_t)par->line_no,
+			    path);
+		r = stat(path, &st);
+		if (r >= 0)
+			r = chmod(path, getmode(par->unveil_setmode, st.st_mode));
+	}
+	if (r < 0)
+		warn("%s", path);
+	else
+		do_unveil(par, path);
+	*next = delim;
+}
+
+static void
 parse_unveil(struct parser *par, struct word *w)
 {
 	struct word *patterns, *patterns_end;
 	int r;
 	patterns = w;
-	patterns_end = NULL;
 	par->unveil_create = false;
+	par->unveil_setmode = NULL;
+	*par->unveil_pending = '\0';
 	par->uperms = UPERM_READ;
-	while (w) {
-		if (w->len == 1 && (w->ptr[0] == ':' ||
-		    (par->unveil_create = w->ptr[0] == '!'))) {
-			patterns_end = w;
-			par->uperms = UPERM_NONE;
-			if (!(w = w->next))
-				break;
+	while (w && !(w->len == 1 && w->ptr[0] == ':'))
+		w = w->next;
+	patterns_end = w;
+	if (w) {
+		par->uperms = UPERM_NONE;
+		if ((w = w->next)) {
 			r = curtain_parse_unveil_perms(&par->uperms, w->ptr);
 			if (r < 0)
 				return (parse_error(par, "invalid unveil permissions"));
 			w = w->next;
-			break;
+		}
+	}
+	if (w) {
+		par->unveil_create = true;
+		par->unveil_setmode = setmode(w->ptr);
+		if (!par->unveil_setmode) {
+			if (errno == EINVAL || errno == ERANGE)
+				return (parse_error(par, "invalid creation mode"));
+			else
+				err(errno == ENOMEM ? EX_TEMPFAIL : EX_OSERR, "setmode");
 		}
 		w = w->next;
 	}
-	if (w)
+	if (w) {
+		free(par->unveil_setmode);
 		return (parse_error(par, "unexpected word"));
-	if (par->apply)
+	}
+	if (par->apply) {
 		while (patterns != patterns_end) {
 			do_unveils(par, patterns->ptr);
 			patterns = patterns->next;
 		}
+		if (*par->unveil_pending)
+			do_unveil_pending(par);
+	}
+	free(par->unveil_setmode);
 }
 
 static void
@@ -685,7 +767,7 @@ parse_section(struct parser *par, char *p)
 	par->slot = NULL;
 	par->last_matched_section_path = NULL;
 	p = parse_section_pred(par, p + 1);
-	if (par->cfg->verbosity >= 1 && par->matched)
+	if (par->cfg->verbosity >= 2 && par->matched)
 		fprintf(stderr, "%s: %s:%ju: matched section%s\n",
 		    getprogname(), par->file_name, (uintmax_t)par->line_no,
 		    par->skip ? ", already applied" : "");

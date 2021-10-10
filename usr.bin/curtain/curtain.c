@@ -289,7 +289,7 @@ main(int argc, char *argv[])
 			curtain_config_directive(cfg, args_slot, optarg);
 			break;
 		case 'v':
-			curtain_config_verbosity(cfg, 1);
+			curtain_config_verbosity(cfg, curtain_config_verbosity(cfg, 0) + 1);
 			break;
 		case 'k':
 			signaling = true;
