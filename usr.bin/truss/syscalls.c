@@ -79,7 +79,7 @@ __FBSDID("$FreeBSD$");
 #include <unistd.h>
 #include <vis.h>
 
-#include <sys/sysfil.h>
+#include <sys/curtain.h>
 #include <sys/unveil.h>
 
 #include "truss.h"
@@ -207,6 +207,8 @@ static const struct syscall_decode decoded_syscalls[] = {
 	{ .name = "connectat", .ret_type = 1, .nargs = 4,
 	  .args = { { Atfd, 0 }, { Int, 1 }, { Sockaddr | IN, 2 },
 		    { Int, 3 } } },
+	{ .name = "curtainctl", .ret_type = 1, .nargs = 3,
+	  .args = { { CurtainctlFlags | IN, 0 }, { Sizet, 1 }, { Curtainctl, 2 } } },
 	{ .name = "dup", .ret_type = 1, .nargs = 1,
 	  .args = { { Int, 0 } } },
 	{ .name = "dup2", .ret_type = 1, .nargs = 2,
@@ -569,6 +571,8 @@ static const struct syscall_decode decoded_syscalls[] = {
 	  .args = { { Long, 0 }, { Name, 1 } } },
 	{ .name = "truncate", .ret_type = 1, .nargs = 2,
 	  .args = { { Name | IN, 0 }, { QuadHex | IN, 1 } } },
+	{ .name = "unveilreg", .ret_type = 1, .nargs = 2,
+	  .args = { { UnveilregFlags | IN, 0 }, { Unveilreg | OUT, 1 } } },
 #if 0
 	/* Does not exist */
 	{ .name = "umount", .ret_type = 1, .nargs = 2,
@@ -2689,6 +2693,89 @@ print_arg(struct syscall_arg *sc, unsigned long *args, register_t *retval,
 		fprintf(fp, ",%u,", msghdr.msg_controllen);
 		print_mask_arg(sysdecode_msg_flags, fp, msghdr.msg_flags);
 		fputs("}", fp);
+		break;
+	}
+
+	case CurtainctlFlags:
+		print_mask_arg(sysdecode_curtainctlflags, fp, args[sc->offset]);
+		break;
+
+	case Curtainctl: {
+		size_t reqc = args[sc->offset - 1];
+		struct curtainreq reqv[reqc], *req;
+		if (get_struct(pid, args[sc->offset], &reqv, sizeof(reqv)) != -1) {
+			fprintf(fp, "{");
+			for (req = reqv; req < &reqv[reqc]; req++) {
+				bool handled;
+				fprintf(fp, " { ");
+				fprintf(fp, "type=%u", req->type);
+				fprintf(fp, ",level=%u", req->level);
+				fprintf(fp, ",flags=%#x", req->flags);
+				fprintf(fp, ",size=%zu", req->size);
+				fprintf(fp, ",data=");
+				handled = false;
+				switch (req->type) {
+				case CURTAINTYP_ABILITY: {
+					char buf[req->size];
+					if ((handled = get_struct(pid,
+					    (uintptr_t)req->data,
+					    buf, sizeof buf) != -1)) {
+						enum curtain_ability *p = (void*)buf;
+						size_t c = req->size / sizeof *p;
+						fprintf(fp, "[");
+						for (size_t i = 0; i < c; i++)
+							fprintf(fp, "%s%d",
+							    i == 0 ? "" : ",",
+							    *p++);
+						fprintf(fp, "]");
+					}
+					break;
+				}
+				default:
+					break;
+				}
+				if (!handled)
+					print_pointer(fp, (uintptr_t)req->data);
+				fprintf(fp, " }");
+			}
+			fprintf(fp, " }");
+		} else
+			print_pointer(fp, args[sc->offset]);
+		break;
+	}
+
+	case UnveilregFlags:
+		print_mask_arg(sysdecode_unveilregflags, fp, args[sc->offset]);
+		break;
+
+	case Unveilreg: {
+		struct unveilreg reg;
+		if (get_struct(pid, args[sc->offset], &reg, sizeof(reg)) != -1) {
+			unveil_index tev[UNVEILREG_MAX_TE][2];
+			char *tmp2;
+			fprintf(fp, "{ atfd=");
+			print_integer_arg(sysdecode_atfd, fp, reg.atfd);
+			fprintf(fp, ",atflags=");
+			print_mask_arg(sysdecode_atflags, fp, reg.atflags);
+			tmp2 = get_string(pid, (uintptr_t)reg.path, 0);
+			fprintf(fp, ",path=\"%s\"", tmp2);
+			free(tmp2);
+			fprintf(fp, ",tec=%zu", reg.tec);
+			fprintf(fp, ",tev=");
+			if (retval[0] >= 0 && reg.tev != NULL &&
+			    get_struct(pid, (uintptr_t)reg.tev, tev,
+			    retval[0] * sizeof *tev) != -1) {
+				fprintf(fp, "[");
+				for (int i = 0; i < retval[0]; i++) {
+					fprintf(fp, "%s%u-%u",
+					    i == 0 ? "" : ",", tev[i][0], tev[i][1]);
+				}
+				fprintf(fp, "]");
+			} else
+				print_pointer(fp, (uintptr_t)reg.tev);
+			fprintf(fp, " }");
+		} else
+			print_pointer(fp, args[sc->offset]);
 		break;
 	}
 

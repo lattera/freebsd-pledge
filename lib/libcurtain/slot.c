@@ -788,7 +788,7 @@ curtain_unveil(struct curtain_slot *slot,
 		.tev = tev,
 	};
 	ssize_t ter;
-	ter = unveilreg(UNVEILREG_REGISTER | UNVEILREG_NONDIRBYNAME, &reg);
+	ter = unveilreg(UNVEILREG_THIS_VERSION | UNVEILREG_REGISTER | UNVEILREG_NONDIRBYNAME, &reg);
 	if (ter < 0) {
 		if (errno != ENOENT && errno != EACCES && errno != ENOSYS)
 			warn("%s: %s", __FUNCTION__, path);
@@ -1062,7 +1062,7 @@ curtain_submit_1(int flags, bool neutral_on[CURTAIN_ON_COUNT], enum curtain_stat
 	}
 
 	/* Submit requests. */
-	return (curtainctl(flags, reqp - reqv, reqv));
+	return (curtainctl(CURTAINCTL_THIS_VERSION | flags, reqp - reqv, reqv));
 }
 
 static int

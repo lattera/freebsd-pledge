@@ -1279,9 +1279,8 @@ sys_unveilreg(struct thread *td, struct unveilreg_args *uap)
 	if (!unveil_enabled)
 		return (ENOSYS);
 	flags = uap->flags;
-	if ((flags & UNVEILREG_VERSION_MASK) != UNVEILREG_VERSION)
+	if ((flags & UNVEILREG_VER_MASK) != UNVEILREG_THIS_VERSION)
 		return (EINVAL);
-	flags &= ~UNVEILREG_VERSION_MASK;
 	error = copyin(uap->reg, &reg, sizeof reg);
 	if (error)
 		return (error);

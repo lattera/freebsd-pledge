@@ -80,11 +80,13 @@ struct unveilreg {
 
 int unveilreg(int flags, struct unveilreg *);
 
-#define	UNVEILREG_VERSION_MASK	(0xff << 24)
-#define	UNVEILREG_VERSION	(2 << 24)
+#define	UNVEILREG_VER_SHIFT	(24)
+#define	UNVEILREG_VER_MASK	(0xff << UNVEILREG_VER_SHIFT)
+#define	UNVEILREG_VERSION(v)	(((v) << UNVEILREG_VER_SHIFT) & UNVEILREG_VER_MASK)
+#define	UNVEILREG_THIS_VERSION	UNVEILREG_VERSION(2)
 
-#define	UNVEILREG_REGISTER	(1 <<  0 | UNVEILREG_VERSION)
-#define	UNVEILREG_NONDIRBYNAME	(1 <<  9 | UNVEILREG_VERSION)
+#define	UNVEILREG_REGISTER	(1 <<  0)
+#define	UNVEILREG_NONDIRBYNAME	(1 <<  9)
 
 struct curtainent_unveil {
 	uint16_t _reserved;

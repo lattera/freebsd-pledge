@@ -1476,9 +1476,8 @@ sys_curtainctl(struct thread *td, struct curtainctl_args *uap)
 	struct curtainreq *reqv;
 	int flags, error;
 	flags = uap->flags;
-	if ((flags & CURTAINCTL_VERSION_MASK) != CURTAINCTL_VERSION)
+	if ((flags & CURTAINCTL_VER_MASK) != CURTAINCTL_THIS_VERSION)
 		return (EINVAL);
-	flags &= ~CURTAINCTL_VERSION_MASK;
 	reqc = uap->reqc;
 	if (reqc > CURTAINCTL_MAX_REQS)
 		return (E2BIG);

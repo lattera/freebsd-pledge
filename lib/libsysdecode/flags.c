@@ -70,7 +70,7 @@ __FBSDID("$FreeBSD$");
 #include <netgraph/bluetooth/include/ng_hci.h>
 #include <netgraph/bluetooth/include/ng_l2cap.h>
 #include <netgraph/bluetooth/include/ng_btsocket.h>
-#include <sys/sysfil.h>
+#include <sys/curtain.h>
 #include <sys/unveil.h>
 
 /*
@@ -1301,14 +1301,53 @@ sysdecode_shmflags(FILE *fp, int flags, int *rem)
 	return (print_mask_0(fp, shmflags, flags, rem));
 }
 
+#define	V(a)	{ a & (M), #a },
+#define	VEND	{ 0, NULL }
+
+static struct name_table curtainctl_flags[] = {
+#define	M ~CURTAINCTL_VER_MASK
+	V(CURTAINCTL_ENGAGE) V(CURTAINCTL_ENFORCE) V(CURTAINCTL_REQUIRE)
+	V(CURTAINREQ_ON_SELF) V(CURTAINREQ_ON_EXEC)
+	VEND
+#undef	M
+};
+
 bool
 sysdecode_curtainctlflags(FILE *fp, int flags, int *rem)
 {
-	return (print_mask_0(fp, curtainctlflags, flags, rem));
+	unsigned version;
+	uintmax_t val;
+	bool printed;
+	val = flags;
+	version = (val & CURTAINCTL_VER_MASK) >> CURTAINCTL_VER_SHIFT;
+	val &= ~CURTAINCTL_VER_MASK;
+	fprintf(fp, "CURTAINCTL_VERSION(%u)", version);
+	printed = true;
+	print_mask_part(fp, curtainctl_flags, &val, &printed);
+	if (rem != NULL)
+		*rem = val;
+	return (printed);
 }
+
+static struct name_table unveilreg_flags[] = {
+#define	M ~UNVEILREG_VER_MASK
+	V(UNVEILREG_REGISTER) V(UNVEILREG_NONDIRBYNAME) VEND
+#undef	M
+};
 
 bool
 sysdecode_unveilregflags(FILE *fp, int flags, int *rem)
 {
-	return (print_mask_0(fp, unveilregflags, flags, rem));
+	unsigned version;
+	uintmax_t val;
+	bool printed;
+	val = flags;
+	version = (val & UNVEILREG_VER_MASK) >> UNVEILREG_VER_SHIFT;
+	val &= ~UNVEILREG_VER_MASK;
+	fprintf(fp, "UNVEILREG_VERSION(%u)", version);
+	printed = true;
+	print_mask_part(fp, unveilreg_flags, &val, &printed);
+	if (rem != NULL)
+		*rem = val;
+	return (printed);
 }
