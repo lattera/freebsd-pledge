@@ -1023,7 +1023,6 @@ curtain_submit_1(int flags, bool neutral_on[CURTAIN_ON_COUNT], enum curtain_stat
 	/* Build requests array. */
 	for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++) {
 		for (size_t i = 0; i < nitems(types); i++) {
-			bool found;
 			if (neutral_on[on]) {
 				/*
 				 * If all existing slots indicate that they are
@@ -1038,11 +1037,9 @@ curtain_submit_1(int flags, bool neutral_on[CURTAIN_ON_COUNT], enum curtain_stat
 					};
 				continue;
 			}
-			found = false;
 			for (enum curtainreq_level lvl = 0; lvl < CURTAIN_LEVEL_COUNT; lvl++) {
 				if (counts[i][on][lvl] == 0)
 					continue;
-				found = true;
 				*reqp++ = (struct curtainreq){
 					.type = types[i]->req_type,
 					.flags = curtainreq_flags[on],
@@ -1051,13 +1048,6 @@ curtain_submit_1(int flags, bool neutral_on[CURTAIN_ON_COUNT], enum curtain_stat
 					.size = sizes[i][on][lvl],
 				};
 			}
-			/* Kernel defaults to CURTAINLVL_DENY, but we want CURTAINLVL_KILL. */
-			if (!found && types[i] == &default_type) /* XXX */
-				*reqp++ = (struct curtainreq){
-					.type = CURTAINTYP_DEFAULT,
-					.flags = curtainreq_flags[on],
-					.level = CURTAINLVL_KILL,
-				};
 		}
 	}
 

@@ -1240,7 +1240,7 @@ curtain_fill(struct curtain *ct, size_t reqc, const struct curtainreq *reqv)
 	    group_index < group_fills[t] && (req = &reqv[group_entries[group_index]]); \
 	    group_index++)
 
-	def_on_self = def_on_exec = CURTAINLVL_DENY;
+	def_on_self = def_on_exec = CURTAINLVL_KILL;
 	GROUP_FOREACH(CURTAINTYP_DEFAULT, req) {
 		MPASS(req->type == CURTAINTYP_DEFAULT);
 		if (req->flags & CURTAINREQ_ON_SELF)
