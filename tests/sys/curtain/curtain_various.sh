@@ -170,6 +170,19 @@ cmd_id_body() {
 	atf_check -o file:exp curtain -t _pwddb id
 }
 
+atf_test_case uncurtain
+uncurtain_body() {
+	[ "$(sysctl -n security.curtain.curtained)" = 0 ] || atf_skip "already curtained"
+	atf_check -o inline:"0\n" sysctl -n security.curtain.curtained
+	atf_check -o inline:"0\n" sysctl -n security.curtain.curtained_exec
+	atf_check -o inline:"1\n" curtain sysctl -n security.curtain.curtained
+	atf_check -o inline:"1\n" curtain sysctl -n security.curtain.curtained_exec
+	atf_check -o inline:"1\n" curtain -t curtain curtain -d default-pass sysctl -n security.curtain.curtained
+	atf_check -o inline:"1\n" curtain -t curtain curtain -d default-pass sysctl -n security.curtain.curtained_exec
+	atf_check -o inline:"0\n" curtain -t curtain -U curtain -d default-pass sysctl -n security.curtain.curtained
+	atf_check -o inline:"0\n" curtain -t curtain -U curtain -d default-pass sysctl -n security.curtain.curtained_exec
+}
+
 atf_test_case unenforced_unveil
 unenforced_unveil_body() {
 	atf_check -o save:f echo test
@@ -259,6 +272,7 @@ atf_init_test_cases() {
 	atf_add_test_case posixshm_restriction
 	atf_add_test_case cmd_timeout
 	atf_add_test_case cmd_id
+	atf_add_test_case uncurtain
 	atf_add_test_case unenforced_unveil
 	atf_add_test_case extattrs
 	atf_add_test_case reunveil_inheritance

@@ -71,6 +71,16 @@ SYSCTL_UINT(_security_curtain, OID_AUTO, log_level,
     CTLFLAG_RW, &curtain_log_level, 0,
     "");
 
+static int sysctl_curtain_curtained(SYSCTL_HANDLER_ARGS);
+SYSCTL_PROC(_security_curtain, OID_AUTO, curtained,
+    CTLTYPE_INT | CTLFLAG_RD | CTLFLAG_RESTRICT | CTLFLAG_MPSAFE, NULL, 0,
+    sysctl_curtain_curtained, "I", "");
+
+static int sysctl_curtain_curtained_exec(SYSCTL_HANDLER_ARGS);
+SYSCTL_PROC(_security_curtain, OID_AUTO, curtained_exec,
+    CTLTYPE_INT | CTLFLAG_RD | CTLFLAG_RESTRICT | CTLFLAG_MPSAFE, NULL, 0,
+    sysctl_curtain_curtained_exec, "I", "");
+
 #define CURTAIN_STATS
 
 #ifdef CURTAIN_STATS
@@ -1028,6 +1038,25 @@ struct curtain *
 curtain_from_cred(struct ucred *cr)
 {
 	return (CRED_SLOT(cr));
+}
+
+
+static int
+sysctl_curtain_curtained(SYSCTL_HANDLER_ARGS)
+{
+	struct curtain *ct;
+	int ret;
+	ret = ((ct = CRED_SLOT(req->td->td_ucred)) ? ct->ct_cached.is_restricted_on_self : 0);
+	return (SYSCTL_OUT(req, &ret, sizeof(ret)));
+}
+
+static int
+sysctl_curtain_curtained_exec(SYSCTL_HANDLER_ARGS)
+{
+	struct curtain *ct;
+	int ret;
+	ret = ((ct = CRED_SLOT(req->td->td_ucred)) ? ct->ct_cached.is_restricted_on_exec : 0);
+	return (SYSCTL_OUT(req, &ret, sizeof(ret)));
 }
 
 
