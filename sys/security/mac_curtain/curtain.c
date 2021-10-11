@@ -55,31 +55,9 @@ SDT_PROBE_DEFINE1(curtain,, do_curtainctl, compact, "struct curtain *");
 SDT_PROBE_DEFINE1(curtain,, do_curtainctl, harden, "struct curtain *");
 SDT_PROBE_DEFINE1(curtain,, do_curtainctl, assign, "struct curtain *");
 
-
-static bool __read_mostly curtainctl_enabled = true;
-static unsigned __read_mostly curtain_log_level = CURTAINLVL_TRAP;
-
 SYSCTL_NODE(_security, OID_AUTO, curtain,
     CTLFLAG_RW | CTLFLAG_MPSAFE, 0,
     "Curtain");
-
-SYSCTL_BOOL(_security_curtain, OID_AUTO, enabled,
-    CTLFLAG_RW, &curtainctl_enabled, 0,
-    "Allow curtainctl(2) usage");
-
-SYSCTL_UINT(_security_curtain, OID_AUTO, log_level,
-    CTLFLAG_RW, &curtain_log_level, 0,
-    "");
-
-static int sysctl_curtain_curtained(SYSCTL_HANDLER_ARGS);
-SYSCTL_PROC(_security_curtain, OID_AUTO, curtained,
-    CTLTYPE_INT | CTLFLAG_RD | CTLFLAG_RESTRICT | CTLFLAG_MPSAFE, NULL, 0,
-    sysctl_curtain_curtained, "I", "");
-
-static int sysctl_curtain_curtained_exec(SYSCTL_HANDLER_ARGS);
-SYSCTL_PROC(_security_curtain, OID_AUTO, curtained_exec,
-    CTLTYPE_INT | CTLFLAG_RD | CTLFLAG_RESTRICT | CTLFLAG_MPSAFE, NULL, 0,
-    sysctl_curtain_curtained_exec, "I", "");
 
 #define CURTAIN_STATS
 
@@ -102,8 +80,6 @@ STATNODE_COUNTER(long_probes, curtain_stats_long_probes, "");
 
 CTASSERT(CURTAINCTL_MAX_ITEMS <= (curtain_index)-1);
 
-static volatile uint64_t barrier_serial = 1;
-
 static int __read_mostly curtain_slot;
 #define	CTH_IS_CT(cth) ((cth) != &(cth)->cth_barrier->br_head)
 #define	SLOT_CTH(l) ((l) ? (struct curtain_head *)mac_label_get((l), curtain_slot) : NULL)
@@ -123,32 +99,6 @@ static int __read_mostly curtain_slot;
 })
 #define	CRED_SLOT(cr) SLOT((cr)->cr_label)
 #define	CRED_SLOT_BR(cr) SLOT_BR((cr)->cr_label)
-
-
-struct get_sysctl_serial_ctx {
-	uint64_t *serial;
-	int *name;
-	unsigned namelen;
-	int error;
-};
-
-static void
-get_sysctl_serial_cb(void *ptr)
-{
-	struct get_sysctl_serial_ctx *ctx = ptr;
-	struct sysctl_oid *oidp;
-	ctx->error = sysctl_find_oid(ctx->name, ctx->namelen, &oidp, NULL, NULL);
-	if (!ctx->error)
-		*ctx->serial = oidp->oid_serial;
-}
-
-static uint64_t
-get_sysctl_serial(int *name, unsigned name_len, uint64_t *serial)
-{
-	struct get_sysctl_serial_ctx ctx = { serial, name, name_len };
-	sysctl_call_with_rlock(get_sysctl_serial_cb, &ctx);
-	return (ctx.error);
-}
 
 
 static inline void
@@ -198,6 +148,8 @@ mode_restricts(struct curtain_mode mode1, struct curtain_mode mode2)
 }
 
 
+static volatile uint64_t barrier_serial = 1;
+
 static void
 barrier_init(struct barrier *br)
 {
@@ -1040,6 +992,43 @@ curtain_from_cred(struct ucred *cr)
 	return (CRED_SLOT(cr));
 }
 
+
+struct get_sysctl_serial_ctx {
+	uint64_t *serial;
+	int *name;
+	unsigned namelen;
+	int error;
+};
+
+static void
+get_sysctl_serial_cb(void *ptr)
+{
+	struct get_sysctl_serial_ctx *ctx = ptr;
+	struct sysctl_oid *oidp;
+	ctx->error = sysctl_find_oid(ctx->name, ctx->namelen, &oidp, NULL, NULL);
+	if (!ctx->error)
+		*ctx->serial = oidp->oid_serial;
+}
+
+static uint64_t
+get_sysctl_serial(int *name, unsigned name_len, uint64_t *serial)
+{
+	struct get_sysctl_serial_ctx ctx = { serial, name, name_len };
+	sysctl_call_with_rlock(get_sysctl_serial_cb, &ctx);
+	return (ctx.error);
+}
+
+
+static bool __read_mostly curtainctl_enabled = true;
+static unsigned __read_mostly curtain_log_level = CURTAINLVL_TRAP;
+
+SYSCTL_BOOL(_security_curtain, OID_AUTO, enabled,
+    CTLFLAG_RW, &curtainctl_enabled, 0,
+    "Allow curtainctl(2) usage");
+
+SYSCTL_UINT(_security_curtain, OID_AUTO, log_level,
+    CTLFLAG_RW, &curtain_log_level, 0,
+    "");
 
 static int
 sysctl_curtain_curtained(SYSCTL_HANDLER_ARGS)
@@ -1050,6 +1039,10 @@ sysctl_curtain_curtained(SYSCTL_HANDLER_ARGS)
 	return (SYSCTL_OUT(req, &ret, sizeof(ret)));
 }
 
+SYSCTL_PROC(_security_curtain, OID_AUTO, curtained,
+    CTLTYPE_INT | CTLFLAG_RD | CTLFLAG_RESTRICT | CTLFLAG_MPSAFE, NULL, 0,
+    sysctl_curtain_curtained, "I", "");
+
 static int
 sysctl_curtain_curtained_exec(SYSCTL_HANDLER_ARGS)
 {
@@ -1058,6 +1051,10 @@ sysctl_curtain_curtained_exec(SYSCTL_HANDLER_ARGS)
 	ret = ((ct = CRED_SLOT(req->td->td_ucred)) ? ct->ct_cached.is_restricted_on_exec : 0);
 	return (SYSCTL_OUT(req, &ret, sizeof(ret)));
 }
+
+SYSCTL_PROC(_security_curtain, OID_AUTO, curtained_exec,
+    CTLTYPE_INT | CTLFLAG_RD | CTLFLAG_RESTRICT | CTLFLAG_MPSAFE, NULL, 0,
+    sysctl_curtain_curtained_exec, "I", "");
 
 
 /* Some abilities shouldn't be disabled via curtainctl(2). */
