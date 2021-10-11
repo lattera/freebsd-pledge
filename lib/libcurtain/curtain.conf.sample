@@ -77,6 +77,7 @@ ability! any_ioctl # XXX
 # Needs platform-dependent ioctls from libdrm.
 # See /usr/share/examples/curtain/make-drm-render-conf.c
 
+
 [sh, ksh, ksh93, mksh, oksh, dash, bash, zsh : _bourne]
 
 [_shell _bourne]
@@ -308,6 +309,28 @@ ability id
 
 [st : _terminal]
 merge! _pwddb
+
+
+[_devel]
+/usr/include/
+[_devel _localbase]
+/usr/local/include/
+
+[_ruby_gems]
+$GEM_HOME/
+
+[_ruby_gems_manage]
+merge _devel
+$GEM_HOME/ : rwx +
+
+[_python_pip]
+$PYTHONUSERBASE/
+
+[_python_pip_manage]
+merge _devel
+ability chflags
+$PYTHONUSERBASE/ : rwx +
+#~/.cache/pip/ : rw + # sharing probably unsafe
 
 
 [_ports_build]
