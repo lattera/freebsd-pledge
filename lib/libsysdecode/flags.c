@@ -1306,7 +1306,7 @@ sysdecode_shmflags(FILE *fp, int flags, int *rem)
 
 static struct name_table curtainctl_flags[] = {
 #define	M ~CURTAINCTL_VER_MASK
-	V(CURTAINCTL_ENGAGE) V(CURTAINCTL_ENFORCE) V(CURTAINCTL_REQUIRE)
+	V(CURTAINCTL_ENGAGE) V(CURTAINCTL_ENFORCE)
 	V(CURTAINREQ_ON_SELF) V(CURTAINREQ_ON_EXEC)
 	VEND
 #undef	M

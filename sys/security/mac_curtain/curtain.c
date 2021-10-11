@@ -1318,20 +1318,21 @@ curtain_fill(struct curtain *ct, size_t reqc, const struct curtainreq *reqv)
 
 	GROUP_FOREACH(CURTAINTYP_SYSCTL, req) {
 		MPASS(req->type == CURTAINTYP_SYSCTL);
-		int *namep = req->data;
-		size_t namec = req->size / sizeof *namep, namei = 0;
-		while (namei < namec) {
+		int *p = req->data;
+		size_t c = req->size / sizeof *p;
+		while (c--) {
 			uint64_t serial;
-			if (namep[namei] >= 0) {
-				namei++;
-				continue;
+			size_t l;
+			l = *p++;
+			if (l > c) {
+				error = EINVAL;
+				goto fail;
 			}
-			error = get_sysctl_serial(namep, namei, &serial);
+			error = get_sysctl_serial(p, l, &serial);
 			if (error && error != ENOENT)
 				goto fail;
-			namep += namei + 1;
-			namec -= namei + 1;
-			namei = 0;
+			p += l;
+			c -= l;
 			curtain_fill_item(ct, req,
 			    (ctkey){ .sysctl = { .serial = serial } });
 		}

@@ -665,9 +665,9 @@ sysctl_ent_fill(void *dest,
 	int *fill = dest;
 	size_t len = key->sysctl.len;
 	const int *mib = key->sysctl.mib;
+	*fill++ = len;
 	while (len--)
 		*fill++ = *mib++;
-	*fill++ = -1;
 	return (fill);
 }
 

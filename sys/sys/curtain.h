@@ -5,6 +5,7 @@
 
 enum curtainreq_type {
 	CURTAINTYP_DEFAULT = 1,
+	CURTAINTYP_ABILITY = 2,
 	CURTAINTYP_UNVEIL = 3,
 	CURTAINTYP_IOCTL = 4,
 	CURTAINTYP_SOCKAF = 5,
@@ -12,8 +13,7 @@ enum curtainreq_type {
 	CURTAINTYP_SOCKOPT = 7,
 	CURTAINTYP_PRIV = 8,
 	CURTAINTYP_SYSCTL = 9,
-	CURTAINTYP_ABILITY = 10,
-#define	CURTAINTYP_LAST 10 /* UPDATE ME!!! */
+#define	CURTAINTYP_LAST 9 /* UPDATE ME!!! */
 };
 
 enum curtainreq_level {
@@ -44,11 +44,10 @@ int curtainctl(int flags, size_t reqc, struct curtainreq *reqv);
 #define	CURTAINCTL_VER_SHIFT	(24)
 #define	CURTAINCTL_VER_MASK	(0xff << CURTAINCTL_VER_SHIFT)
 #define	CURTAINCTL_VERSION(v)	(((v) << CURTAINCTL_VER_SHIFT) & CURTAINCTL_VER_MASK)
-#define	CURTAINCTL_THIS_VERSION	CURTAINCTL_VERSION(6)
+#define	CURTAINCTL_THIS_VERSION	CURTAINCTL_VERSION(7)
 
 #define	CURTAINCTL_ENGAGE	(1 <<  0)
-#define	CURTAINCTL_REQUIRE	(1 <<  1)
-#define	CURTAINCTL_ENFORCE	(1 <<  2)
+#define	CURTAINCTL_ENFORCE	(1 <<  1)
 
 #define	CURTAINREQ_ON_SELF	(1 << 16)
 #define	CURTAINREQ_ON_EXEC	(1 << 17)
