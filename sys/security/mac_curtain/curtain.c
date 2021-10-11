@@ -437,7 +437,7 @@ curtain_alloc(size_t nslots)
 }
 
 static struct curtain *
-curtain_make_nb(size_t nitems)
+curtain_make_without_barrier(size_t nitems)
 {
 	size_t nslots;
 	struct curtain *ct;
@@ -452,7 +452,7 @@ static struct curtain *
 curtain_make(size_t nitems)
 {
 	struct curtain *ct;
-	ct = curtain_make_nb(nitems);
+	ct = curtain_make_without_barrier(nitems);
 	ct->ct_head.cth_barrier = barrier_make();
 	curtain_invariants_sync(ct);
 	return (ct);
@@ -697,7 +697,7 @@ curtain_dup_compact(const struct curtain *src)
 	const struct curtain_item *si;
 	struct curtain *dst;
 	curtain_invariants(src);
-	dst = curtain_make_nb(src->ct_nitems);
+	dst = curtain_make_without_barrier(src->ct_nitems);
 	dst->ct_head.cth_barrier = barrier_dup(CURTAIN_BARRIER(src));
 	dst->ct_overflowed = src->ct_overflowed;
 	if ((dst->ct_finalized = src->ct_finalized))
