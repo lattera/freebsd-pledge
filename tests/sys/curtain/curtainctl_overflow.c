@@ -1,8 +1,10 @@
 #include <stdlib.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <stdio.h>
 #include <errno.h>
 #include <sys/curtain.h>
-#include <sys/sysfil.h>
+#include <sys/unveil.h>
 #include <sys/param.h>
 #include <atf-c.h>
 
@@ -82,11 +84,28 @@ ATF_TC_BODY(curtainctl_overflow_items, tc)
 	ATF_CHECK_ERRNO(E2BIG, curtainctl(flags, nitems(reqs), reqs) < 0);
 }
 
+ATF_TC_WITHOUT_HEAD(unveilreg_overflow);
+ATF_TC_BODY(unveilreg_overflow, tc)
+{
+	int r, i;
+	for (i = 0, r = 0; i < 1024; i++) {
+		char path[32];
+		struct unveilreg reg = { .atfd = AT_FDCWD, .path = path };
+		ATF_CHECK(sprintf(path, "test-%u", i) > 0);
+		r = unveilreg(UNVEILREG_THIS_VERSION | UNVEILREG_REGISTER |
+		    UNVEILREG_NONDIRBYNAME, &reg);
+		if (r < 0)
+			break;
+	}
+	ATF_CHECK_ERRNO(E2BIG, r < 0);
+}
+
 ATF_TP_ADD_TCS(tp)
 {
 	ATF_TP_ADD_TC(tp, curtainctl_sanity);
 	ATF_TP_ADD_TC(tp, curtainctl_overflow_reqs);
 	ATF_TP_ADD_TC(tp, curtainctl_overflow_size);
 	ATF_TP_ADD_TC(tp, curtainctl_overflow_items);
+	ATF_TP_ADD_TC(tp, unveilreg_overflow);
 	return (atf_no_error());
 }
