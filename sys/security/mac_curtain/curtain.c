@@ -54,12 +54,20 @@ SDT_PROBE_DEFINE1(curtain,, do_curtainctl, mask, "struct curtain *");
 SDT_PROBE_DEFINE1(curtain,, do_curtainctl, compact, "struct curtain *");
 SDT_PROBE_DEFINE1(curtain,, do_curtainctl, harden, "struct curtain *");
 SDT_PROBE_DEFINE1(curtain,, do_curtainctl, assign, "struct curtain *");
+SDT_PROBE_DEFINE3(curtain,, cred_key_check, check,
+    "struct ucred *", "enum curtainreq_type", "union curtain_key *");
+SDT_PROBE_DEFINE5(curtain,, cred_key_check, failed,
+    "struct ucred *", "enum curtainreq_type", "union curtain_key *",
+    "enum curtain_action", "bool");
+SDT_PROBE_DEFINE3(curtain,, cred_sysfil_check, failed,
+    "struct ucred *", "sysfilset_t", "enum curtain_action");
 
 SYSCTL_NODE(_security, OID_AUTO, curtain,
     CTLFLAG_RW | CTLFLAG_MPSAFE, 0,
     "Curtain");
 
 #define CURTAIN_STATS
+#define CURTAIN_STATS_LOOKUP
 
 #ifdef CURTAIN_STATS
 
@@ -71,10 +79,18 @@ SYSCTL_NODE(_security_curtain, OID_AUTO, stats,
 	SYSCTL_COUNTER_U64(_security_curtain_stats, OID_AUTO, name,	\
 	    CTLFLAG_RD, &varname, descr);
 
+STATNODE_COUNTER(check_denies, curtain_stats_check_denies, "");
+STATNODE_COUNTER(check_traps, curtain_stats_check_traps, "");
+STATNODE_COUNTER(check_kills, curtain_stats_check_kills, "");
+
+#ifdef CURTAIN_STATS_LOOKUP
+
 STATNODE_COUNTER(lookups, curtain_stats_lookups, "");
 STATNODE_COUNTER(probes, curtain_stats_probes, "");
 STATNODE_COUNTER(long_lookups, curtain_stats_long_lookups, "");
 STATNODE_COUNTER(long_probes, curtain_stats_long_probes, "");
+
+#endif
 
 #endif
 
@@ -621,7 +637,7 @@ curtain_lookup(const struct curtain *ctc, enum curtainreq_type type, union curta
 		item = NULL;
 		probes = 1;
 	}
-#ifdef CURTAIN_STATS
+#ifdef CURTAIN_STATS_LOOKUP
 	counter_u64_add(curtain_stats_lookups, 1);
 	counter_u64_add(curtain_stats_probes, probes);
 	if (probes > 5) {
@@ -1565,6 +1581,27 @@ static const int act2err[] = {
 		CURTAIN_LOG(curthread, (act), fmt, __VA_ARGS__); \
 } while (0)
 
+static void
+cred_action_failed(const struct ucred *cr, enum curtain_action act, bool noise)
+{
+#ifdef CURTAIN_STATS
+	if (!noise)
+		switch (act) {
+		case CURTAINACT_ALLOW:
+			break;
+		case CURTAINACT_DENY:
+			counter_u64_add(curtain_stats_check_denies, 1);
+			break;
+		case CURTAINACT_TRAP:
+			counter_u64_add(curtain_stats_check_traps, 1);
+			break;
+		case CURTAINACT_KILL:
+			counter_u64_add(curtain_stats_check_kills, 1);
+			break;
+		}
+#endif
+}
+
 static enum curtain_action
 cred_key_action(const struct ucred *cr, enum curtainreq_type type, union curtain_key key)
 {
@@ -1587,9 +1624,10 @@ cred_ability_action(const struct ucred *cr, enum curtain_ability abl)
 }
 
 static void
-cred_log_key_failed(const struct ucred *cr, enum curtainreq_type type, union curtain_key key,
+cred_key_failed(const struct ucred *cr, enum curtainreq_type type, union curtain_key key,
     enum curtain_action act)
 {
+	bool noise = false;
 	switch (type) {
 	case CURTAINTYP_DEFAULT:
 		CURTAIN_CRED_LOG(cr, act, "default%s", "");
@@ -1623,6 +1661,7 @@ cred_log_key_failed(const struct ucred *cr, enum curtainreq_type type, union cur
 		case PRIV_VFS_EXCEEDQUOTA:
 		case PRIV_VFS_SYSFLAGS:
 		case PRIV_NETINET_REUSEPORT:
+			noise = true;
 			break;
 		default:
 			CURTAIN_CRED_LOG(cr, act, "priv %d", key.priv);
@@ -1633,18 +1672,22 @@ cred_log_key_failed(const struct ucred *cr, enum curtainreq_type type, union cur
 #if 0
 		CURTAIN_CRED_LOG(cr, act, "sysctl %ju", (uintmax_t)key.sysctl.serial); /* XXX */
 #endif
+		noise = true;
 		break;
 	}
+	SDT_PROBE5(curtain,, cred_key_check, failed, cr, type, &key, act, noise);
+	cred_action_failed(cr, act, noise);
 }
 
 static int
 cred_key_check(const struct ucred *cr, enum curtainreq_type type, union curtain_key key)
 {
 	enum curtain_action act;
+	SDT_PROBE3(curtain,, cred_key_check, check, cr, type, &key);
 	act = cred_key_action(cr, type, key);
 	if (__predict_true(act == CURTAINACT_ALLOW))
 		return (0);
-	cred_log_key_failed(cr, type, key, act);
+	cred_key_failed(cr, type, key, act);
 	return (act2err[act]);
 }
 
@@ -2794,6 +2837,8 @@ curtain_sysfil_check(struct ucred *cr, sysfilset_t sfs)
 				return (0);
 		}
 	CURTAIN_CRED_LOG(cr, act, "sysfil %#jx", (uintmax_t)sfs);
+	SDT_PROBE3(curtain,, cred_sysfil_check, failed, cr, sfs, act);
+	cred_action_failed(cr, act, false);
 	return (act2err[act]);
 }
 
