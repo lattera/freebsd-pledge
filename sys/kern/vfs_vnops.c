@@ -191,7 +191,7 @@ static int vn_io_fault1(struct vnode *vp, struct uio *uio,
 int
 vn_open(struct nameidata *ndp, int *flagp, int cmode, struct file *fp)
 {
-	struct thread *td = ndp->ni_cnd.cn_thread;
+	struct thread *td = curthread;
 
 	return (vn_open_cred(ndp, flagp, cmode, 0, td->td_ucred, fp));
 }
@@ -235,7 +235,6 @@ vn_open_cred(struct nameidata *ndp, int *flagp, int cmode, u_int vn_open_flags,
 {
 	struct vnode *vp;
 	struct mount *mp;
-	struct thread *td = ndp->ni_cnd.cn_thread;
 	struct vattr vat;
 	struct vattr *vap = &vat;
 	int fmode, error;
@@ -290,8 +289,8 @@ restart:
 				error = VOP_CREATE(ndp->ni_dvp, &ndp->ni_vp,
 				    &ndp->ni_cnd, vap);
 #ifdef UNVEIL_SUPPORT
-			if (error == 0 && unveil_active(td))
-				unveil_ops->tracker_substitute(td,
+			if (error == 0 && unveil_active(curthread))
+				unveil_ops->tracker_substitute(curthread,
 				    ndp->ni_dvp, ndp->ni_vp,
 				    ndp->ni_cnd.cn_uperms);
 #endif
@@ -343,7 +342,7 @@ restart:
 			return (error);
 		vp = ndp->ni_vp;
 	}
-	error = vn_open_vnode(vp, fmode, cred, td, fp);
+	error = vn_open_vnode(vp, fmode, cred, curthread, fp);
 	if (first_open) {
 		VI_LOCK(vp);
 		vp->v_iflag &= ~VI_FOPENING;
@@ -1690,14 +1689,13 @@ vn_truncate_locked(struct vnode *vp, off_t length, bool sync,
  * File table vnode stat routine.
  */
 int
-vn_statfile(struct file *fp, struct stat *sb, struct ucred *active_cred,
-    struct thread *td)
+vn_statfile(struct file *fp, struct stat *sb, struct ucred *active_cred)
 {
 	struct vnode *vp = fp->f_vnode;
 	int error;
 
 	vn_lock(vp, LK_SHARED | LK_RETRY);
-	error = VOP_STAT(vp, sb, active_cred, fp->f_cred, td);
+	error = VOP_STAT(vp, sb, active_cred, fp->f_cred);
 	VOP_UNLOCK(vp);
 
 	return (error);

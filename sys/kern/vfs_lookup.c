@@ -295,7 +295,7 @@ namei_setup(struct nameidata *ndp, struct vnode **dpp, struct pwd **pwdp)
 	bool startdir_used;
 
 	cnp = &ndp->ni_cnd;
-	td = cnp->cn_thread;
+	td = curthread;
 
 	startdir_used = false;
 	*pwdp = NULL;
@@ -569,10 +569,8 @@ namei(struct nameidata *ndp)
 #endif
 
 	cnp = &ndp->ni_cnd;
-	td = cnp->cn_thread;
+	td = curthread;
 #ifdef INVARIANTS
-	KASSERT(cnp->cn_thread == curthread,
-	    ("namei not using curthread"));
 	KASSERT((ndp->ni_debugflags & NAMEI_DBG_CALLED) == 0,
 	    ("%s: repeated call to namei without NDREINIT", __func__));
 	KASSERT(ndp->ni_debugflags == NAMEI_DBG_INITED,
@@ -598,7 +596,7 @@ namei(struct nameidata *ndp)
 	 */
 	cnp->cn_origflags = cnp->cn_flags;
 #endif
-	ndp->ni_cnd.cn_cred = ndp->ni_cnd.cn_thread->td_ucred;
+	ndp->ni_cnd.cn_cred = td->td_ucred;
 	KASSERT(ndp->ni_resflags == 0, ("%s: garbage in ni_resflags: %x\n",
 	    __func__, ndp->ni_resflags));
 	KASSERT(cnp->cn_cred && td->td_proc, ("namei: bad cred/proc"));
@@ -1148,7 +1146,7 @@ dirloop:
 			dp = dp->v_mount->mnt_vnodecovered;
 #ifdef UNVEIL_SUPPORT
 			if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE)
-				unveil_ops->traverse_replace(cnp->cn_thread, ndp->ni_unveil,
+				unveil_ops->traverse_replace(curthread, ndp->ni_unveil,
 				    tdp, dp);
 #endif
 			VREF(dp);
@@ -1172,7 +1170,7 @@ dirloop:
 	 */
 unionlookup:
 #ifdef MAC
-	error = mac_vnode_check_lookup(cnp->cn_thread->td_ucred, dp, cnp);
+	error = mac_vnode_check_lookup(cnp->cn_cred, dp, cnp);
 	if (error)
 		goto bad;
 #endif
@@ -1216,7 +1214,7 @@ unionlookup:
 			dp = dp->v_mount->mnt_vnodecovered;
 #ifdef UNVEIL_SUPPORT
 			if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE)
-				unveil_ops->traverse_replace(cnp->cn_thread, ndp->ni_unveil,
+				unveil_ops->traverse_replace(curthread, ndp->ni_unveil,
 				    tdp, dp);
 #endif
 			VREF(dp);
@@ -1261,7 +1259,7 @@ unionlookup:
 		}
 #ifdef UNVEIL_SUPPORT
 		if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE)
-			unveil_ops->traverse_component(cnp->cn_thread, ndp->ni_unveil,
+			unveil_ops->traverse_component(curthread, ndp->ni_unveil,
 			    dp, cnp, NULL);
 #endif
 		if ((cnp->cn_flags & LOCKPARENT) == 0)
@@ -1313,7 +1311,7 @@ good:
 
 #ifdef UNVEIL_SUPPORT
 	if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE)
-		unveil_ops->traverse_component(cnp->cn_thread, ndp->ni_unveil,
+		unveil_ops->traverse_component(curthread, ndp->ni_unveil,
 		    ndp->ni_dvp, cnp, ndp->ni_vp);
 #endif
 
