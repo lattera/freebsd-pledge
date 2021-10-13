@@ -83,6 +83,16 @@ pty_wrap_setup()
 }
 
 static void
+pty_wrap_child()
+{
+	int r;
+	close(pty_master_fd);
+	r = login_tty(pty_slave_fd);
+	if (r < 0)
+		err(EX_OSERR, "login_tty");
+}
+
+static void
 pty_wrap_loop()
 {
 	struct pollfd pfds[] = {
@@ -209,7 +219,8 @@ main(int argc, char *argv[])
 	     no_fork = false,
 	     run_shell = false,
 	     login_shell = false,
-	     new_session = false,
+	     pty_wrap = false,
+	     new_sid = false,
 	     new_pgrp = false,
 	     no_network = false,
 	     unenforced = false;
@@ -220,7 +231,7 @@ main(int argc, char *argv[])
 	size_t abspath_len = 0;
 	struct curtain_config *cfg;
 	struct curtain_slot *main_slot, *args_slot;
-	bool do_exec, pty_wrap;
+	bool do_exec;
 	int status;
 
 	init_harden();
@@ -230,8 +241,21 @@ main(int argc, char *argv[])
 	curtain_enable((main_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 	curtain_enable((args_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 
-	while ((ch = getopt(argc, argv, "@:d:vfkgneaA!t:p:u:0:SslUXYW")) != -1)
+	while ((ch = getopt(argc, argv, "@:d:vfkneaA!o:t:p:u:0:SslUXYW")) != -1)
 		switch (ch) {
+		case 'o': {
+			char *str, *tok;
+			str = optarg;
+			while ((tok = strsep(&str, ",")))
+				if (strcmp(tok, "newpgrp") == 0) {
+					new_pgrp = true;
+				} else if (strcmp(tok, "newsid") == 0) {
+					new_sid = true;
+				} else {
+					warnx("unknown option: %s", tok);
+				}
+			break;
+		}
 		case '@':
 		case 'd':
 			curtain_config_directive(cfg, args_slot, optarg);
@@ -313,7 +337,8 @@ main(int argc, char *argv[])
 			  cmd_arg0 = optarg;
 			  break;
 		case 'S':
-			  new_session = true;
+			  new_sid = true;
+			  pty_wrap = true;
 			  run_shell = true;
 			  break;
 		case 's':
@@ -381,7 +406,7 @@ main(int argc, char *argv[])
 		curtain_config_tag_push(cfg, "_extra");
 	if (no_network)
 		curtain_config_tag_block(cfg, "_network");
-	if (new_session)
+	if (new_sid)
 		curtain_config_tag_push(cfg, "_session");
 	if (run_shell)
 		curtain_config_tag_push(cfg, "_shell");
@@ -442,38 +467,25 @@ main(int argc, char *argv[])
 		cmd_arg0 = p;
 	}
 
-	if (new_session && no_fork)
-		errx(EX_USAGE, "-S is incompatible with -f");
-	pty_wrap = false;
+	if ((new_sid | pty_wrap) && no_fork)
+		errx(EX_USAGE, "session/pty options incompatible with -f");
 
 	if (!(do_exec = no_fork)) {
-		bool do_setsid;
-		do_setsid = false;
-		if (new_session) {
-			if (isatty(STDIN_FILENO) > 0) {
-				pty_wrap_setup();
-				pty_wrap = true;
-			} else
-				do_setsid = true;
-		}
-
+		if (pty_wrap)
+			pty_wrap_setup();
 		child_pid = 0;
 		signal(SIGHUP, handle_exit);
 		signal(SIGINT, handle_exit);
 		signal(SIGQUIT, handle_exit);
 		signal(SIGTERM, handle_exit);
-
 		child_pid = vfork();
 		if (child_pid < 0)
 			err(EX_TEMPFAIL, "fork");
 		if ((do_exec = child_pid == 0)) {
 			err_set_exit(_exit);
 			if (pty_wrap) {
-				close(pty_master_fd);
-				r = login_tty(pty_slave_fd);
-				if (r < 0)
-					err(EX_OSERR, "login_tty");
-			} else if (do_setsid) {
+				pty_wrap_child();
+			} else if (new_sid) {
 				r = setsid();
 				if (r < 0)
 					err(EX_OSERR, "setsid");

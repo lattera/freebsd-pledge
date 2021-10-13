@@ -93,7 +93,7 @@ ps_visibility_body() {
 atf_test_case session_with_non_tty
 session_with_non_tty_body() {
 	ps -o sid -p $$ > not-exp
-	echo 'ps -o sid -p $$' | atf_check -o not-file:not-exp curtain -S
+	echo 'ps -o sid -p $$' | atf_check -o not-file:not-exp curtain -o newsid -s
 }
 
 atf_test_case script_with_cmd # this tests openpty(3)
