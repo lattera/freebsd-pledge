@@ -2,6 +2,7 @@
 #include <curtain.h>
 #include <err.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <libutil.h>
 #include <limits.h>
 #include <paths.h>
@@ -17,7 +18,6 @@
 #include <string.h>
 #include <sys/param.h>
 #include <sys/stat.h>
-#include <sys/sysfil.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sysexits.h>
@@ -141,10 +141,49 @@ handle_exit(int sig)
 		kill(child_pid, sig);
 }
 
+#define	DROP_FD_FROM	3
+
+static void
+init_harden(void)
+{
+	bool missing[DROP_FD_FROM], any_missing;
+	int fd, r;
+	for (fd = 0, any_missing = false; fd < DROP_FD_FROM; fd++) {
+		r = fcntl(fd, F_GETFD);
+		if (r < 0) {
+			any_missing = missing[fd] = true;
+			if (errno != EBADF)
+				warn("fcntl fd#%i", fd);
+		} else
+			missing[fd] = false;
+	}
+	if (any_missing) {
+		int dnfd;
+		bool seen;
+		dnfd = open(_PATH_DEVNULL, O_RDWR);
+		if (dnfd < 0)
+			err(EX_OSFILE, "%s", _PATH_DEVNULL);
+		for (fd = 0, seen = false; fd < DROP_FD_FROM; fd++)
+			if (dnfd != fd) {
+				if (missing[fd]) {
+					r = dup2(dnfd, fd);
+					if (r < 0)
+						err(EX_OSERR, "dup2 fd#%i", fd);
+				}
+			} else
+				seen = true;
+		if (!seen) {
+			r = close(dnfd);
+			if (r < 0)
+				warn("close");
+		}
+	}
+}
+
 static void
 preexec_cleanup(void)
 {
-	closefrom(3); /* Prevent potentially unintended FD passing. */
+	closefrom(DROP_FD_FROM); /* Prevent potentially unintended FD passing. */
 }
 
 static void
@@ -183,6 +222,8 @@ main(int argc, char *argv[])
 	struct curtain_slot *main_slot, *args_slot;
 	bool do_exec, pty_wrap;
 	int status;
+
+	init_harden();
 
 	cfg = curtain_config_new(CURTAIN_CONFIG_ON_EXEC_ONLY);
 
