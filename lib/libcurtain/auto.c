@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <sys/param.h>
 #include <sys/sysctl.h>
 #include <sys/types.h>
@@ -16,7 +17,7 @@
 static struct curtain_config *auto_curtain_cfg = NULL;
 
 static void
-auto_curtain_setup(const char *name)
+auto_curtain_setup_1(const char *name, char *buf)
 {
 	struct curtain_config *cfg;
 	char *p;
@@ -26,6 +27,7 @@ auto_curtain_setup(const char *name)
 	curtain_config_tag_push(cfg, "_default");
 	curtain_config_tag_push(cfg, "_basic");
 	curtain_config_tag_push(cfg, "_auto");
+	curtain_config_tag_push(cfg, buf);
 	if (name)
 		curtain_config_tag_push(cfg, name);
 	curtain_config_setup_tmpdir(cfg, true);
@@ -44,6 +46,27 @@ auto_curtain_setup(const char *name)
 	curtain_config_load(cfg);
 	curtain_config_free(cfg);
 	curtain_enforce();
+}
+
+static void
+auto_curtain_setup(const char *name)
+{
+	const char *home;
+	char path[PATH_MAX], buf[4096];
+	ssize_t r;
+	if (issetugid() || !(home = getenv("HOME")))
+		return;
+	r = snprintf(path, sizeof path, "%s/.curtain-auto.d/%s", home, name);
+	if (r < 0)
+		err(EX_OSERR, "snprintf");
+	r = readlink(path, buf, sizeof buf);
+	if (r < 0) {
+		if (errno != ENOENT)
+			warn("%s", path);
+		return;
+	}
+	buf[r] = '\0';
+	auto_curtain_setup_1(name, buf);
 }
 
 static void __attribute__((constructor))
