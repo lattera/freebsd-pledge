@@ -23,15 +23,16 @@
 #include <sysexits.h>
 #include <termios.h>
 #include <unistd.h>
+#include <vis.h>
 
 static struct termios tty_saved_termios;
-static int pty_master_fd, pty_slave_fd;
+static int pty_outer_fd, pty_master_fd, pty_slave_fd;
 
 static void
 restore_tty()
 {
 	int r;
-	r = tcsetattr(STDIN_FILENO, TCSADRAIN, &tty_saved_termios);
+	r = tcsetattr(pty_outer_fd, TCSADRAIN, &tty_saved_termios);
 	if (r < 0)
 		warn("tcsetattr");
 }
@@ -44,24 +45,46 @@ handle_sigwinch(int sig)
 	(void)sig;
 	if (pty_master_fd < 0)
 		return;
-	r = ioctl(STDIN_FILENO, TIOCGWINSZ, &ws);
+	r = ioctl(pty_outer_fd, TIOCGWINSZ, &ws);
 	if (r >= 0)
 		r = ioctl(pty_master_fd, TIOCSWINSZ, &ws);
 	if (r < 0)
 		warn("ioctl");
 }
 
+#define	PTY_WRAP_FDS 3
+static bool pty_fds_pass[PTY_WRAP_FDS];
+
 static void
-pty_wrap_setup()
+pty_wrap_setup(bool partial)
 {
 	bool has_tt, has_ws;
 	struct termios tt;
 	struct winsize ws;
 	int r;
-	r = tcgetattr(STDIN_FILENO, &tt);
+
+	pty_outer_fd = open(_PATH_TTY, O_RDWR);
+	if (pty_outer_fd < 0)
+		err(EX_OSFILE, "%s", _PATH_TTY);
+
+	for (int fd = 0; fd < PTY_WRAP_FDS; fd++) {
+		pty_fds_pass[fd] = false;
+		if (partial) {
+			errno = 0;
+			r = isatty(fd);
+			if (r <= 0) {
+				if (r < 0 || (errno && errno != ENOTTY))
+					warn("isatty(%i)", fd);
+				else
+					pty_fds_pass[fd] = true;
+			}
+		}
+	}
+
+	r = tcgetattr(pty_outer_fd, &tt);
 	if (!(has_tt = r >= 0))
 		warn("tcgetattr");
-	r = ioctl(STDIN_FILENO, TIOCGWINSZ, &ws);
+	r = ioctl(pty_outer_fd, TIOCGWINSZ, &ws);
 	if (!(has_ws = r >= 0))
 		warn("ioctl");
 
@@ -74,7 +97,7 @@ pty_wrap_setup()
 		tty_saved_termios = tt;
 		atexit(restore_tty);
 		cfmakeraw(&tt);
-		r = tcsetattr(STDIN_FILENO, TCSAFLUSH, &tt);
+		r = tcsetattr(pty_outer_fd, TCSAFLUSH, &tt);
 		if (r < 0)
 			warn("tcsetattr");
 	}
@@ -83,23 +106,41 @@ pty_wrap_setup()
 }
 
 static void
-pty_wrap_child()
+pty_wrap_child(bool partial)
 {
 	int r;
 	close(pty_master_fd);
-	r = login_tty(pty_slave_fd);
-	if (r < 0)
-		err(EX_OSERR, "login_tty");
+	close(pty_outer_fd);
+	if (partial) {
+		pid_t sid;
+		sid = setsid();
+		if (sid < 0)
+			err(EX_OSERR, "setsid");
+		if (tcsetsid(pty_slave_fd, sid) < 0)
+			err(EX_OSERR, "tcsetsid");
+		for (int fd = 0; fd < PTY_WRAP_FDS; fd++)
+			if (!pty_fds_pass[fd]) {
+				r = dup2(pty_slave_fd, fd);
+				if (r < 0)
+					err(EX_OSERR, "dup2");
+			}
+		if (pty_slave_fd >= PTY_WRAP_FDS)
+			close(pty_slave_fd);
+	} else {
+		r = login_tty(pty_slave_fd);
+		if (r < 0)
+			err(EX_OSERR, "login_tty");
+	}
 }
 
 static void
-pty_wrap_loop()
+pty_wrap_loop(bool filter)
 {
 	struct pollfd pfds[] = {
-		{ .fd = STDIN_FILENO, .events = POLLIN },
+		{ .fd = pty_outer_fd, .events = POLLIN },
 		{ .fd = pty_master_fd, .events = POLLIN },
 	};
-	char buf[1024];
+	char buf[1024], visbuf[filter ? (sizeof buf) * 4 + 1 : 0];
 	int r;
 	while (true) {
 		r = poll(pfds, 2, INFTIM);
@@ -112,7 +153,7 @@ pty_wrap_loop()
 		if (pfds[0].revents & POLLNVAL)
 			errx(EX_OSERR, "poll POLLNVAL");
 		if (pfds[0].revents & (POLLIN|POLLHUP|POLLERR)) {
-			r = read(STDIN_FILENO, buf, sizeof buf);
+			r = read(pty_outer_fd, buf, sizeof buf);
 			if (r < 0)
 				err(EX_IOERR, "read");
 			if (r == 0) {
@@ -133,7 +174,13 @@ pty_wrap_loop()
 				err(EX_IOERR, "read");
 			if (r == 0)
 				break;
-			r = write(STDOUT_FILENO, buf, r);
+			if (filter) {
+				r = strnvisx(visbuf, sizeof visbuf, buf, r,
+				    VIS_SAFE | VIS_NOSLASH);
+				if (r < 0)
+					err(EX_IOERR, "strnvisx");
+			}
+			r = write(pty_outer_fd, filter ? visbuf : buf, r);
 			if (r < 0)
 				err(EX_IOERR, "write");
 		}
@@ -220,6 +267,8 @@ main(int argc, char *argv[])
 	     run_shell = false,
 	     login_shell = false,
 	     pty_wrap = false,
+	     pty_wrap_partial = false,
+	     pty_filter = false,
 	     new_sid = false,
 	     new_pgrp = false,
 	     no_network = false,
@@ -251,6 +300,10 @@ main(int argc, char *argv[])
 					new_pgrp = true;
 				} else if (strcmp(tok, "newsid") == 0) {
 					new_sid = true;
+				} else if (strcmp(tok, "pty_partial") == 0) {
+					pty_wrap = pty_wrap_partial = true;
+				} else if (strcmp(tok, "pty_filter") == 0) {
+					pty_filter = pty_wrap = pty_wrap_partial = true;
 				} else {
 					warnx("unknown option: %s", tok);
 				}
@@ -471,8 +524,14 @@ main(int argc, char *argv[])
 		errx(EX_USAGE, "session/pty options incompatible with -f");
 
 	if (!(do_exec = no_fork)) {
-		if (pty_wrap)
-			pty_wrap_setup();
+		if (pty_wrap) {
+			pty_wrap_setup(pty_wrap_partial);
+			if (pty_filter) {
+				r = setenv("TERM", "dumb", 1);
+				if (r < 0)
+					warn("setenv");
+			}
+		}
 		child_pid = 0;
 		signal(SIGHUP, handle_exit);
 		signal(SIGINT, handle_exit);
@@ -484,7 +543,7 @@ main(int argc, char *argv[])
 		if ((do_exec = child_pid == 0)) {
 			err_set_exit(_exit);
 			if (pty_wrap) {
-				pty_wrap_child();
+				pty_wrap_child(pty_wrap_partial);
 			} else if (new_sid) {
 				r = setsid();
 				if (r < 0)
@@ -512,7 +571,7 @@ main(int argc, char *argv[])
 	assert(!no_fork && child_pid > 0);
 
 	if (pty_wrap)
-		pty_wrap_loop();
+		pty_wrap_loop(pty_filter);
 
 	r = waitpid(child_pid, &status, 0);
 	if (r < 0)
