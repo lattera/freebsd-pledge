@@ -81,6 +81,18 @@ curtain_parse_unveil_perms(unveil_perms *uperms, const char *s)
 }
 
 
+static void
+pathfmt(char *path, const char *fmt, ...)
+{
+	int r;
+	va_list ap;
+	va_start(ap, fmt);
+	r = vsnprintf(path, PATH_MAX, fmt, ap);
+	va_end(ap);
+	if (r < 0)
+		err(EX_TEMPFAIL, "snprintf");
+}
+
 static int
 strmemcmp(const char *s, const char *b, size_t n)
 {
@@ -91,6 +103,7 @@ strmemcmp(const char *s, const char *b, size_t n)
 	}
 	return (n ? -1 : *s ? 1 : 0);
 }
+
 
 static struct curtain_config_tag *
 curtain_config_tag_find_mem(struct curtain_config *cfg, const char *buf, size_t len)
@@ -821,25 +834,34 @@ parse_config(struct parser *par)
 }
 
 static int
-process_file(struct curtain_config *cfg, const char *path)
+process_file_at(struct curtain_config *cfg,
+    const char *base_path, int base_fd, const char *sub_path)
 {
+	char path[PATH_MAX];
 	struct parser par = {
 		.cfg = cfg,
-		.file_name = path,
 		.matched = true,
 		.apply = true,
 		.skip = cfg->tags_visited,
 		.visited = cfg->tags_visited,
 	};
-	int saved_errno;
-	par.file = fopen(path, "r");
-	if (!par.file) {
+	int fd, saved_errno;
+	if (base_path) {
+		pathfmt(path, "%s/%s", base_path, sub_path);
+		par.file_name = path;
+	} else
+		par.file_name = sub_path;
+	fd = openat(base_fd, sub_path, O_RDONLY);
+	if (fd < 0) {
 		if (errno != ENOENT)
 			warn("%s", par.file_name);
 		return (-1);
 	}
+	par.file = fdopen(fd, "r");
+	if (!par.file)
+		err(EX_OSERR, "fopen");
 	if (cfg->verbosity >= 1) {
-		fprintf(stderr, "%s: %s: processing with tags [", getprogname(), path);
+		fprintf(stderr, "%s: %s: processing with tags [", getprogname(), par.file_name);
 		for (const struct curtain_config_tag *tag = cfg->tags_current; tag; tag = tag->chain)
 			fprintf(stderr, "%s%s", tag->name,
 			    !tag->chain ? "" : tag->chain == cfg->tags_visited ? "; " : ", ");
@@ -850,6 +872,12 @@ process_file(struct curtain_config *cfg, const char *path)
 	fclose(par.file);
 	errno = saved_errno;
 	return (par.error ? -1 : 0);
+}
+
+static int
+process_file(struct curtain_config *cfg, const char *path)
+{
+	return (process_file_at(cfg, "", AT_FDCWD, path));
 }
 
 int
@@ -874,45 +902,36 @@ curtain_config_directive(struct curtain_config *cfg, struct curtain_slot *slot,
 
 
 static void
-pathfmt(char *path, const char *fmt, ...)
-{
-	int r;
-	va_list ap;
-	va_start(ap, fmt);
-	r = vsnprintf(path, PATH_MAX, fmt, ap);
-	va_end(ap);
-	if (r < 0)
-		err(EX_TEMPFAIL, "snprintf");
-}
-
-static void
-process_dir_tag(struct curtain_config *cfg, struct curtain_config_tag *tag, const char *base)
+process_dir_tag(struct curtain_config *cfg, struct curtain_config_tag *tag,
+    const char *base_path, int base_fd)
 {
 	char path[PATH_MAX];
 	DIR *dir;
 	struct dirent *ent;
-	int r;
+	int dir_fd, r;
 	if (tag->name[0] == '.' || strchr(tag->name, '/'))
 		return;
 
-	pathfmt(path, "%s/%s.conf", base, tag->name);
-	process_file(cfg, path);
+	pathfmt(path, "%s.conf", tag->name);
+	process_file_at(cfg, base_path, base_fd, path);
 
-	pathfmt(path, "%s/%s.d", base, tag->name);
-	dir = opendir(path);
-	if (!dir) {
+	pathfmt(path, "%s.d", tag->name);
+	dir_fd = openat(base_fd, path, O_RDONLY|O_DIRECTORY);
+	if (dir_fd < 0) {
 		if (errno != ENOENT)
-			warn("%s", path);
+			warn("%s/%s", base_path, path);
 		return;
 	}
+	dir = fdopendir(dir_fd);
+	if (!dir)
+		err(EX_OSERR, "opendir");
 	while ((ent = readdir(dir))) {
 		if (ent->d_name[0] == '.')
 			continue;
 		if (ent->d_namlen < 5 ||
 		    strcmp(ent->d_name + ent->d_namlen - 5, ".conf") != 0)
 			continue;
-		pathfmt(path, "%s/%s.d/%s", base, tag->name, ent->d_name);
-		process_file(cfg, path);
+		process_file_at(cfg, path, dirfd(dir), ent->d_name);
 	}
 	r = closedir(dir);
 	if (r < 0)
@@ -922,7 +941,16 @@ process_dir_tag(struct curtain_config *cfg, struct curtain_config_tag *tag, cons
 static void
 process_dir(struct curtain_config *cfg, const char *base)
 {
-	bool visited = false;
+	int dir_fd, r;
+	bool visited;
+	dir_fd = open(base, O_SEARCH|O_DIRECTORY);
+	if (dir_fd < 0) {
+		if (errno != ENOENT)
+			warn("%s", base);
+		return;
+	}
+
+	visited = false;
 	for (struct curtain_config_tag *tag = cfg->tags_current; tag; tag = tag->chain) {
 		struct curtain_config_tag *saved_tags_visited = cfg->tags_visited;
 		if (tag == cfg->tags_visited)
@@ -930,10 +958,14 @@ process_dir(struct curtain_config *cfg, const char *base)
 		/* Don't skip anything in files that haven't been visited yet. */
 		if (!visited)
 			cfg->tags_visited = NULL;
-		process_dir_tag(cfg, tag, base);
+		process_dir_tag(cfg, tag, base, dir_fd);
 		if (!visited)
 			cfg->tags_visited = saved_tags_visited;
 	}
+
+	r = close(dir_fd);
+	if (r < 0)
+		warn("%s", base);
 }
 
 void
