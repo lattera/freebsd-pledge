@@ -26,13 +26,14 @@
 #include <vis.h>
 
 static struct termios tty_saved_termios;
-static int pty_outer_fd, pty_master_fd, pty_slave_fd;
+static int pty_outer_tty_fd, pty_outer_read_fd, pty_outer_write_fd, pty_outer_ioctl_fd;
+static int pty_master_fd, pty_slave_fd;
 
 static void
 restore_tty()
 {
 	int r;
-	r = tcsetattr(pty_outer_fd, TCSADRAIN, &tty_saved_termios);
+	r = tcsetattr(pty_outer_ioctl_fd, TCSADRAIN, &tty_saved_termios);
 	if (r < 0)
 		warn("tcsetattr");
 }
@@ -45,7 +46,7 @@ handle_sigwinch(int sig)
 	(void)sig;
 	if (pty_master_fd < 0)
 		return;
-	r = ioctl(pty_outer_fd, TIOCGWINSZ, &ws);
+	r = ioctl(pty_outer_ioctl_fd, TIOCGWINSZ, &ws);
 	if (r >= 0)
 		r = ioctl(pty_master_fd, TIOCSWINSZ, &ws);
 	if (r < 0)
@@ -63,28 +64,39 @@ pty_wrap_setup(bool partial)
 	struct winsize ws;
 	int r;
 
-	pty_outer_fd = open(_PATH_TTY, O_RDWR);
-	if (pty_outer_fd < 0)
-		err(EX_OSFILE, "%s", _PATH_TTY);
+	if (partial) {
+		pty_outer_tty_fd = open(_PATH_TTY, O_RDWR);
+		if (pty_outer_tty_fd < 0)
+			err(EX_OSFILE, "%s", _PATH_TTY);
+		pty_outer_read_fd = pty_outer_tty_fd;
+		pty_outer_write_fd = pty_outer_tty_fd;
+	} else {
+		pty_outer_tty_fd = -1;
+		pty_outer_read_fd = STDIN_FILENO;
+		pty_outer_write_fd = STDOUT_FILENO;
+	}
+	pty_outer_ioctl_fd = pty_outer_tty_fd;
 
 	for (int fd = 0; fd < PTY_WRAP_FDS; fd++) {
 		pty_fds_pass[fd] = false;
-		if (partial) {
-			errno = 0;
-			r = isatty(fd);
-			if (r <= 0) {
-				if (r < 0 || (errno && errno != ENOTTY))
-					warn("isatty(%i)", fd);
-				else
-					pty_fds_pass[fd] = true;
-			}
+		errno = 0;
+		r = isatty(fd);
+		if (r > 0) {
+			pty_fds_pass[fd] = false;
+			if (pty_outer_ioctl_fd < 0)
+				pty_outer_ioctl_fd = fd;
+		} else if (r < 0 || (errno && errno != ENOTTY)) {
+			warn("isatty(%i)", fd);
+			pty_fds_pass[fd] = false;
+		} else {
+			pty_fds_pass[fd] = partial;
 		}
 	}
 
-	r = tcgetattr(pty_outer_fd, &tt);
+	r = tcgetattr(pty_outer_ioctl_fd, &tt);
 	if (!(has_tt = r >= 0))
 		warn("tcgetattr");
-	r = ioctl(pty_outer_fd, TIOCGWINSZ, &ws);
+	r = ioctl(pty_outer_ioctl_fd, TIOCGWINSZ, &ws);
 	if (!(has_ws = r >= 0))
 		warn("ioctl");
 
@@ -97,7 +109,7 @@ pty_wrap_setup(bool partial)
 		tty_saved_termios = tt;
 		atexit(restore_tty);
 		cfmakeraw(&tt);
-		r = tcsetattr(pty_outer_fd, TCSAFLUSH, &tt);
+		r = tcsetattr(pty_outer_ioctl_fd, TCSAFLUSH, &tt);
 		if (r < 0)
 			warn("tcsetattr");
 	}
@@ -110,7 +122,8 @@ pty_wrap_child(bool partial)
 {
 	int r;
 	close(pty_master_fd);
-	close(pty_outer_fd);
+	if (pty_outer_tty_fd >= 0)
+		close(pty_outer_tty_fd);
 	if (partial) {
 		pid_t sid;
 		sid = setsid();
@@ -137,7 +150,7 @@ static void
 pty_wrap_loop(bool filter)
 {
 	struct pollfd pfds[] = {
-		{ .fd = pty_outer_fd, .events = POLLIN },
+		{ .fd = pty_outer_read_fd, .events = POLLIN },
 		{ .fd = pty_master_fd, .events = POLLIN },
 	};
 	char buf[1024], visbuf[filter ? (sizeof buf) * 4 + 1 : 0];
@@ -153,7 +166,7 @@ pty_wrap_loop(bool filter)
 		if (pfds[0].revents & POLLNVAL)
 			errx(EX_OSERR, "poll POLLNVAL");
 		if (pfds[0].revents & (POLLIN|POLLHUP|POLLERR)) {
-			r = read(pty_outer_fd, buf, sizeof buf);
+			r = read(pty_outer_read_fd, buf, sizeof buf);
 			if (r < 0)
 				err(EX_IOERR, "read");
 			if (r == 0) {
@@ -180,7 +193,7 @@ pty_wrap_loop(bool filter)
 				if (r < 0)
 					err(EX_IOERR, "strnvisx");
 			}
-			r = write(pty_outer_fd, filter ? visbuf : buf, r);
+			r = write(pty_outer_write_fd, filter ? visbuf : buf, r);
 			if (r < 0)
 				err(EX_IOERR, "write");
 		}
