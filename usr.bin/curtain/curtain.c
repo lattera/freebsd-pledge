@@ -281,7 +281,7 @@ main(int argc, char *argv[])
 	     login_shell = false,
 	     pty_wrap = false,
 	     pty_wrap_partial = false,
-	     pty_filter = false,
+	     pty_wrap_filter = false,
 	     new_sid = false,
 	     new_pgrp = false,
 	     no_network = false,
@@ -303,7 +303,7 @@ main(int argc, char *argv[])
 	curtain_enable((main_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 	curtain_enable((args_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 
-	while ((ch = getopt(argc, argv, "@:d:vfkneaA!o:t:p:u:0:SslUXYW")) != -1)
+	while ((ch = getopt(argc, argv, "@:d:vfkneaA!o:t:p:u:0:TSslUXYW")) != -1)
 		switch (ch) {
 		case 'o': {
 			char *str, *tok;
@@ -313,10 +313,6 @@ main(int argc, char *argv[])
 					new_pgrp = true;
 				} else if (strcmp(tok, "newsid") == 0) {
 					new_sid = true;
-				} else if (strcmp(tok, "pty_partial") == 0) {
-					pty_wrap = pty_wrap_partial = true;
-				} else if (strcmp(tok, "pty_filter") == 0) {
-					pty_filter = pty_wrap = pty_wrap_partial = true;
 				} else {
 					warnx("unknown option: %s", tok);
 				}
@@ -401,6 +397,14 @@ main(int argc, char *argv[])
 		}
 		case '0':
 			  cmd_arg0 = optarg;
+			  break;
+		case 'T':
+			  new_sid = true;
+			  pty_wrap = true;
+			  if (pty_wrap_partial)
+				  pty_wrap_filter = true;
+			  else
+				  pty_wrap_partial = true;
 			  break;
 		case 'S':
 			  new_sid = true;
@@ -539,7 +543,7 @@ main(int argc, char *argv[])
 	if (!(do_exec = no_fork)) {
 		if (pty_wrap) {
 			pty_wrap_setup(pty_wrap_partial);
-			if (pty_filter) {
+			if (pty_wrap_filter) {
 				r = setenv("TERM", "dumb", 1);
 				if (r < 0)
 					warn("setenv");
@@ -584,7 +588,7 @@ main(int argc, char *argv[])
 	assert(!no_fork && child_pid > 0);
 
 	if (pty_wrap)
-		pty_wrap_loop(pty_filter);
+		pty_wrap_loop(pty_wrap_filter);
 
 	r = waitpid(child_pid, &status, 0);
 	if (r < 0)
