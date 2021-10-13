@@ -24,98 +24,6 @@
 #include <termios.h>
 #include <unistd.h>
 
-static const char dbus_cmd_name[] = "dbus-daemon";
-static char *session_dbus_socket = NULL;
-static pid_t session_dbus_pid = -1;
-
-static void
-cleanup_dbus(void)
-{
-	int r;
-	if (session_dbus_pid > 0) {
-		int status;
-		r = kill(session_dbus_pid, SIGTERM);
-		if (r < 0)
-			warn("kill");
-		r = waitpid(session_dbus_pid, &status, 0);
-		session_dbus_pid = -1;
-		if (r < 0) {
-			warn("waitpid");
-		} else if (!(WIFEXITED(status) && WEXITSTATUS(status) == 0)) {
-			if (WIFSIGNALED(status))
-				warnx("%s terminated with signal %d",
-				    dbus_cmd_name, WTERMSIG(status));
-			warnx("%s exited with code %d",
-			    dbus_cmd_name, WEXITSTATUS(status));
-		}
-		r = unlink(session_dbus_socket);
-		/* dbus-daemon doesn't always cleanup after itself */
-		if (r < 0 && errno != ENOENT)
-			warn("%s", session_dbus_socket);
-	}
-}
-
-static void
-prepare_dbus(struct curtain_slot *slot)
-{
-	char buf[1024];
-	char *dbus_path, *pipe_fd_str;
-	int r, pipe_fds[2];
-
-	r = pipe(pipe_fds);
-	if (r < 0)
-		err(EX_OSERR, "pipe");
-
-	session_dbus_socket = tempnam(NULL, "curtain.dbus");
-	if (!session_dbus_socket)
-		err(EX_OSERR, "tempnam");
-
-	r = asprintf(&dbus_path, "unix:path=%s", session_dbus_socket);
-	if (r < 0)
-		err(EX_TEMPFAIL, "asprintf");
-	r = asprintf(&pipe_fd_str, "%d", pipe_fds[1]);
-	if (r < 0)
-		err(EX_TEMPFAIL, "asprintf");
-
-	session_dbus_pid = vfork();
-	if (session_dbus_pid < 0)
-		err(EX_TEMPFAIL, "fork");
-	if (session_dbus_pid == 0) {
-		err_set_exit(_exit);
-		close(pipe_fds[0]);
-		execlp(dbus_cmd_name, dbus_cmd_name,
-		    "--nofork", "--session",
-		    "--print-address", pipe_fd_str,
-		    "--address", dbus_path, NULL);
-		err(EX_OSERR, dbus_cmd_name);
-	}
-	err_set_exit(NULL);
-	close(pipe_fds[1]);
-
-	/*
-	 * Don't need to get the address from the daemon since we picked it
-	 * ourself, but reading on the pipe until EOF will hopefully make us
-	 * wait until it's ready to serve requests before spawning clients.
-	 */
-	while ((r = read(pipe_fds[0], buf, sizeof buf)) > 0);
-	if (r < 0)
-		err(EX_IOERR, "pipe from %s", dbus_cmd_name);
-	close(pipe_fds[0]);
-
-	atexit(cleanup_dbus);
-
-	r = setenv("DBUS_SESSION_BUS_ADDRESS", dbus_path, 1);
-	if (r < 0)
-		err(EX_TEMPFAIL, "setenv");
-	free(dbus_path); dbus_path = NULL;
-
-	r = curtain_unveil(slot, session_dbus_socket,
-	    CURTAIN_UNVEIL_INSPECT, UPERM_CONNECT|UPERM_INSPECT);
-	if (r < 0)
-		err(EX_OSERR, "%s", session_dbus_socket);
-}
-
-
 static struct termios tty_saved_termios;
 static int pty_master_fd, pty_slave_fd;
 
@@ -242,7 +150,7 @@ preexec_cleanup(void)
 static void
 usage(void)
 {
-	fprintf(stderr, "usage: %s [-vfkgneaAXYWD] "
+	fprintf(stderr, "usage: %s [-vfkgneaAXYW] "
 	    "[-t tag] [-p promises] [-u unveil ...] "
 	    "[-Ssl] cmd [arg ...]\n",
 	    getprogname());
@@ -268,7 +176,6 @@ main(int argc, char *argv[])
 	     unenforced = false;
 	enum { X11_NONE, X11_UNTRUSTED, X11_TRUSTED } x11_mode = X11_NONE;
 	bool wayland = false;
-	bool dbus = false;
 	char *cmd_arg0 = NULL;
 	char abspath[PATH_MAX];
 	size_t abspath_len = 0;
@@ -282,7 +189,7 @@ main(int argc, char *argv[])
 	curtain_enable((main_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 	curtain_enable((args_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 
-	while ((ch = getopt(argc, argv, "@:d:vfkgneaA!t:p:u:0:SslUXYWD")) != -1)
+	while ((ch = getopt(argc, argv, "@:d:vfkgneaA!t:p:u:0:SslUXYW")) != -1)
 		switch (ch) {
 		case '@':
 		case 'd':
@@ -391,9 +298,6 @@ main(int argc, char *argv[])
 		case 'W':
 			  wayland = true;
 			  break;
-		case 'D':
-			  dbus = true;
-			  break;
 		default:
 			usage();
 		}
@@ -444,15 +348,6 @@ main(int argc, char *argv[])
 		curtain_config_tag_push(cfg, "_login_shell");
 	if (new_pgrp)
 		curtain_config_tag_push(cfg, "_pgrp");
-	if (dbus) {
-		if (no_fork)
-			errx(EX_USAGE, "-D incompatible with -f");
-		curtain_config_tag_push(cfg, "_dbus");
-		/*
-		 * XXX dbus-daemon currently being run unsandboxed.
-		 */
-		prepare_dbus(main_slot);
-	}
 
 	if (autotag && argc) {
 		char *p;
