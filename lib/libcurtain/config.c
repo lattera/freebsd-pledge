@@ -1035,20 +1035,23 @@ curtain_config_free(struct curtain_config *cfg)
 }
 
 void
-curtain_config_tags_from_env(struct curtain_config *cfg)
+curtain_config_tags_from_env(struct curtain_config *cfg, const char *name)
 {
 	char *p, *q;
-	p = issetugid() ? NULL : getenv("CURTAIN_TAGS");
-	if ((q = p))
-		do {
-			if (!*q || is_space(*q)) {
-				if (p != q)
-					curtain_config_tag_push_mem(cfg, p, q - p);
-				if (!*q)
-					break;
-				p = ++q;
-			} else
-				q++;
-		} while (true);
+	if (!name)
+		name = "CURTAIN_TAGS";
+	if (issetugid() || !(p = getenv(name)))
+		return;
+	q = p;
+	do {
+		if (!*q || is_space(*q)) {
+			if (p != q)
+				curtain_config_tag_push_mem(cfg, p, q - p);
+			if (!*q)
+				break;
+			p = ++q;
+		} else
+			q++;
+	} while (true);
 }
 

@@ -21,8 +21,8 @@ auto_curtain_setup(const char *name)
 	struct curtain_config *cfg;
 	char *p;
 	auto_curtain_cfg = cfg = curtain_config_new(0);
-	cfg->unsafety = 1; /* XXX */
-	curtain_config_tags_from_env(cfg);
+	curtain_config_tags_from_env(cfg, NULL);
+	curtain_config_tags_from_env(cfg, "CURTAIN_AUTO_TAGS");
 	curtain_config_tag_push(cfg, "_default");
 	curtain_config_tag_push(cfg, "_basic");
 	curtain_config_tag_push(cfg, "_auto");
@@ -30,9 +30,11 @@ auto_curtain_setup(const char *name)
 		curtain_config_tag_push(cfg, name);
 	curtain_config_setup_tmpdir(cfg, true);
 	if ((p = getenv("CURTAIN_AUTO_X11"))) {
+		bool trusted = strcmp(p, "trusted") == 0;
 		curtain_config_tag_push(cfg, "_x11");
+		curtain_config_tag_push(cfg, trusted ? "_x11_trusted" : "_x11_untrusted");
 		curtain_config_tag_push(cfg, "_gui");
-		curtain_config_setup_x11(cfg, strcmp(p, "trusted") == 0);
+		curtain_config_setup_x11(cfg, trusted);
 	}
 	if (getenv("CURTAIN_AUTO_WAYLAND")) {
 		curtain_config_tag_push(cfg, "_wayland");

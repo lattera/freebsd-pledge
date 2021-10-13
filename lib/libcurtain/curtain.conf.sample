@@ -61,6 +61,10 @@ merge _session
 ability-gate sysvipc # MIT-SHM
 merge _drm_render
 
+[_x11_all]
+${XAUTHORITY-~/.Xauthority}
+/tmp/.X11-unix/ : u
+
 [_wayland]
 merge _drm_render
 

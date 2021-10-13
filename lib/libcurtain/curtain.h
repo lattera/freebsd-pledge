@@ -100,7 +100,7 @@ curtain_config_tag_block(struct curtain_config *cfg, const char *name)
 }
 
 void curtain_config_load(struct curtain_config *);
-void curtain_config_tags_from_env(struct curtain_config *);
+void curtain_config_tags_from_env(struct curtain_config *, const char *name);
 void curtain_config_tags_clear(struct curtain_config *);
 
 int curtain_config_directive(struct curtain_config *, struct curtain_slot *,

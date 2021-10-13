@@ -427,7 +427,7 @@ main(int argc, char *argv[])
 
 
 	curtain_config_unsafety(cfg, unsafety);
-	curtain_config_tags_from_env(cfg);
+	curtain_config_tags_from_env(cfg, NULL);
 	curtain_config_tag_push(cfg, "_default");
 	curtain_config_tag_push(cfg, "_basic");
 	if (!signaling)
