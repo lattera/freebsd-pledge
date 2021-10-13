@@ -1570,17 +1570,26 @@ static const int act2err[] = {
 	[CURTAINACT_KILL] = ERESTRICTEDKILL,
 };
 
-#define	CURTAIN_LOG(td, act, fmt, ...) do { \
-	if ((act) >= curtain_log_level) \
-		log(LOG_ERR, "curtain %s: pid %d (%s), jid %d, uid %d: " fmt "\n", \
-		    act2str[act], (td)->td_proc->p_pid, (td)->td_proc->p_comm, \
-		    (td)->td_ucred->cr_prison->pr_id, (td)->td_ucred->cr_uid, \
-		    __VA_ARGS__); \
+#define	CURTAIN_LOG(td, cat, fmt, ...) do { \
+	log(LOG_ERR, "curtain %s: pid %d (%s), jid %d, uid %d: " fmt "\n", \
+	    cat, (td)->td_proc->p_pid, (td)->td_proc->p_comm, \
+	    (td)->td_ucred->cr_prison->pr_id, (td)->td_ucred->cr_uid, \
+	    __VA_ARGS__); \
 } while (0)
 
-#define	CURTAIN_CRED_LOG(cr, act, fmt, ...) do { \
-	if ((cr) == curthread->td_ucred) \
-		CURTAIN_LOG(curthread, (act), fmt, __VA_ARGS__); \
+#define	CURTAIN_LOG_ACTION(td, act, fmt, ...) do { \
+	if ((act) >= curtain_log_level) \
+		CURTAIN_LOG(td, act2str[act], fmt, __VA_ARGS__); \
+} while (0)
+
+#define	CURTAIN_CRED_LOG(cr, cat, fmt, ...) do { \
+	if ((cr) == curthread->td_ucred) /* XXX */ \
+		CURTAIN_LOG(curthread, (cat), fmt, __VA_ARGS__); \
+} while (0)
+
+#define	CURTAIN_CRED_LOG_ACTION(cr, act, fmt, ...) do { \
+	if ((cr) == curthread->td_ucred) /* XXX */ \
+		CURTAIN_LOG_ACTION(curthread, (act), fmt, __VA_ARGS__); \
 } while (0)
 
 static void
@@ -1632,24 +1641,24 @@ cred_key_failed(const struct ucred *cr, enum curtainreq_type type, union curtain
 	bool noise = false;
 	switch (type) {
 	case CURTAINTYP_DEFAULT:
-		CURTAIN_CRED_LOG(cr, act, "default%s", "");
+		CURTAIN_CRED_LOG_ACTION(cr, act, "default%s", "");
 		break;
 	case CURTAINTYP_UNVEIL:
 		break;
 	case CURTAINTYP_ABILITY:
-		CURTAIN_CRED_LOG(cr, act, "ability %d", key.ability);
+		CURTAIN_CRED_LOG_ACTION(cr, act, "ability %d", key.ability);
 		break;
 	case CURTAINTYP_IOCTL:
-		CURTAIN_CRED_LOG(cr, act, "ioctl %#jx", (uintmax_t)key.ioctl);
+		CURTAIN_CRED_LOG_ACTION(cr, act, "ioctl %#jx", (uintmax_t)key.ioctl);
 		break;
 	case CURTAINTYP_SOCKAF:
-		CURTAIN_CRED_LOG(cr, act, "sockaf %d", key.sockaf);
+		CURTAIN_CRED_LOG_ACTION(cr, act, "sockaf %d", key.sockaf);
 		break;
 	case CURTAINTYP_SOCKLVL:
-		CURTAIN_CRED_LOG(cr, act, "socklvl %d", key.socklvl);
+		CURTAIN_CRED_LOG_ACTION(cr, act, "socklvl %d", key.socklvl);
 		break;
 	case CURTAINTYP_SOCKOPT:
-		CURTAIN_CRED_LOG(cr, act, "sockopt %d:%d",
+		CURTAIN_CRED_LOG_ACTION(cr, act, "sockopt %d:%d",
 		    key.sockopt.level, key.sockopt.optname);
 		break;
 	case CURTAINTYP_PRIV:
@@ -1666,13 +1675,13 @@ cred_key_failed(const struct ucred *cr, enum curtainreq_type type, union curtain
 			noise = true;
 			break;
 		default:
-			CURTAIN_CRED_LOG(cr, act, "priv %d", key.priv);
+			CURTAIN_CRED_LOG_ACTION(cr, act, "priv %d", key.priv);
 			break;
 		}
 		break;
 	case CURTAINTYP_SYSCTL:
 #if 0
-		CURTAIN_CRED_LOG(cr, act, "sysctl %ju", (uintmax_t)key.sysctl.serial); /* XXX */
+		CURTAIN_CRED_LOG_ACTION(cr, act, "sysctl %ju", (uintmax_t)key.sysctl.serial); /* XXX */
 #endif
 		noise = true;
 		break;
@@ -2642,7 +2651,7 @@ dangerous_device_ioctl(struct ucred *cr, struct file *fp, u_long com)
 		reason = "across barrier";
 	else
 		return (false);
-	CURTAIN_CRED_LOG(cr, CURTAINACT_DENY,
+	CURTAIN_CRED_LOG(cr, "warning",
 	    "dangerous ioctl %#jx attempted %s", (uintmax_t)com, reason);
 	return (true);
 }
@@ -2725,7 +2734,7 @@ curtain_system_check_sysctl(struct ucred *cr,
 		return (0);
 	act = CURTAINACT_DENY; /* XXX */
 #if 0
-	CURTAIN_CRED_LOG(cr, act, "sysctl %ju", (uintmax_t)oidp->oid_serial); /* XXX */
+	CURTAIN_CRED_LOG_ACTION(cr, act, "sysctl %ju", (uintmax_t)oidp->oid_serial); /* XXX */
 #endif
 	return (act2err[act]);
 }
@@ -2865,7 +2874,7 @@ curtain_sysfil_check(struct ucred *cr, sysfilset_t sfs)
 			if (act == CURTAINACT_ALLOW)
 				return (0);
 		}
-	CURTAIN_CRED_LOG(cr, act, "sysfil %#jx", (uintmax_t)sfs);
+	CURTAIN_CRED_LOG_ACTION(cr, act, "sysfil %#jx", (uintmax_t)sfs);
 	SDT_PROBE3(curtain,, cred_sysfil_check, failed, cr, sfs, act);
 	cred_action_failed(cr, act, false);
 	return (act2err[act]);
