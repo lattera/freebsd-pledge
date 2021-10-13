@@ -31,6 +31,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/protosw.h>
 #include <sys/sbuf.h>
 #include <sys/stat.h>
+#include <sys/conf.h>
 #include <sys/imgact.h>
 #include <sys/vnode.h>
 #include <sys/mount.h>
@@ -2627,10 +2628,32 @@ curtain_generic_ipc_name_prefix(struct ucred *cr, char **prefix, char *end)
 	return (0);
 }
 
+static bool
+dangerous_device_ioctl(struct ucred *cr, struct file *fp, u_long com)
+{
+	const char *reason;
+	if (!(fp->f_vnode && fp->f_vnode->v_type == VCHR))
+		reason = "on non-device";
+	else if (!fp->f_vnode->v_rdev)
+		reason = "on bogus device vnode";
+	else if (!fp->f_vnode->v_rdev->si_cred)
+		reason = "on device without ucred";
+	else if (!curtain_cred_visible(cr, fp->f_vnode->v_rdev->si_cred, BARRIER_DEVICE))
+		reason = "across barrier";
+	else
+		return (false);
+	CURTAIN_CRED_LOG(cr, CURTAINACT_DENY,
+	    "dangerous ioctl %#jx attempted %s", (uintmax_t)com, reason);
+	return (true);
+}
+
 static int
 curtain_generic_check_ioctl(struct ucred *cr, struct file *fp, u_long com, void *data)
 {
 	enum curtain_ability abl;
+	int error;
+	bool dangerous;
+	dangerous = false;
 	switch (com) {
 	case FIOCLEX:
 	case FIONCLEX:
@@ -2651,6 +2674,10 @@ curtain_generic_check_ioctl(struct ucred *cr, struct file *fp, u_long com, void 
 		/* also checked in setown() */
 		abl = CURTAINABL_PROC;
 		break;
+	case TIOCSTI:
+		if (CRED_IN_RESTRICTED_MODE(cr))
+			dangerous = dangerous_device_ioctl(cr, fp, com);
+		/* FALLTHROUGH */
 	default:
 		abl = CURTAINABL_ANY_IOCTL;
 		break;
@@ -2658,7 +2685,8 @@ curtain_generic_check_ioctl(struct ucred *cr, struct file *fp, u_long com, void 
 	if (abl != CURTAINABL_ANY_IOCTL &&
 	    cred_ability_action(cr, abl) == CURTAINACT_ALLOW)
 		return (0);
-	return (cred_key_check(cr, CURTAINTYP_IOCTL, (ctkey){ .ioctl = com }));
+	error = cred_key_check(cr, CURTAINTYP_IOCTL, (ctkey){ .ioctl = com });
+	return (error ? error : dangerous ? EPERM : 0);
 }
 
 static int
