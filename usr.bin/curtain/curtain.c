@@ -26,31 +26,33 @@
 #include <vis.h>
 
 static struct termios tty_saved_termios;
-static int pty_outer_tty_fd, pty_outer_read_fd, pty_outer_write_fd, pty_outer_ioctl_fd;
+static bool tty_made_raw;
+static int pty_outer_read_fd, pty_outer_write_fd, pty_outer_ioctl_fd;
 static int pty_master_fd, pty_slave_fd;
 
 static void
 restore_tty()
 {
 	int r;
-	r = tcsetattr(pty_outer_ioctl_fd, TCSADRAIN, &tty_saved_termios);
-	if (r < 0)
-		warn("tcsetattr");
+	if (pty_outer_ioctl_fd >= 0) {
+		r = tcsetattr(pty_outer_ioctl_fd, TCSADRAIN, &tty_saved_termios);
+		if (r < 0)
+			warn("tcsetattr");
+	}
 }
 
 static void
-handle_sigwinch(int sig)
+handle_sigwinch(int sig __unused)
 {
 	int r;
 	struct winsize ws;
-	(void)sig;
-	if (pty_master_fd < 0)
-		return;
-	r = ioctl(pty_outer_ioctl_fd, TIOCGWINSZ, &ws);
-	if (r >= 0)
-		r = ioctl(pty_master_fd, TIOCSWINSZ, &ws);
-	if (r < 0)
-		warn("ioctl");
+	if (pty_outer_ioctl_fd >= 0 && pty_master_fd >= 0) {
+		r = ioctl(pty_outer_ioctl_fd, TIOCGWINSZ, &ws);
+		if (r >= 0)
+			r = ioctl(pty_master_fd, TIOCSWINSZ, &ws);
+		if (r < 0)
+			warn("ioctl");
+	}
 }
 
 #define	PTY_WRAP_FDS 3
@@ -65,17 +67,13 @@ pty_wrap_setup(bool partial)
 	int r;
 
 	if (partial) {
-		pty_outer_tty_fd = open(_PATH_TTY, O_RDWR);
-		if (pty_outer_tty_fd < 0)
-			err(EX_OSFILE, "%s", _PATH_TTY);
-		pty_outer_read_fd = pty_outer_tty_fd;
-		pty_outer_write_fd = pty_outer_tty_fd;
+		pty_outer_read_fd = -1;
+		pty_outer_write_fd = -1;
 	} else {
-		pty_outer_tty_fd = -1;
 		pty_outer_read_fd = STDIN_FILENO;
 		pty_outer_write_fd = STDOUT_FILENO;
 	}
-	pty_outer_ioctl_fd = pty_outer_tty_fd;
+	pty_outer_ioctl_fd = -1;
 
 	for (int fd = 0; fd < PTY_WRAP_FDS; fd++) {
 		pty_fds_pass[fd] = false;
@@ -85,6 +83,12 @@ pty_wrap_setup(bool partial)
 			pty_fds_pass[fd] = false;
 			if (pty_outer_ioctl_fd < 0)
 				pty_outer_ioctl_fd = fd;
+			if (pty_outer_read_fd < 0 &&
+			    fd == STDIN_FILENO)
+				pty_outer_read_fd = fd;
+			if (pty_outer_write_fd < 0 &&
+			    (fd == STDOUT_FILENO || fd == STDERR_FILENO))
+				pty_outer_write_fd = fd;
 		} else if (r < 0 || (errno && errno != ENOTTY)) {
 			warn("isatty(%i)", fd);
 			pty_fds_pass[fd] = false;
@@ -92,19 +96,27 @@ pty_wrap_setup(bool partial)
 			pty_fds_pass[fd] = partial;
 		}
 	}
+	if (pty_outer_read_fd < 0)
+		pty_outer_read_fd = pty_outer_ioctl_fd;
+	if (pty_outer_write_fd < 0)
+		pty_outer_write_fd = pty_outer_ioctl_fd;
 
-	r = tcgetattr(pty_outer_ioctl_fd, &tt);
-	if (!(has_tt = r >= 0))
-		warn("tcgetattr");
-	r = ioctl(pty_outer_ioctl_fd, TIOCGWINSZ, &ws);
-	if (!(has_ws = r >= 0))
-		warn("ioctl");
+	if (pty_outer_ioctl_fd >= 0) {
+		r = tcgetattr(pty_outer_ioctl_fd, &tt);
+		if (!(has_tt = r >= 0))
+			warn("tcgetattr");
+		r = ioctl(pty_outer_ioctl_fd, TIOCGWINSZ, &ws);
+		if (!(has_ws = r >= 0))
+			warn("ioctl");
+	} else
+		has_tt = has_ws = false;
 
 	r = openpty(&pty_master_fd, &pty_slave_fd, NULL,
 	    has_tt ? &tt : NULL, has_ws ? &ws : NULL);
 	if (r < 0)
 		err(EX_OSERR, "openpty");
 
+	tty_made_raw = false;
 	if (has_tt) {
 		tty_saved_termios = tt;
 		atexit(restore_tty);
@@ -112,6 +124,8 @@ pty_wrap_setup(bool partial)
 		r = tcsetattr(pty_outer_ioctl_fd, TCSAFLUSH, &tt);
 		if (r < 0)
 			warn("tcsetattr");
+		else
+			tty_made_raw = true;
 	}
 	if (has_ws)
 		signal(SIGWINCH, handle_sigwinch);
@@ -122,8 +136,6 @@ pty_wrap_child(bool partial)
 {
 	int r;
 	close(pty_master_fd);
-	if (pty_outer_tty_fd >= 0)
-		close(pty_outer_tty_fd);
 	if (partial) {
 		pid_t sid;
 		sid = setsid();
@@ -147,46 +159,76 @@ pty_wrap_child(bool partial)
 }
 
 static void
-pty_wrap_loop(bool filter)
+pty_suspend(void)
 {
-	struct pollfd pfds[] = {
-		{ .fd = pty_outer_read_fd, .events = POLLIN },
-		{ .fd = pty_master_fd, .events = POLLIN },
-	};
-	char buf[1024], visbuf[filter ? (sizeof buf) * 4 + 1 : 0];
+	struct termios tt;
+	bool has_tt;
 	int r;
-	while (true) {
-		r = poll(pfds, 2, INFTIM);
-		if (r <= 0) {
-			if (r < 0 && errno != EINTR)
-				err(EX_OSERR, "poll");
-			continue;
-		}
+	if (tty_made_raw) {
+		r = tcgetattr(pty_outer_ioctl_fd, &tt);
+		if ((has_tt = r >= 0)) {
+			r = tcsetattr(pty_outer_ioctl_fd, TCSADRAIN, &tty_saved_termios);
+			if (r < 0)
+				warn("tcsetattr");
+		} else
+			warn("tcgetattr");
+	}
+	r = kill(getpid(), SIGSTOP);
+	if (r < 0)
+		warn("kill");
+	if (tty_made_raw && has_tt) {
+		r = tcsetattr(pty_outer_ioctl_fd, TCSADRAIN, &tt);
+		if (r < 0)
+			warn("tcsetattr");
+	}
+}
 
-		if (pfds[0].revents & POLLNVAL)
+static bool
+pty_wrap_redir(bool filter)
+{
+	char buf[1024], visbuf[filter ? (sizeof buf) * 4 + 1 : 0];
+	struct pollfd pfds[2];
+	int pfdc, r, i;
+	pfdc = 0;
+	if (pty_outer_read_fd >= 0)
+		pfds[pfdc++] = (struct pollfd){
+			.fd = pty_outer_read_fd, .events = POLLIN
+		};
+	if (pty_master_fd >= 0)
+		pfds[pfdc++] = (struct pollfd){
+			.fd = pty_master_fd, .events = POLLIN
+		};
+	if (!pfdc)
+		return (false);
+	r = poll(pfds, pfdc, INFTIM);
+	if (r <= 0) {
+		if (r < 0 && errno != EINTR)
+			err(EX_OSERR, "poll");
+		return (true);
+	}
+	for (i = 0; i < pfdc; i++) {
+		if (pfds[i].revents & POLLNVAL)
 			errx(EX_OSERR, "poll POLLNVAL");
-		if (pfds[0].revents & (POLLIN|POLLHUP|POLLERR)) {
+		if (!(pfds[i].revents & (POLLIN|POLLHUP|POLLERR)))
+			continue;
+		if (pfds[i].fd == pty_outer_read_fd) {
 			r = read(pty_outer_read_fd, buf, sizeof buf);
 			if (r < 0)
 				err(EX_IOERR, "read");
 			if (r == 0) {
 				close(pty_master_fd);
 				pty_master_fd = -1;
-				break;
+				return (false);
 			}
 			r = write(pty_master_fd, buf, r);
 			if (r < 0)
 				err(EX_IOERR, "write");
-		}
-
-		if (pfds[1].revents & POLLNVAL)
-			errx(EX_OSERR, "poll POLLNVAL");
-		if (pfds[1].revents & (POLLIN|POLLHUP|POLLERR)) {
+		} else if (pfds[i].fd == pty_master_fd) {
 			r = read(pty_master_fd, buf, sizeof buf);
 			if (r < 0)
 				err(EX_IOERR, "read");
 			if (r == 0)
-				break;
+				return (false);
 			if (filter) {
 				r = strnvisx(visbuf, sizeof visbuf, buf, r,
 				    VIS_SAFE | VIS_NOSLASH);
@@ -198,19 +240,10 @@ pty_wrap_loop(bool filter)
 				err(EX_IOERR, "write");
 		}
 	}
+	return (true);
 }
 
 
-static pid_t child_pid;
-
-static void
-handle_exit(int sig)
-{
-	assert(child_pid >= 0);
-	if (child_pid)
-		kill(child_pid, sig);
-}
-
 #define	DROP_FD_FROM	3
 
 static void
@@ -254,6 +287,22 @@ static void
 preexec_cleanup(void)
 {
 	closefrom(DROP_FD_FROM); /* Prevent potentially unintended FD passing. */
+}
+
+
+static pid_t child_pid;
+
+static void
+forward_signal(int sig)
+{
+	assert(child_pid >= 0);
+	if (child_pid > 0)
+		kill(child_pid, sig);
+}
+
+static void
+interrupt_signal(int sig __unused)
+{
 }
 
 static void
@@ -550,10 +599,10 @@ main(int argc, char *argv[])
 			}
 		}
 		child_pid = 0;
-		signal(SIGHUP, handle_exit);
-		signal(SIGINT, handle_exit);
-		signal(SIGQUIT, handle_exit);
-		signal(SIGTERM, handle_exit);
+		signal(SIGHUP, forward_signal);
+		signal(SIGINT, forward_signal);
+		signal(SIGQUIT, forward_signal);
+		signal(SIGTERM, forward_signal);
 		child_pid = vfork();
 		if (child_pid < 0)
 			err(EX_TEMPFAIL, "fork");
@@ -587,13 +636,34 @@ main(int argc, char *argv[])
 	}
 	assert(!no_fork && child_pid > 0);
 
-	if (pty_wrap)
-		pty_wrap_loop(pty_wrap_filter);
+	if (pty_wrap) {
+		signal(SIGCHLD, interrupt_signal);
+		if (tty_made_raw) {
+			signal(SIGTSTP, forward_signal);
+			signal(SIGCONT, forward_signal);
+		}
+	}
+	do {
+		pid_t pid;
+		if (pty_wrap)
+			pty_wrap = pty_wrap_redir(pty_wrap_filter);
+		pid = waitpid(child_pid, &status,
+		    pty_wrap ? WSTOPPED | WNOHANG : 0);
+		if (pid <= 0) {
+			if (pid < 0)
+				err(EX_OSERR, "waitpid");
+			continue;
+		}
+		assert(pid == child_pid);
+		if (WIFSTOPPED(status)) {
+			if (pty_wrap)
+				pty_suspend();
+		} else if (!WIFCONTINUED(status)) {
+			child_pid = 0;
+			break;
+		}
+	} while (true);
 
-	r = waitpid(child_pid, &status, 0);
-	if (r < 0)
-		err(EX_OSERR, "waitpid");
-	child_pid = 0;
 	/* shell-like exit status */
 	exit(WIFSIGNALED(status) ? 128 + WTERMSIG(status) : WEXITSTATUS(status));
 }
