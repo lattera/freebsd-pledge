@@ -660,7 +660,7 @@ main(int argc, char *argv[])
 		if (pty_wrap)
 			pty_wrap = pty_wrap_relay(pty_wrap_filter);
 		pid = waitpid(child_pid, &status,
-		    pty_wrap ? WSTOPPED | WNOHANG : 0);
+		    pty_wrap ? (tty_made_raw ? WSTOPPED : 0) | WNOHANG : 0);
 		if (pid <= 0) {
 			if (pid < 0)
 				err(EX_OSERR, "waitpid");
