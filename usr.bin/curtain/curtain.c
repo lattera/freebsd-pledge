@@ -58,7 +58,7 @@ handle_sigwinch(int sig __unused)
 #define	PTY_WRAP_FDS 3
 static bool pty_fds_pass[PTY_WRAP_FDS];
 
-static void
+static bool
 pty_wrap_setup(bool partial)
 {
 	bool has_tt, has_ws;
@@ -96,6 +96,8 @@ pty_wrap_setup(bool partial)
 			pty_fds_pass[fd] = partial;
 		}
 	}
+	if (pty_outer_ioctl_fd < 0 && partial)
+		return (false);
 	if (pty_outer_read_fd < 0)
 		pty_outer_read_fd = pty_outer_ioctl_fd;
 	if (pty_outer_write_fd < 0)
@@ -129,6 +131,8 @@ pty_wrap_setup(bool partial)
 	}
 	if (has_ws)
 		signal(SIGWINCH, handle_sigwinch);
+
+	return (true);
 }
 
 static void
@@ -591,8 +595,10 @@ main(int argc, char *argv[])
 
 	if (!(do_exec = no_fork)) {
 		if (pty_wrap) {
-			pty_wrap_setup(pty_wrap_partial);
-			if (pty_wrap_filter) {
+			pty_wrap = pty_wrap_setup(pty_wrap_partial);
+			if (!pty_wrap) { /* NOTE: new_sid still set */
+				unsetenv("TERM");
+			} else if (pty_wrap_filter) {
 				r = setenv("TERM", "dumb", 1);
 				if (r < 0)
 					warn("setenv");
