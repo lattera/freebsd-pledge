@@ -136,6 +136,12 @@ pty_wrap_setup(bool partial)
 }
 
 static void
+pty_wrap_parent(void)
+{
+	close(pty_slave_fd);
+}
+
+static void
 pty_wrap_child(bool partial)
 {
 	int r;
@@ -194,11 +200,11 @@ pty_wrap_relay(bool filter)
 	struct pollfd pfds[2];
 	int pfdc, r, i;
 	pfdc = 0;
-	if (pty_outer_read_fd >= 0)
+	if (pty_outer_read_fd >= 0 && pty_master_fd >= 0)
 		pfds[pfdc++] = (struct pollfd){
 			.fd = pty_outer_read_fd, .events = POLLIN
 		};
-	if (pty_master_fd >= 0)
+	if (pty_master_fd >= 0 && pty_outer_write_fd >= 0)
 		pfds[pfdc++] = (struct pollfd){
 			.fd = pty_master_fd, .events = POLLIN
 		};
@@ -628,7 +634,7 @@ main(int argc, char *argv[])
 		} else {
 			err_set_exit(NULL);
 			if (pty_wrap)
-				close(pty_slave_fd);
+				pty_wrap_parent();
 		}
 	}
 	if (do_exec) {
