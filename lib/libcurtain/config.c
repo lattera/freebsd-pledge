@@ -162,20 +162,40 @@ parse_error(struct parser *par, const char *error)
 	warnx("%s:%ju: %s", par->file_name, (uintmax_t)par->line_no, error);
 }
 
+#define	SPACE_CASES \
+	case ' ': \
+	case '\t': \
+	case '\n': \
+	case '\r': \
+	case '\f': \
+	case '\v':
+
 static inline bool
 is_space(char c)
 {
-	return (c && strchr(" \t\n\r\f\v", c));
+	switch (c) {
+	SPACE_CASES
+		return (true);
+	default:
+		return (false);
+	}
 }
 
 static inline char *
 skip_spaces(char *p)
 {
-	while (is_space(*p))
+next:	switch (*p) {
+	case '#':
+		do {
+			p++;
+		} while (*p);
+		/* FALLTHROUGH */
+	case '\0':
+		break;
+	SPACE_CASES
 		p++;
-	if (*p == '#')
-		do p++;
-		while (*p);
+		goto next;
+	}
 	return (p);
 }
 
@@ -805,12 +825,13 @@ parse_line(struct parser *par)
 {
 	char *p;
 	p = par->line;
-	while (is_space(*p))
-		p++;
-	switch (*p) {
+next:	switch (*p) {
 	case '\0':
 	case '#':
 		return;
+	SPACE_CASES
+		p++;
+		goto next;
 	case '[':
 		parse_section(par, p);
 		return;
