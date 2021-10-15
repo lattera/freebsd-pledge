@@ -169,7 +169,7 @@ pty_wrap_child(bool partial)
 }
 
 static void
-pty_suspend(void)
+pty_suspend(int sig)
 {
 	struct termios tt;
 	bool has_tt;
@@ -183,7 +183,7 @@ pty_suspend(void)
 		} else
 			warn("tcgetattr");
 	}
-	r = kill(getpid(), SIGSTOP);
+	r = kill(getpid(), sig);
 	if (r < 0)
 		warn("kill");
 	if (tty_made_raw && has_tt) {
@@ -668,8 +668,11 @@ main(int argc, char *argv[])
 		}
 		assert(pid == child_pid);
 		if (WIFSTOPPED(status)) {
-			if (pty_wrap)
-				pty_suspend();
+			if (pty_wrap && tty_made_raw) {
+				signal(SIGTSTP, SIG_DFL);
+				pty_suspend(SIGTSTP);
+				signal(SIGTSTP, forward_signal);
+			}
 		} else if (!WIFCONTINUED(status)) {
 			child_pid = 0;
 			break;
