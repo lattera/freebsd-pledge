@@ -337,12 +337,13 @@ main(int argc, char *argv[])
 	     autotag = false,
 	     signaling = false,
 	     no_fork = false,
+	     want_fork = false,
 	     run_shell = false,
 	     login_shell = false,
-	     pty_wrap = false,
-	     pty_wrap_partial = false,
-	     pty_wrap_filter = false,
-	     new_sid = false,
+	     pty_wrap = true,
+	     pty_wrap_partial = true,
+	     pty_wrap_filter = true,
+	     new_sid = true,
 	     new_pgrp = false,
 	     no_network = false,
 	     unenforced = false;
@@ -365,7 +366,7 @@ main(int argc, char *argv[])
 	curtain_enable((main_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 	curtain_enable((args_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 
-	while ((ch = getopt(argc, argv, "@:d:vfkneaA!o:t:p:u:0:TSslUXYW")) != -1)
+	while ((ch = getopt(argc, argv, "@:d:vfkneaA!o:t:p:u:0:TRSslUXYW")) != -1)
 		switch (ch) {
 		case 'o': {
 			char *str, *tok;
@@ -461,16 +462,18 @@ main(int argc, char *argv[])
 			  cmd_arg0 = optarg;
 			  break;
 		case 'T':
-			  new_sid = true;
-			  pty_wrap = true;
-			  if (pty_wrap_partial)
-				  pty_wrap_filter = true;
-			  else
-				  pty_wrap_partial = true;
+			  new_sid = false;
+			  pty_wrap = false;
+			  pty_wrap_partial = false;
+			  break;
+		case 'R':
+			  pty_wrap_filter = false;
 			  break;
 		case 'S':
+			  want_fork = true;
 			  new_sid = true;
 			  pty_wrap = true;
+			  pty_wrap_partial = false;
 			  run_shell = true;
 			  break;
 		case 's':
@@ -599,13 +602,13 @@ main(int argc, char *argv[])
 		cmd_arg0 = p;
 	}
 
-	if ((new_sid | pty_wrap) && no_fork)
-		errx(EX_USAGE, "session/pty options incompatible with -f");
+	if (want_fork && no_fork)
+		errx(EX_USAGE, "requested options incompatible with -f");
 
 	if (!(do_exec = no_fork)) {
 		if (pty_wrap) {
 			pty_wrap = pty_wrap_setup(pty_wrap_partial);
-			if (!pty_wrap) { /* NOTE: new_sid still set */
+			if (!pty_wrap) { /* NOTE: new_sid might still be set */
 				unsetenv("TERM");
 			} else if (pty_wrap_filter) {
 				r = setenv("TERM", "dumb", 1);
