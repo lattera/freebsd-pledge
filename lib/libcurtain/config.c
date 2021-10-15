@@ -1,5 +1,4 @@
 #include <assert.h>
-#include <ctype.h>
 #include <curtain.h>
 #include <dirent.h>
 #include <err.h>
@@ -808,20 +807,33 @@ parse_line(struct parser *par)
 	p = par->line;
 	while (is_space(*p))
 		p++;
-	if (!*p || *p == '#')
+	switch (*p) {
+	case '\0':
+	case '#':
 		return;
-	if (*p == '[')
-		return (parse_section(par, p));
-	if (!par->matched)
+	case '[':
+		parse_section(par, p);
 		return;
-	if (p[0] == '@')
-		return (parse_directive(par, p + 1));
-	if (isalnum(*p) || *p == '_')
-		return (parse_directive(par, p));
-	if (par->skip)
+	case '\\':
+	case '/':
+	case '.':
+	case '{':
+	case '$':
+	case '~':
+	case '%':
+		if (!par->skip) {
+			need_slot(par);
+			parse_words(par, p, parse_unveil);
+		}
 		return;
-	need_slot(par);
-	return (parse_words(par, p, parse_unveil));
+	case '@': /* old syntax */
+		p++;
+		/* FALLTHROUGH */
+	default:
+		if (par->matched)
+			parse_directive(par, p);
+		return;
+	}
 }
 
 static void
