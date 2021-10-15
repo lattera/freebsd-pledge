@@ -57,7 +57,7 @@ handle_sigwinch(int sig __unused)
 }
 
 #define	PTY_WRAP_FDS 3
-static bool pty_bypass_fds[PTY_WRAP_FDS];
+static bool pty_bypass_fds[PTY_WRAP_FDS], pty_bypass_any;
 
 static bool
 pty_wrap_setup(bool partial)
@@ -76,6 +76,7 @@ pty_wrap_setup(bool partial)
 	}
 	pty_outer_ioctl_fd = -1;
 
+	pty_bypass_any = false;
 	for (int fd = 0; fd < PTY_WRAP_FDS; fd++) {
 		pty_bypass_fds[fd] = false;
 		errno = 0;
@@ -94,7 +95,8 @@ pty_wrap_setup(bool partial)
 			warn("isatty(%i)", fd);
 			pty_bypass_fds[fd] = false;
 		} else {
-			pty_bypass_fds[fd] = partial;
+			if ((pty_bypass_fds[fd] = partial))
+				pty_bypass_any = true;
 		}
 	}
 	if (pty_outer_ioctl_fd < 0 && partial)
@@ -120,7 +122,8 @@ pty_wrap_setup(bool partial)
 		err(EX_OSERR, "openpty");
 
 	tty_made_raw = false;
-	if (has_tt && tcgetpgrp(pty_outer_ioctl_fd) == getpgrp()) {
+	if (has_tt && !pty_bypass_any &&
+	    tcgetpgrp(pty_outer_ioctl_fd) == getpgrp()) {
 		tty_saved_termios = tt;
 		atexit(restore_tty);
 		cfmakeraw(&tt);
