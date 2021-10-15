@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <libutil.h>
 #include <limits.h>
+#include <locale.h>
 #include <paths.h>
 #include <pledge.h>
 #include <poll.h>
@@ -356,6 +357,8 @@ main(int argc, char *argv[])
 	int status;
 
 	init_harden();
+
+	setlocale(LC_ALL, "");
 
 	cfg = curtain_config_new(CURTAIN_CONFIG_ON_EXEC_ONLY);
 
