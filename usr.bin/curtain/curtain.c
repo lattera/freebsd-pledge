@@ -34,7 +34,7 @@ static void
 restore_tty()
 {
 	int r;
-	if (pty_outer_ioctl_fd >= 0) {
+	if (pty_outer_ioctl_fd >= 0 && tty_made_raw) {
 		r = tcsetattr(pty_outer_ioctl_fd, TCSADRAIN, &tty_saved_termios);
 		if (r < 0)
 			warn("tcsetattr");
@@ -119,7 +119,7 @@ pty_wrap_setup(bool partial)
 		err(EX_OSERR, "openpty");
 
 	tty_made_raw = false;
-	if (has_tt) {
+	if (has_tt && tcgetpgrp(pty_outer_ioctl_fd) == getpgrp()) {
 		tty_saved_termios = tt;
 		atexit(restore_tty);
 		cfmakeraw(&tt);
@@ -662,7 +662,7 @@ main(int argc, char *argv[])
 		pid = waitpid(child_pid, &status,
 		    pty_wrap ? (tty_made_raw ? WSTOPPED : 0) | WNOHANG : 0);
 		if (pid <= 0) {
-			if (pid < 0)
+			if (pid < 0 && errno != EINTR)
 				err(EX_OSERR, "waitpid");
 			continue;
 		}
