@@ -56,7 +56,7 @@ handle_sigwinch(int sig __unused)
 }
 
 #define	PTY_WRAP_FDS 3
-static bool pty_fds_pass[PTY_WRAP_FDS];
+static bool pty_bypass_fds[PTY_WRAP_FDS];
 
 static bool
 pty_wrap_setup(bool partial)
@@ -76,11 +76,11 @@ pty_wrap_setup(bool partial)
 	pty_outer_ioctl_fd = -1;
 
 	for (int fd = 0; fd < PTY_WRAP_FDS; fd++) {
-		pty_fds_pass[fd] = false;
+		pty_bypass_fds[fd] = false;
 		errno = 0;
 		r = isatty(fd);
 		if (r > 0) {
-			pty_fds_pass[fd] = false;
+			pty_bypass_fds[fd] = false;
 			if (pty_outer_ioctl_fd < 0)
 				pty_outer_ioctl_fd = fd;
 			if (pty_outer_read_fd < 0 &&
@@ -91,9 +91,9 @@ pty_wrap_setup(bool partial)
 				pty_outer_write_fd = fd;
 		} else if (r < 0 || (errno && errno != ENOTTY)) {
 			warn("isatty(%i)", fd);
-			pty_fds_pass[fd] = false;
+			pty_bypass_fds[fd] = false;
 		} else {
-			pty_fds_pass[fd] = partial;
+			pty_bypass_fds[fd] = partial;
 		}
 	}
 	if (pty_outer_ioctl_fd < 0 && partial)
@@ -148,7 +148,7 @@ pty_wrap_child(bool partial)
 		if (tcsetsid(pty_slave_fd, sid) < 0)
 			err(EX_OSERR, "tcsetsid");
 		for (int fd = 0; fd < PTY_WRAP_FDS; fd++)
-			if (!pty_fds_pass[fd]) {
+			if (!pty_bypass_fds[fd]) {
 				r = dup2(pty_slave_fd, fd);
 				if (r < 0)
 					err(EX_OSERR, "dup2");
@@ -188,7 +188,7 @@ pty_suspend(void)
 }
 
 static bool
-pty_wrap_redir(bool filter)
+pty_wrap_relay(bool filter)
 {
 	char buf[1024], visbuf[filter ? (sizeof buf) * 4 + 1 : 0];
 	struct pollfd pfds[2];
@@ -652,7 +652,7 @@ main(int argc, char *argv[])
 	do {
 		pid_t pid;
 		if (pty_wrap)
-			pty_wrap = pty_wrap_redir(pty_wrap_filter);
+			pty_wrap = pty_wrap_relay(pty_wrap_filter);
 		pid = waitpid(child_pid, &status,
 		    pty_wrap ? WSTOPPED | WNOHANG : 0);
 		if (pid <= 0) {
