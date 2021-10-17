@@ -181,6 +181,8 @@ bool	curtain_cred_visible(const struct ucred *subject, const struct ucred *targe
 	    enum barrier_type);
 struct curtain *curtain_from_cred(struct ucred *);
 
+uint64_t curtain_serial(const struct curtain *);
+
 #endif
 
 #endif

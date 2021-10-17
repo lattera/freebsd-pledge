@@ -526,6 +526,13 @@ curtain_dup_with_shared_barrier(struct curtain *src)
 	return (dst);
 }
 
+uint64_t
+curtain_serial(const struct curtain *ct)
+{
+	curtain_invariants(ct);
+	return (CURTAIN_BARRIER(ct)->br_serial);
+}
+
 static inline void
 curtain_dirty(struct curtain *ct)
 {

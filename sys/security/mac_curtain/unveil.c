@@ -67,8 +67,6 @@ STATNODE_COUNTER(ascents, unveil_stats_ascents, "");
 STATNODE_COUNTER(ascents_cached, unveil_stats_ascents_cached, "");
 STATNODE_COUNTER(ascent_total_depth, unveil_stats_ascent_total_depth, "");
 
-static volatile uint64_t unveil_lockdown_gen = 1;
-
 struct unveil_node {
 	struct unveil_node *cover;
 	RB_ENTRY(unveil_node) entry;
@@ -106,7 +104,7 @@ struct unveil_save {
 
 struct unveil_tracker {
 #define	UNVEIL_TRACKER_ENTRIES_COUNT 2
-	uint64_t lockdown_gen;
+	uint64_t serial;
 	struct unveil_tracker_entry {
 		struct vnode *vp;
 		struct mount *mp;
@@ -118,7 +116,7 @@ struct unveil_tracker {
 };
 
 struct unveil_cache {
-	uint64_t lockdown_gen;
+	uint64_t serial;
 #define UNVEIL_CACHE_ENTRIES_COUNT 4
 	struct unveil_cache_entry {
 		struct vnode *vp;
@@ -376,7 +374,6 @@ unveil_stash_init(struct unveil_stash *stash)
 void
 unveil_stash_copy(struct unveil_stash *dst, const struct unveil_stash *src)
 {
-	dst->lockdown_gen = src->lockdown_gen;
 	dst->tree = src->tree ? unveil_tree_hold(src->tree) : NULL;
 	dst->flags = src->flags;
 }
@@ -510,7 +507,6 @@ unveil_stash_begin(struct unveil_stash *stash, struct unveil_base *base)
 void
 unveil_stash_commit(struct unveil_stash *stash, struct unveil_base *base)
 {
-	stash->lockdown_gen = atomic_fetchadd_64(&unveil_lockdown_gen, 1);
 	if (base->tree)
 		unveil_tree_free(base->tree);
 	base->tree = unveil_tree_hold(stash->tree);
@@ -518,13 +514,18 @@ unveil_stash_commit(struct unveil_stash *stash, struct unveil_base *base)
 }
 
 
-static struct unveil_stash *
-unveil_stash_get(struct thread *td)
+static inline uint64_t
+unveil_stash_get(struct thread *td, struct unveil_stash **p)
 {
 	struct curtain *ct;
-	if ((ct = curtain_from_cred(td->td_ucred)))
-		return (&ct->ct_ustash);
-	return (NULL);
+	if ((ct = curtain_from_cred(td->td_ucred))) {
+		if (p)
+			*p = &ct->ct_ustash;
+		return (curtain_serial(ct));
+	}
+	if (p)
+		*p = NULL;
+	return (0);
 }
 
 
@@ -551,11 +552,11 @@ unveil_tracker_prep(struct thread *td)
 {
 	struct unveil_tracker *track;
 	if ((track = td->td_unveil_tracker)) {
-		struct unveil_stash *stash;
-		stash = unveil_stash_get(td);
-		if (__predict_false(stash && track->lockdown_gen != stash->lockdown_gen))
+		uint64_t serial;
+		serial = unveil_stash_get(td, NULL);
+		if (__predict_false(track->serial != serial))
 			*track = (struct unveil_tracker){
-				.lockdown_gen = stash->lockdown_gen,
+				.serial = serial,
 			};
 		return (track);
 	}
@@ -670,11 +671,11 @@ unveil_tracker_push(struct thread *td, struct vnode *vp, unveil_perms uperms)
 	struct unveil_tracker *track;
 	size_t i;
 	if (__predict_false(!td->td_unveil_tracker)) {
-		struct unveil_stash *stash;
-		stash = unveil_stash_get(td);
+		uint64_t serial;
+		serial = unveil_stash_get(td, NULL);
 		track = malloc(sizeof *track, M_UNVEIL, M_WAITOK);
 		*track = (struct unveil_tracker){
-			.lockdown_gen = stash ? stash->lockdown_gen : 0,
+			.serial = serial,
 		};
 		td->td_unveil_tracker = track;
 	} else
@@ -688,13 +689,11 @@ unveil_tracker_push(struct thread *td, struct vnode *vp, unveil_perms uperms)
 static void
 unveil_tracker_push_file(struct thread *td, struct file *fp)
 {
-	struct unveil_stash *stash;
 	unveil_perms uperms;
 	if (!fp->f_vnode)
 		return;
 	uperms = fp->f_uperms;
-	if ((stash = unveil_stash_get(td)) &&
-	    fp->f_uldgen != stash->lockdown_gen)
+	if ((fp->f_uldgen != unveil_stash_get(td, NULL)))
 		uperms &= unveil_fflags_uperms(fp->f_vnode->v_type, fp->f_flag);
 	unveil_tracker_push(td, fp->f_vnode, uperms);
 }
@@ -702,9 +701,7 @@ unveil_tracker_push_file(struct thread *td, struct file *fp)
 static void
 unveil_tracker_save_file(struct thread *td, struct file *fp, struct vnode *vp)
 {
-	struct unveil_stash *stash;
-	stash = unveil_stash_get(td);
-	fp->f_uldgen = stash ? stash->lockdown_gen : 0;
+	fp->f_uldgen = unveil_stash_get(td, NULL);
 	fp->f_uperms = unveil_active(td) ? unveil_tracker_find(td, vp) : UPERM_ALL;
 }
 
@@ -912,7 +909,7 @@ unveil_traverse_begin(struct thread *td, struct unveil_traversal *trav,
 {
 	struct unveil_stash *stash;
 	counter_u64_add(unveil_stats_traversals, 1);
-	if (!(trav->bypass = bypass) && (stash = unveil_stash_get(td))) {
+	if (!(trav->bypass = bypass) && (unveil_stash_get(td, &stash), stash)) {
 		unveil_stash_check(stash);
 		trav->tree = stash->tree;
 		trav->flags = stash->flags;
@@ -948,12 +945,12 @@ unveil_traverse_start(struct thread *td, struct unveil_traversal *trav,
 {
 	const enum unveil_on on = UNVEIL_ON_SELF;
 	struct unveil_base *base;
-	struct unveil_stash *stash;
+	uint64_t serial;
 	int error;
 	unsigned depth;
 	MPASS(dvp);
 	base = td->td_proc->p_unveils;
-	stash = unveil_stash_get(td);
+	serial = unveil_stash_get(td, NULL);
 	if (trav->bypass) {
 		trav->cover = NULL;
 		trav->uncharted = true;
@@ -964,7 +961,7 @@ unveil_traverse_start(struct thread *td, struct unveil_traversal *trav,
 	}
 	depth = 0;
 	trav->cover = NULL;
-	if (unveil_cover_cache_enabled && stash) {
+	if (unveil_cover_cache_enabled) {
 		struct unveil_cache_entry *ent;
 		ent = NULL;
 		for (size_t i = 0; i < UNVEIL_CACHE_ENTRIES_COUNT; i++)
@@ -978,7 +975,7 @@ unveil_traverse_start(struct thread *td, struct unveil_traversal *trav,
 			if (ent->vp == dvp &&
 			    ent->vp_nchash == dvp->v_nchash &&
 			    ent->vp_hash == dvp->v_hash &&
-			    base->cover_cache.lockdown_gen == stash->lockdown_gen) {
+			    base->cover_cache.serial == serial) {
 				trav->cover = ent->cover;
 				depth = -1;
 				counter_u64_add(unveil_stats_ascents_cached, 1);
@@ -994,7 +991,7 @@ unveil_traverse_start(struct thread *td, struct unveil_traversal *trav,
 		if (depth > 0) {
 			counter_u64_add(unveil_stats_ascents, 1);
 			counter_u64_add(unveil_stats_ascent_total_depth, depth);
-			if (unveil_cover_cache_enabled && trav->cover && stash) {
+			if (unveil_cover_cache_enabled && trav->cover) {
 				struct unveil_cache_entry *ent;
 				if (trav->save)
 					sx_assert(&base->sx, SA_XLOCKED);
@@ -1006,7 +1003,7 @@ unveil_traverse_start(struct thread *td, struct unveil_traversal *trav,
 				ent->vp = dvp;
 				ent->vp_nchash = dvp->v_nchash;
 				ent->vp_hash = dvp->v_hash;
-				base->cover_cache.lockdown_gen = stash->lockdown_gen;
+				base->cover_cache.serial = serial;
 				if (!trav->save)
 					sx_xunlock(&base->sx);
 			}
