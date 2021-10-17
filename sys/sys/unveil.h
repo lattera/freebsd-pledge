@@ -157,7 +157,6 @@ struct unveil_ops {
 struct unveil_base_flags {
 	struct {
 		bool frozen;
-		bool wanted;
 	} on[UNVEIL_ON_COUNT];
 };
 
@@ -191,8 +190,7 @@ int unveil_stash_update(struct unveil_stash *, enum unveil_on, unsigned index, u
 void unveil_stash_exec_switch(struct unveil_stash *);
 bool unveil_stash_need_exec_switch(const struct unveil_stash *);
 void unveil_stash_switch(struct unveil_stash *, enum unveil_on, enum unveil_on);
-void unveil_stash_enable(struct unveil_stash *, enum unveil_on);
-void unveil_stash_disable(struct unveil_stash *, enum unveil_on);
+void unveil_stash_unrestrict(struct unveil_stash *, enum unveil_on);
 void unveil_stash_sweep(struct unveil_stash *, enum unveil_on);
 void unveil_stash_freeze(struct unveil_stash *, enum unveil_on);
 void unveil_stash_commit(struct unveil_stash *, struct unveil_base *);

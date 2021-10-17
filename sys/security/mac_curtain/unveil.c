@@ -405,27 +405,17 @@ unveil_stash_mount_lookup(struct unveil_stash *stash, struct mount *mp)
 	UNVEIL_FOREACH(node, stash)
 		if (node->vp->v_mount == mp) /* XXX linear search */
 			uperms |= node->frozen_uperms[on] &
-			    (stash->flags.on[on].wanted ?
-			     unveil_node_wanted_uperms(node, on) : UPERM_ALL);
+			     unveil_node_wanted_uperms(node, on);
 	return (uperms_expand(uperms));
 }
 
 void
-unveil_stash_enable(struct unveil_stash *stash, enum unveil_on on)
+unveil_stash_unrestrict(struct unveil_stash *stash, enum unveil_on on)
 {
-	stash->flags.on[on].wanted = true;
-}
-
-void
-unveil_stash_disable(struct unveil_stash *stash, enum unveil_on on)
-{
-	if (stash->flags.on[on].wanted) {
-		struct unveil_node *node;
-		stash->flags.on[on].wanted = false;
-		UNVEIL_FOREACH(node, stash) {
-			node->wanted[on] = false;
-			node->wanted_uperms[on] = UPERM_NONE;
-		}
+	struct unveil_node *node;
+	UNVEIL_FOREACH(node, stash) {
+		node->wanted[on] = true;
+		node->wanted_uperms[on] = UPERM_ALL;
 	}
 }
 
@@ -433,7 +423,6 @@ void
 unveil_stash_sweep(struct unveil_stash *stash, enum unveil_on on)
 {
 	struct unveil_node *node;
-	stash->flags.on[on].wanted = false;
 	UNVEIL_FOREACH(node, stash) {
 		node->wanted_uperms[on] = UPERM_NONE;
 		node->wanted[on] = false;
@@ -1019,7 +1008,7 @@ unveil_traverse_start(struct thread *td, struct unveil_traversal *trav,
 	}
 	if (trav->cover) {
 		const enum unveil_on on = UNVEIL_ON_SELF;
-		bool wanted_needed = !trav->save && trav->flags.on[on].wanted;
+		bool wanted_needed = !trav->save;
 		trav->actual_uperms = trav->cover->frozen_uperms[on];
 		if (depth != 0) {
 			trav->actual_uperms = uperms_inherit(trav->actual_uperms);
@@ -1048,7 +1037,7 @@ unveil_traverse_enter(struct unveil_base *base, struct unveil_traversal *trav,
     struct unveil_node *node)
 {
 	const enum unveil_on on = UNVEIL_ON_SELF;
-	bool wanted_needed = !trav->save && trav->flags.on[on].wanted;
+	bool wanted_needed = !trav->save;
 	if (node) {
 		trav->cover = node;
 		trav->uncharted = false;
