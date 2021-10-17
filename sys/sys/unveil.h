@@ -165,12 +165,10 @@ struct unveil_traversal {
 	struct unveil_save *save;
 	struct unveil_node *cover;
 	struct unveil_base_flags flags;
-	unveil_perms actual_uperms;
-	unveil_perms wanted_uperms;
+	unveil_perms uperms;
 	unsigned fill;
 	bool bypass;
 	bool uncharted;
-	bool wanted_valid;
 };
 
 struct unveil_stash {
@@ -192,6 +190,7 @@ bool unveil_stash_need_exec_switch(const struct unveil_stash *);
 void unveil_stash_switch(struct unveil_stash *, enum unveil_on, enum unveil_on);
 void unveil_stash_unrestrict(struct unveil_stash *, enum unveil_on);
 void unveil_stash_sweep(struct unveil_stash *, enum unveil_on);
+void unveil_stash_inherit(struct unveil_stash *, enum unveil_on);
 void unveil_stash_freeze(struct unveil_stash *, enum unveil_on);
 void unveil_stash_commit(struct unveil_stash *, struct unveil_base *);
 

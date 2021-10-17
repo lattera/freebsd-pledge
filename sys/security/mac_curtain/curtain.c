@@ -1470,9 +1470,13 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 	curtain_cred_sysfil_update(cr, ct);
 
 #ifdef UNVEIL_SUPPORT
-	if (!on_self)
+	if (on_self)
+		unveil_stash_inherit(&ct->ct_ustash, UNVEIL_ON_SELF);
+	else
 		unveil_stash_unrestrict(&ct->ct_ustash, UNVEIL_ON_SELF);
-	if (!on_exec)
+	if (on_exec)
+		unveil_stash_inherit(&ct->ct_ustash, UNVEIL_ON_EXEC);
+	else
 		unveil_stash_unrestrict(&ct->ct_ustash, UNVEIL_ON_EXEC);
 #endif
 
