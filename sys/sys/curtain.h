@@ -170,9 +170,7 @@ struct curtain {
 		bool is_restricted_on_self;
 		bool is_restricted_on_exec;
 	} ct_cached;
-#ifdef UNVEIL_SUPPORT
 	struct unveil_stash ct_ustash;
-#endif
 	struct curtain_mode ct_abilities[CURTAINABL_COUNT];
 	struct curtain_item ct_slots[];
 };

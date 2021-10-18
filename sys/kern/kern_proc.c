@@ -278,7 +278,7 @@ proc_init(void *mem, int size, int flags)
 	EVENTHANDLER_DIRECT_INVOKE(process_init, p);
 	p->p_stats = pstats_alloc();
 	p->p_pgrp = NULL;
-#ifdef UNVEIL_SUPPORT /* XXX */
+#ifndef NOUNVEIL /* XXX */
 	p->p_unveils = NULL;
 #endif
 	return (0);

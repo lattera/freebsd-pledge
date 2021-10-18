@@ -59,7 +59,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/sdt.h>
 #include <sys/syscallsubr.h>
 #include <sys/sysctl.h>
-#include <sys/unveil.h>
 #ifdef KTRACE
 #include <sys/ktrace.h>
 #endif
@@ -327,11 +326,13 @@ namei_setup(struct nameidata *ndp, struct vnode **dpp, struct pwd **pwdp)
 		}
 	}
 #endif
-#ifdef UNVEIL_SUPPORT
-	if (unveil_active(td) || ndp->ni_unveil) {
-		if (ndp->ni_cnd.cn_flags & UNVEILBYPASS)
-			ndp->ni_lcf |= NI_LCF_UNVEIL_TRAVERSE | NI_LCF_UNVEIL_BYPASSED;
-		else if (!ndp->ni_startdir || ndp->ni_unveil)
+#ifdef MAC
+	if ((cnp->cn_flags & NOMACCHECK) == 0) {
+		int flags;
+		flags = mac_vnode_walk_state(cnp->cn_cred);
+		if (flags & MAC_VNODE_WALK_UNVEIL)
+			ndp->ni_lcf |= NI_LCF_UNVEIL_TRAVERSE | NI_LCF_UNVEIL_UNVEILING;
+		if (flags & MAC_VNODE_WALK_ACTIVE && !ndp->ni_startdir)
 			ndp->ni_lcf |= NI_LCF_UNVEIL_TRAVERSE;
 	}
 #endif
@@ -392,7 +393,7 @@ namei_setup(struct nameidata *ndp, struct vnode **dpp, struct pwd **pwdp)
 
 					if ((dfp->f_flag & FSEARCH) != 0)
 						cnp->cn_flags |= NOEXECCHECK;
-#ifdef UNVEIL_SUPPORT
+#ifdef MAC
 					/* Reuse fget_cap()'s tracker slot. */
 					ndp->ni_lcf |= NI_LCF_UNVEIL_REUSEFILL;
 #endif
@@ -564,9 +565,6 @@ namei(struct nameidata *ndp)
 	struct uio auio;
 	int error, linklen;
 	enum cache_fpl_status status;
-#ifdef UNVEIL_SUPPORT
-	struct unveil_traversal utrav;
-#endif
 
 	cnp = &ndp->ni_cnd;
 	td = curthread;
@@ -669,18 +667,13 @@ namei(struct nameidata *ndp)
 	/*
 	 * Locked lookup.
 	 */
-#ifdef UNVEIL_SUPPORT
+#ifdef MAC
 	if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE) {
-		if (!ndp->ni_unveil)
-			unveil_ops->traverse_begin(td, (ndp->ni_unveil = &utrav),
-			    ndp->ni_lcf & NI_LCF_UNVEIL_BYPASSED,
-			    ndp->ni_lcf & NI_LCF_UNVEIL_REUSEFILL);
-		error = unveil_ops->traverse_start(td, ndp->ni_unveil, dp);
-		if (error != 0) {
-			if (ndp->ni_unveil == &utrav)
-				unveil_ops->traverse_end(td, ndp->ni_unveil);
+		if (!(ndp->ni_lcf & NI_LCF_UNVEIL_REUSEFILL))
+			mac_vnode_walk_roll(cnp->cn_cred, 1);
+		error = mac_vnode_walk_start(cnp->cn_cred, dp);
+		if (error != 0)
 			return (error);
-		}
 	}
 #endif
 	for (;;) {
@@ -701,14 +694,9 @@ namei(struct nameidata *ndp)
 			nameicap_cleanup(ndp);
 			pwd_drop(pwd);
 			NDVALIDATE(ndp);
-#ifdef UNVEIL_SUPPORT
+#ifdef MAC
 			if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE) {
-				unveil_perms uperms;
-				uperms = unveil_ops->traverse_uperms(td, ndp->ni_unveil);
-				if (!(uperms & ~UPERM_TRAVERSE))
-					error = ENOENT;
-				if (ndp->ni_unveil == &utrav)
-					unveil_ops->traverse_end(td, ndp->ni_unveil);
+				error = mac_vnode_walk_final(cnp->cn_cred, error);
 				if (error != 0)
 					/*
 					 * The lookup() call was successful
@@ -729,7 +717,7 @@ namei(struct nameidata *ndp)
 		}
 #ifdef MAC
 		if ((cnp->cn_flags & NOMACCHECK) == 0) {
-			error = mac_vnode_check_readlink(td->td_ucred,
+			error = mac_vnode_check_readlink(cnp->cn_cred,
 			    ndp->ni_vp);
 			if (error != 0)
 				break;
@@ -785,18 +773,18 @@ namei(struct nameidata *ndp)
 			error = namei_handle_root(ndp, &dp);
 			if (error != 0)
 				goto out;
-#ifdef UNVEIL_SUPPORT
+#ifdef MAC
 			if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE) {
 				/* Absolute path, find new unveil cover. */
-				error = unveil_ops->traverse_start(td, ndp->ni_unveil, dp);
+				error = mac_vnode_walk_start(cnp->cn_cred, dp);
 				if (error != 0)
 					goto out;
 			}
 #endif
 		} else {
-#ifdef UNVEIL_SUPPORT
+#ifdef MAC
 			if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE)
-				unveil_ops->traverse_backtrack(td, ndp->ni_unveil, dp);
+				mac_vnode_walk_backtrack(cnp->cn_cred, dp);
 #endif
 		}
 	}
@@ -809,15 +797,9 @@ out:
 	namei_cleanup_cnp(cnp);
 	nameicap_cleanup(ndp);
 	pwd_drop(pwd);
-#ifdef UNVEIL_SUPPORT
-	if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE) {
-		unveil_perms uperms;
-		uperms = unveil_ops->traverse_uperms(td, ndp->ni_unveil);
-		if (!(uperms & UPERM_EXPOSE))
-			error = ENOENT;
-		if (ndp->ni_unveil == &utrav)
-			unveil_ops->traverse_end(td, ndp->ni_unveil);
-	}
+#ifdef MAC
+	if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE)
+		error = mac_vnode_walk_final(cnp->cn_cred, error);
 #endif
 	return (error);
 }
@@ -1144,10 +1126,9 @@ dirloop:
 			}
 			tdp = dp;
 			dp = dp->v_mount->mnt_vnodecovered;
-#ifdef UNVEIL_SUPPORT
+#ifdef MAC
 			if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE)
-				unveil_ops->traverse_replace(curthread, ndp->ni_unveil,
-				    tdp, dp);
+				mac_vnode_walk_replace(cnp->cn_cred, tdp, dp);
 #endif
 			VREF(dp);
 			vput(tdp);
@@ -1170,9 +1151,11 @@ dirloop:
 	 */
 unionlookup:
 #ifdef MAC
-	error = mac_vnode_check_lookup(cnp->cn_cred, dp, cnp);
-	if (error)
-		goto bad;
+	if ((cnp->cn_flags & NOMACCHECK) == 0) {
+		error = mac_vnode_check_lookup(cnp->cn_cred, dp, cnp);
+		if (error)
+			goto bad;
+	}
 #endif
 	ndp->ni_dvp = dp;
 	ndp->ni_vp = NULL;
@@ -1212,10 +1195,9 @@ unionlookup:
 		    (dp->v_mount->mnt_flag & MNT_UNION)) {
 			tdp = dp;
 			dp = dp->v_mount->mnt_vnodecovered;
-#ifdef UNVEIL_SUPPORT
+#ifdef MAC
 			if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE)
-				unveil_ops->traverse_replace(curthread, ndp->ni_unveil,
-				    tdp, dp);
+				mac_vnode_walk_replace(cnp->cn_cred, tdp, dp);
 #endif
 			VREF(dp);
 			vput(tdp);
@@ -1235,9 +1217,9 @@ unionlookup:
 		}
 
 		if (error != EJUSTRETURN
-#ifdef UNVEIL_SUPPORT
+#ifdef MAC
 		    && !(error == ENOENT && (cnp->cn_flags & ISLASTCN) &&
-			    ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE && ndp->ni_unveil->save)
+			    ndp->ni_lcf & NI_LCF_UNVEIL_UNVEILING)
 #endif
 		    )
 			goto bad;
@@ -1257,10 +1239,9 @@ unionlookup:
 			error = ENOENT;
 			goto bad;
 		}
-#ifdef UNVEIL_SUPPORT
+#ifdef MAC
 		if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE)
-			unveil_ops->traverse_component(curthread, ndp->ni_unveil,
-			    dp, cnp, NULL);
+			mac_vnode_walk_component(cnp->cn_cred, dp, cnp, NULL);
 #endif
 		if ((cnp->cn_flags & LOCKPARENT) == 0)
 			VOP_UNLOCK(dp);
@@ -1309,10 +1290,9 @@ good:
 		ndp->ni_vp = dp = tdp;
 	}
 
-#ifdef UNVEIL_SUPPORT
+#ifdef MAC
 	if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE)
-		unveil_ops->traverse_component(curthread, ndp->ni_unveil,
-		    ndp->ni_dvp, cnp, ndp->ni_vp);
+		mac_vnode_walk_component(cnp->cn_cred, ndp->ni_dvp, cnp, ndp->ni_vp);
 #endif
 
 	/*
@@ -1872,11 +1852,4 @@ keeporig:
 		bcopy(ptr, buf, len);
 	return (error);
 }
-
-#ifdef UNVEIL_SUPPORT
-bool unveil_support = true;
-const struct unveil_ops *unveil_ops = NULL;
-#else
-bool unveil_support = false;
-#endif
 

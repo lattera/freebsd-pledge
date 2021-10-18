@@ -39,6 +39,7 @@
 #include <sys/types.h> /* XXX */
 #include <sys/fcntl.h>
 #include <sys/unistd.h>
+#include <sys/_unveil.h>
 #else
 #include <sys/queue.h>
 #include <sys/refcount.h>
@@ -193,7 +194,7 @@ struct file {
 	/*
 	 *  DTYPE_VNODE specific fields.
 	 */
-#ifdef UNVEIL_SUPPORT
+#ifndef NOUNVEIL
 	unveil_perms	f_uperms;	/* unveil permissions when opened */
 	uint64_t	f_uldgen;	/* unveil lockdown generation number */
 #endif

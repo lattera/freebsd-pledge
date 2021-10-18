@@ -79,7 +79,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/syslog.h>
 #include <sys/unistd.h>
 #include <sys/user.h>
-#include <sys/unveil.h>
 #include <sys/ktrace.h>
 
 #include <security/audit/audit.h>
@@ -214,9 +213,9 @@ open2nameif(int fmode, u_int vn_open_flags)
 		res |= AUDITVNODE1;
 	if ((vn_open_flags & VN_OPEN_NOCAPCHECK) != 0)
 		res |= NOCAPCHECK;
-#ifdef UNVEIL_SUPPORT
-	if ((vn_open_flags & VN_OPEN_UNVEILBYPASS) != 0)
-		res |= UNVEILBYPASS;
+#ifdef MAC
+	if ((vn_open_flags & VN_OPEN_NOMACCHECK) != 0)
+		res |= NOMACCHECK;
 #endif
 	return (res);
 }
@@ -282,17 +281,18 @@ restart:
 			if ((vn_open_flags & VN_OPEN_NAMECACHE) != 0)
 				ndp->ni_cnd.cn_flags |= MAKEENTRY;
 #ifdef MAC
-			error = mac_vnode_check_create(cred, ndp->ni_dvp,
-			    &ndp->ni_cnd, vap);
+			if ((vn_open_flags & VN_OPEN_NOMACCHECK) == 0)
+				error = mac_vnode_check_create(cred,
+				    ndp->ni_dvp, &ndp->ni_cnd, vap);
 			if (error == 0)
 #endif
 				error = VOP_CREATE(ndp->ni_dvp, &ndp->ni_vp,
 				    &ndp->ni_cnd, vap);
-#ifdef UNVEIL_SUPPORT
-			if (error == 0 && unveil_active(curthread))
-				unveil_ops->tracker_substitute(curthread,
-				    ndp->ni_dvp, ndp->ni_vp,
-				    ndp->ni_cnd.cn_uperms);
+#ifdef MAC
+			if (error == 0 &&
+			    (vn_open_flags & VN_OPEN_NOMACCHECK) == 0 &&
+			    CRED_IN_LIMITED_VFS_VISIBILITY_MODE(cred))
+				mac_vnode_walk_created(cred, ndp->ni_dvp, ndp->ni_vp);
 #endif
 			vp = ndp->ni_vp;
 			if (error == 0 && (fmode & O_EXCL) != 0 &&
@@ -342,7 +342,7 @@ restart:
 			return (error);
 		vp = ndp->ni_vp;
 	}
-	error = vn_open_vnode(vp, fmode, cred, curthread, fp);
+	error = vn_open_vnode(vp, fmode, vn_open_flags, cred, curthread, fp);
 	if (first_open) {
 		VI_LOCK(vp);
 		vp->v_iflag &= ~VI_FOPENING;
@@ -399,8 +399,8 @@ vn_open_vnode_advlock(struct vnode *vp, int fmode, struct file *fp)
  * Check permissions, and call the VOP_OPEN routine.
  */
 int
-vn_open_vnode(struct vnode *vp, int fmode, struct ucred *cred,
-    struct thread *td, struct file *fp)
+vn_open_vnode(struct vnode *vp, int fmode, u_int vn_open_flags,
+    struct ucred *cred, struct thread *td, struct file *fp)
 {
 	accmode_t accmode;
 	int error;
@@ -435,9 +435,11 @@ vn_open_vnode(struct vnode *vp, int fmode, struct ucred *cred,
 #ifdef MAC
 	if ((fmode & O_VERIFY) != 0)
 		accmode |= VVERIFY;
-	error = mac_vnode_check_open(cred, vp, accmode);
-	if (error != 0)
-		return (error);
+	if ((vn_open_flags & VN_OPEN_NOMACCHECK) == 0) {
+		error = mac_vnode_check_open(cred, vp, accmode);
+		if (error != 0)
+			return (error);
+	}
 
 	accmode &= ~(VCREAT | VVERIFY);
 #endif
@@ -450,9 +452,9 @@ vn_open_vnode(struct vnode *vp, int fmode, struct ucred *cred,
 		if (vp->v_type != VFIFO && vp->v_type != VSOCK &&
 		    VOP_ACCESS(vp, VREAD, cred, td) == 0)
 			fp->f_flag |= FKQALLOWED;
-#ifdef UNVEIL_SUPPORT
-		if (fp && unveil_ops)
-			unveil_ops->tracker_save_file(td, fp, vp);
+#ifdef MAC
+		if (fp && (vn_open_flags & VN_OPEN_NOMACCHECK) == 0)
+			mac_vnode_walk_annotate_file(cred, fp, vp);
 #endif
 		return (0);
 	}
@@ -506,9 +508,9 @@ vn_open_vnode(struct vnode *vp, int fmode, struct ucred *cred,
 	}
 
 	ASSERT_VOP_LOCKED(vp, "vn_open_vnode");
-#ifdef UNVEIL_SUPPORT
-	if (fp && unveil_ops)
-		unveil_ops->tracker_save_file(td, fp, vp);
+#ifdef MAC
+	if (fp && (vn_open_flags & VN_OPEN_NOMACCHECK) == 0)
+		mac_vnode_walk_annotate_file(cred, fp, vp);
 #endif
 	return (error);
 

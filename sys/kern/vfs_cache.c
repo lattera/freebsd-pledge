@@ -63,7 +63,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysctl.h>
 #include <sys/sysproto.h>
 #include <sys/vnode.h>
-#include <sys/unveil.h>
 #include <ck_queue.h>
 #ifdef KTRACE
 #include <sys/ktrace.h>
@@ -2899,7 +2898,7 @@ cache_purge_vgone(struct vnode *vp)
 			cache_purge_impl(vp);
 		}
 	}
-#ifdef UNVEIL_SUPPORT
+#ifndef NOUNVEIL
 	/*
 	 * The unveil support (ab)uses v_nchash to detect when a vnode has been
 	 * reclaimed (and thus could refer to a different file).  v_nchash is
@@ -4240,8 +4239,9 @@ cache_can_fplookup(struct cache_fpl *fpl)
 		cache_fpl_aborted_early(fpl);
 		return (false);
 	}
-#ifdef UNVEIL_SUPPORT
-	if (unveil_active(td) || ndp->ni_unveil) {
+#ifdef MAC /* TODO: fast path for this check */
+	if (mac_vnode_walk_state(cnp->cn_cred) &
+	    (MAC_VNODE_WALK_ACTIVE | MAC_VNODE_WALK_UNVEIL)) {
 		cache_fpl_aborted_early(fpl);
 		return (false);
 	}

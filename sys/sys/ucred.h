@@ -96,11 +96,14 @@ struct ucred {
 #ifdef NOSYSFIL
 #define	CRED_IN_RESTRICTED_MODE(cr) 0
 #define	CRED_IN_CAPABILITY_MODE(cr) 0
+#define	CRED_IN_LIMITED_VFS_VISIBILITY_MODE(cr) 0
 #else
 #define	CRED_IN_RESTRICTED_MODE(cr) \
 	SYSFILSET_IS_RESTRICTED((cr)->cr_sysfilset)
 #define	CRED_IN_CAPABILITY_MODE(cr) \
 	SYSFILSET_IN_CAPABILITY_MODE((cr)->cr_sysfilset)
+#define	CRED_IN_LIMITED_VFS_VISIBILITY_MODE(cr) \
+	SYSFILSET_IN_LIMITED_VFS_VISIBILITY_MODE((cr)->cr_sysfilset)
 #endif
 
 #endif /* _KERNEL || _WANT_UCRED */

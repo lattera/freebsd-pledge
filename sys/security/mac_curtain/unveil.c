@@ -32,8 +32,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/unveil.h>
 #include <sys/curtain.h>
 
-#ifdef UNVEIL_SUPPORT
-
 static MALLOC_DEFINE(M_UNVEIL, "unveil", "vnode unveils");
 
 static bool __read_mostly unveil_enabled = true;
@@ -101,19 +99,6 @@ struct unveil_save {
 	bool te_overflow /* array overflowed? */;
 	size_t ter; /* remaining array slots */
 	unveil_index (*tev)[2] /* array base */, (*tep)[2] /* fill pointer */;
-};
-
-struct unveil_tracker {
-#define	UNVEIL_TRACKER_ENTRIES_COUNT 2
-	uint64_t serial;
-	struct unveil_tracker_entry {
-		struct vnode *vp;
-		struct mount *mp;
-		unsigned vp_nchash, vp_hash;
-		int mp_gen;
-		unveil_perms uperms;
-	} entries[UNVEIL_TRACKER_ENTRIES_COUNT];
-	unsigned fill;
 };
 
 struct unveil_cache {
@@ -515,10 +500,10 @@ unveil_stash_commit(struct unveil_stash *stash, struct unveil_base *base)
 
 
 static inline uint64_t
-unveil_stash_get(struct thread *td, struct unveil_stash **p)
+unveil_stash_get(struct ucred *cr, struct unveil_stash **p)
 {
 	struct curtain *ct;
-	if ((ct = curtain_from_cred(td->td_ucred))) {
+	if ((ct = curtain_from_cred(cr))) {
 		if (p)
 			*p = &ct->ct_ustash;
 		return (curtain_serial(ct));
@@ -547,162 +532,108 @@ unveil_fflags_uperms(enum vtype type, int fflags)
 	return (uperms_expand(uperms));
 }
 
-static struct unveil_tracker *
-unveil_tracker_prep(struct thread *td)
-{
-	struct unveil_tracker *track;
-	if ((track = td->td_unveil_tracker)) {
-		uint64_t serial;
-		serial = unveil_stash_get(td, NULL);
-		if (__predict_false(track->serial != serial))
-			*track = (struct unveil_tracker){
-				.serial = serial,
-			};
-		return (track);
-	}
-	return (NULL);
-}
-
-static unveil_perms
-unveil_tracker_find(struct thread *td, struct vnode *vp)
-{
-	struct unveil_tracker *track;
-	MPASS(vp);
-	if ((track = unveil_tracker_prep(td))) {
-		unsigned j = UNVEIL_TRACKER_ENTRIES_COUNT - 1;
-		do {
-			unsigned i = (track->fill + j) % UNVEIL_TRACKER_ENTRIES_COUNT;
-			if (track->entries[i].vp == vp &&
-			    track->entries[i].vp_nchash == vp->v_nchash &&
-			    track->entries[i].vp_hash == vp->v_hash &&
-			    track->entries[i].mp == vp->v_mount &&
-			    track->entries[i].mp_gen == (vp->v_mount ? vp->v_mount->mnt_gen : 0))
-				return (track->entries[i].uperms);
-		} while (j--);
-	}
-	return (UPERM_NONE);
-}
-
-static unveil_perms
-unveil_tracker_find_mount(struct thread *td, struct mount *mp)
-{
-	struct unveil_tracker *track;
-	MPASS(mp);
-	if ((track = unveil_tracker_prep(td))) {
-		unsigned j = UNVEIL_TRACKER_ENTRIES_COUNT - 1;
-		do {
-			unsigned i = (track->fill + j) % UNVEIL_TRACKER_ENTRIES_COUNT;
-			if (track->entries[i].mp == mp &&
-			    track->entries[i].mp_gen == mp->mnt_gen)
-				return (track->entries[i].uperms);
-		} while (j--);
-	}
-	return (UPERM_NONE);
-}
-
-static size_t
-unveil_tracker_last(struct thread *td)
-{
-	struct unveil_tracker *track;
-	track = td->td_unveil_tracker;
-	return ((track->fill != 0 ? track->fill : UNVEIL_TRACKER_ENTRIES_COUNT) - 1);
-}
-
-static unveil_perms
-unveil_tracker_get(struct thread *td, size_t i)
-{
-	struct unveil_tracker *track;
-	track = td->td_unveil_tracker;
-	return (track->entries[i].uperms);
-}
-
 static void
-unveil_tracker_set(struct thread *td, size_t i, struct vnode *vp, unveil_perms uperms)
+unveil_track_init(struct unveil_tracker *track, uint64_t serial, struct unveil_stash *stash)
+{
+	if (stash)
+		unveil_stash_check(stash);
+	*track = (struct unveil_tracker){
+		.serial = serial,
+		.tree = stash ? stash->tree : NULL,
+		.flags = stash ? stash->flags : (struct unveil_base_flags){ 0 },
+		.fill = UNVEIL_TRACKER_ENTRIES_COUNT - 1,
+	};
+}
+
+void
+unveil_track_reset(struct unveil_tracker *track)
+{
+	*track = (struct unveil_tracker){ 0 };
+}
+
+struct unveil_tracker *
+unveil_track_get(struct ucred *cr, bool create)
 {
 	struct unveil_tracker *track;
-	track = td->td_unveil_tracker;
-	track->entries[i] = (struct unveil_tracker_entry){
+	struct unveil_stash *stash;
+	uint64_t serial;
+	if ((track = curthread->td_unveil_tracker)) {
+		serial = unveil_stash_get(cr, &stash);
+		if (!track->save && __predict_false(track->serial != serial))
+			unveil_track_init(track, serial, stash);
+		return (track);
+	} else if (create) {
+		serial = unveil_stash_get(cr, &stash);
+		track = malloc(sizeof *track, M_UNVEIL, M_WAITOK);
+		unveil_track_init(track, serial, stash);
+		curthread->td_unveil_tracker = track;
+	}
+	return (track);
+}
+
+static unsigned
+unveil_track_roll(struct unveil_tracker *track, int offset)
+{
+	if (offset > 0) {
+		do {
+			if (++track->fill == UNVEIL_TRACKER_ENTRIES_COUNT)
+				track->fill = 0;
+		} while (--offset);
+	} else if (offset < 0) {
+		do {
+			if (track->fill-- == 0)
+				track->fill = UNVEIL_TRACKER_ENTRIES_COUNT - 1;
+		} while (--offset);
+	}
+	return (track->fill);
+}
+
+static struct unveil_tracker_entry *
+unveil_track_peek(struct unveil_tracker *track)
+{
+	return (&track->entries[track->fill]);
+}
+
+static struct unveil_tracker_entry *
+unveil_track_fill(struct unveil_tracker *track, struct vnode *vp)
+{
+	track->entries[track->fill] = (struct unveil_tracker_entry){
 		.vp = vp,
 		.vp_nchash = vp ? vp->v_nchash : 0,
 		.vp_hash = vp ? vp->v_hash : 0,
 		.mp = vp ? vp->v_mount : NULL,
 		.mp_gen = vp && vp->v_mount ? vp->v_mount->mnt_gen : 0,
-		.uperms = uperms,
 	};
+	return (&track->entries[track->fill]);
 }
 
-static void
-unveil_tracker_replace(struct thread *td, size_t i, struct vnode *vp)
+struct unveil_tracker_entry *
+unveil_track_find(struct unveil_tracker *track, struct vnode *vp)
 {
-	struct unveil_tracker *track;
 	MPASS(vp);
-	track = td->td_unveil_tracker;
-	track->entries[i] = (struct unveil_tracker_entry){
-		.vp = vp,
-		.vp_nchash = vp->v_nchash,
-		.vp_hash = vp->v_hash,
-		.mp = vp->v_mount,
-		.mp_gen = vp->v_mount ? vp->v_mount->mnt_gen : 0,
-		.uperms = track->entries[i].uperms,
-	};
-}
-
-static void
-unveil_tracker_substitute(struct thread *td,
-    struct vnode *old_vp, struct vnode *new_vp, unveil_perms uperms)
-{
-	struct unveil_tracker *track;
-	if ((track = unveil_tracker_prep(td))) {
-		unsigned j = UNVEIL_TRACKER_ENTRIES_COUNT - 1;
-		do {
-			unsigned i = (track->fill + j) % UNVEIL_TRACKER_ENTRIES_COUNT;
-			if (track->entries[i].vp == old_vp) {
-				unveil_tracker_replace(td, i, new_vp);
-				track->entries[i].uperms = uperms;
-				break;
-			}
-		} while (j--);
+	for (unsigned j = 0; j < UNVEIL_TRACKER_ENTRIES_COUNT; j++) {
+		unsigned i = (track->fill + j) % UNVEIL_TRACKER_ENTRIES_COUNT;
+		if (track->entries[i].vp == vp &&
+		    track->entries[i].vp_nchash == vp->v_nchash &&
+		    track->entries[i].vp_hash == vp->v_hash &&
+		    track->entries[i].mp == vp->v_mount &&
+		    track->entries[i].mp_gen == (vp->v_mount ? vp->v_mount->mnt_gen : 0))
+			return (&track->entries[i]);
 	}
+	return (NULL);
 }
 
-static size_t
-unveil_tracker_push(struct thread *td, struct vnode *vp, unveil_perms uperms)
+struct unveil_tracker_entry *
+unveil_track_find_mount(struct unveil_tracker *track, struct mount *mp)
 {
-	struct unveil_tracker *track;
-	size_t i;
-	if (__predict_false(!td->td_unveil_tracker)) {
-		uint64_t serial;
-		serial = unveil_stash_get(td, NULL);
-		track = malloc(sizeof *track, M_UNVEIL, M_WAITOK);
-		*track = (struct unveil_tracker){
-			.serial = serial,
-		};
-		td->td_unveil_tracker = track;
-	} else
-		track = unveil_tracker_prep(td);
-	i = track->fill++;
-	track->fill %= UNVEIL_TRACKER_ENTRIES_COUNT;
-	unveil_tracker_set(td, i, vp, uperms);
-	return (i);
-}
-
-static void
-unveil_tracker_push_file(struct thread *td, struct file *fp)
-{
-	unveil_perms uperms;
-	if (!fp->f_vnode)
-		return;
-	uperms = fp->f_uperms;
-	if ((fp->f_uldgen != unveil_stash_get(td, NULL)))
-		uperms &= unveil_fflags_uperms(fp->f_vnode->v_type, fp->f_flag);
-	unveil_tracker_push(td, fp->f_vnode, uperms);
-}
-
-static void
-unveil_tracker_save_file(struct thread *td, struct file *fp, struct vnode *vp)
-{
-	fp->f_uldgen = unveil_stash_get(td, NULL);
-	fp->f_uperms = unveil_active(td) ? unveil_tracker_find(td, vp) : UPERM_ALL;
+	MPASS(mp);
+	for (unsigned j = 0; j < UNVEIL_TRACKER_ENTRIES_COUNT; j++) {
+		unsigned i = (track->fill + j) % UNVEIL_TRACKER_ENTRIES_COUNT;
+		if (track->entries[i].mp == mp &&
+		    track->entries[i].mp_gen == mp->mnt_gen)
+			return (&track->entries[i]);
+	}
+	return (NULL);
 }
 
 
@@ -732,29 +663,27 @@ unveil_save_prefix(struct unveil_save *save, struct unveil_node *cover)
 }
 
 static struct unveil_node *
-unveil_save(struct unveil_base *base, struct unveil_traversal *trav,
+unveil_save(struct ucred *cr, struct unveil_tracker *track,
     struct vnode *dvp, const char *name, size_t name_len, struct vnode *vp)
 {
 	struct unveil_node *node, *iter;
 	bool inserted;
 	MPASS(!(name && !dvp));
-	sx_assert(&base->sx, SA_XLOCKED);
-	MPASS(trav->tree && base->tree == trav->tree);
 
 	if (name && name_len > NAME_MAX) {
-		trav->save->error = ENAMETOOLONG;
+		track->save->error = ENAMETOOLONG;
 		return (NULL);
 	}
-	if (trav->tree->node_count >= unveil_max_nodes_per_process) {
-		trav->save->error = E2BIG;
+	if (track->tree->node_count >= unveil_max_nodes_per_process) {
+		track->save->error = E2BIG;
 		return (NULL);
 	}
 
 	if (name && (!vp || vp->v_type != VDIR) &&
-	    (trav->save->flags & UNVEILREG_NONDIRBYNAME))
-		node = unveil_tree_insert(trav->tree, dvp, name, name_len, &inserted);
+	    (track->save->flags & UNVEILREG_NONDIRBYNAME))
+		node = unveil_tree_insert(track->tree, dvp, name, name_len, &inserted);
 	else if (vp)
-		node = unveil_tree_insert(trav->tree, vp, NULL, 0, &inserted);
+		node = unveil_tree_insert(track->tree, vp, NULL, 0, &inserted);
 	else
 		return (NULL);
 
@@ -762,12 +691,12 @@ unveil_save(struct unveil_base *base, struct unveil_traversal *trav,
 	 * Update the cover link of the node.  If directories move around, the
 	 * cover hierarchy might become out of date.
 	 */
-	if (trav->cover) {
-		for (iter = trav->cover; iter; iter = iter->cover)
+	if (track->cover) {
+		for (iter = track->cover; iter; iter = iter->cover)
 			if (iter == node)
 				break;
 		if (!iter) /* prevent loops */
-			node->cover = trav->cover;
+			node->cover = track->cover;
 	}
 
 	/*
@@ -781,26 +710,26 @@ unveil_save(struct unveil_base *base, struct unveil_traversal *trav,
 			node->wanted[i] = false;
 			node->wanted_uperms[i] = UPERM_NONE;
 			node->frozen_uperms[i] =
-			    trav->cover ? uperms_inherit(trav->cover->frozen_uperms[i]) :
-			    trav->flags.on[i].frozen ? UPERM_NONE : UPERM_ALL;
+			    track->cover ? uperms_inherit(track->cover->frozen_uperms[i]) :
+			    track->flags.on[i].frozen ? UPERM_NONE : UPERM_ALL;
 			node->actual_uperms[i] =
-			    (trav->cover ? uperms_inherit(trav->cover->actual_uperms[i]) :
-			     unveil_active(curthread) ? UPERM_NONE : UPERM_ALL) &
+			    (track->cover ? uperms_inherit(track->cover->actual_uperms[i]) :
+			     CRED_IN_LIMITED_VFS_VISIBILITY_MODE(cr) ? UPERM_NONE : UPERM_ALL) &
 			    node->frozen_uperms[i];
 		}
 
-	if (trav->save->ter) {
-		(*trav->save->tep)[0] = node->cover ? node->cover->index : node->index;
-		(*trav->save->tep)[1] = node->index;
-		trav->save->tep++, trav->save->ter--;
+	if (track->save->ter) {
+		(*track->save->tep)[0] = node->cover ? node->cover->index : node->index;
+		(*track->save->tep)[1] = node->index;
+		track->save->tep++, track->save->ter--;
 	} else
-		trav->save->te_overflow = true;
+		track->save->te_overflow = true;
 
 	return (node);
 }
 
 static int
-unveil_find_cover(struct thread *td, struct unveil_tree *tree,
+unveil_find_cover(struct ucred *cr, struct unveil_tree *tree,
     struct vnode *dp, struct unveil_node **cover, unsigned *depth)
 {
 	int error, lkflags;
@@ -852,7 +781,7 @@ unveil_find_cover(struct thread *td, struct unveil_tree *tree,
 			.cn_nameiop = LOOKUP,
 			.cn_flags = ISLASTCN | ISDOTDOT,
 			.cn_lkflags = lkflags,
-			.cn_cred = td->td_ucred,
+			.cn_cred = cr,
 			.cn_nameptr = "..",
 			.cn_namelen = 2,
 		};
@@ -877,199 +806,200 @@ unveil_find_cover(struct thread *td, struct unveil_tree *tree,
 
 
 static bool
-curtain_device_unveil_bypass(struct thread *td, struct cdev *dev)
+curtain_device_unveil_bypass(struct ucred *cr, struct cdev *dev)
 {
-	struct ucred *cr1 = td->td_ucred, *cr2 = dev->si_cred;
-	return (cr2 && curtain_cred_visible(cr1, cr2, BARRIER_DEVICE));
+	return (dev->si_cred && curtain_cred_visible(cr, dev->si_cred, BARRIER_DEVICE));
 }
 
 static unveil_perms
-unveil_special_exemptions(struct thread *td, struct vnode *vp, unveil_perms uperms)
+unveil_special_exemptions(struct ucred *cr, struct vnode *vp, unveil_perms uperms)
 {
 	unveil_perms add_uperms = UPERM_NONE;
 	if (uperms & UPERM_DEVFS) {
 		if (vp && vp->v_type == VCHR && vp->v_rdev &&
-		    curtain_device_unveil_bypass(td, vp->v_rdev))
+		    curtain_device_unveil_bypass(cr, vp->v_rdev))
 			add_uperms |= UPERM_READ | UPERM_WRITE | UPERM_SETATTR;
 	}
-	if (add_uperms)
+	if (add_uperms != UPERM_NONE)
 		uperms = uperms_expand(add_uperms | uperms);
 	return (uperms);
 }
 
-static unveil_perms
-unveil_traverse_track(struct thread *td, struct unveil_traversal *trav, struct vnode *vp)
+int
+unveil_vnode_walk_state(struct ucred *cr)
 {
-	unveil_perms uperms;
-	uperms = trav->uperms;
-	uperms = unveil_special_exemptions(td, vp, uperms);
-	unveil_tracker_set(td, trav->fill, vp, uperms);
-	return (uperms);
-}
-
-static void
-unveil_traverse_begin(struct thread *td, struct unveil_traversal *trav,
-    bool bypass, bool reuse)
-{
-	struct unveil_stash *stash;
-	counter_u64_add(unveil_stats_traversals, 1);
-	if (!(trav->bypass = bypass) && (unveil_stash_get(td, &stash), stash)) {
-		unveil_stash_check(stash);
-		trav->tree = stash->tree;
-		trav->flags = stash->flags;
-	} else {
-		trav->tree = NULL;
-		trav->flags = (struct unveil_base_flags){ 0 };
+	int flags = 0;
+	struct unveil_tracker *track;
+	if (CRED_IN_LIMITED_VFS_VISIBILITY_MODE(cr))
+		flags |= MAC_VNODE_WALK_ACTIVE;
+	if ((track = unveil_track_get(cr, false))) {
+		if (track->save)
+			flags |= MAC_VNODE_WALK_UNVEIL;
 	}
-	trav->save = NULL;
-	trav->fill = reuse ? unveil_tracker_last(td)
-	                   : unveil_tracker_push(td, NULL, UPERM_NONE);
+	return (flags);
 }
 
-static void
-unveil_traverse_begin_save(struct thread *td, struct unveil_traversal *trav,
-    struct unveil_save *save)
+void
+unveil_vnode_walk_roll(struct ucred *cr, int offset)
 {
-	struct unveil_base *base;
-	MPASS(save);
-	base = td->td_proc->p_unveils;
-	MPASS(base);
-	counter_u64_add(unveil_stats_traversals, 1);
-	sx_assert(&base->sx, SA_XLOCKED);
-	trav->flags = base->flags;
-	trav->tree = base->tree;
-	trav->save = save;
-	trav->fill = unveil_tracker_push(td, NULL, UPERM_NONE);
-	trav->bypass = false;
+	struct unveil_tracker *track;
+	if (!(track = unveil_track_get(cr, false)))
+		return;
+	unveil_track_roll(track, offset);
 }
 
-static int
-unveil_traverse_start(struct thread *td, struct unveil_traversal *trav,
-    struct vnode *dvp)
+void
+unveil_vnode_walk_annotate_file(struct ucred *cr, struct file *fp, struct vnode *vp)
+{
+	struct unveil_tracker *track;
+	struct unveil_tracker_entry *entry;
+	fp->f_uldgen = unveil_stash_get(cr, NULL);
+	if (CRED_IN_LIMITED_VFS_VISIBILITY_MODE(cr)) {
+		if ((track = unveil_track_get(cr, false)) &&
+		    (entry = unveil_track_find(track, vp)))
+			fp->f_uperms = entry->uperms;
+		else
+			fp->f_uperms = UPERM_NONE;
+	} else
+		fp->f_uperms = UPERM_ALL;
+}
+
+int
+unveil_vnode_walk_start_file(struct ucred *cr, struct file *fp)
+{
+	struct unveil_tracker *track;
+	unveil_perms uperms;
+	if (!fp->f_vnode)
+		return (0);
+	track = unveil_track_get(cr, true);
+	uperms = fp->f_uperms;
+	if ((fp->f_uldgen != track->serial))
+		uperms &= unveil_fflags_uperms(fp->f_vnode->v_type, fp->f_flag);
+	unveil_track_roll(track, 1);
+	unveil_track_fill(track, fp->f_vnode)->uperms = uperms;
+	return (0);
+}
+
+int
+unveil_vnode_walk_start(struct ucred *cr, struct vnode *dvp)
 {
 	const enum unveil_on on = UNVEIL_ON_SELF;
+	struct unveil_tracker *track;
 	struct unveil_base *base;
-	uint64_t serial;
 	int error;
 	unsigned depth;
 	MPASS(dvp);
-	base = td->td_proc->p_unveils;
-	serial = unveil_stash_get(td, NULL);
-	if (trav->bypass) {
-		trav->cover = NULL;
-		trav->uncharted = true;
-		trav->uperms = UPERM_ALL;
-		unveil_traverse_track(td, trav, dvp);
-		return (0);
-	}
+	track = unveil_track_get(cr, true);
+	base = curthread->td_proc->p_unveils;
+	counter_u64_add(unveil_stats_traversals, 1);
 	depth = 0;
-	trav->cover = NULL;
-	if (unveil_cover_cache_enabled) {
+	track->cover = NULL;
+	if (unveil_cover_cache_enabled && !track->save) {
 		struct unveil_cache_entry *ent;
 		ent = NULL;
 		for (size_t i = 0; i < UNVEIL_CACHE_ENTRIES_COUNT; i++)
 			if (base->cover_cache.entries[i].vp == dvp)
 				ent = &base->cover_cache.entries[i];
 		if (ent) {
-			if (trav->save)
+			if (track->save)
 				sx_assert(&base->sx, SA_XLOCKED);
 			else
 				sx_slock(&base->sx);
 			if (ent->vp == dvp &&
 			    ent->vp_nchash == dvp->v_nchash &&
 			    ent->vp_hash == dvp->v_hash &&
-			    base->cover_cache.serial == serial) {
-				trav->cover = ent->cover;
+			    base->cover_cache.serial == track->serial) {
+				track->cover = ent->cover;
 				depth = -1;
 				counter_u64_add(unveil_stats_ascents_cached, 1);
 			}
-			if (!trav->save)
+			if (!track->save)
 				sx_sunlock(&base->sx);
 		}
 	}
-	if (!trav->cover && trav->tree) {
-		error = unveil_find_cover(td, trav->tree, dvp, &trav->cover, &depth);
+	if (!track->cover && track->tree) {
+		error = unveil_find_cover(cr, track->tree, dvp, &track->cover, &depth);
 		if (error)
 			return (error);
 		if (depth > 0) {
 			counter_u64_add(unveil_stats_ascents, 1);
 			counter_u64_add(unveil_stats_ascent_total_depth, depth);
-			if (unveil_cover_cache_enabled && trav->cover) {
+			if (unveil_cover_cache_enabled && !track->save && track->cover) {
 				struct unveil_cache_entry *ent;
-				if (trav->save)
+				if (track->save)
 					sx_assert(&base->sx, SA_XLOCKED);
 				else
 					sx_xlock(&base->sx);
 				ent = base->cover_cache.entries;
 				memcpy(ent, &ent[1], (UNVEIL_CACHE_ENTRIES_COUNT - 1) * sizeof *ent);
-				ent->cover = trav->cover;
+				ent->cover = track->cover;
 				ent->vp = dvp;
 				ent->vp_nchash = dvp->v_nchash;
 				ent->vp_hash = dvp->v_hash;
-				base->cover_cache.serial = serial;
-				if (!trav->save)
+				base->cover_cache.serial = track->serial;
+				if (!track->save)
 					sx_xunlock(&base->sx);
 			}
 		}
 	}
-	trav->uncharted = true;
-	trav->uperms = UPERM_NONE;
-	if (trav->save) {
-		if (trav->cover)
-			unveil_save_prefix(trav->save, trav->cover);
-		trav->cover = unveil_save(base, trav, NULL, NULL, 0, dvp);
+	track->uncharted = true;
+	track->uperms = UPERM_NONE;
+	if (track->save) {
+		if (track->cover)
+			unveil_save_prefix(track->save, track->cover);
+		track->cover = unveil_save(cr, track, NULL, NULL, 0, dvp);
 	}
-	if (trav->cover) {
+	if (track->cover) {
 		const enum unveil_on on = UNVEIL_ON_SELF;
-		trav->uperms = trav->save ? trav->cover->frozen_uperms[on] :
-		                            trav->cover->actual_uperms[on] ;
+		track->uperms = track->save ? track->cover->frozen_uperms[on] :
+		                              track->cover->actual_uperms[on] ;
 		if (depth)
-			trav->uperms = uperms_inherit(trav->uperms);
+			track->uperms = uperms_inherit(track->uperms);
 		else
-			trav->uncharted = false;
+			track->uncharted = false;
 	} else {
-		trav->uperms =
-		    (trav->save ? trav->flags.on[on].frozen : unveil_active(td)) ?
+		track->uperms =
+		    (track->save ? track->flags.on[on].frozen :
+		     CRED_IN_LIMITED_VFS_VISIBILITY_MODE(cr)) ?
 		    UPERM_NONE : UPERM_ALL;
 	}
-	unveil_traverse_track(td, trav, dvp);
 
+	unveil_track_fill(track, dvp)->uperms = track->uperms;
 	return (0);
 }
 
 static void
-unveil_traverse_enter(struct unveil_base *base, struct unveil_traversal *trav,
-    struct unveil_node *node)
+unveil_traverse_enter(struct unveil_tracker *track, struct unveil_node *node)
 {
 	const enum unveil_on on = UNVEIL_ON_SELF;
 	if (node) {
-		trav->cover = node;
-		trav->uncharted = false;
-		trav->uperms = trav->save ? node->frozen_uperms[on] :
-		                            node->actual_uperms[on] ;
+		track->cover = node;
+		track->uncharted = false;
+		track->uperms = track->save ? node->frozen_uperms[on] :
+		                              node->actual_uperms[on] ;
 	} else {
-		bool had_tmpdir = trav->uperms & UPERM_TMPDIR;
-		trav->uncharted = true;
-		trav->uperms = uperms_inherit(trav->uperms);
+		bool had_tmpdir = track->uperms & UPERM_TMPDIR;
+		track->uncharted = true;
+		track->uperms = uperms_inherit(track->uperms);
 		if (had_tmpdir)
-			trav->uperms |= UPERM_TMPDIR_CHILD;
+			track->uperms |= UPERM_TMPDIR_CHILD;
 	}
 }
 
-static void
-unveil_traverse_backtrack(struct thread *td, struct unveil_traversal *trav,
-    struct vnode *dvp)
+void
+unveil_vnode_walk_backtrack(struct ucred *cr, struct vnode *dvp)
 {
-	struct unveil_base *base;
+	struct unveil_tracker *track;
 	struct unveil_node *node;
-	base = td->td_proc->p_unveils;
-	if (!trav->uncharted) {
-		trav->cover = NULL;
-		trav->uperms = UPERM_NONE;
+	if (!(track = unveil_track_get(cr, false)))
+		return;
+	if (!track->uncharted) {
+		track->cover = NULL;
+		track->uperms = UPERM_NONE;
 	}
-	node = trav->tree ? unveil_tree_lookup(trav->tree, dvp, NULL, 0) : NULL;
-	unveil_traverse_enter(base, trav, node);
-	unveil_traverse_track(td, trav, dvp);
+	node = track->tree ? unveil_tree_lookup(track->tree, dvp, NULL, 0) : NULL;
+	unveil_traverse_enter(track, node);
+	unveil_track_fill(track, dvp)->uperms = track->uperms;
 }
 
 /*
@@ -1078,18 +1008,20 @@ unveil_traverse_backtrack(struct thread *td, struct unveil_traversal *trav,
  * be dvp's parent when ISDOTDOT is set.
  */
 
-static void
-unveil_traverse_component(struct thread *td, struct unveil_traversal *trav,
+void
+unveil_vnode_walk_component(struct ucred *cr,
     struct vnode *dvp, struct componentname *cnp, struct vnode *vp)
 {
-	struct unveil_base *base = td->td_proc->p_unveils;
+	struct unveil_tracker *track;
 	struct unveil_node *node = NULL;
 	char *name = NULL;
 	size_t name_len = 0;
+	if (!(track = unveil_track_get(cr, false)))
+		return;
 	if (cnp->cn_flags & ISDOTDOT) {
-		if (!trav->uncharted) {
-			trav->cover = NULL;
-			trav->uperms = UPERM_NONE;
+		if (!track->uncharted) {
+			track->cover = NULL;
+			track->uperms = UPERM_NONE;
 		}
 	} else {
 		/*
@@ -1100,45 +1032,65 @@ unveil_traverse_component(struct thread *td, struct unveil_traversal *trav,
 			name = cnp->cn_nameptr;
 	}
 
-	if (trav->save) {
-		node = unveil_save(base, trav, dvp, name, name_len, vp);
-	} else if (trav->tree) {
+	if (track->save) {
+		node = unveil_save(cr, track, dvp, name, name_len, vp);
+	} else if (track->tree) {
 		if (vp)
-			node = unveil_tree_lookup(trav->tree, vp, NULL, 0);
+			node = unveil_tree_lookup(track->tree, vp, NULL, 0);
 		if (!node && name && (!vp || vp->v_type != VDIR))
-			node = unveil_tree_lookup(trav->tree, dvp, name, name_len);
+			node = unveil_tree_lookup(track->tree, dvp, name, name_len);
 	}
 
-	unveil_traverse_enter(base, trav, node);
-	if (vp)
-		unveil_traverse_track(td, trav, vp);
-	cnp->cn_uperms = trav->uperms;
+	unveil_traverse_enter(track, node);
+	if (vp) {
+		track->uperms = unveil_special_exemptions(cr, vp, track->uperms);
+		unveil_track_fill(track, vp)->uperms = track->uperms;
+	} else {
+		struct unveil_tracker_entry *entry;
+		if ((entry = unveil_track_find(track, dvp)))
+			entry->pending_uperms = track->uperms;
+	}
 }
 
-static void
-unveil_traverse_replace(struct thread *td, struct unveil_traversal *trav,
+void
+unveil_vnode_walk_replace(struct ucred *cr,
     struct vnode *from_vp, struct vnode *to_vp)
 {
-	MPASS(td->td_unveil_tracker->entries[trav->fill].vp == from_vp);
-	unveil_tracker_replace(td, trav->fill, to_vp);
+	struct unveil_tracker *track;
+	if (!(track = unveil_track_get(cr, false)))
+		return;
+	if (unveil_track_peek(track)->vp == from_vp)
+		unveil_track_fill(track, to_vp)->uperms = track->uperms;
 }
 
-static unveil_perms
-unveil_traverse_uperms(struct thread *td, struct unveil_traversal *trav)
+void
+unveil_vnode_walk_created(struct ucred *cr, struct vnode *dvp, struct vnode *vp)
 {
-	return (trav->uperms);
-}
-
-static void
-unveil_traverse_end(struct thread *td, struct unveil_traversal *trav)
-{
-	struct unveil_base *base;
-	base = td->td_proc->p_unveils;
-	MPASS(base);
-	if (trav->save) {
-		MPASS(base->tree == trav->tree);
-		sx_assert(&base->sx, SA_XLOCKED);
+	struct unveil_tracker *track;
+	struct unveil_tracker_entry *entry;
+	if ((track = unveil_track_get(cr, false)) &&
+	    (entry = unveil_track_peek(track))) {
+		if (entry->vp == dvp) {
+			unveil_perms uperms = entry->pending_uperms;
+			unveil_track_fill(track, vp)->uperms = uperms;
+		}
 	}
+}
+
+int
+unveil_vnode_walk_final(struct ucred *cr, int error)
+{
+	struct unveil_tracker *track;
+	if (!(track = unveil_track_get(cr, false)))
+		return (error);
+	if (error) {
+		if (!(track->uperms & UPERM_EXPOSE))
+			error = ENOENT;
+	} else {
+		if (!(track->uperms & ~UPERM_TRAVERSE))
+			error = ENOENT;
+	}
+	return (error);
 }
 
 
@@ -1191,7 +1143,7 @@ static int
 do_unveil_add(struct thread *td, struct unveil_base *base, int flags, struct unveilreg reg)
 {
 	struct nameidata nd;
-	struct unveil_traversal trav;
+	struct unveil_tracker *track;
 	struct unveil_save save;
 	uint64_t ndflags;
 	int error;
@@ -1208,7 +1160,6 @@ do_unveil_add(struct thread *td, struct unveil_base *base, int flags, struct unv
 	    (reg.atflags & AT_RESOLVE_BENEATH ? RBENEATH : 0);
 	NDINIT_ATRIGHTS(&nd, LOOKUP, ndflags,
 	    UIO_USERSPACE, reg.path, reg.atfd, &cap_fchdir_rights, td);
-	nd.ni_unveil = &trav;
 	save = (struct unveil_save){ .flags = flags, .first = true, .error = 0 };
 	if (reg.tev) {
 		if ((save.ter = reg.tec) > UNVEILREG_MAX_TE)
@@ -1218,12 +1169,22 @@ do_unveil_add(struct thread *td, struct unveil_base *base, int flags, struct unv
 		if (!save.tev)
 			return (EINVAL);
 	}
-	unveil_traverse_begin_save(td, &trav, &save);
+	track = unveil_track_get(td->td_ucred, true);
+	*track = (struct unveil_tracker){
+		.serial = 0,
+		.fill = 0,
+		.save = &save,
+		.tree = base->tree,
+		.flags = base->flags,
+	};
 	error = namei(&nd);
-	unveil_traverse_end(td, &trav);
-	if (error || (error = save.error))
+	track->save = NULL;
+	if (!error) {
+		NDFREE(&nd, 0);
+		error = save.error;
+	}
+	if (error)
 		goto out;
-	NDFREE(&nd, 0);
 	if (reg.tev) {
 		if (save.te_overflow) {
 			error = ENAMETOOLONG;
@@ -1235,9 +1196,10 @@ do_unveil_add(struct thread *td, struct unveil_base *base, int flags, struct unv
 			goto out;
 		td->td_retval[0] = save.tep - save.tev;
 	} else
-		td->td_retval[0] = trav.cover ? trav.cover->index : -1;
+		td->td_retval[0] = track->cover ? track->cover->index : -1;
 out:	if (reg.tev)
 		free(save.tev, M_TEMP);
+	unveil_track_reset(track);
 	return (error);
 }
 
@@ -1312,21 +1274,6 @@ unveil_thread_dtor(void *arg __unused, struct thread *td)
 	}
 }
 
-static struct unveil_ops unveil_ops_here = {
-	.traverse_begin = unveil_traverse_begin,
-	.traverse_start = unveil_traverse_start,
-	.traverse_component = unveil_traverse_component,
-	.traverse_backtrack = unveil_traverse_backtrack,
-	.traverse_replace = unveil_traverse_replace,
-	.traverse_uperms = unveil_traverse_uperms,
-	.traverse_end = unveil_traverse_end,
-	.tracker_find = unveil_tracker_find,
-	.tracker_find_mount = unveil_tracker_find_mount,
-	.tracker_substitute = unveil_tracker_substitute,
-	.tracker_push_file = unveil_tracker_push_file,
-	.tracker_save_file = unveil_tracker_save_file,
-};
-
 static struct syscall_helper_data unveil_syscalls[] = {
 	SYSCALL_INIT_HELPER(unveilreg),
 	SYSCALL_INIT_LAST,
@@ -1342,10 +1289,6 @@ static void
 unveil_sysinit(void *arg __unused)
 {
 	int error;
-	if (!unveil_support) {
-		printf("%s: kernel not built with UNVEIL_SUPPORT!\n", __FUNCTION__);
-		return;
-	}
 	unveil_proc_ctor_tag = EVENTHANDLER_REGISTER(
 	    process_ctor, unveil_proc_ctor, NULL, EVENTHANDLER_PRI_ANY);
 	unveil_proc_dtor_tag = EVENTHANDLER_REGISTER(
@@ -1356,9 +1299,6 @@ unveil_sysinit(void *arg __unused)
 	    thread_ctor, unveil_thread_ctor, NULL, EVENTHANDLER_PRI_ANY);
 	unveil_thread_dtor_tag = EVENTHANDLER_REGISTER(
 	    thread_dtor, unveil_thread_dtor, NULL, EVENTHANDLER_PRI_ANY);
-	if (unveil_ops)
-		printf("%s: unveil_ops was already set!\n", __FUNCTION__);
-	unveil_ops = &unveil_ops_here;
 	error = syscall_helper_register(unveil_syscalls,
 	    SY_THR_STATIC_KLD | SY_HLP_PRESERVE_SYFLAGS);
 	if (error)
@@ -1368,11 +1308,6 @@ unveil_sysinit(void *arg __unused)
 static void
 unveil_sysuninit(void *arg __unused)
 {
-	if (!unveil_support)
-		return;
-	if (unveil_ops != &unveil_ops_here)
-		printf("%s: unveil_ops was tampered with!\n", __FUNCTION__);
-	unveil_ops = NULL;
 	syscall_helper_unregister(unveil_syscalls);
 	EVENTHANDLER_DEREGISTER(process_ctor, unveil_proc_ctor_tag);
 	EVENTHANDLER_DEREGISTER(process_dtor, unveil_proc_dtor_tag);
@@ -1383,5 +1318,3 @@ unveil_sysuninit(void *arg __unused)
 
 SYSINIT(unveil_sysinit, SI_SUB_KLD, SI_ORDER_ANY, unveil_sysinit, NULL);
 SYSUNINIT(unveil_sysinit, SI_SUB_KLD, SI_ORDER_ANY, unveil_sysuninit, NULL);
-
-#endif /* UNVEIL_SUPPORT */

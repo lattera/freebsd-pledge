@@ -95,6 +95,10 @@
 #define	VN_OPEN_INVFS	0x0
 #endif
 
+#ifndef VN_OPEN_NOMACCHECK
+#define	VN_OPEN_NOMACCHECK	0x0
+#endif
+
 VFS_SMR_DECLARE;
 
 #if __FreeBSD_version >= 1300047
@@ -5341,10 +5345,10 @@ zfs_getextattr_dir(struct vop_getextattr_args *ap, const char *attrname)
 		return (error);
 
 	flags = FREAD;
-	NDINIT_ATVP(&nd, LOOKUP, NOFOLLOW | UNVEILBYPASS,
-	    UIO_SYSSPACE, attrname, xvp, td);
-	error = vn_open_cred(&nd, &flags, 0,
-	    VN_OPEN_INVFS | VN_OPEN_UNVEILBYPASS, ap->a_cred, NULL);
+	NDINIT_ATVP(&nd, LOOKUP, NOFOLLOW | NOMACCHECK, UIO_SYSSPACE, attrname,
+	    xvp, td);
+	error = vn_open_cred(&nd, &flags, 0, VN_OPEN_INVFS | VN_OPEN_NOMACCHECK,
+	    ap->a_cred, NULL);
 	vp = nd.ni_vp;
 	NDFREE(&nd, NDF_ONLY_PNBUF);
 	if (error != 0)
@@ -5457,8 +5461,7 @@ zfs_deleteextattr_dir(struct vop_deleteextattr_args *ap, const char *attrname)
 	if (error != 0)
 		return (error);
 
-	NDINIT_ATVP(&nd, DELETE,
-	    NOFOLLOW | LOCKPARENT | LOCKLEAF | UNVEILBYPASS,
+	NDINIT_ATVP(&nd, DELETE, NOFOLLOW | LOCKPARENT | LOCKLEAF | NOMACCHECK,
 	    UIO_SYSSPACE, attrname, xvp, td);
 	error = namei(&nd);
 	vp = nd.ni_vp;
@@ -5587,10 +5590,10 @@ zfs_setextattr_dir(struct vop_setextattr_args *ap, const char *attrname)
 		return (error);
 
 	flags = FFLAGS(O_WRONLY | O_CREAT);
-	NDINIT_ATVP(&nd, LOOKUP, NOFOLLOW | UNVEILBYPASS,
-	    UIO_SYSSPACE, attrname, xvp, td);
+	NDINIT_ATVP(&nd, LOOKUP, NOFOLLOW | NOMACCHECK, UIO_SYSSPACE, attrname,
+	    xvp, td);
 	error = vn_open_cred(&nd, &flags, 0600,
-	    VN_OPEN_INVFS | VN_OPEN_UNVEILBYPASS, ap->a_cred,
+	    VN_OPEN_INVFS | VN_OPEN_NOMACCHECK, ap->a_cred,
 	    NULL);
 	vp = nd.ni_vp;
 	NDFREE(&nd, NDF_ONLY_PNBUF);
@@ -5744,8 +5747,7 @@ zfs_listextattr_dir(struct vop_listextattr_args *ap, const char *attrprefix)
 		return (error);
 	}
 
-	NDINIT_ATVP(&nd, LOOKUP,
-	    NOFOLLOW | LOCKLEAF | LOCKSHARED | UNVEILBYPASS,
+	NDINIT_ATVP(&nd, LOOKUP, NOFOLLOW | LOCKLEAF | LOCKSHARED | NOMACCHECK,
 	    UIO_SYSSPACE, ".", xvp, td);
 	error = namei(&nd);
 	vp = nd.ni_vp;

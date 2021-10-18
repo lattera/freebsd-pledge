@@ -15,4 +15,8 @@ typedef uint64_t sysfilset_t;
 #define	SYSFILSET_IN_CAPABILITY_MODE(sfs) \
 	!((sfs) & ((sysfilset_t)1 << SYSFILSET_NOT_IN_CAPABILITY_MODE_BIT))
 
+#define	SYSFILSET_LIMITED_VFS_VISIBILITY_MODE_BIT 1 /* must match SYSFIL_DEFAULT */
+#define	SYSFILSET_IN_LIMITED_VFS_VISIBILITY_MODE(sfs) \
+	!((sfs) & ((sysfilset_t)1 << SYSFILSET_LIMITED_VFS_VISIBILITY_MODE_BIT))
+
 #endif

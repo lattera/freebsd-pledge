@@ -677,6 +677,21 @@ typedef int	(*mpo_vnode_setlabel_extattr_t)(struct ucred *cred,
 		    struct vnode *vp, struct label *vplabel,
 		    struct label *intlabel);
 
+typedef int	(*mpo_vnode_walk_state_t)(struct ucred *cred);
+typedef void	(*mpo_vnode_walk_roll_t)(struct ucred *cred, int offset);
+typedef void	(*mpo_vnode_walk_annotate_file_t)(struct ucred *cred,
+		    struct file *fp, struct vnode *vp);
+typedef int	(*mpo_vnode_walk_start_file_t)(struct ucred *cred, struct file *fp);
+typedef int	(*mpo_vnode_walk_start_t)(struct ucred *cred, struct vnode *vp);
+typedef void	(*mpo_vnode_walk_component_t)(struct ucred *cred,
+		    struct vnode *dvp, struct componentname *cnp, struct vnode *vp);
+typedef void	(*mpo_vnode_walk_backtrack_t)(struct ucred *cred, struct vnode *dvp);
+typedef void	(*mpo_vnode_walk_replace_t)(struct ucred *cred,
+		    struct vnode *from_vp, struct vnode *to_vp);
+typedef void	(*mpo_vnode_walk_created_t)(struct ucred *cred,
+		    struct vnode *dvp, struct vnode *vp);
+typedef int	(*mpo_vnode_walk_final_t)(struct ucred *cred, int error);
+
 typedef int	(*mpo_generic_check_ioctl_t)(struct ucred *cred,
 		    struct file *file,
 		    unsigned long cmd, void *data);
@@ -991,6 +1006,17 @@ struct mac_policy_ops {
 	mpo_vnode_internalize_label_t		mpo_vnode_internalize_label;
 	mpo_vnode_relabel_t			mpo_vnode_relabel;
 	mpo_vnode_setlabel_extattr_t		mpo_vnode_setlabel_extattr;
+
+	mpo_vnode_walk_state_t			mpo_vnode_walk_state;
+	mpo_vnode_walk_roll_t			mpo_vnode_walk_roll;
+	mpo_vnode_walk_annotate_file_t		mpo_vnode_walk_annotate_file;
+	mpo_vnode_walk_start_file_t		mpo_vnode_walk_start_file;
+	mpo_vnode_walk_start_t			mpo_vnode_walk_start;
+	mpo_vnode_walk_component_t		mpo_vnode_walk_component;
+	mpo_vnode_walk_backtrack_t		mpo_vnode_walk_backtrack;
+	mpo_vnode_walk_replace_t		mpo_vnode_walk_replace;
+	mpo_vnode_walk_created_t		mpo_vnode_walk_created;
+	mpo_vnode_walk_final_t			mpo_vnode_walk_final;
 
 	mpo_generic_check_ioctl_t		mpo_generic_check_ioctl;
 	mpo_generic_check_vm_prot_t		mpo_generic_check_vm_prot;

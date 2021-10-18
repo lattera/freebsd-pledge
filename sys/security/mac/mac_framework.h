@@ -696,6 +696,23 @@ void	mac_vnode_relabel(struct ucred *cred, struct vnode *vp,
  */
 int	vop_stdsetlabel_ea(struct vop_setlabel_args *ap);
 
+#define	MAC_VNODE_WALK_ACTIVE	0x01
+#define	MAC_VNODE_WALK_UNVEIL	0x02
+
+int	mac_vnode_walk_state(struct ucred *cred);
+void	mac_vnode_walk_roll(struct ucred *cred, int offset);
+void	mac_vnode_walk_annotate_file(struct ucred *cred,
+	    struct file *fp, struct vnode *vp);
+int	mac_vnode_walk_start_file(struct ucred *cred, struct file *fp);
+int	mac_vnode_walk_start(struct ucred *cred, struct vnode *vp);
+void	mac_vnode_walk_component(struct ucred *cred,
+	    struct vnode *dvp, struct componentname *cnp, struct vnode *vp);
+void	mac_vnode_walk_backtrack(struct ucred *cred, struct vnode *dvp);
+void	mac_vnode_walk_replace(struct ucred *cred,
+	    struct vnode *from_vp, struct vnode *to_vp);
+void	mac_vnode_walk_created(struct ucred *cred,
+	    struct vnode *dvp, struct vnode *vp);
+int	mac_vnode_walk_final(struct ucred *cred, int error);
 
 void	mac_cred_trim(struct ucred *cred);
 

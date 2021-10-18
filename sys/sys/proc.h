@@ -384,7 +384,7 @@ struct thread {
 #ifdef EPOCH_TRACE
 	SLIST_HEAD(, epoch_tracker) td_epochs;
 #endif
-#ifdef UNVEIL_SUPPORT
+#ifndef NOUNVEIL
 	struct unveil_tracker *td_unveil_tracker; /* (a) */
 #endif
 };
@@ -741,7 +741,7 @@ struct proc {
 
 	TAILQ_HEAD(, kq_timer_cb_data)	p_kqtim_stop;	/* (c) */
 
-#ifdef UNVEIL_SUPPORT
+#ifndef NOUNVEIL
 	struct unveil_base *p_unveils;	/* (c) */
 #endif
 };

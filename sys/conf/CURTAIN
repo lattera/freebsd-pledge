@@ -1,4 +1,0 @@
-ident	CURTAIN
-include	GENERIC
-options	UNVEIL_SUPPORT
-options	COMPAT_43

@@ -80,7 +80,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/user.h>
 #include <sys/vnode.h>
 #include <sys/sysfil.h>
-#include <sys/unveil.h>
 #include <sys/ktrace.h>
 
 #include <net/vnet.h>
@@ -2815,9 +2814,9 @@ finit_vnode(struct file *fp, u_int flag, void *data, struct fileops *ops)
 static inline void
 _fget_unveil(struct thread *td, struct filedesc *fdp, struct file *fp)
 {
-#ifdef UNVEIL_SUPPORT
-	if (unveil_active(td))
-		unveil_ops->tracker_push_file(td, fp);
+#ifdef MAC
+	if (CRED_IN_LIMITED_VFS_VISIBILITY_MODE(td->td_ucred))
+		mac_vnode_walk_start_file(td->td_ucred, fp);
 #endif
 }
 

@@ -1080,6 +1080,93 @@ vn_setlabel(struct vnode *vp, struct label *intlabel, struct ucred *cred)
 	return (0);
 }
 
+
+int
+mac_vnode_walk_state(struct ucred *cred)
+{
+	int result = 0;
+
+	MAC_POLICY_BOOLEAN(vnode_walk_state, |, cred);
+
+	return (result);
+}
+
+void
+mac_vnode_walk_roll(struct ucred *cred, int offset)
+{
+
+	MAC_POLICY_PERFORM(vnode_walk_roll, cred, offset);
+}
+
+void
+mac_vnode_walk_annotate_file(struct ucred *cred, struct file *fp, struct vnode *vp)
+{
+
+	MAC_POLICY_PERFORM(vnode_walk_annotate_file, cred, fp, vp);
+}
+
+int
+mac_vnode_walk_start_file(struct ucred *cred, struct file *fp)
+{
+	int error;
+
+	MAC_POLICY_CHECK(vnode_walk_start_file, cred, fp);
+
+	return (error);
+}
+
+int
+mac_vnode_walk_start(struct ucred *cred, struct vnode *vp)
+{
+	int error;
+
+	MAC_POLICY_CHECK(vnode_walk_start, cred, vp);
+
+	return (error);
+}
+
+void
+mac_vnode_walk_component(struct ucred *cred,
+    struct vnode *dvp, struct componentname *cnp, struct vnode *vp)
+{
+
+	MAC_POLICY_PERFORM(vnode_walk_component, cred, dvp, cnp, vp);
+}
+
+void
+mac_vnode_walk_backtrack(struct ucred *cred, struct vnode *dvp)
+{
+
+	MAC_POLICY_PERFORM(vnode_walk_backtrack, cred, dvp);
+}
+
+void
+mac_vnode_walk_replace(struct ucred *cred,
+    struct vnode *from_vp, struct vnode *to_vp)
+{
+
+	MAC_POLICY_PERFORM(vnode_walk_replace, cred, from_vp, to_vp);
+}
+
+void
+mac_vnode_walk_created(struct ucred *cred,
+    struct vnode *dvp, struct vnode *vp)
+{
+
+	MAC_POLICY_PERFORM(vnode_walk_replace, cred, dvp, vp);
+}
+
+int
+mac_vnode_walk_final(struct ucred *cred, int error1)
+{
+	int error;
+
+	MAC_POLICY_CHECK(vnode_walk_final, cred, error1);
+
+	return (error);
+}
+
+
 #ifdef DEBUG_VFS_LOCKS
 void
 mac_vnode_assert_locked(struct vnode *vp, const char *func)

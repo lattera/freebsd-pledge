@@ -59,9 +59,6 @@ struct componentname {
 	char	*cn_pnbuf;	/* pathname buffer */
 	char	*cn_nameptr;	/* pointer to looked up name */
 	long	cn_namelen;	/* length of looked up component */
-#ifdef UNVEIL_SUPPORT
-	unveil_perms cn_uperms;
-#endif
 };
 
 struct nameicap_tracker;
@@ -115,9 +112,6 @@ struct nameidata {
 	 */
 	struct componentname ni_cnd;
 	struct nameicap_tracker_head ni_cap_tracker;
-#ifdef UNVEIL_SUPPORT
-	struct unveil_traversal *ni_unveil;
-#endif
 	/*
 	 * Private helper data for UFS, must be at the end.  See
 	 * NDINIT_PREFILL().
@@ -191,7 +185,7 @@ int	cache_fplookup(struct nameidata *ndp, enum cache_fpl_status *status,
 #define	NOCAPCHECK	0x00100000 /* do not perform capability checks */
 #define	OPENREAD	0x00200000 /* open for reading */
 #define	OPENWRITE	0x00400000 /* open for writing */
-#define	UNVEILBYPASS	0x00800000 /* bypass unveil checks on looked up file */
+/* UNUSED		0x00800000 */
 #define	HASBUF		0x01000000 /* has allocated pathname buffer */
 #define	NOEXECCHECK	0x02000000 /* do not perform exec check on dir */
 #define	MAKEENTRY	0x04000000 /* entry is to be added to name cache */
@@ -221,8 +215,8 @@ int	cache_fplookup(struct nameidata *ndp, enum cache_fpl_status *status,
 #define	NI_LCF_STRICTRELATIVE	0x0001	/* relative lookup only */
 #define	NI_LCF_CAP_DOTDOT	0x0002	/* ".." in strictrelative case */
 #define	NI_LCF_UNVEIL_TRAVERSE	0x0020	/* do unveil checks */
-#define	NI_LCF_UNVEIL_BYPASSED	0x0040	/* pretend that unveil checks passed */
 #define	NI_LCF_UNVEIL_REUSEFILL	0x0080	/* tracker entry already filled */
+#define	NI_LCF_UNVEIL_UNVEILING	0x0100	/* creating an unveil */
 
 /*
  * Initialization of a nameidata structure.
@@ -256,15 +250,6 @@ int	cache_fplookup(struct nameidata *ndp, enum cache_fpl_status *status,
 #define NDREINIT_DBG(arg)	do { } while (0)
 #endif
 
-#ifdef UNVEIL_SUPPORT
-#define	NDINIT_UNVEIL(_ndp) do { \
-	_ndp->ni_unveil = NULL; \
-	_ndp->ni_cnd.cn_uperms = UPERM_NONE; \
-} while (0)
-#else
-#define	NDINIT_UNVEIL(ndp) do { } while (0)
-#endif
-
 #define NDINIT_ALL(ndp, op, flags, segflg, namep, dirfd, startdir, rightsp, td)	\
 do {										\
 	struct nameidata *_ndp = (ndp);						\
@@ -281,7 +266,6 @@ do {										\
 	_ndp->ni_resflags = 0;							\
 	filecaps_init(&_ndp->ni_filecaps);					\
 	_ndp->ni_rightsneeded = _rightsp;					\
-	NDINIT_UNVEIL(_ndp);							\
 } while (0)
 
 #define NDREINIT(ndp)	do {							\
