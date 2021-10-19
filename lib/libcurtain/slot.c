@@ -290,6 +290,17 @@ item_set_flags_level(struct curtain_item *item, int flags)
 #define	KEY(m, ...) (union curtain_key){ m = __VA_ARGS__ }
 #define	CMP(a, b) ((a) < (b) ? -1 : (a) > (b) ? 1 : 0)
 
+#define	DEF_SIMPLE_KEY_FUNCS(name, key_field) \
+	static int name ## _key_cmp(const union curtain_key *key0, const union curtain_key *key1) \
+		{ return (CMP(key0->key_field, key1->key_field)); }
+
+#define	DEF_SIMPLE_ENT_FUNCS(name, key_field, ent_type) \
+	static size_t name ## _ent_size(const union curtain_key *key __unused) \
+		{ return (sizeof (ent_type)); } \
+	static void *name ## _ent_fill(void *dest, \
+	    const union curtain_key *key, struct curtain_mode mode __unused) \
+		{ ent_type *fill = dest; *fill++ = key->key_field; return (fill); }
+
 
 static bool
 level_mode_is_null(struct curtain_mode m)
@@ -349,26 +360,8 @@ curtain_default(struct curtain_slot *slot, unsigned flags)
 }
 
 
-static int
-ability_key_cmp(const union curtain_key *key0, const union curtain_key *key1)
-{
-	return (CMP(key0->ability, key1->ability));
-}
-
-static size_t
-ability_ent_size(const union curtain_key *key __unused)
-{
-	return (sizeof (enum curtain_ability));
-}
-
-static void *
-ability_ent_fill(void *dest,
-    const union curtain_key *key, struct curtain_mode mode __unused)
-{
-	enum curtain_ability *fill = dest;
-	*fill++ = key->ability;
-	return (fill);
-}
+DEF_SIMPLE_KEY_FUNCS(ability, ability);
+DEF_SIMPLE_ENT_FUNCS(ability, ability, enum curtain_ability);
 
 static struct curtain_node *
 ability_fallback(struct curtain_node *node __unused)
@@ -404,26 +397,8 @@ curtain_ability(struct curtain_slot *slot, enum curtain_ability ability, int fla
 }
 
 
-static int
-ioctl_key_cmp(const union curtain_key *key0, const union curtain_key *key1)
-{
-	return (CMP(key0->ioctl, key1->ioctl));
-}
-
-static size_t
-ioctl_ent_size(const union curtain_key *key __unused)
-{
-	return (sizeof (unsigned long));
-}
-
-static void *
-ioctl_ent_fill(void *dest,
-    const union curtain_key *key, struct curtain_mode mode __unused)
-{
-	unsigned long *fill = dest;
-	*fill++ = key->ioctl;
-	return (fill);
-}
+DEF_SIMPLE_KEY_FUNCS(ioctl, ioctl);
+DEF_SIMPLE_ENT_FUNCS(ioctl, ioctl, unsigned long);
 
 static struct curtain_type ioctls_type = {
 	.req_type = CURTAINTYP_IOCTL,
@@ -454,26 +429,8 @@ curtain_ioctls(struct curtain_slot *slot, const unsigned long *ioctls, int flags
 }
 
 
-static int
-sockaf_key_cmp(const union curtain_key *key0, const union curtain_key *key1)
-{
-	return (CMP(key0->sockaf, key1->sockaf));
-}
-
-static size_t
-sockaf_ent_size(const union curtain_key *key __unused)
-{
-	return (sizeof (int));
-}
-
-static void *
-sockaf_ent_fill(void *dest,
-    const union curtain_key *key, struct curtain_mode mode __unused)
-{
-	int *fill = dest;
-	*fill++ = key->sockaf;
-	return (fill);
-}
+DEF_SIMPLE_KEY_FUNCS(sockaf, sockaf);
+DEF_SIMPLE_ENT_FUNCS(sockaf, sockaf, int);
 
 static struct curtain_type sockafs_type = {
 	.req_type = CURTAINTYP_SOCKAF,
@@ -496,26 +453,8 @@ curtain_sockaf(struct curtain_slot *slot, int sockaf, int flags)
 }
 
 
-static int
-socklvl_key_cmp(const union curtain_key *key0, const union curtain_key *key1)
-{
-	return (CMP(key0->socklvl, key1->socklvl));
-}
-
-static size_t
-socklvl_ent_size(const union curtain_key *key __unused)
-{
-	return (sizeof (int));
-}
-
-static void *
-socklvl_ent_fill(void *dest,
-    const union curtain_key *key, struct curtain_mode mode __unused)
-{
-	int *fill = dest;
-	*fill++ = key->socklvl;
-	return (fill);
-}
+DEF_SIMPLE_KEY_FUNCS(socklvl, socklvl);
+DEF_SIMPLE_ENT_FUNCS(socklvl, socklvl, int);
 
 static struct curtain_type socklvls_type = {
 	.req_type = CURTAINTYP_SOCKLVL,
@@ -597,26 +536,8 @@ curtain_sockopts(struct curtain_slot *slot, const int (*sockopts)[2], int flags)
 }
 
 
-static int
-priv_key_cmp(const union curtain_key *key0, const union curtain_key *key1)
-{
-	return (CMP(key0->priv, key1->priv));
-}
-
-static size_t
-priv_ent_size(const union curtain_key *key __unused)
-{
-	return (sizeof (int));
-}
-
-static void *
-priv_ent_fill(void *dest,
-    const union curtain_key *key, struct curtain_mode mode __unused)
-{
-	int *fill = dest;
-	*fill++ = key->priv;
-	return (fill);
-}
+DEF_SIMPLE_KEY_FUNCS(priv, priv);
+DEF_SIMPLE_ENT_FUNCS(priv, priv, int);
 
 static struct curtain_type privs_type = {
 	.req_type = CURTAINTYP_PRIV,
@@ -719,26 +640,8 @@ curtain_sysctl(struct curtain_slot *slot, const char *sysctl, int flags)
 }
 
 
-static int
-fibnum_key_cmp(const union curtain_key *key0, const union curtain_key *key1)
-{
-	return (CMP(key0->fibnum, key1->fibnum));
-}
-
-static size_t
-fibnum_ent_size(const union curtain_key *key __unused)
-{
-	return (sizeof (int));
-}
-
-static void *
-fibnum_ent_fill(void *dest,
-    const union curtain_key *key, struct curtain_mode mode __unused)
-{
-	int *fill = dest;
-	*fill++ = key->fibnum;
-	return (fill);
-}
+DEF_SIMPLE_KEY_FUNCS(fibnum, fibnum);
+DEF_SIMPLE_ENT_FUNCS(fibnum, fibnum, int);
 
 static struct curtain_type fibnums_type = {
 	.req_type = CURTAINTYP_FIBNUM,
