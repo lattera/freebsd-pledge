@@ -89,6 +89,7 @@ try_accessat(int atfd, const char *path, int mode)
 static void __unused
 check_accessat(int atfd, const char *path, const char *flags)
 {
+	bool is_root;
 	bool e, /* not hiding existence */
 	     s, /* searchable (for directories) */
 	     i, /* stat()-able */
@@ -112,7 +113,7 @@ check_accessat(int atfd, const char *path, const char *flags)
 		case '*': a =             true; break;
 		default: assert(0); break;
 		}
-	if (atfd == AT_FDCWD && path && strcmp(path, "/") == 0)
+	if ((is_root = atfd == AT_FDCWD && path && strcmp(path, "/") == 0))
 		/*
 		 * This unveil() implementation always give some limited access
 		 * to the root directory (see comments in libcurtain), but the
@@ -198,12 +199,19 @@ check_accessat(int atfd, const char *path, const char *flags)
 		}
 	}
 
-	if (e && path) {
-		int fd;
-		ATF_CHECK((fd = openat(atfd, path, O_PATH)) >= 0);
-		if (fd >= 0) {
-			check_accessat(fd, NULL, flags);
-			close(fd);
+	if (path) { /* check with O_EMPTY_PATH/AT_EMPTY_PATH */
+		int fd1;
+		char flags1[strlen(flags) + 1];
+		strcpy(flags1, flags);
+		if (is_root)
+			strcat(flags1, "s");
+		if (e)
+			ATF_CHECK((fd1 = openat(atfd, path, O_PATH)) >= 0);
+		else
+			fd1 = openat(atfd, path, O_PATH);
+		if (fd1 >= 0) {
+			check_accessat(fd1, NULL, flags1);
+			close(fd1);
 		}
 	}
 }
