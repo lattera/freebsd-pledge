@@ -1780,7 +1780,14 @@ curtain_destroy_label_barrier(struct label *label)
 static int
 curtain_cred_check_visible(struct ucred *cr1, struct ucred *cr2)
 {
-	/* XXX This makes a few more things visible than just processes. */
+	/*
+	 * XXX This currently allows too much:
+	 *
+	 * - Listing active local domain sockets (sysctl blocked by default).
+	 * - Certain procctl(2) operations (partially limited with sysfils).
+	 * - Some TCP/syncache state inspection (sysctl blocked by default).
+	 * - Others?
+	 */
 	if (!barrier_visible(CRED_SLOT_BR(cr1), CRED_SLOT_BR(cr2), BARRIER_PROC_STATUS))
 		return (ESRCH);
 	return (0);
