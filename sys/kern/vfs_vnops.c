@@ -403,7 +403,7 @@ vn_open_vnode(struct vnode *vp, int fmode, u_int vn_open_flags,
     struct ucred *cred, struct thread *td, struct file *fp)
 {
 	accmode_t accmode;
-	int error;
+	int error = 0;
 
 	if (vp->v_type == VLNK) {
 		if ((fmode & O_PATH) == 0 || (fmode & FEXEC) != 0)
@@ -452,11 +452,7 @@ vn_open_vnode(struct vnode *vp, int fmode, u_int vn_open_flags,
 		if (vp->v_type != VFIFO && vp->v_type != VSOCK &&
 		    VOP_ACCESS(vp, VREAD, cred, td) == 0)
 			fp->f_flag |= FKQALLOWED;
-#ifdef MAC
-		if (fp && (vn_open_flags & VN_OPEN_NOMACCHECK) == 0)
-			mac_vnode_walk_annotate_file(cred, fp, vp);
-#endif
-		return (0);
+		goto out;
 	}
 
 	if (vp->v_type == VFIFO && VOP_ISLOCKED(vp) != LK_EXCLUSIVE)
@@ -508,6 +504,7 @@ vn_open_vnode(struct vnode *vp, int fmode, u_int vn_open_flags,
 	}
 
 	ASSERT_VOP_LOCKED(vp, "vn_open_vnode");
+out:
 #ifdef MAC
 	if (fp && (vn_open_flags & VN_OPEN_NOMACCHECK) == 0)
 		mac_vnode_walk_annotate_file(cred, fp, vp);

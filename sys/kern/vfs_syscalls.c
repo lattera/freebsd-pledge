@@ -1041,7 +1041,7 @@ flags_to_rights(int flags, cap_rights_t *rightsp)
 		cap_rights_set_one(rightsp, CAP_FEXECVE);
 		if (flags & O_PATH)
 			return;
-	} else if (!(flags & O_PATH)) {
+	} else {
 		switch ((flags & O_ACCMODE)) {
 		case O_RDONLY:
 			cap_rights_set_one(rightsp, CAP_READ);
