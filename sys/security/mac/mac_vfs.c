@@ -1081,16 +1081,6 @@ vn_setlabel(struct vnode *vp, struct label *intlabel, struct ucred *cred)
 }
 
 
-int
-mac_vnode_walk_state(struct ucred *cred)
-{
-	int result = 0;
-
-	MAC_POLICY_BOOLEAN(vnode_walk_state, |, cred);
-
-	return (result);
-}
-
 void
 mac_vnode_walk_roll(struct ucred *cred, int offset)
 {

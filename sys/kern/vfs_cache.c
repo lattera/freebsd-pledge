@@ -4240,13 +4240,10 @@ cache_can_fplookup(struct cache_fpl *fpl)
 		cache_fpl_aborted_early(fpl);
 		return (false);
 	}
-#ifdef MAC /* TODO: fast path for this check */
-	if (mac_vnode_walk_state(cnp->cn_cred) &
-	    (MAC_VNODE_WALK_ACTIVE | MAC_VNODE_WALK_UNVEIL)) {
+	if (CRED_IN_LIMITED_VFS_VISIBILITY_MODE(cnp->cn_cred)) {
 		cache_fpl_aborted_early(fpl);
 		return (false);
 	}
-#endif
 	if (AUDITING_TD(td)) {
 		cache_fpl_aborted_early(fpl);
 		return (false);

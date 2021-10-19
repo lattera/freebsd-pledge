@@ -825,20 +825,6 @@ unveil_special_exemptions(struct ucred *cr, struct vnode *vp, unveil_perms uperm
 	return (uperms);
 }
 
-int
-unveil_vnode_walk_state(struct ucred *cr)
-{
-	int flags = 0;
-	struct unveil_tracker *track;
-	if (CRED_IN_LIMITED_VFS_VISIBILITY_MODE(cr))
-		flags |= MAC_VNODE_WALK_ACTIVE;
-	if ((track = unveil_track_get(cr, false))) {
-		if (track->save)
-			flags |= MAC_VNODE_WALK_UNVEIL;
-	}
-	return (flags);
-}
-
 void
 unveil_vnode_walk_roll(struct ucred *cr, int offset)
 {
@@ -894,7 +880,7 @@ unveil_vnode_walk_start(struct ucred *cr, struct vnode *dvp)
 	counter_u64_add(unveil_stats_traversals, 1);
 	depth = 0;
 	track->cover = NULL;
-	if (unveil_cover_cache_enabled && !track->save) {
+	if (unveil_cover_cache_enabled && base &&  !track->save) {
 		struct unveil_cache_entry *ent;
 		ent = NULL;
 		for (size_t i = 0; i < UNVEIL_CACHE_ENTRIES_COUNT; i++)
@@ -924,7 +910,7 @@ unveil_vnode_walk_start(struct ucred *cr, struct vnode *dvp)
 		if (depth > 0) {
 			counter_u64_add(unveil_stats_ascents, 1);
 			counter_u64_add(unveil_stats_ascent_total_depth, depth);
-			if (unveil_cover_cache_enabled && !track->save && track->cover) {
+			if (unveil_cover_cache_enabled && base &&  !track->save && track->cover) {
 				struct unveil_cache_entry *ent;
 				if (track->save)
 					sx_assert(&base->sx, SA_XLOCKED);
@@ -1155,7 +1141,7 @@ do_unveil_add(struct thread *td, struct unveil_base *base, int flags, struct unv
 	 * non-existent final path components and requires that either
 	 * WANTPARENT or LOCKPARENT be enabled.
 	 */
-	ndflags = WANTPARENT |
+	ndflags = FORCEMACWALK | WANTPARENT |
 	    (reg.atflags & AT_SYMLINK_NOFOLLOW ? NOFOLLOW : FOLLOW) |
 	    (reg.atflags & AT_RESOLVE_BENEATH ? RBENEATH : 0);
 	NDINIT_ATRIGHTS(&nd, LOOKUP, ndflags,

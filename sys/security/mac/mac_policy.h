@@ -677,7 +677,6 @@ typedef int	(*mpo_vnode_setlabel_extattr_t)(struct ucred *cred,
 		    struct vnode *vp, struct label *vplabel,
 		    struct label *intlabel);
 
-typedef int	(*mpo_vnode_walk_state_t)(struct ucred *cred);
 typedef void	(*mpo_vnode_walk_roll_t)(struct ucred *cred, int offset);
 typedef void	(*mpo_vnode_walk_annotate_file_t)(struct ucred *cred,
 		    struct file *fp, struct vnode *vp);
@@ -1007,7 +1006,6 @@ struct mac_policy_ops {
 	mpo_vnode_relabel_t			mpo_vnode_relabel;
 	mpo_vnode_setlabel_extattr_t		mpo_vnode_setlabel_extattr;
 
-	mpo_vnode_walk_state_t			mpo_vnode_walk_state;
 	mpo_vnode_walk_roll_t			mpo_vnode_walk_roll;
 	mpo_vnode_walk_annotate_file_t		mpo_vnode_walk_annotate_file;
 	mpo_vnode_walk_start_file_t		mpo_vnode_walk_start_file;

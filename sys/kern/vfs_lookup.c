@@ -328,11 +328,9 @@ namei_setup(struct nameidata *ndp, struct vnode **dpp, struct pwd **pwdp)
 #endif
 #ifdef MAC
 	if ((cnp->cn_flags & NOMACCHECK) == 0) {
-		int flags;
-		flags = mac_vnode_walk_state(cnp->cn_cred);
-		if (flags & MAC_VNODE_WALK_UNVEIL)
+		if ((cnp->cn_flags & FORCEMACWALK) != 0)
 			ndp->ni_lcf |= NI_LCF_UNVEIL_TRAVERSE | NI_LCF_UNVEIL_UNVEILING;
-		if (flags & MAC_VNODE_WALK_ACTIVE && !ndp->ni_startdir)
+		else if (CRED_IN_LIMITED_VFS_VISIBILITY_MODE(cnp->cn_cred))
 			ndp->ni_lcf |= NI_LCF_UNVEIL_TRAVERSE;
 	}
 #endif

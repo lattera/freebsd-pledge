@@ -116,7 +116,6 @@ void unveil_base_free(struct unveil_base *);
 void unveil_base_write_begin(struct unveil_base *);
 void unveil_base_write_end(struct unveil_base *);
 
-int	unveil_vnode_walk_state(struct ucred *);
 void	unveil_vnode_walk_roll(struct ucred *, int offset);
 void	unveil_vnode_walk_annotate_file(struct ucred *, struct file *, struct vnode *);
 int	unveil_vnode_walk_start_file(struct ucred *, struct file *);

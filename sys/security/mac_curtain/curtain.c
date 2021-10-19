@@ -2994,7 +2994,6 @@ static struct mac_policy_ops curtain_policy_ops = {
 
 	.mpo_mount_check_stat = curtain_mount_check_stat,
 
-	.mpo_vnode_walk_state = unveil_vnode_walk_state,
 	.mpo_vnode_walk_roll = unveil_vnode_walk_roll,
 	.mpo_vnode_walk_annotate_file = unveil_vnode_walk_annotate_file,
 	.mpo_vnode_walk_start_file = unveil_vnode_walk_start_file,
