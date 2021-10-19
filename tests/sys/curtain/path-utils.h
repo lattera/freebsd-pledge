@@ -37,7 +37,7 @@ static int __unused
 try_openat(int atfd, const char *path, int flags)
 {
 	int r, r2;
-	r = openat(atfd, path, flags);
+	r = openat(atfd, path ? path : "", (path ? 0 : O_EMPTY_PATH) | flags);
 	if (r >= 0)
 		close(r);
 	if (atfd == AT_FDCWD) {
@@ -59,7 +59,7 @@ try_statat(int atfd, const char *path)
 {
 	int r, r2;
 	struct stat st;
-	r = fstatat(atfd, path, &st, 0);
+	r = fstatat(atfd, path ? path : "", &st, path ? 0 : AT_EMPTY_PATH);
 	if (atfd == AT_FDCWD) {
 		r2 = try_stat(path);
 		ATF_CHECK_EQ(r, r2);
@@ -77,7 +77,8 @@ static int __unused
 try_accessat(int atfd, const char *path, int mode)
 {
 	int r, r2;
-	r = faccessat(atfd, path, mode, AT_EACCESS);
+	r = faccessat(atfd, path ? path : "", mode,
+	    (path ? 0 : AT_EMPTY_PATH) | AT_EACCESS);
 	if (atfd == AT_FDCWD) {
 		r2 = try_access(path, mode);
 		ATF_CHECK_EQ(r, r2);
@@ -111,7 +112,7 @@ check_accessat(int atfd, const char *path, const char *flags)
 		case '*': a =             true; break;
 		default: assert(0); break;
 		}
-	if (atfd == AT_FDCWD && strcmp(path, "/") == 0)
+	if (atfd == AT_FDCWD && path && strcmp(path, "/") == 0)
 		/*
 		 * This unveil() implementation always give some limited access
 		 * to the root directory (see comments in libcurtain), but the
@@ -125,7 +126,7 @@ check_accessat(int atfd, const char *path, const char *flags)
 		 */
 		s = i;
 
-	warnx("%s: %s %s", __FUNCTION__, path, flags);
+	warnx("%s: %i:\"%s\" %s", __FUNCTION__, atfd, path ? path : "", flags);
 
 	int expected_errno = a ? EPERM : e ? EACCES : ENOENT;
 
@@ -172,9 +173,11 @@ check_accessat(int atfd, const char *path, const char *flags)
 			ATF_CHECK(try_openat(atfd, path, O_WRONLY) >= 0);
 			if (r)
 				ATF_CHECK(try_openat(atfd, path, O_RDWR) >= 0);
-			ATF_CHECK(try_openat(atfd, path, O_WRONLY|O_CREAT) >= 0);
-			if (r)
-				ATF_CHECK(try_openat(atfd, path, O_RDWR|O_CREAT) >= 0);
+			if (path) {
+				ATF_CHECK(try_openat(atfd, path, O_WRONLY|O_CREAT) >= 0);
+				if (r)
+					ATF_CHECK(try_openat(atfd, path, O_RDWR|O_CREAT) >= 0);
+			}
 		}
 	} else if (!p) {
 		ATF_CHECK_ERRNO(expected_errno, try_accessat(atfd, path, W_OK) < 0);
@@ -192,6 +195,15 @@ check_accessat(int atfd, const char *path, const char *flags)
 		} else if (!p) {
 			ATF_CHECK_ERRNO(expected_errno, try_accessat(atfd, path, X_OK) < 0);
 			ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_EXEC) < 0);
+		}
+	}
+
+	if (e && path) {
+		int fd;
+		ATF_CHECK((fd = openat(atfd, path, O_PATH)) >= 0);
+		if (fd >= 0) {
+			check_accessat(fd, NULL, flags);
+			close(fd);
 		}
 	}
 }
