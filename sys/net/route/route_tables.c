@@ -156,14 +156,7 @@ sys_setfib(struct thread *td, struct setfib_args *uap)
 	int error = 0;
 
 #ifdef MAC
-	struct sockopt sopt;
-	sopt = (struct sockopt){
-		.sopt_dir = SOPT_SET,
-		.sopt_level = SOL_SOCKET,
-		.sopt_name = SO_SETFIB,
-	};
-	/* XXX should have a different hook for this check */
-	error = mac_socket_check_setsockopt(td->td_ucred, NULL, &sopt);
+	error = mac_net_check_fibnum(td->td_ucred, uap->fibnum);
 	if (error)
 		return (error);
 #endif

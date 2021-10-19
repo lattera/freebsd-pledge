@@ -214,6 +214,8 @@ typedef int	(*mpo_ifnet_internalize_label_t)(struct label *label,
 typedef void	(*mpo_ifnet_relabel_t)(struct ucred *cred, struct ifnet *ifp,
 		    struct label *ifplabel, struct label *newlabel);
 
+typedef int	(*mpo_net_check_fibnum_t)(struct ucred *cred, int fibnum);
+
 typedef int	(*mpo_inpcb_check_deliver_t)(struct inpcb *inp,
 		    struct label *inplabel, struct mbuf *m,
 		    struct label *mlabel);
@@ -778,6 +780,8 @@ struct mac_policy_ops {
 	mpo_ifnet_init_label_t			mpo_ifnet_init_label;
 	mpo_ifnet_internalize_label_t		mpo_ifnet_internalize_label;
 	mpo_ifnet_relabel_t			mpo_ifnet_relabel;
+
+	mpo_net_check_fibnum_t			mpo_net_check_fibnum;
 
 	mpo_inpcb_check_deliver_t		mpo_inpcb_check_deliver;
 	mpo_inpcb_check_visible_t		mpo_inpcb_check_visible;

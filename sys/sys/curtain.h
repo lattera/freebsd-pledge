@@ -13,7 +13,8 @@ enum curtainreq_type {
 	CURTAINTYP_SOCKOPT = 7,
 	CURTAINTYP_PRIV = 8,
 	CURTAINTYP_SYSCTL = 9,
-#define	CURTAINTYP_LAST 9 /* UPDATE ME!!! */
+	CURTAINTYP_FIBNUM = 10,
+#define	CURTAINTYP_LAST 10 /* UPDATE ME!!! */
 };
 
 enum curtainreq_level {
@@ -60,6 +61,7 @@ static const enum curtain_ability curtain_type_fallback[CURTAINTYP_LAST + 1] = {
 	[CURTAINTYP_SOCKOPT] = CURTAINABL_ANY_SOCKOPT,
 	[CURTAINTYP_PRIV] = CURTAINABL_ANY_PRIV,
 	[CURTAINTYP_SYSCTL] = CURTAINABL_ANY_SYSCTL,
+	[CURTAINTYP_FIBNUM] = CURTAINABL_ANY_FIBNUM,
 };
 
 #ifdef _KERNEL
@@ -110,6 +112,7 @@ struct curtain_item {
 		struct {
 			uint64_t serial;
 		} __packed sysctl;
+		int fibnum;
 	} key;
 };
 

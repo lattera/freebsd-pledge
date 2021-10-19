@@ -574,6 +574,22 @@ parse_socklvl(struct parser *par, struct word *w)
 }
 
 static void
+parse_fibnum(struct parser *par, struct word *w)
+{
+	while (w) {
+		long n;
+		char *end;
+		errno = 0;
+		n = strtol(w->ptr, &end, 0);
+		if (errno || *end)
+			parse_error(par, "invalid fibnum");
+		else if (par->apply)
+			curtain_fibnum(par->slot, n, par->directive_flags);
+		w = w->next;
+	}
+}
+
+static void
 parse_default(struct parser *par, struct word *w)
 {
 	if (w)
@@ -584,7 +600,7 @@ parse_default(struct parser *par, struct word *w)
 }
 
 static const struct {
-	const char name[16];
+	const char name[8];
 	void (*func)(struct parser *, struct word *);
 } directives[] = {
 	{ "merge",	parse_push	},
@@ -597,6 +613,7 @@ static const struct {
 	{ "ioctls",	parse_ioctls	},
 	{ "sockaf",	parse_sockaf	},
 	{ "socklvl",	parse_socklvl	},
+	{ "fibnum",	parse_fibnum	},
 	{ "default",	parse_default	},
 };
 

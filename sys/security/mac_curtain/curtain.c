@@ -557,6 +557,8 @@ curtain_key_hash(enum curtainreq_type type, union curtain_key key)
 		return (key.priv);
 	case CURTAINTYP_SYSCTL:
 		return (key.sysctl.serial);
+	case CURTAINTYP_FIBNUM:
+		return (key.fibnum);
 	}
 	MPASS(0);
 	return (-1);
@@ -582,6 +584,8 @@ curtain_key_same(enum curtainreq_type type,
 		return (key0.priv == key1.priv);
 	case CURTAINTYP_SYSCTL:
 		return (key0.sysctl.serial == key1.sysctl.serial);
+	case CURTAINTYP_FIBNUM:
+		return (key0.fibnum == key1.fibnum);
 	}
 	MPASS(0);
 	return (false);
@@ -1309,8 +1313,7 @@ curtain_fill(struct curtain *ct, size_t reqc, const struct curtainreq *reqv)
 		int *p = req->data;
 		size_t c = req->size / sizeof *p;
 		while (c--)
-			curtain_fill_item(ct, req,
-			    (ctkey){ .priv = *p++ });
+			curtain_fill_item(ct, req, (ctkey){ .priv = *p++ });
 	}
 
 	GROUP_FOREACH(CURTAINTYP_SYSCTL, req) {
@@ -1333,6 +1336,14 @@ curtain_fill(struct curtain *ct, size_t reqc, const struct curtainreq *reqv)
 			curtain_fill_item(ct, req,
 			    (ctkey){ .sysctl = { .serial = serial } });
 		}
+	}
+
+	GROUP_FOREACH(CURTAINTYP_FIBNUM, req) {
+		MPASS(req->type == CURTAINTYP_FIBNUM);
+		int *p = req->data;
+		size_t c = req->size / sizeof *p;
+		while (c--)
+			curtain_fill_item(ct, req, (ctkey){ .fibnum = *p++ });
 	}
 
 	GROUP_FOREACH(CURTAINTYP_UNVEIL, req) {
@@ -1663,6 +1674,9 @@ cred_key_failed(const struct ucred *cr, enum curtainreq_type type, union curtain
 #endif
 		noise = true;
 		break;
+	case CURTAINTYP_FIBNUM:
+		CURTAIN_CRED_LOG_ACTION(cr, act, "fibnum %d", key.fibnum);
+		break;
 	}
 	SDT_PROBE5(curtain,, cred_key_check, failed, cr, type, &key, act, noise);
 	cred_action_failed(cr, act, noise);
@@ -1903,6 +1917,13 @@ curtain_inpcb_check_visible(struct ucred *cr, struct inpcb *inp, struct label *i
 	if (!barrier_visible(CRED_SLOT_BR(cr), SLOT_BR(inplabel), BARRIER_SOCK))
 		return (ENOENT);
 	return (0);
+}
+
+
+static int
+curtain_net_check_fibnum(struct ucred *cr, int fibnum)
+{
+	return (cred_key_check(cr, CURTAINTYP_FIBNUM, (ctkey){ .fibnum = fibnum }));
 }
 
 
@@ -2971,6 +2992,8 @@ static struct mac_policy_ops curtain_policy_ops = {
 	.mpo_socket_check_getsockopt = curtain_socket_check_sockopt,
 	.mpo_socket_check_visible = curtain_socket_check_visible,
 	.mpo_inpcb_check_visible = curtain_inpcb_check_visible,
+
+	.mpo_net_check_fibnum = curtain_net_check_fibnum,
 
 	.mpo_vnode_check_access = curtain_vnode_check_open,
 	.mpo_vnode_check_open = curtain_vnode_check_open,

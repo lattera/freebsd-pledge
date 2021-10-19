@@ -500,3 +500,14 @@ mac_ifnet_ioctl_set(struct ucred *cred, struct ifreq *ifr, struct ifnet *ifp)
 	mac_ifnet_label_free(intlabel);
 	return (0);
 }
+
+int
+mac_net_check_fibnum(struct ucred *cred, int fibnum)
+{
+	int error;
+
+	MAC_POLICY_CHECK_NOSLEEP(net_check_fibnum, cred, fibnum);
+
+	return (error);
+}
+

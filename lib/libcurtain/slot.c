@@ -59,6 +59,7 @@ struct curtain_node {
 			size_t len;
 			const int *mib;
 		} sysctl;
+		int fibnum;
 		unveil_index unveil_idx;
 	} key;
 	/* scratch */
@@ -718,6 +719,48 @@ curtain_sysctl(struct curtain_slot *slot, const char *sysctl, int flags)
 }
 
 
+static int
+fibnum_key_cmp(const union curtain_key *key0, const union curtain_key *key1)
+{
+	return (CMP(key0->fibnum, key1->fibnum));
+}
+
+static size_t
+fibnum_ent_size(const union curtain_key *key __unused)
+{
+	return (sizeof (int));
+}
+
+static void *
+fibnum_ent_fill(void *dest,
+    const union curtain_key *key, struct curtain_mode mode __unused)
+{
+	int *fill = dest;
+	*fill++ = key->fibnum;
+	return (fill);
+}
+
+static struct curtain_type fibnums_type = {
+	.req_type = CURTAINTYP_FIBNUM,
+	.fallback = ability_fallback_helper,
+	.key_cmp = fibnum_key_cmp,
+	.ent_size = fibnum_ent_size,
+	.ent_fill = fibnum_ent_fill,
+	.mode = &level_mode_type,
+};
+
+int
+curtain_fibnum(struct curtain_slot *slot, int fibnum, int flags)
+{
+	struct curtain_item *item;
+	item = node_item_get(&fibnums_type, slot, KEY(.fibnum, fibnum), true);
+	if (!item)
+		return (-1);
+	item_set_flags_level(item, flags);
+	return (0);
+}
+
+
 static bool
 unveil_mode_is_null(struct curtain_mode m)
 { return (m.uperms == UPERM_NONE); }
@@ -982,6 +1025,7 @@ static struct curtain_type *const types[] = {
 	&sockopts_type,
 	&privs_type,
 	&sysctls_type,
+	&fibnums_type,
 	&unveils_type,
 };
 
