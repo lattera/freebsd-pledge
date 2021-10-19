@@ -27,6 +27,7 @@
 #define	UPERM_DELETE		(1 << 12)
 #define	UPERM_EXECUTE		(1 << 13)
 #define	UPERM_SETATTR		(1 << 14)
+#define	UPERM_APPEND		(1 << 15)
 #define	UPERM_BIND		(1 << 16)
 #define	UPERM_CONNECT		(1 << 17)
 #define	UPERM_UNIX		(UPERM_BIND | UPERM_CONNECT)
@@ -36,7 +37,7 @@
 #define	UPERM_ALL		(-1)
 
 static const unveil_perms uperms_inheritable =
-    UPERM_BROWSE | UPERM_READ | UPERM_WRITE | UPERM_CREATE | UPERM_DELETE |
+    UPERM_BROWSE | UPERM_READ | UPERM_APPEND | UPERM_WRITE | UPERM_CREATE | UPERM_DELETE |
     UPERM_EXECUTE | UPERM_SETATTR | UPERM_BIND | UPERM_CONNECT |
     UPERM_DEVFS;
 
@@ -50,6 +51,8 @@ uperms_expand(unveil_perms uperms)
 		uperms |= UPERM_SEARCH;
 	if (uperms & uperms_exposable)
 		uperms |= UPERM_EXPOSE;
+	if (uperms & UPERM_WRITE)
+		uperms |= UPERM_APPEND;
 	if (uperms & (UPERM_BROWSE | UPERM_READ))
 		uperms |= UPERM_STATUS | UPERM_BROWSE;
 	if (uperms & UPERM_SEARCH)

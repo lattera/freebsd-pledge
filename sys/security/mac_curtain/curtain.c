@@ -1965,7 +1965,8 @@ curtain_vnode_check_open(struct ucred *cr,
 		    (error = unveil_check_uperms(uperms, UPERM_BROWSE)))
 			return (error);
 		if (accmode & VWRITE &&
-		    (error = unveil_check_uperms(uperms, UPERM_WRITE)))
+		    (error = unveil_check_uperms(uperms,
+		    accmode & VAPPEND ? UPERM_APPEND : UPERM_WRITE)))
 			return (error);
 		if (accmode & VEXEC &&
 		    (error = unveil_check_uperms(uperms, UPERM_SEARCH)))
@@ -1977,7 +1978,8 @@ curtain_vnode_check_open(struct ucred *cr,
 			    (error = unveil_check_uperms(uperms, UPERM_READ)))
 				return (error);
 			if (accmode & VWRITE &&
-			    (error = unveil_check_uperms(uperms, UPERM_WRITE)))
+			    (error = unveil_check_uperms(uperms,
+			    accmode & VAPPEND ? UPERM_APPEND : UPERM_WRITE)))
 				return (error);
 		}
 		if (accmode & VEXEC &&
