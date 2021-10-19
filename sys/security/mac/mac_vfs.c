@@ -1147,11 +1147,11 @@ mac_vnode_walk_created(struct ucred *cred,
 }
 
 int
-mac_vnode_walk_final(struct ucred *cred, int error1)
+mac_vnode_walk_fixup_errno(struct ucred *cred, int error1)
 {
 	int error;
 
-	MAC_POLICY_CHECK(vnode_walk_final, cred, error1);
+	MAC_POLICY_CHECK(vnode_walk_fixup_errno, cred, error1);
 
 	return (error);
 }

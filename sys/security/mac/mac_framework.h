@@ -711,7 +711,7 @@ void	mac_vnode_walk_replace(struct ucred *cred,
 	    struct vnode *from_vp, struct vnode *to_vp);
 void	mac_vnode_walk_created(struct ucred *cred,
 	    struct vnode *dvp, struct vnode *vp);
-int	mac_vnode_walk_final(struct ucred *cred, int error);
+int	mac_vnode_walk_fixup_errno(struct ucred *cred, int error);
 
 void	mac_cred_trim(struct ucred *cred);
 

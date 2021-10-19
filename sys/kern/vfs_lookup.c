@@ -695,7 +695,8 @@ namei(struct nameidata *ndp)
 			NDVALIDATE(ndp);
 #ifdef MAC
 			if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE) {
-				error = mac_vnode_walk_final(cnp->cn_cred, error);
+				error = mac_vnode_walk_fixup_errno(
+				    cnp->cn_cred, error);
 				if (error != 0)
 					/*
 					 * The lookup() call was successful
@@ -798,7 +799,7 @@ out:
 	pwd_drop(pwd);
 #ifdef MAC
 	if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE)
-		error = mac_vnode_walk_final(cnp->cn_cred, error);
+		error = mac_vnode_walk_fixup_errno(cnp->cn_cred, error);
 #endif
 	return (error);
 }
