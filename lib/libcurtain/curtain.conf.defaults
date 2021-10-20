@@ -45,9 +45,8 @@ ability rlimit
 ability posixrt
 ability sched
 ability flock
-ability vfs_read vfs_write vfs_create vfs_delete
+ability vfs_read vfs_write vfs_create vfs_delete vfs_fifo
 ability fattr fmode_special
-ability mkfifo
 ability curtain
 
 merge _acl

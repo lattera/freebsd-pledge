@@ -1085,7 +1085,10 @@ static const int abilities_expand[][2] = {
 	{ CURTAINABL_VFS_DELETE,	CURTAINABL_VFS_MISC		},
 	{ CURTAINABL_FATTR,		CURTAINABL_VFS_MISC		},
 	{ CURTAINABL_PROT_EXEC,		CURTAINABL_PROT_EXEC_LOOSE	},
-	{ CURTAINABL_VFS_SOCK,		CURTAINABL_SOCK			},
+	{ CURTAINABL_VFS_SOCK,		CURTAINABL_VFS_BIND		},
+	{ CURTAINABL_VFS_SOCK,		CURTAINABL_VFS_CONNECT		},
+	{ CURTAINABL_VFS_BIND,		CURTAINABL_SOCK			},
+	{ CURTAINABL_VFS_CONNECT,	CURTAINABL_SOCK			},
 	{ CURTAINABL_NET,		CURTAINABL_NET_CLIENT		},
 	{ CURTAINABL_NET,		CURTAINABL_NET_SERVER		},
 	{ CURTAINABL_NET_CLIENT,	CURTAINABL_SOCK			},
@@ -2017,9 +2020,13 @@ curtain_vnode_check_open(struct ucred *cr,
 	}
 
 	if (vp->v_type == VSOCK) {
-		if ((error = cred_ability_check(cr, CURTAINABL_VFS_SOCK)))
+		if ((error = cred_ability_check(cr, CURTAINABL_VFS_CONNECT)))
 			return (error);
 	} else {
+		if (vp->v_type == VFIFO) {
+			if ((error = cred_ability_check(cr, CURTAINABL_VFS_FIFO)))
+				return (error);
+		}
 		if (accmode & VREAD && (error = cred_ability_check(cr, CURTAINABL_VFS_READ)))
 			return (error);
 		if (accmode & VWRITE && (error = cred_ability_check(cr, CURTAINABL_VFS_WRITE)))
@@ -2091,11 +2098,11 @@ curtain_vnode_check_create(struct ucred *cr,
 	}
 
 	if (vap->va_type == VSOCK) {
-		if ((error = cred_ability_check(cr, CURTAINABL_VFS_SOCK)))
+		if ((error = cred_ability_check(cr, CURTAINABL_VFS_BIND)))
 			return (error);
 	} else {
 		if (vap->va_type == VFIFO) {
-			if ((error = cred_ability_check(cr, CURTAINABL_MKFIFO)))
+			if ((error = cred_ability_check(cr, CURTAINABL_VFS_FIFO)))
 				return (error);
 		}
 		if ((error = cred_ability_check(cr, CURTAINABL_VFS_CREATE)))
@@ -2158,7 +2165,7 @@ curtain_vnode_check_unlink(struct ucred *cr,
 	}
 
 	if (vp->v_type == VSOCK) {
-		if ((error = cred_ability_check(cr, CURTAINABL_VFS_SOCK)))
+		if ((error = cred_ability_check(cr, CURTAINABL_VFS_BIND)))
 			return (error);
 	} else {
 		if ((error = cred_ability_check(cr, CURTAINABL_VFS_DELETE)))
