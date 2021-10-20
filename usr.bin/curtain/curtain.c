@@ -624,7 +624,7 @@ main(int argc, char *argv[])
 		signal(SIGINT, forward_signal);
 		signal(SIGQUIT, forward_signal);
 		signal(SIGTERM, forward_signal);
-		child_pid = vfork();
+		child_pid = pty_wrap ? fork() : vfork();
 		if (child_pid < 0)
 			err(EX_TEMPFAIL, "fork");
 		if ((do_exec = child_pid == 0)) {
