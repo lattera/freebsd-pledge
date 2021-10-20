@@ -341,16 +341,15 @@ static int
 ktls_buffer_import(void *arg, void **store, int count, int domain, int flags)
 {
 	vm_page_t m;
-	int i;
+	int i, req;
 
 	KASSERT((ktls_maxlen & PAGE_MASK) == 0,
 	    ("%s: ktls max length %d is not page size-aligned",
 	    __func__, ktls_maxlen));
 
+	req = VM_ALLOC_WIRED | VM_ALLOC_NODUMP | malloc2vm_flags(flags);
 	for (i = 0; i < count; i++) {
-		m = vm_page_alloc_contig_domain(NULL, 0, domain,
-		    VM_ALLOC_NORMAL | VM_ALLOC_NOOBJ | VM_ALLOC_WIRED |
-		    VM_ALLOC_NODUMP | malloc2vm_flags(flags),
+		m = vm_page_alloc_noobj_contig_domain(domain, req,
 		    atop(ktls_maxlen), 0, ~0ul, PAGE_SIZE, 0,
 		    VM_MEMATTR_DEFAULT);
 		if (m == NULL)
@@ -2101,12 +2100,8 @@ ktls_encrypt_record(struct ktls_wq *wq, struct mbuf *m,
 	} else {
 		off = m->m_epg_1st_off;
 		for (i = 0; i < m->m_epg_npgs; i++, off = 0) {
-			do {
-				pg = vm_page_alloc(NULL, 0, VM_ALLOC_NORMAL |
-				    VM_ALLOC_NOOBJ | VM_ALLOC_NODUMP |
-				    VM_ALLOC_WIRED | VM_ALLOC_WAITFAIL);
-			} while (pg == NULL);
-
+			pg = vm_page_alloc_noobj(VM_ALLOC_NODUMP |
+			    VM_ALLOC_WIRED | VM_ALLOC_WAITOK);
 			len = m_epg_pagelen(m, i, off);
 			state->parray[i] = VM_PAGE_TO_PHYS(pg);
 			state->dst_iov[i].iov_base =

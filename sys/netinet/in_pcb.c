@@ -87,6 +87,7 @@ __FBSDID("$FreeBSD$");
 #if defined(INET) || defined(INET6)
 #include <netinet/in.h>
 #include <netinet/in_pcb.h>
+#include <netinet/in_pcb_var.h>
 #ifdef INET
 #include <netinet/in_var.h>
 #include <netinet/in_fib.h>
@@ -1653,38 +1654,6 @@ in_pcbrele_wlocked(struct inpcb *inp)
 	pcbinfo = inp->inp_pcbinfo;
 	uma_zfree(pcbinfo->ipi_zone, inp);
 	return (1);
-}
-
-/*
- * Temporary wrapper.
- */
-int
-in_pcbrele(struct inpcb *inp)
-{
-
-	return (in_pcbrele_wlocked(inp));
-}
-
-void
-in_pcblist_rele_rlocked(epoch_context_t ctx)
-{
-	struct in_pcblist *il;
-	struct inpcb *inp;
-	struct inpcbinfo *pcbinfo;
-	int i, n;
-
-	il = __containerof(ctx, struct in_pcblist, il_epoch_ctx);
-	pcbinfo = il->il_pcbinfo;
-	n = il->il_count;
-	INP_INFO_WLOCK(pcbinfo);
-	for (i = 0; i < n; i++) {
-		inp = il->il_inp_list[i];
-		INP_RLOCK(inp);
-		if (!in_pcbrele_rlocked(inp))
-			INP_RUNLOCK(inp);
-	}
-	INP_INFO_WUNLOCK(pcbinfo);
-	free(il, M_TEMP);
 }
 
 static void

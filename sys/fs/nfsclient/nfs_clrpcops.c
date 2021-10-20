@@ -760,8 +760,9 @@ nfsrpc_close(vnode_t vp, int doclose, NFSPROC_T *p)
 /*
  * Close the open.
  */
-void
-nfsrpc_doclose(struct nfsmount *nmp, struct nfsclopen *op, NFSPROC_T *p)
+int
+nfsrpc_doclose(struct nfsmount *nmp, struct nfsclopen *op, NFSPROC_T *p,
+    bool loop_on_delayed, bool freeop)
 {
 	struct nfsrv_descript nfsd, *nd = &nfsd;
 	struct nfscllockowner *lp, *nlp;
@@ -840,7 +841,7 @@ nfsrpc_doclose(struct nfsmount *nmp, struct nfsclopen *op, NFSPROC_T *p)
 	nfscl_lockexcl(&op->nfso_own->nfsow_rwlock, NFSCLSTATEMUTEXPTR);
 	NFSUNLOCKCLSTATE();
 	do {
-		error = nfscl_tryclose(op, tcred, nmp, p, true);
+		error = nfscl_tryclose(op, tcred, nmp, p, loop_on_delayed);
 		if (error == NFSERR_GRACE)
 			(void) nfs_catnap(PZERO, error, "nfs_close");
 	} while (error == NFSERR_GRACE);
@@ -849,9 +850,11 @@ nfsrpc_doclose(struct nfsmount *nmp, struct nfsclopen *op, NFSPROC_T *p)
 
 	LIST_FOREACH_SAFE(lp, &op->nfso_lock, nfsl_list, nlp)
 		nfscl_freelockowner(lp, 0);
-	nfscl_freeopen(op, 0, true);
+	if (freeop && error != NFSERR_DELAY)
+		nfscl_freeopen(op, 0, true);
 	NFSUNLOCKCLSTATE();
 	NFSFREECRED(tcred);
+	return (error);
 }
 
 /*
@@ -8917,13 +8920,8 @@ nfsm_split(struct mbuf *mp, uint64_t xfer)
 	 * page.
 	 */
 	if (left < plen) {
-		do {
-			pg = vm_page_alloc(NULL, 0, VM_ALLOC_NORMAL |
-			    VM_ALLOC_NOOBJ | VM_ALLOC_NODUMP |
-			    VM_ALLOC_WIRED);
-			if (pg == NULL)
-				vm_wait(NULL);
-		} while (pg == NULL);
+		pg = vm_page_alloc_noobj(VM_ALLOC_WAITOK | VM_ALLOC_NODUMP |
+		    VM_ALLOC_WIRED);
 		m2->m_epg_pa[0] = VM_PAGE_TO_PHYS(pg);
 		m2->m_epg_npgs = 1;
 
