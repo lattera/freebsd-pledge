@@ -1073,7 +1073,7 @@ sys_semget(struct thread *td, struct semget_args *uap)
 		    sizeof(sema[semid].u.__sem_base[0])*nsems);
 #ifdef MAC
 		if (!sema[semid].label) /* deal with late loaded MAC modules */
-			mac_sysvsem_init(&sema[semid]);
+			mac_sysvsem_init(&sema[semid]); /* XXX locking is wrong */
 		mac_sysvsem_create(cred, &sema[semid]);
 #endif
 		mtx_unlock(&sema_mtx[semid]);

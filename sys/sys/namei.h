@@ -213,9 +213,8 @@ int	cache_fplookup(struct nameidata *ndp, enum cache_fpl_status *status,
  */
 #define	NI_LCF_STRICTRELATIVE	0x0001	/* relative lookup only */
 #define	NI_LCF_CAP_DOTDOT	0x0002	/* ".." in strictrelative case */
-#define	NI_LCF_UNVEIL_TRAVERSE	0x0020	/* do unveil checks */
-#define	NI_LCF_UNVEIL_REUSEFILL	0x0080	/* tracker entry already filled */
-#define	NI_LCF_UNVEIL_UNVEILING	0x0100	/* creating an unveil */
+#define	NI_LCF_MACWALK_ACTIVE	0x0010	/* calling vnode MAC walk functions */
+#define	NI_LCF_MACWALK_NOROLL	0x0020	/* don't need to roll tracker forward */
 
 /*
  * Initialization of a nameidata structure.

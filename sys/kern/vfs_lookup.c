@@ -327,12 +327,10 @@ namei_setup(struct nameidata *ndp, struct vnode **dpp, struct pwd **pwdp)
 	}
 #endif
 #ifdef MAC
-	if ((cnp->cn_flags & NOMACCHECK) == 0) {
-		if ((cnp->cn_flags & FORCEMACWALK) != 0)
-			ndp->ni_lcf |= NI_LCF_UNVEIL_TRAVERSE | NI_LCF_UNVEIL_UNVEILING;
-		else if (CRED_IN_LIMITED_VFS_VISIBILITY_MODE(cnp->cn_cred))
-			ndp->ni_lcf |= NI_LCF_UNVEIL_TRAVERSE;
-	}
+	if ((cnp->cn_flags & NOMACCHECK) == 0 &&
+	    ((cnp->cn_flags & FORCEMACWALK) != 0 ||
+	     CRED_IN_LIMITED_VFS_VISIBILITY_MODE(cnp->cn_cred)))
+		ndp->ni_lcf |= NI_LCF_MACWALK_ACTIVE;
 #endif
 
 	error = 0;
@@ -393,7 +391,7 @@ namei_setup(struct nameidata *ndp, struct vnode **dpp, struct pwd **pwdp)
 						cnp->cn_flags |= NOEXECCHECK;
 #ifdef MAC
 					/* Reuse fget_cap()'s tracker slot. */
-					ndp->ni_lcf |= NI_LCF_UNVEIL_REUSEFILL;
+					ndp->ni_lcf |= NI_LCF_MACWALK_NOROLL;
 #endif
 				}
 				fdrop(dfp, td);
@@ -667,8 +665,8 @@ namei(struct nameidata *ndp)
 	 * Locked lookup.
 	 */
 #ifdef MAC
-	if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE) {
-		if (!(ndp->ni_lcf & NI_LCF_UNVEIL_REUSEFILL))
+	if (ndp->ni_lcf & NI_LCF_MACWALK_ACTIVE) {
+		if (!(ndp->ni_lcf & NI_LCF_MACWALK_NOROLL))
 			mac_vnode_walk_roll(cnp->cn_cred, 1);
 		error = mac_vnode_walk_start(cnp->cn_cred, dp);
 		if (error != 0)
@@ -694,7 +692,7 @@ namei(struct nameidata *ndp)
 			pwd_drop(pwd);
 			NDVALIDATE(ndp);
 #ifdef MAC
-			if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE) {
+			if (ndp->ni_lcf & NI_LCF_MACWALK_ACTIVE) {
 				error = mac_vnode_walk_fixup_errno(
 				    cnp->cn_cred, error);
 				if (error != 0)
@@ -774,8 +772,8 @@ namei(struct nameidata *ndp)
 			if (error != 0)
 				goto out;
 #ifdef MAC
-			if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE) {
-				/* Absolute path, find new unveil cover. */
+			if (ndp->ni_lcf & NI_LCF_MACWALK_ACTIVE) {
+				/* Absolute path, restart walk. */
 				error = mac_vnode_walk_start(cnp->cn_cred, dp);
 				if (error != 0)
 					goto out;
@@ -783,7 +781,8 @@ namei(struct nameidata *ndp)
 #endif
 		} else {
 #ifdef MAC
-			if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE)
+			/* Resume walk from containing directory. */
+			if (ndp->ni_lcf & NI_LCF_MACWALK_ACTIVE)
 				mac_vnode_walk_backtrack(cnp->cn_cred, dp);
 #endif
 		}
@@ -798,7 +797,7 @@ out:
 	nameicap_cleanup(ndp);
 	pwd_drop(pwd);
 #ifdef MAC
-	if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE)
+	if (ndp->ni_lcf & NI_LCF_MACWALK_ACTIVE)
 		error = mac_vnode_walk_fixup_errno(cnp->cn_cred, error);
 #endif
 	return (error);
@@ -1127,7 +1126,7 @@ dirloop:
 			tdp = dp;
 			dp = dp->v_mount->mnt_vnodecovered;
 #ifdef MAC
-			if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE)
+			if (ndp->ni_lcf & NI_LCF_MACWALK_ACTIVE)
 				mac_vnode_walk_replace(cnp->cn_cred, tdp, dp);
 #endif
 			VREF(dp);
@@ -1196,7 +1195,7 @@ unionlookup:
 			tdp = dp;
 			dp = dp->v_mount->mnt_vnodecovered;
 #ifdef MAC
-			if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE)
+			if (ndp->ni_lcf & NI_LCF_MACWALK_ACTIVE)
 				mac_vnode_walk_replace(cnp->cn_cred, tdp, dp);
 #endif
 			VREF(dp);
@@ -1218,8 +1217,9 @@ unionlookup:
 
 		if (error != EJUSTRETURN
 #ifdef MAC
-		    && !(error == ENOENT && (cnp->cn_flags & ISLASTCN) &&
-			    ndp->ni_lcf & NI_LCF_UNVEIL_UNVEILING)
+		    && !(error == ENOENT &&
+		    (cnp->cn_flags & (ISLASTCN | FORCEMACWALK)) ==
+		    (ISLASTCN | FORCEMACWALK))
 #endif
 		    )
 			goto bad;
@@ -1240,7 +1240,7 @@ unionlookup:
 			goto bad;
 		}
 #ifdef MAC
-		if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE)
+		if (ndp->ni_lcf & NI_LCF_MACWALK_ACTIVE)
 			mac_vnode_walk_component(cnp->cn_cred, dp, cnp, NULL);
 #endif
 		if ((cnp->cn_flags & LOCKPARENT) == 0)
@@ -1291,7 +1291,7 @@ good:
 	}
 
 #ifdef MAC
-	if (ndp->ni_lcf & NI_LCF_UNVEIL_TRAVERSE)
+	if (ndp->ni_lcf & NI_LCF_MACWALK_ACTIVE)
 		mac_vnode_walk_component(cnp->cn_cred, ndp->ni_dvp, cnp, ndp->ni_vp);
 #endif
 
