@@ -55,6 +55,7 @@ merge _localbase
 
 merge _tty
 merge _proc
+merge _ps
 merge _unix
 merge _network
 merge _exec
@@ -123,6 +124,7 @@ ability fattr fmode_special
 
 [_proc]
 ability proc
+[_ps]
 ability ps
 
 [_rtld]
@@ -167,7 +169,12 @@ ability exec
 # NOTE: Some packages install executables in /usr/local/share.
 /usr/local/share/			: rx
 
-[_unix]
+[_sock]
+ability sock
+# XXX Socket options should be more restricted.
+socklvl socket
+
+[_unix : _sock]
 ability vfs_sock sendfd recvfd
 sockaf unix
 
@@ -193,6 +200,8 @@ ioctls cryptodev
 ~/.curtain.{conf,d/}			: r
 [curtain _localbase]
 /usr/local/etc/curtain.{conf,d/}	: r
+[curtain _tty]
+merge _pty
 
 [_separate_tmpdir]
 ${TMPDIR}/				: rwxu
@@ -202,6 +211,10 @@ ${TMPDIR:-/tmp}/			: t
 # Sharing TMPDIR is risky even with the "t" permission.  Block access to known
 # file names that might allow privilege escalation.
 ${TMPDIR:-/tmp}/krb5cc_%u		:
+
+[_shared_system_tmpdir]
+/tmp					: t
+/tmp/krb5cc_%u				:
 
 [_unsafe_system_tmpdir]
 /tmp/					: rwxu
@@ -222,7 +235,7 @@ ${TMPDIR:-/tmp}/krb5cc_%u		:
 ability net_client
 [_network_server : _network_base]
 ability net_server
-[_network_base]
+[_network_base : _sock]
 /etc/nsswitch.conf			: r
 /etc/resolv.conf			: r
 /etc/hosts				: r
@@ -233,7 +246,6 @@ ability net_server
 /etc/ssl/private/			:
 sockaf inet inet6
 # XXX Socket options should be more restricted.
-socklvl socket
 socklvl ip ipv6
 socklvl tcp udp
 sysctl net.routetable
@@ -257,13 +269,7 @@ ioctls bpf
 ioctls oss
 /dev/sndstat				: r
 /dev/dsp				: rm
+/dev/dsp{0,1,2,3}			: rm
 /dev/mixer				: rm
 sysctl hw.snd.default_unit
-
-
-[_shell]
-merge curtain
-
-[_session : _shell]
-merge _pty
 

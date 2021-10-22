@@ -556,13 +556,13 @@ main(int argc, char *argv[])
 	if (no_network)
 		curtain_config_tag_block(cfg, "_network");
 	if (new_sid)
-		curtain_config_tag_push(cfg, "_session");
+		curtain_config_tag_push(cfg, "_newsid");
 	if (run_shell)
 		curtain_config_tag_push(cfg, "_shell");
 	if (login_shell)
 		curtain_config_tag_push(cfg, "_login_shell");
 	if (new_pgrp)
-		curtain_config_tag_push(cfg, "_pgrp");
+		curtain_config_tag_push(cfg, "_newpgrp");
 
 	if (app_tag && argc) {
 		char *p;
