@@ -361,6 +361,8 @@ usage(void)
 	exit(EX_USAGE);
 }
 
+#define	DEFAULT_LEVEL 3
+
 int
 main(int argc, char *argv[])
 {
@@ -368,8 +370,9 @@ main(int argc, char *argv[])
 	int ch, r;
 	char *promises = NULL;
 	unsigned unsafety = 0;
-	unsigned level = 3;
-	bool autotag = false,
+	unsigned level = DEFAULT_LEVEL;
+	bool has_level = false,
+	     autotag = false,
 	     signaling = false,
 	     no_fork = false,
 	     run_shell = false,
@@ -406,6 +409,7 @@ main(int argc, char *argv[])
 		switch (ch) {
 		case '0' ... '9':
 			level = ch - '0';
+			has_level = true;
 			break;
 		case 'o': {
 			char *str, *tok;
@@ -539,7 +543,7 @@ main(int argc, char *argv[])
 	curtain_config_unsafety(cfg, unsafety);
 	curtain_config_tags_from_env(cfg, NULL);
 	curtain_config_tag_push(cfg, "_default");
-	{
+	if (has_level || !autotag) {
 		char name[] = "_levelX";
 		name[strlen(name) - 1] = '0' + level;
 		curtain_config_tag_push(cfg, name);

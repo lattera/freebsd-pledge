@@ -24,10 +24,10 @@ cmd_cat_body() {
 atf_test_case cmd_curtain_cat
 cmd_curtain_cat_body() {
 	local f="/etc/rc"
-	atf_check -s not-exit:0 -e not-empty -o empty curtain -a curtain -u "$f" cat "$f"
-	atf_check -s not-exit:0 -e not-empty -o empty curtain -a -u "$f" curtain cat "$f"
-	atf_check -s not-exit:0 -e not-empty -o empty curtain -a curtain cat "$f"
-	atf_check -s exit:0 -e empty -o file:"$f" curtain -a -u "$f" curtain -u "$f" cat "$f"
+	atf_check -s not-exit:0 -e not-empty -o empty curtain -t curtain curtain -u "$f" cat "$f"
+	atf_check -s not-exit:0 -e not-empty -o empty curtain -t curtain -u "$f" curtain cat "$f"
+	atf_check -s not-exit:0 -e not-empty -o empty curtain -t curtain curtain cat "$f"
+	atf_check -s exit:0 -e empty -o file:"$f" curtain -t curtain -u "$f" curtain -u "$f" cat "$f"
 }
 
 
@@ -56,10 +56,10 @@ cmd_execpledge_cat_body() {
 atf_test_case cmd_curtain_execpledge_cat
 cmd_curtain_execpledge_cat_body() {
 	local f="/etc/rc"
-	atf_check -s not-exit:0 -e not-empty -o empty curtain -a curtain -u "$f" execpledge -p 'stdio rpath' cat "$f"
-	atf_check -s not-exit:0 -e not-empty -o empty curtain -a -u "$f" curtain execpledge -p 'stdio rpath' cat "$f"
-	atf_check -s not-exit:0 -e not-empty -o empty curtain -a curtain execpledge -p 'stdio rpath' cat "$f"
-	atf_check -s exit:0 -e empty -o file:"$f" curtain -a -u "$f" curtain -u "$f" execpledge -p 'stdio rpath' cat "$f"
+	atf_check -s not-exit:0 -e not-empty -o empty curtain -t curtain curtain -u "$f" execpledge -p 'stdio rpath' cat "$f"
+	atf_check -s not-exit:0 -e not-empty -o empty curtain -t curtain -u "$f" curtain execpledge -p 'stdio rpath' cat "$f"
+	atf_check -s not-exit:0 -e not-empty -o empty curtain -t curtain curtain execpledge -p 'stdio rpath' cat "$f"
+	atf_check -s exit:0 -e empty -o file:"$f" curtain -t curtain -u "$f" curtain -u "$f" execpledge -p 'stdio rpath' cat "$f"
 }
 
 atf_test_case date_localtime # check if localtime(3) works
@@ -186,12 +186,12 @@ uncurtain_body() {
 atf_test_case unenforced_unveil
 unenforced_unveil_body() {
 	atf_check -o save:f echo test
-	atf_check -o file:f curtain -U -a curtain -u f cat f
-	atf_check -o file:f curtain -U -a curtain -u / cat f
-	atf_check -o file:f curtain -U -a curtain -U -a curtain -u f cat f
-	atf_check -o file:f curtain -U -a curtain -U -a curtain -u / cat f
-	atf_check -s not-exit:0 -o empty -e not-empty curtain -U -a curtain -a curtain -u f cat f
-	atf_check -s not-exit:0 -o empty -e not-empty curtain -U -a curtain -a curtain -u / cat f
+	atf_check -o file:f curtain -U -t curtain curtain -u f cat f
+	atf_check -o file:f curtain -U -t curtain curtain -u / cat f
+	atf_check -o file:f curtain -U -t curtain curtain -U -t curtain curtain -u f cat f
+	atf_check -o file:f curtain -U -t curtain curtain -U -t curtain curtain -u / cat f
+	atf_check -s not-exit:0 -o empty -e not-empty curtain -U -t curtain curtain -t curtain curtain -u f cat f
+	atf_check -s not-exit:0 -o empty -e not-empty curtain -U -t curtain curtain -t curtain curtain -u / cat f
 }
 
 atf_test_case extattrs

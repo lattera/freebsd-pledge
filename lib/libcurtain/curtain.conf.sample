@@ -84,6 +84,9 @@ ability! any_ioctl # XXX
 
 [sh, ksh, ksh93, mksh, oksh, dash, bash, zsh : _bourne]
 
+[_bourne]
+merge _basic
+
 [_shell _bourne]
 ${ENV}					: r
 
@@ -114,6 +117,9 @@ ${ZDOTDIR:-~/}/.zlogout			: r
 
 [csh, tcsh : _csh]
 
+[_csh]
+merge _basic
+
 [_shell _csh]
 /etc/csh.cshrc				: r
 ~/.{t,}cshrc				: r
@@ -135,12 +141,14 @@ merge _spwddb
 /usr/local/etc/pam.d/
 
 [su : _login]
+merge _basic
 ability id any_id
 ability audit
 ability! rsugid_exec
 merge _syslog
 
 [doas : _login]
+merge _basic
 ability id any_id
 ability! rsugid_exec
 merge _syslog
@@ -149,6 +157,7 @@ merge _syslog
 
 
 [vi : _editor]
+merge _basic
 ~/.{n,}exrc				: r
 /etc/vi.exrc				: r
 # recovery handling needs to be able to read the user database
@@ -156,32 +165,39 @@ merge! _pwddb
 unveil! /var/tmp/vi.recover/		: rw
 
 [git]
+merge _basic
 ~/.gitconfig				: r
 
 [ping, ping6]
+merge _basic
 ability id
 priv net_raw netinet_raw
 socklvl icmpv6
 
 [traceroute, traceroute6]
+merge _basic
 ability id
 priv net_raw netinet_raw
 sysctl net.inet.ip.ttl
 sysctl net.inet6.ip6.hlim
 
 [mtr]
+merge _basic
 ability id
 priv net_raw netinet_raw
 
 [tcpdump]
+merge _basic
 ability id
 merge _bpf
 
 [wireshark]
+merge _basic
 merge _bpf
 ~/.config/wireshark/			: rw +
 
 [emacs : _editor]
+merge _basic
 # NOTE: Sometimes crashes with untrusted X11.
 merge! _pwddb
 ~/.emacs.el				: rw
@@ -189,20 +205,24 @@ merge! _pwddb
 ~/.emacs.d/ ~/.config/emacs/		: rw +
 
 [abiword : _editor]
+merge _basic
 ~/.config/abiword/			: rw +
 
 [gimp : _editor]
+merge _basic
 ability sysvipc
 /usr/local/etc/gimp/			: r
 ~/.config/GIMP/				: rw +
 ~/.cache/gimp/				: rw +
 
 [inkscape : _editor]
+merge _basic
 ability posixipc
 ~/.cache/inkscape/			: rw +
 ~/.config/inkscape/			: rw +
 
 [libreoffice : _editor]
+merge _basic
 ability prot_exec
 merge! _pwddb
 # LibreOffice ignores $TMPDIR for some things.
@@ -210,48 +230,59 @@ merge!! _unsafe_system_tmpdir
 ~/.config/libreoffice/			: rw +
 
 [xpdf : _viewer]
+merge _basic
 /usr/local/etc/papersize		: r
 /usr/local/etc/xpdfrc			: r
 ~/.xpdfrc				: rw
 
 [gv : _viewer]
+merge _basic
 ~/.gv					: r
 
 [epdfview : _viewer]
+merge _basic
 ~/.config/epdfview/			: rw +
 
 [okular : _viewer]
+merge _basic
 ~/.config/okularrc			: rw +
 ~/.local/share/okular/			: rw +
 
 [geeqie : _viewer]
+merge _basic
 ~/.config/geeqie/			: rw +
 ~/.local/share/geeqie/			: rw +
 ~/.cache/geeqie/			: rw +
 
 [shotwell : _viewer]
+merge _basic
 # Has trouble saving its configs.
 ~/.shotwell/				: rw +
 ~/.local/share/shotwell/		: rw +
 ~/.cache/shotwell/			: rw +
 
 [gpicview : _viewer]
+merge _basic
 ~/.config/gpicview/			: rw +
 
 [sxiv : _viewer]
+merge _basic
 ~/.config/sxiv/				: rw +
 ~/.cache/sxiv/				: rw +
 
 [hexchat]
+merge _basic
 ~/.config/hexchat/			: rw +
 
 [pidgin]
+merge _basic
 ~/.purple/				: rw +
 
 [firefox : _browser]
 # NOTE: Sometimes crash due to X11 errors with -X.  Works better under -Y/-W.
 # Run with GDK_BACKEND=wayland for -W.  When giving it DRM access, it sometimes
 # doesn't activate until the second start.
+merge _basic
 ability posixipc prot_exec
 ~/.mozilla/firefox/			: rw +
 ~/.cache/mozilla/firefox/		: rw +
@@ -260,58 +291,71 @@ ability posixipc prot_exec
 # NOTE: When running chromium as an "untrusted" X11 client (curtain -X), the
 # setting "Use system title bar and borders" in the "Appearance" section must
 # be enabled.
+merge _basic
 ability posixipc prot_exec sendfile
 ~/.config/chromium/			: rw +
 ~/.cache/chromium/			: rw +
 
 [thunderbird]
+merge _basic
 ability posixipc prot_exec
 ~/.thunderbird/				: rw +
 ~/.cache/thunderbird/			: rw +
 
 [falkon : _browser]
+merge _basic
 ~/.config/falkon/			: rw +
 ability prot_exec
 ~/.cache/falkon/			: rw +
 
 [otter-browser : _browser]
+merge _basic
 ability prot_exec
 ~/.config/otter/			: rw +
 ~/.cache/Otter/				: rw +
 
 [qbittorrent : _p2p]
+merge _basic
 # NOTE: Best to disable the tray icon feature under -X.
 ~/.local/share/qBittorrent/		: rw +
 ~/.config/qBittorrent/			: rw +
 ~/.cache/qBittorrent/			: rw +
 
 [deluge : _p2p]
+merge _basic
 # XXX needs dbus
 ~/.config/deluge/			: rw +
 
 [audacious : _player]
+merge _basic
 ~/.config/audacious/			: rw +
 
 [mpv : _player]
+merge _basic
 ~/.mpv/					: rw +
 ~/.config/mpv/				: rw +
 
 [mplayer : _player]
+merge _basic
 ~/.mplayer/				: rw +
 
 [vlc : _player]
+merge _basic
 ability sysvipc
 ability prot_exec
 ~/.config/vlc/				: rw +
 ~/.local/share/vlc/			: rw +
 
 [xterm : _terminal]
+merge _basic
 # Dies with an X11 error when trying to select text under -X.
 ability id
 
 [urxvt : _terminal]
+merge _basic
 
 [st : _terminal]
+merge _basic
 merge! _pwddb
 
 
@@ -360,6 +404,7 @@ merge _pwddb
 # binaries and periodic scripts also should be run under curtain or disabled.
 
 [sendmail : _daemon]
+merge _basic
 merge _login
 merge _syslog
 merge _shared_tmpdir # mail.local(8) uses /tmp directly
@@ -372,6 +417,7 @@ ability id any_id chown
 #~user/.forward
 
 [exim : _daemon]
+merge _basic
 merge _login
 merge _syslog
 ability id any_id chown
@@ -385,6 +431,7 @@ ability id any_id chown
 #~user/.forward
 
 [ftpd : _daemon]
+merge _basic
 merge _login
 merge _syslog
 ability id any_id chown
@@ -400,6 +447,7 @@ ability id any_id chown
 #~user/ : rw
 
 [samba : _daemon]
+merge _basic
 # NOTE: Needs `curtain -f`, will access the TMPDIR under different UIDs.
 merge _login
 merge _syslog
