@@ -362,6 +362,7 @@ usage(void)
 }
 
 #define	DEFAULT_LEVEL 3
+#define	APP_TAG_LEVEL 1 /* usually lets the application print an error message */
 
 int
 main(int argc, char *argv[])
@@ -372,7 +373,7 @@ main(int argc, char *argv[])
 	unsigned unsafety = 0;
 	unsigned level = DEFAULT_LEVEL;
 	bool has_level = false,
-	     autotag = false,
+	     app_tag = false,
 	     signaling = false,
 	     no_fork = false,
 	     run_shell = false,
@@ -441,10 +442,10 @@ main(int argc, char *argv[])
 			no_network = true;
 			break;
 		case 'a':
-			autotag = true;
+			app_tag = true;
 			break;
 		case 'A':
-			autotag = true;
+			app_tag = true;
 			/* FALLTHROUGH */
 		case '!':
 			unsafety++;
@@ -543,7 +544,9 @@ main(int argc, char *argv[])
 	curtain_config_unsafety(cfg, unsafety);
 	curtain_config_tags_from_env(cfg, NULL);
 	curtain_config_tag_push(cfg, "_default");
-	if (has_level || !autotag) {
+	if (!has_level && app_tag)
+		level = APP_TAG_LEVEL;
+	{
 		char name[] = "_levelX";
 		name[strlen(name) - 1] = '0' + level;
 		curtain_config_tag_push(cfg, name);
@@ -561,7 +564,7 @@ main(int argc, char *argv[])
 	if (new_pgrp)
 		curtain_config_tag_push(cfg, "_pgrp");
 
-	if (autotag && argc) {
+	if (app_tag && argc) {
 		char *p;
 		if ((p = strrchr(argv[0], '/')))
 			p = p + 1;
