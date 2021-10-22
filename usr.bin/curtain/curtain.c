@@ -354,7 +354,7 @@ interrupt_signal(int sig __unused)
 static void
 usage(void)
 {
-	fprintf(stderr, "usage: %s [-vfkgneaAXYW] "
+	fprintf(stderr, "usage: %s [-vfknaAXYW] "
 	    "[-t tag] [-p promises] [-u unveil ...] "
 	    "[-Ssl] [name=value ...] cmd [arg ...]\n",
 	    getprogname());
@@ -368,8 +368,8 @@ main(int argc, char *argv[])
 	int ch, r;
 	char *promises = NULL;
 	unsigned unsafety = 0;
-	bool extra = false,
-	     autotag = false,
+	unsigned level = 3;
+	bool autotag = false,
 	     signaling = false,
 	     no_fork = false,
 	     run_shell = false,
@@ -402,8 +402,11 @@ main(int argc, char *argv[])
 	curtain_enable((main_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 	curtain_enable((args_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 
-	while ((ch = getopt(argc, argv, "@:d:vfkneaA!o:t:p:u:0:TRSslUXYW")) != -1)
+	while ((ch = getopt(argc, argv, "0123456789@:d:vfknaA!o:t:p:u:0:TRSslUXYW")) != -1)
 		switch (ch) {
+		case '0' ... '9':
+			level = ch - '0';
+			break;
 		case 'o': {
 			char *str, *tok;
 			str = optarg;
@@ -432,9 +435,6 @@ main(int argc, char *argv[])
 			break;
 		case 'n':
 			no_network = true;
-			break;
-		case 'e':
-			extra = true;
 			break;
 		case 'a':
 			autotag = true;
@@ -494,9 +494,6 @@ main(int argc, char *argv[])
 				warn("%s", path);
 			break;
 		}
-		case '0':
-			  cmd_arg0 = optarg;
-			  break;
 		case 'T':
 			  new_sid = false;
 			  pty_wrap = false;
@@ -542,11 +539,13 @@ main(int argc, char *argv[])
 	curtain_config_unsafety(cfg, unsafety);
 	curtain_config_tags_from_env(cfg, NULL);
 	curtain_config_tag_push(cfg, "_default");
-	curtain_config_tag_push(cfg, "_basic");
+	{
+		char name[] = "_levelX";
+		name[strlen(name) - 1] = '0' + level;
+		curtain_config_tag_push(cfg, name);
+	}
 	if (!signaling)
 		curtain_default(main_slot, CURTAIN_DENY);
-	if (extra)
-		curtain_config_tag_push(cfg, "_extra");
 	if (no_network)
 		curtain_config_tag_block(cfg, "_network");
 	if (new_sid)

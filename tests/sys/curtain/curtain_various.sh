@@ -235,18 +235,18 @@ atf_test_case chflags
 chflags_body() {
 	atf_check touch f
 	chflags uchg f || atf_skip "chflags not supported?"
-	atf_check -s not-exit:0 -e not-empty curtain -u f:rw chflags 0 f
-	atf_check -s not-exit:0 -e not-empty curtain -d ability:chflags -u f:r chflags 0 f
-	atf_check curtain -d ability:chflags -u f:rw chflags 0 f
+	atf_check -s not-exit:0 -e not-empty curtain -2 -u f:rw chflags 0 f
+	atf_check -s not-exit:0 -e not-empty curtain -2 -d ability:chflags -u f:r chflags 0 f
+	atf_check curtain -2 -d ability:chflags -u f:rw chflags 0 f
 }
 
 atf_test_case chflags_system
 chflags_system_body() {
 	atf_check touch f
 	chflags schg f || atf_skip "modifying system flags already disabled"
-	atf_check -s not-exit:0 -e not-empty curtain -u f:rw chflags 0 f
-	atf_check -s not-exit:0 -e not-empty curtain -d ability:chflags -d ability:sysflags -u f:r chflags 0 f
-	atf_check curtain -d ability:chflags -d ability:sysflags -u f:rw chflags 0 f
+	atf_check -s not-exit:0 -e not-empty curtain -2 -u f:rw chflags 0 f
+	atf_check -s not-exit:0 -e not-empty curtain -2 -d ability:chflags -d ability:sysflags -u f:r chflags 0 f
+	atf_check curtain -2 -d ability:chflags -d ability:sysflags -u f:rw chflags 0 f
 }
 
 atf_init_test_cases() {

@@ -38,62 +38,92 @@
 
 ability stdio
 
-[_basic : _stdio] # enabled by default by curtain(1)
+[_crude : _stdio]
 
 ability thread
 ability rlimit
 ability posixrt
 ability sched
-ability flock
-ability vfs_read vfs_write vfs_create vfs_delete vfs_fifo
-ability fattr fmode_special
 ability curtain
 
-merge _acl
+merge _vfs
+merge _libs
+merge _share
+merge _localbase
+
+[_basic : _crude] # base for many application profiles
+
 merge _tty
 merge _proc
 merge _unix
 merge _network
-merge _localbase
-merge _share
-merge _libs
 merge _exec
 merge _cmds
 
-[_extra : _basic]
-# Lots of permissions that ought to be safe even for root processes (with
-# proper unveils).
 
-ability prot_exec
-ability sysvipc
-ability posixipc
-ability mlock
+# Permission tower used by curtain(1)'s -0 to -9 options.
+
+[_level0]
+
+[_level1 : _level0]
+merge _crude
+
+[_level2 : _level1]
+merge _basic
+
+[_level3 : _level2] # curtain(1)'s default
 ability acl
 ability mac
 ability extattr
-ability aio
-ability sendfile
-ability reap
-ability rfork
-ability chroot
-ability chown
-ability id any_id
-
+ability chflags
 # May allow privilege escalations if untrusted processes have access to paths
 # writable by the sandboxed process.
 ability! fsugid # chmod ug+s
 
-merge _fflags
+[_level4 : _level3]
+ability sysvipc
+ability posixipc
+ability mlock
+ability aio
+ability sendfile
+ability id
 merge _pty
 merge _cryptodev
+
+[_level5 : _level4]
+ability chroot
+ability chown
+ability any_id
+ability! sysflags
+
+[_level6 : _level5]
+ability prot_exec
+
+[_level7 : _level6]
+ability reap
+ability rfork
+ability cpuset
+# NOTE: Privileges to manipulate modules are still denied, this is for programs
+# that need to inspect what modules are loaded.
+ability kmod
+
+[_level8 : _level7]
+ability debug
+
+[_level9 : _level8]
+merge _pwddb
+ability any_ioctl
+ability any_sysctl
+
+
+[_vfs]
+ability vfs_read vfs_write vfs_create vfs_delete vfs_fifo
+ability flock
+ability fattr fmode_special
 
 [_proc]
 ability proc
 ability ps
-
-[_fflags]
-ability chflags
-ability! sysflags
 
 [_rtld]
 /etc/libmap.conf			: r
@@ -136,15 +166,6 @@ ability exec
 /usr/local/man/				: r
 # NOTE: Some packages install executables in /usr/local/share.
 /usr/local/share/			: rx
-
-[_shell]
-merge curtain
-
-[_session : _shell]
-merge _pty
-
-[_acl]
-ability acl
 
 [_unix]
 ability vfs_sock sendfd recvfd
@@ -238,4 +259,11 @@ ioctls oss
 /dev/dsp				: rm
 /dev/mixer				: rm
 sysctl hw.snd.default_unit
+
+
+[_shell]
+merge curtain
+
+[_session : _shell]
+merge _pty
 
