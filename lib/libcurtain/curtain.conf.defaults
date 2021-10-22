@@ -90,6 +90,7 @@ ability sendfile
 ability id
 merge _pty
 merge _cryptodev
+merge _fdpass
 
 [_level5 : _level4]
 ability chroot
@@ -175,8 +176,11 @@ ability sock
 socklvl socket
 
 [_unix : _sock]
-ability vfs_sock sendfd recvfd
+ability vfs_sock
 sockaf unix
+
+[_fdpass : _unix]
+ability sendfd recvfd
 
 [_tty]
 /dev/tty				: rma

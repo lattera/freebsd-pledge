@@ -54,8 +54,12 @@ merge _audio
 
 [_terminal]
 merge _pty
-merge _session
 
+
+[_x11]
+merge _sock
+ability vfs_connect
+sockaf unix
 
 [_x11_trusted]
 ability-gate sysvipc # MIT-SHM
@@ -80,6 +84,14 @@ ability! any_ioctl # XXX
 [_drm_render]
 # Needs platform-dependent ioctls from libdrm.
 # See /usr/share/examples/curtain/make-drm-render-conf.c
+
+[_xdg]
+~/.config/user-dirs.{dirs,locale}
+
+[_gtk]
+merge _xdg
+# Seems like GTK-2 also will use this file.
+~/.config/gtk-3.0/bookmarks
 
 
 [_shell]
@@ -160,7 +172,7 @@ merge _syslog
 
 
 [vi : _editor]
-merge _basic
+merge _crude _tty
 ~/.{n,}exrc				: r
 /etc/vi.exrc				: r
 # recovery handling needs to be able to read the user database
@@ -195,7 +207,7 @@ ability id
 merge _bpf
 
 [wireshark]
-merge _basic
+merge _basic _gtk
 merge _bpf
 ~/.config/wireshark/			: rw +
 
@@ -206,26 +218,29 @@ merge! _pwddb
 ~/.emacs.el				: rw
 ~/.emacs				: rw
 ~/.emacs.d/ ~/.config/emacs/		: rw +
+[emacs _gui]
+merge _gtk
 
 [abiword : _editor]
-merge _basic
+merge _crude _gtk
 ~/.config/abiword/			: rw +
 
 [gimp : _editor]
-merge _basic
+merge _crude _proc _cmds _gtk
 ability sysvipc
 /usr/local/etc/gimp/			: r
 ~/.config/GIMP/				: rw +
 ~/.cache/gimp/				: rw +
 
 [inkscape : _editor]
-merge _basic
+merge _crude _gtk
 ability posixipc
 ~/.cache/inkscape/			: rw +
 ~/.config/inkscape/			: rw +
+/usr/local/bin/inkscape			: i
 
 [libreoffice : _editor]
-merge _basic
+merge _basic _acl _xdg
 ability prot_exec
 merge! _pwddb
 # LibreOffice ignores $TMPDIR for some things.
@@ -233,26 +248,27 @@ merge!! _unsafe_system_tmpdir
 ~/.config/libreoffice/			: rw +
 
 [xpdf : _viewer]
-merge _basic
+merge _crude _xdg
 /usr/local/etc/papersize		: r
 /usr/local/etc/xpdfrc			: r
 ~/.xpdfrc				: rw
 
 [gv : _viewer]
-merge _basic
+merge _crude _proc _cmds
+merge! _shared_system_tmpdir
 ~/.gv					: r
 
 [epdfview : _viewer]
-merge _basic
+merge _crude _gtk
 ~/.config/epdfview/			: rw +
 
 [okular : _viewer]
-merge _basic
+merge _crude _xdg
 ~/.config/okularrc			: rw +
 ~/.local/share/okular/			: rw +
 
 [geeqie : _viewer]
-merge _basic
+merge _crude _proc _ps _cmds _gtk
 ~/.config/geeqie/			: rw +
 ~/.local/share/geeqie/			: rw +
 ~/.cache/geeqie/			: rw +
@@ -285,7 +301,7 @@ merge _basic
 # NOTE: Sometimes crash due to X11 errors with -X.  Works better under -Y/-W.
 # Run with GDK_BACKEND=wayland for -W.  When giving it DRM access, it sometimes
 # doesn't activate until the second start.
-merge _basic
+merge _basic _fdpass _gtk
 ability posixipc prot_exec
 ~/.mozilla/firefox/			: rw +
 ~/.cache/mozilla/firefox/		: rw +
@@ -294,31 +310,35 @@ ability posixipc prot_exec
 # NOTE: When running chromium as an "untrusted" X11 client (curtain -X), the
 # setting "Use system title bar and borders" in the "Appearance" section must
 # be enabled.
-merge _basic
+merge _basic _fdpass _gtk
 ability posixipc prot_exec sendfile
 ~/.config/chromium/			: rw +
 ~/.cache/chromium/			: rw +
 
 [thunderbird]
-merge _basic
+merge _basic _fdpass _gtk
 ability posixipc prot_exec
 ~/.thunderbird/				: rw +
 ~/.cache/thunderbird/			: rw +
 
-[falkon : _browser]
-merge _basic
-~/.config/falkon/			: rw +
+[_webkit]
+merge _fdpass
 ability prot_exec
+
+[falkon : _browser]
+merge _basic _xdg
+merge _webkit
+~/.config/falkon/			: rw +
 ~/.cache/falkon/			: rw +
 
 [otter-browser : _browser]
-merge _basic
-ability prot_exec
+merge _basic _xdg
+merge _webkit
 ~/.config/otter/			: rw +
 ~/.cache/Otter/				: rw +
 
 [qbittorrent : _p2p]
-merge _basic
+merge _crude _unix _ps _network _xdg
 # NOTE: Best to disable the tray icon feature under -X.
 ~/.local/share/qBittorrent/		: rw +
 ~/.config/qBittorrent/			: rw +
@@ -330,7 +350,7 @@ merge _basic
 ~/.config/deluge/			: rw +
 
 [audacious : _player]
-merge _basic
+merge _crude _ps _xdg
 ~/.config/audacious/			: rw +
 
 [mpv : _player]
@@ -343,22 +363,22 @@ merge _basic
 ~/.mplayer/				: rw +
 
 [vlc : _player]
-merge _basic
+merge _basic _xdg
 ability sysvipc
 ability prot_exec
 ~/.config/vlc/				: rw +
 ~/.local/share/vlc/			: rw +
 
 [xterm : _terminal]
-merge _basic
 # Dies with an X11 error when trying to select text under -X.
+merge _crude _proc _cmds
 ability id
 
 [urxvt : _terminal]
-merge _basic
+merge _crude _proc _cmds
 
 [st : _terminal]
-merge _basic
+merge _crude _proc _cmds
 merge! _pwddb
 
 
@@ -423,6 +443,7 @@ ability id any_id chown
 merge _basic
 merge _login
 merge _syslog
+merge _fdpass
 ability id any_id chown
 /etc/aliases
 /usr/local/etc/exim/
@@ -454,6 +475,7 @@ merge _basic
 # NOTE: Needs `curtain -f`, will access the TMPDIR under different UIDs.
 merge _login
 merge _syslog
+merge _fdpass
 ability id any_id chown
 ability extattr acl quota
 sysctl kern.corefile
