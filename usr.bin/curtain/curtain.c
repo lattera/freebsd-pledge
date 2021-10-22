@@ -6,6 +6,7 @@
 #include <libutil.h>
 #include <limits.h>
 #include <locale.h>
+#include <login_cap.h>
 #include <paths.h>
 #include <pledge.h>
 #include <poll.h>
@@ -26,6 +27,37 @@
 #include <unistd.h>
 #include <vis.h>
 
+static char *
+estrdup(const char *src)
+{
+	char *dst;
+	dst = strdup(src);
+	if (!dst)
+		err(EX_TEMPFAIL, "strdup");
+	return (dst);
+}
+
+static int
+esetenv(const char *name, const char *value, int overwrite)
+{
+	int r;
+	r = setenv(name, value, overwrite);
+	if (r < 0)
+		err(EX_OSERR, "setenv");
+	return (r);
+}
+
+static int
+eputenv(char *string)
+{
+	int r;
+	r = putenv(string);
+	if (r < 0)
+		err(EX_OSERR, "putenv");
+	return (r);
+}
+
+
 static struct termios tty_saved_termios;
 static bool tty_made_raw;
 static int pty_outer_read_fd, pty_outer_write_fd, pty_outer_ioctl_fd;
@@ -324,7 +356,7 @@ usage(void)
 {
 	fprintf(stderr, "usage: %s [-vfkgneaAXYW] "
 	    "[-t tag] [-p promises] [-u unveil ...] "
-	    "[-Ssl] cmd [arg ...]\n",
+	    "[-Ssl] [name=value ...] cmd [arg ...]\n",
 	    getprogname());
 	exit(EX_USAGE);
 }
@@ -340,12 +372,12 @@ main(int argc, char *argv[])
 	     autotag = false,
 	     signaling = false,
 	     no_fork = false,
-	     want_fork = false,
 	     run_shell = false,
 	     login_shell = false,
 	     pty_wrap = true,
 	     pty_wrap_partial = true,
 	     pty_wrap_filter = true,
+	     clean_env = false,
 	     new_sid = true,
 	     new_pgrp = false,
 	     no_network = false,
@@ -357,6 +389,7 @@ main(int argc, char *argv[])
 	size_t abspath_len = 0;
 	struct curtain_config *cfg;
 	struct curtain_slot *main_slot, *args_slot;
+	struct passwd *pw;
 	bool do_exec;
 	int status;
 
@@ -472,19 +505,16 @@ main(int argc, char *argv[])
 		case 'R':
 			  pty_wrap_filter = false;
 			  break;
+		case 'l':
+			  login_shell = true;
+			  /* FALLTHROUGH */
 		case 'S':
-			  want_fork = true;
+			  clean_env = true;
 			  new_sid = true;
 			  pty_wrap = true;
 			  pty_wrap_partial = false;
-			  run_shell = true;
-			  break;
+			  /* FALLTHROUGH */
 		case 's':
-			  run_shell = true;
-			  break;
-		case 'l':
-			  /* TODO: reset env? */
-			  login_shell = true;
 			  run_shell = true;
 			  break;
 		case 'f':
@@ -507,31 +537,6 @@ main(int argc, char *argv[])
 		}
 	argv += optind;
 	argc -= optind;
-
-	if (argc == 0) {
-		char *shell;
-		if (!run_shell)
-			usage();
-		shell = getenv("SHELL");
-		if (!shell) {
-			struct passwd *pw;
-			errno = 0;
-			pw = getpwuid(getuid());
-			if (pw) {
-				if (pw->pw_shell && *pw->pw_shell)
-					shell = pw->pw_shell;
-			} else if (errno)
-				err(EX_OSERR, "getpwuid");
-			shell = strdup(shell ? shell : _PATH_BSHELL);
-			if (!shell)
-				err(EX_TEMPFAIL, "strdup");
-			endpwent();
-		}
-		sh_argv[0] = shell;
-		sh_argv[1] = NULL;
-		argv = sh_argv;
-		argc = 1;
-	}
 
 
 	curtain_config_unsafety(cfg, unsafety);
@@ -594,6 +599,99 @@ main(int argc, char *argv[])
 	}
 
 
+	pw = NULL;
+
+	if (clean_env) {
+		const char *set_home = NULL, *set_shell = NULL,
+		      *set_user = NULL, *set_logname = NULL,
+		      *set_term = NULL,
+		      *set_display = NULL, *set_xauthority = NULL,
+		      *set_wdisplay = NULL;
+		static char *null_env[] = { NULL };
+		extern char **environ;
+
+		if (!pw) {
+			errno = 0;
+			pw = getpwuid(getuid());
+			if (!pw && errno)
+				err(EX_OSERR, "getpwuid");
+		}
+
+		if (login_shell) {
+			set_home = pw ? pw->pw_dir : "/";
+			set_shell = pw && pw->pw_shell && *pw->pw_shell ?
+			    pw->pw_shell : _PATH_BSHELL;
+			if (pw->pw_name)
+				set_user = set_logname = pw->pw_name;
+		} else {
+			set_home = getenv("HOME");
+			set_shell = getenv("SHELL");
+			set_user = getenv("USER");
+			set_logname = getenv("LOGNAME");
+		}
+		set_term = getenv("TERM");
+		if (x11_mode != X11_NONE) {
+			set_display = getenv("DISPLAY");
+			set_xauthority = getenv("XAUTHORITY");
+		}
+		if (wayland) {
+			set_wdisplay = getenv("WAYLAND_DISPLAY");
+		}
+
+		environ = null_env;
+		r = setusercontext(NULL, pw, pw->pw_uid, LOGIN_SETENV | LOGIN_SETPATH);
+		if (r < 0)
+			err(EX_OSERR, "setusercontext()");
+
+		if (set_home)
+			esetenv("HOME", set_home, 1);
+		if (set_shell)
+			esetenv("SHELL", set_shell, 1);
+		if (set_user)
+			esetenv("USER", set_user, 1);
+		if (set_logname)
+			esetenv("LOGNAME", set_logname, 1);
+		if (set_term)
+			esetenv("TERM", set_term, 1);
+		if (set_display)
+			esetenv("DISPLAY", set_display, 1);
+		if (set_xauthority)
+			esetenv("XAUTHORITY", set_xauthority, 1);
+		if (set_wdisplay)
+			esetenv("WAYLAND_DISPLAY", set_wdisplay, 1);
+	}
+
+	while (argc && strchr(*argv, '=')) {
+		eputenv(*argv);
+		argc--, argv++;
+	}
+
+	/*
+	 * WARNING: HOME may be untrusted past this point!
+	 */
+
+	if (!argc) {
+		char *shell;
+		if (!run_shell)
+			usage();
+		shell = getenv("SHELL");
+		if (!shell) {
+			if (!pw) {
+				errno = 0;
+				pw = getpwuid(getuid());
+				if (!pw && errno)
+					err(EX_OSERR, "getpwuid");
+			}
+			if (pw && pw->pw_shell && *pw->pw_shell)
+				shell = pw->pw_shell;
+			shell = estrdup(shell ? shell : _PATH_BSHELL);
+		}
+		sh_argv[0] = shell;
+		sh_argv[1] = NULL;
+		argv = sh_argv;
+		argc = 1;
+	}
+
 	if (login_shell) { /* prefix arg0 with "-" */
 		char *p, *q;
 		q = (p = strrchr(argv[0], '/')) ? p + 1 : argv[0];
@@ -605,8 +703,9 @@ main(int argc, char *argv[])
 		cmd_arg0 = p;
 	}
 
-	if (want_fork && no_fork)
-		errx(EX_USAGE, "requested options incompatible with -f");
+	endpwent();
+	pw = NULL;
+
 
 	if (!(do_exec = no_fork)) {
 		if (pty_wrap) {
@@ -614,9 +713,7 @@ main(int argc, char *argv[])
 			if (!pty_wrap) { /* NOTE: new_sid might still be set */
 				unsetenv("TERM");
 			} else if (pty_wrap_filter) {
-				r = setenv("TERM", "dumb", 1);
-				if (r < 0)
-					warn("setenv");
+				esetenv("TERM", "dumb", 1);
 			}
 		}
 		child_pid = 0;
