@@ -704,6 +704,13 @@ mac_error_select(int error1, int error2)
 	if (error1 == EDEADLK || error2 == EDEADLK)
 		return (EDEADLK);
 
+	/* Precedence for errors that should send signals. */
+	if (error1 == ESYSFILKILL || error2 == ESYSFILKILL)
+		return (ESYSFILKILL);
+
+	if (error1 == ESYSFILTRAP || error2 == ESYSFILTRAP)
+		return (ESYSFILTRAP);
+
 	/* Invalid arguments should be reported where possible. */
 	if (error1 == EINVAL || error2 == EINVAL)
 		return (EINVAL);
