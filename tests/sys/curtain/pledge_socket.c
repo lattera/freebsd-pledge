@@ -199,6 +199,19 @@ ATF_TC_BODY(pass_fd_same_proc, tc)
 	ATF_CHECK(close(fd1) >= 0);
 }
 
+ATF_TC_WITHOUT_HEAD(pass_fd_dir_deny);
+ATF_TC_BODY(pass_fd_dir_deny, tc)
+{
+	int sock_fds[2], fd;
+	ATF_REQUIRE(pledge("stdio error rpath sendfd recvfd", "") >= 0);
+	ATF_REQUIRE((fd = open(".", O_RDONLY)) >= 0);
+	ATF_REQUIRE(socketpair(AF_UNIX, SOCK_STREAM, 0, sock_fds) >= 0);
+	ATF_CHECK_ERRNO(EPERM, send_fd(sock_fds[1], fd) < 0);
+	ATF_CHECK(close(sock_fds[0]) >= 0);
+	ATF_CHECK(close(sock_fds[1]) >= 0);
+	ATF_CHECK(close(fd) >= 0);
+}
+
 static void
 test_pass_fd_fork(bool allow_send, bool allow_recv)
 {
@@ -312,6 +325,7 @@ ATF_TP_ADD_TCS(tp)
 	ATF_TP_ADD_TC(tp, net_sockopts_allow);
 	ATF_TP_ADD_TC(tp, net_sockopts_deny);
 	ATF_TP_ADD_TC(tp, pass_fd_same_proc);
+	ATF_TP_ADD_TC(tp, pass_fd_dir_deny);
 	ATF_TP_ADD_TC(tp, pass_fd_both_allow);
 	ATF_TP_ADD_TC(tp, pass_fd_send_deny);
 	ATF_TP_ADD_TC(tp, pass_fd_recv_deny);

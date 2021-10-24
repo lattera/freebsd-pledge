@@ -2287,6 +2287,12 @@ unp_internalize(struct mbuf **controlp, struct thread *td)
 					error = EOPNOTSUPP;
 					goto out;
 				}
+				if (CRED_IN_LIMITED_VFS_VISIBILITY_MODE(td->td_ucred) &&
+				    fp->f_vnode && fp->f_vnode->v_type == VDIR) {
+					FILEDESC_SUNLOCK(fdesc);
+					error = EPERM;
+					goto out;
+				}
 			}
 
 			/*
