@@ -80,6 +80,7 @@ ability chflags
 # May allow privilege escalations if untrusted processes have access to paths
 # writable by the sandboxed process.
 ability! fsugid # chmod ug+s
+merge _fdpass
 
 [_level4 : _level3]
 ability sysvipc
@@ -90,7 +91,6 @@ ability sendfile
 ability id
 merge _pty
 merge _cryptodev
-merge _fdpass
 
 [_level5 : _level4]
 ability chroot
