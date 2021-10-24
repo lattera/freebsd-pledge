@@ -377,8 +377,7 @@ kern___acl_get_path(struct thread *td, const char *path, acl_type_t type,
 	struct nameidata nd;
 	int error;
 
-	NDINIT_ATRIGHTS(&nd, LOOKUP, follow | AUDITVNODE1, UIO_USERSPACE, path,
-	    AT_FDCWD, &cap_extattr_get_rights, td);
+	NDINIT(&nd, LOOKUP, follow | AUDITVNODE1, UIO_USERSPACE, path, td);
 	error = namei(&nd);
 	if (error == 0) {
 		error = vacl_get_acl(td, nd.ni_vp, type, aclp);
@@ -416,8 +415,7 @@ kern___acl_set_path(struct thread *td, const char *path,
 	struct nameidata nd;
 	int error;
 
-	NDINIT_ATRIGHTS(&nd, LOOKUP, follow | AUDITVNODE1, UIO_USERSPACE, path,
-	    AT_FDCWD, &cap_extattr_set_rights, td);
+	NDINIT(&nd, LOOKUP, follow | AUDITVNODE1, UIO_USERSPACE, path, td);
 	error = namei(&nd);
 	if (error == 0) {
 		error = vacl_set_acl(td, nd.ni_vp, type, aclp);
@@ -493,8 +491,7 @@ kern___acl_delete_path(struct thread *td, const char *path,
 	struct nameidata nd;
 	int error;
 
-	NDINIT_ATRIGHTS(&nd, LOOKUP, follow, UIO_USERSPACE, path,
-	    AT_FDCWD, &cap_extattr_delete_rights, td);
+	NDINIT(&nd, LOOKUP, follow, UIO_USERSPACE, path, td);
 	error = namei(&nd);
 	if (error == 0) {
 		error = vacl_delete(td, nd.ni_vp, type);
@@ -551,8 +548,7 @@ kern___acl_aclcheck_path(struct thread *td, const char *path, acl_type_t type,
 	struct nameidata nd;
 	int error;
 
-	NDINIT_ATRIGHTS(&nd, LOOKUP, follow, UIO_USERSPACE, path,
-	    AT_FDCWD, &cap_extattr_set_rights, td);
+	NDINIT(&nd, LOOKUP, follow, UIO_USERSPACE, path, td);
 	error = namei(&nd);
 	if (error == 0) {
 		error = vacl_aclcheck(td, nd.ni_vp, type, aclp);

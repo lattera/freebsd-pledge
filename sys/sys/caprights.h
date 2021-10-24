@@ -105,12 +105,6 @@ extern cap_rights_t cap_shutdown_rights;
 extern cap_rights_t cap_symlinkat_rights;
 extern cap_rights_t cap_unlinkat_rights;
 extern cap_rights_t cap_write_rights;
-extern cap_rights_t cap_mac_get_rights;
-extern cap_rights_t cap_mac_set_rights;
-extern cap_rights_t cap_extattr_delete_rights;
-extern cap_rights_t cap_extattr_get_rights;
-extern cap_rights_t cap_extattr_list_rights;
-extern cap_rights_t cap_extattr_set_rights;
 #endif
 
 #endif /* !_SYS_CAPRIGHTS_H_ */

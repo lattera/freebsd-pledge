@@ -764,7 +764,6 @@ __elfN(load_file)(struct proc *p, const char *file, u_long *addr,
 	struct image_params *imgp;
 	u_long rbase;
 	u_long base_addr = 0;
-	cap_rights_t execat_rights;
 	int error;
 
 #ifdef CAPABILITY_MODE
@@ -791,10 +790,8 @@ __elfN(load_file)(struct proc *p, const char *file, u_long *addr,
 	imgp->proc = p;
 	imgp->attr = attr;
 
-	NDINIT_ATRIGHTS(nd,
-	    LOOKUP, ISOPEN | FOLLOW | LOCKSHARED | LOCKLEAF, UIO_SYSSPACE,
-	    file, AT_FDCWD, cap_rights_init_one(&execat_rights, CAP_EXECAT),
-	    curthread);
+	NDINIT(nd, LOOKUP, ISOPEN | FOLLOW | LOCKSHARED | LOCKLEAF,
+	    UIO_SYSSPACE, file, curthread);
 	if ((error = namei(nd)) != 0) {
 		nd->ni_vp = NULL;
 		goto fail;

@@ -204,9 +204,6 @@
 /* Allows for renameat(2) (target directory descriptor). */
 #define	CAP_RENAMEAT_TARGET	(CAP_LOOKUP | 0x0000040000000000ULL)
 
-/* Not used by Capsicum, but useful for pledge(2) support */
-#define	CAP_EXECAT		(CAP_LOOKUP | 0x0000080000000000ULL)
-
 #define	CAP_SOCK_CLIENT \
 	(CAP_CONNECT | CAP_GETPEERNAME | CAP_GETSOCKNAME | CAP_GETSOCKOPT | \
 	 CAP_PEELOFF | CAP_RECV | CAP_SEND | CAP_SETSOCKOPT | CAP_SHUTDOWN)
@@ -216,10 +213,10 @@
 	 CAP_SETSOCKOPT | CAP_SHUTDOWN)
 
 /* All used bits for index 0. */
-#define	CAP_ALL0		CAPRIGHT(0, 0x00000FFFFFFFFFFFULL)
+#define	CAP_ALL0		CAPRIGHT(0, 0x000007FFFFFFFFFFULL)
 
 /* Available bits for index 0. */
-#define	CAP_UNUSED0_45		CAPRIGHT(0, 0x0000100000000000ULL)
+#define	CAP_UNUSED0_44		CAPRIGHT(0, 0x0000080000000000ULL)
 /* ... */
 #define	CAP_UNUSED0_57		CAPRIGHT(0, 0x0100000000000000ULL)
 
@@ -284,14 +281,11 @@
 
 #define	CAP_KQUEUE		(CAP_KQUEUE_EVENT | CAP_KQUEUE_CHANGE)
 
-#define	CAP_REVOKEAT		CAPRIGHT(1, 0x0000000000200000ULL)
-#define	CAP_UNDELETEAT		CAPRIGHT(1, 0x0000000000400000ULL)
-
 /* All used bits for index 1. */
-#define	CAP_ALL1		CAPRIGHT(1, 0x00000000007FFFFFULL)
+#define	CAP_ALL1		CAPRIGHT(1, 0x00000000001FFFFFULL)
 
 /* Available bits for index 1. */
-#define	CAP_UNUSED1_22		CAPRIGHT(1, 0x0000000000800000ULL)
+#define	CAP_UNUSED1_22		CAPRIGHT(1, 0x0000000000200000ULL)
 /* ... */
 #define	CAP_UNUSED1_57		CAPRIGHT(1, 0x0100000000000000ULL)
 
@@ -395,21 +389,6 @@ cap_rights_contains_transient(const cap_rights_t *big, const cap_rights_t *littl
 }
 
 #define cap_rights_contains cap_rights_contains_transient
-
-#define	CAP_MASK0	(~CAPRIGHT(0, 0ULL))
-#define	CAP_MASK1	(~CAPRIGHT(1, 0ULL))
-
-static inline bool
-cap_rights_overlaps_transient(const cap_rights_t *a, const cap_rights_t *b)
-{
-        /* This is only good for CAP_RIGHTS_VERSION_00! */
-        if ((CAP_MASK0 & a->cr_rights[0] & b->cr_rights[0]) |
-            (CAP_MASK1 & a->cr_rights[1] & b->cr_rights[1]))
-                return (true);
-        return (false);
-}
-
-#define cap_rights_overlaps cap_rights_overlaps_transient
 
 int cap_check_failed_notcapable(const cap_rights_t *havep,
     const cap_rights_t *needp);

@@ -962,8 +962,8 @@ kern_jail_set(struct thread *td, struct uio *optuio, int flags)
 			error = EINVAL;
 			goto done_free;
 		}
-		NDINIT_ATRIGHTS(&nd, LOOKUP, FOLLOW | LOCKLEAF,
-		    UIO_SYSSPACE, path, AT_FDCWD, &cap_fchmod_rights, td);
+		NDINIT(&nd, LOOKUP, FOLLOW | LOCKLEAF, UIO_SYSSPACE,
+		    path, td);
 		error = namei(&nd);
 		if (error)
 			goto done_free;

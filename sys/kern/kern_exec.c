@@ -434,7 +434,6 @@ do_execve(struct thread *td, struct image_args *args, struct mac *mac_p,
 	uint32_t orig_fctl0;
 	Elf_Brandinfo *orig_brandinfo;
 	static const char fexecv_proc_title[] = "(fexecv)";
-	cap_rights_t execat_rights;
 
 	imgp = &image_params;
 #ifdef KTRACE
@@ -483,10 +482,8 @@ do_execve(struct thread *td, struct image_args *args, struct mac *mac_p,
 	 * interpreter if this is an interpreted binary.
 	 */
 	if (args->fname != NULL) {
-		NDINIT_ATRIGHTS(&nd,
-		    LOOKUP, ISOPEN | LOCKLEAF | LOCKSHARED | FOLLOW |
-		    SAVENAME | AUDITVNODE1, UIO_SYSSPACE, args->fname,
-		    AT_FDCWD, cap_rights_init_one(&execat_rights, CAP_EXECAT), td);
+		NDINIT(&nd, LOOKUP, ISOPEN | LOCKLEAF | LOCKSHARED | FOLLOW |
+		    SAVENAME | AUDITVNODE1, UIO_SYSSPACE, args->fname, td);
 	}
 
 	SDT_PROBE1(proc, , , exec, args->fname);
@@ -708,11 +705,8 @@ interpret:
 		free(imgp->freepath, M_TEMP);
 		imgp->freepath = NULL;
 		/* set new name to that of the interpreter */
-		NDINIT_ATRIGHTS(&nd,
-		    LOOKUP, ISOPEN | LOCKLEAF | LOCKSHARED | FOLLOW | SAVENAME,
-		    UIO_SYSSPACE, imgp->interpreter_name,
-		    AT_FDCWD, cap_rights_init_one(&execat_rights, CAP_EXECAT),
-		    td);
+		NDINIT(&nd, LOOKUP, ISOPEN | LOCKLEAF | LOCKSHARED | FOLLOW |
+		    SAVENAME, UIO_SYSSPACE, imgp->interpreter_name, td);
 		args->fname = imgp->interpreter_name;
 		goto interpret;
 	}

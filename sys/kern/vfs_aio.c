@@ -62,7 +62,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/event.h>
 #include <sys/mount.h>
 #include <geom/geom.h>
-#include <sys/sysfil.h>
 
 #include <machine/atomic.h>
 
@@ -2226,10 +2225,7 @@ sys_aio_writev(struct thread *td, struct aio_writev_args *uap)
 int
 sys_aio_mlock(struct thread *td, struct aio_mlock_args *uap)
 {
-	int error;
-	error = sysfil_check(td, SYSFIL_MLOCK);
-	if (error)
-		return (error);
+
 	return (aio_aqueue(td, uap->aiocbp, NULL, LIO_MLOCK, &aiocb_ops));
 }
 
