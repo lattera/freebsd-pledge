@@ -160,8 +160,8 @@ posixshm_restriction_body() {
 
 atf_test_case cmd_timeout
 cmd_timeout_body() {
-	atf_check -s exit:124 curtain -d ability:reap timeout 0.001 sleep 100
-	atf_check -s exit:124 curtain -d ability:reap -t curtain timeout 0.001 curtain -f sleep 100
+	atf_check -s exit:124 curtain -d ability:reap timeout 0.05 sleep 10
+	atf_check -s exit:124 curtain -d ability:reap -t curtain timeout 0.05 curtain -f sleep 10
 }
 
 atf_test_case cmd_id
