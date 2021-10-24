@@ -784,7 +784,6 @@ ktls_cleanup(struct ktls_session *tls)
 			counter_u64_add(ktls_sw_chacha20, -1);
 			break;
 		}
-		ktls_ocf_free(tls);
 		break;
 	case TCP_TLS_MODE_IFNET:
 		switch (tls->params.cipher_algorithm) {
@@ -817,6 +816,8 @@ ktls_cleanup(struct ktls_session *tls)
 		break;
 #endif
 	}
+	if (tls->ocf_session != NULL)
+		ktls_ocf_free(tls);
 	if (tls->params.auth_key != NULL) {
 		zfree(tls->params.auth_key, M_KTLS);
 		tls->params.auth_key = NULL;
@@ -1004,14 +1005,9 @@ ktls_try_ifnet(struct socket *so, struct ktls_session *tls, bool force)
 	return (error);
 }
 
-static int
-ktls_try_sw(struct socket *so, struct ktls_session *tls, int direction)
+static void
+ktls_use_sw(struct ktls_session *tls)
 {
-	int error;
-
-	error = ktls_ocf_try(so, tls, direction);
-	if (error)
-		return (error);
 	tls->mode = TCP_TLS_MODE_SW;
 	switch (tls->params.cipher_algorithm) {
 	case CRYPTO_AES_CBC:
@@ -1024,6 +1020,17 @@ ktls_try_sw(struct socket *so, struct ktls_session *tls, int direction)
 		counter_u64_add(ktls_sw_chacha20, 1);
 		break;
 	}
+}
+
+static int
+ktls_try_sw(struct socket *so, struct ktls_session *tls, int direction)
+{
+	int error;
+
+	error = ktls_ocf_try(so, tls, direction);
+	if (error)
+		return (error);
+	ktls_use_sw(tls);
 	return (0);
 }
 
@@ -1082,6 +1089,69 @@ sb_mark_notready(struct sockbuf *sb)
 	    sb->sb_ccc));
 }
 
+/*
+ * Return information about the pending TLS data in a socket
+ * buffer.  On return, 'seqno' is set to the sequence number
+ * of the next TLS record to be received, 'resid' is set to
+ * the amount of bytes still needed for the last pending
+ * record.  The function returns 'false' if the last pending
+ * record contains a partial TLS header.  In that case, 'resid'
+ * is the number of bytes needed to complete the TLS header.
+ */
+bool
+ktls_pending_rx_info(struct sockbuf *sb, uint64_t *seqnop, size_t *residp)
+{
+	struct tls_record_layer hdr;
+	struct mbuf *m;
+	uint64_t seqno;
+	size_t resid;
+	u_int offset, record_len;
+
+	SOCKBUF_LOCK_ASSERT(sb);
+	MPASS(sb->sb_flags & SB_TLS_RX);
+	seqno = sb->sb_tls_seqno;
+	resid = sb->sb_tlscc;
+	m = sb->sb_mtls;
+	offset = 0;
+
+	if (resid == 0) {
+		*seqnop = seqno;
+		*residp = 0;
+		return (true);
+	}
+
+	for (;;) {
+		seqno++;
+
+		if (resid < sizeof(hdr)) {
+			*seqnop = seqno;
+			*residp = sizeof(hdr) - resid;
+			return (false);
+		}
+
+		m_copydata(m, offset, sizeof(hdr), (void *)&hdr);
+
+		record_len = sizeof(hdr) + ntohs(hdr.tls_length);
+		if (resid <= record_len) {
+			*seqnop = seqno;
+			*residp = record_len - resid;
+			return (true);
+		}
+		resid -= record_len;
+
+		while (record_len != 0) {
+			if (m->m_len - offset > record_len) {
+				offset += record_len;
+				break;
+			}
+
+			record_len -= (m->m_len - offset);
+			offset = 0;
+			m = m->m_next;
+		}
+	}
+}
+
 int
 ktls_enable_rx(struct socket *so, struct tls_enable *en)
 {
@@ -1121,16 +1191,17 @@ ktls_enable_rx(struct socket *so, struct tls_enable *en)
 	if (error)
 		return (error);
 
-#ifdef TCP_OFFLOAD
-	error = ktls_try_toe(so, tls, KTLS_RX);
-	if (error)
-#endif
-		error = ktls_try_sw(so, tls, KTLS_RX);
-
+	error = ktls_ocf_try(so, tls, KTLS_RX);
 	if (error) {
 		ktls_cleanup(tls);
 		return (error);
 	}
+
+#ifdef TCP_OFFLOAD
+	error = ktls_try_toe(so, tls, KTLS_RX);
+	if (error)
+#endif
+		ktls_use_sw(tls);
 
 	/* Mark the socket as using TLS offload. */
 	SOCKBUF_LOCK(&so->so_rcv);
