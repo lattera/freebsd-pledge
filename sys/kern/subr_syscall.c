@@ -248,10 +248,10 @@ syscallret(struct thread *td)
 			ksi.ksi_info.si_syscall = sa->original_code;
 			trapsignal(td, &ksi);
 			break;
-		case ERESTRICTEDTRAP:
-		case ERESTRICTEDKILL:
+		case ESYSFILTRAP:
+		case ESYSFILKILL:
 			ksiginfo_init_trap(&ksi);
-			ksi.ksi_signo = td->td_errno == ERESTRICTEDTRAP ?
+			ksi.ksi_signo = td->td_errno == ESYSFILTRAP ?
 			    SIGTRAP : SIGKILL;
 			ksi.ksi_code = SI_RESTRICTED;
 			ksi.ksi_info.si_syscall = sa->original_code;

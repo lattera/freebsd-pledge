@@ -181,8 +181,8 @@ __END_DECLS
 #define	ENOTRECOVERABLE	95		/* State not recoverable */
 #define	EOWNERDEAD	96		/* Previous owner died */
 #define	EINTEGRITY	97		/* Integrity check failed */
-#define	ERESTRICTEDTRAP	98
-#define	ERESTRICTEDKILL	99
+#define	ESYSFILTRAP	98
+#define	ESYSFILKILL	99
 #endif /* _POSIX_SOURCE */
 
 #ifndef _POSIX_SOURCE

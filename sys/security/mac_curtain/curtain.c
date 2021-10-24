@@ -1566,8 +1566,8 @@ static const char act2str[][6] = {
 static const int act2err[] = {
 	[CURTAINACT_ALLOW] = 0,
 	[CURTAINACT_DENY] = SYSFIL_FAILED_ERRNO,
-	[CURTAINACT_TRAP] = ERESTRICTEDTRAP,
-	[CURTAINACT_KILL] = ERESTRICTEDKILL,
+	[CURTAINACT_TRAP] = ESYSFILTRAP,
+	[CURTAINACT_KILL] = ESYSFILKILL,
 };
 
 #define	CURTAIN_LOG(td, cat, fmt, ...) do { \
