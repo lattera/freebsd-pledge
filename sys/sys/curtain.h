@@ -172,6 +172,7 @@ struct curtain {
 		bool need_exec_switch;
 		bool is_restricted_on_self;
 		bool is_restricted_on_exec;
+		uint8_t sysfilacts[SYSFILSET_BITS];
 	} ct_cached;
 	struct unveil_stash ct_ustash;
 	struct curtain_mode ct_abilities[CURTAINABL_COUNT];

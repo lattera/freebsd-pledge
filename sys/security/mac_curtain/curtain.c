@@ -878,28 +878,36 @@ curtain_is_restricted_on_exec(const struct curtain *ct)
 }
 
 static void
-curtain_to_sysfilset(const struct curtain *ct, sysfilset_t *sfs)
-{
-	*sfs = 0;
-	for (enum curtain_ability abl = 0; abl < nitems(abilities_sysfils); abl++)
-		if (ct->ct_abilities[abl].on_self == CURTAINACT_ALLOW)
-			*sfs |= abilities_sysfils[abl];
-}
-
-static void
 curtain_cache_update(struct curtain *ct)
 {
 	ct->ct_cached.need_exec_switch = curtain_need_exec_switch(ct);
 	ct->ct_cached.is_restricted_on_self = curtain_is_restricted_on_self(ct);
 	ct->ct_cached.is_restricted_on_exec = curtain_is_restricted_on_exec(ct);
+
+	for (unsigned i = 0; i < SYSFILSET_BITS; i++)
+		ct->ct_cached.sysfilacts[i] = CURTAINACT_KILL;
+	for (enum curtain_ability abl = 0; abl < nitems(abilities_sysfils); abl++) {
+		sysfilset_t sfs = abilities_sysfils[abl];
+		while (sfs) {
+			unsigned i = ffsll(sfs) - 1;
+			ct->ct_cached.sysfilacts[i] = MIN(ct->ct_cached.sysfilacts[i],
+			    ct->ct_abilities[abl].on_self);
+			sfs ^= (sysfilset_t)1 << i;
+		}
+	}
+
 	ct->ct_finalized = true;
 }
 
 static void
 curtain_cred_sysfil_update(struct ucred *cr, const struct curtain *ct)
 {
-	if (curtain_is_restricted_on_self(ct)) {
-		curtain_to_sysfilset(ct, &cr->cr_sysfilset);
+	MPASS(ct->ct_finalized);
+	if (ct->ct_cached.is_restricted_on_self) {
+		cr->cr_sysfilset = 0;
+		for (unsigned i = 0; i < SYSFILSET_BITS; i++)
+			if (ct->ct_cached.sysfilacts[i] == CURTAINACT_ALLOW)
+				cr->cr_sysfilset |= (sysfilset_t)1 << i;
 		MPASS(SYSFILSET_IS_RESTRICTED(cr->cr_sysfilset));
 		MPASS(CRED_IN_RESTRICTED_MODE(cr));
 	} else {
@@ -2892,17 +2900,20 @@ curtain_priv_check(struct ucred *cr, int priv)
 static int
 curtain_sysfil_check(struct ucred *cr, sysfilset_t sfs)
 {
+	sysfilset_t orig_sfs = sfs;
 	struct curtain *ct;
 	enum curtain_action act;
 	if (!(ct = CRED_SLOT(cr)))
 		return (sysfil_probe_cred(cr, sfs));
-	act = CURTAINACT_KILL;
-	for (enum curtain_ability abl = 0; abl < nitems(abilities_sysfils); abl++)
-		if (!(sfs & ~SYSFIL_UNCAPSICUM & ~abilities_sysfils[abl])) {
-			act = MIN(act, ct->ct_abilities[abl].on_self);
-			if (act == CURTAINACT_ALLOW)
-				return (0);
-		}
+	act = CURTAINACT_ALLOW;
+	while (sfs) {
+		unsigned i = ffsll(sfs) - 1;
+		act = MAX(act, ct->ct_cached.sysfilacts[i]);
+		sfs ^= (sysfilset_t)1 << i;
+	}
+	sfs = orig_sfs;
+	if (act == CURTAINACT_ALLOW)
+		return (0);
 	CURTAIN_CRED_LOG_ACTION(cr, act, "sysfil %#jx", (uintmax_t)sfs);
 	SDT_PROBE3(curtain,, cred_sysfil_check, failed, cr, sfs, act);
 	cred_action_failed(cr, act, false);

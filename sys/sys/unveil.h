@@ -15,6 +15,7 @@
 #include <sys/sysfil.h>
 #endif
 
+#define	UPERM_NONE		(0)
 #define	UPERM_EXPOSE		(1 <<  0)
 #define	UPERM_TRAVERSE		(1 <<  1)
 #define	UPERM_SEARCH		(1 <<  2)

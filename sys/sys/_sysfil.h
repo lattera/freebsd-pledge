@@ -9,6 +9,8 @@
 
 typedef uint64_t sysfilset_t;
 
+#define	SYSFILSET_BITS	(sizeof (sysfilset_t) * CHAR_BIT)
+
 #define	SYSFILSET_IS_RESTRICTED(sfs) (~(sfs) != 0)
 
 #define	SYSFILSET_NOT_IN_CAPABILITY_MODE_BIT 0 /* must match SYSFIL_UNCAPSICUM */
