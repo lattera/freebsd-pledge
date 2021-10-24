@@ -184,13 +184,13 @@ merge _basic
 ~/.gitconfig				: r
 
 [ping, ping6]
-merge _basic
+merge _basic _fdpass
 ability id
 priv net_raw netinet_raw
 socklvl icmpv6
 
 [traceroute, traceroute6]
-merge _basic
+merge _basic _fdpass
 ability id
 priv net_raw netinet_raw
 sysctl net.inet.ip.ttl
