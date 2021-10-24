@@ -118,10 +118,8 @@ struct curtain_item {
 
 CTASSERT(sizeof(struct curtain_item) <= 12);
 
-enum barrier_stop {
-	BARRIER_PASS = 0,
-	BARRIER_GATE = 1,
-	BARRIER_WALL = 2,
+struct curtain_head {
+	struct barrier *cth_barrier;
 };
 
 enum barrier_type {
@@ -136,13 +134,12 @@ enum barrier_type {
 #define	BARRIER_COUNT 8 /* UPDATE ME!!! */
 };
 
-struct barrier_mode {
-	/* enum barrier_stop */
-	uint8_t on_self : 2, on_exec : 2;
-};
+typedef uint8_t barrier_bits;
+#define	BARRIERS_ALL	((1 << BARRIER_COUNT) - 1)
 
-struct curtain_head {
-	struct barrier *cth_barrier;
+struct barrier_mode {
+	barrier_bits isolate : BARRIER_COUNT;
+	barrier_bits protect : BARRIER_COUNT;
 };
 
 struct barrier {
@@ -153,7 +150,7 @@ struct barrier {
 	unsigned br_nchildren;
 	volatile int br_ref;
 	uint64_t br_serial;
-	struct barrier_mode br_barriers[BARRIER_COUNT];
+	struct barrier_mode br_mode;
 };
 
 struct curtain {
@@ -176,6 +173,7 @@ struct curtain {
 	} ct_cached;
 	struct unveil_stash ct_ustash;
 	struct curtain_mode ct_abilities[CURTAINABL_COUNT];
+	struct barrier_mode ct_barrier_mode_on_exec;
 	struct curtain_item ct_slots[];
 };
 

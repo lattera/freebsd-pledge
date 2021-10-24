@@ -257,14 +257,10 @@ barrier_link(struct barrier *child, struct barrier *parent)
 }
 
 static void
-barrier_collapse(struct barrier *src, struct barrier *dst)
+barrier_collapse(const struct barrier *src, struct barrier *dst)
 {
-	for (size_t i = 0; i < BARRIER_COUNT; i++) {
-		dst->br_barriers[i].on_self = MAX(src->br_barriers[i].on_self,
-		                                  dst->br_barriers[i].on_self);
-		dst->br_barriers[i].on_exec = MAX(src->br_barriers[i].on_self,
-		                                  dst->br_barriers[i].on_exec);
-	}
+	dst->br_mode.isolate |= src->br_mode.isolate;
+	dst->br_mode.protect |= src->br_mode.protect;
 }
 
 static void
@@ -317,20 +313,19 @@ barrier_free(struct barrier *br)
 }
 
 static struct barrier *
-barrier_cross_locked(struct barrier *br,
-    enum barrier_type type, enum barrier_stop bar)
+barrier_cross_locked(struct barrier *br, struct barrier_mode mode)
 {
-	while (br && br->br_barriers[type].on_self <= bar)
+	while (br && !((br->br_mode.isolate & mode.isolate) |
+	               (br->br_mode.protect & mode.protect)))
 		br = br->br_parent;
 	return (br);
 }
 
 static struct barrier *
-barrier_cross(struct barrier *br,
-    enum barrier_type type, enum barrier_stop bar)
+barrier_cross(struct barrier *br, struct barrier_mode mode)
 {
 	rw_rlock(&barrier_tree_lock);
-	br = barrier_cross_locked(br, type, bar);
+	br = barrier_cross_locked(br, mode);
 	rw_runlock(&barrier_tree_lock);
 	return (br);
 }
@@ -339,6 +334,10 @@ static bool
 barrier_visible(struct barrier *subject, const struct barrier *target,
     enum barrier_type type)
 {
+	struct barrier_mode mode = {
+		.isolate = 1 << type,
+		.protect = 1 << type,
+	};
 	/*
 	 * NOTE: One or both of subject and target may be NULL (indicating
 	 * credentials with no curtain restrictions).
@@ -350,7 +349,7 @@ barrier_visible(struct barrier *subject, const struct barrier *target,
 	if (subject == target) /* fast path */
 		return (true);
 	rw_rlock(&barrier_tree_lock);
-	subject = barrier_cross_locked(subject, type, BARRIER_PASS);
+	subject = barrier_cross_locked(subject, mode);
 	while (target && subject != target)
 		target = target->br_parent;
 	rw_runlock(&barrier_tree_lock);
@@ -718,6 +717,7 @@ curtain_dup_compact(const struct curtain *src)
 			if (di)
 				di->mode = si->mode;
 		}
+	dst->ct_barrier_mode_on_exec = src->ct_barrier_mode_on_exec;
 	unveil_stash_copy(&dst->ct_ustash, &src->ct_ustash);
 #ifdef INVARIANTS
 	for (si = src->ct_slots; si < &src->ct_slots[src->ct_nslots]; si++)
@@ -782,6 +782,16 @@ static const sysfilset_t abilities_sysfils[CURTAINABL_COUNT] = {
 	[CURTAINABL_KMOD] = SYSFIL_KMOD,
 };
 
+static const barrier_bits abilities_barriers[CURTAINABL_COUNT] = {
+	[CURTAINABL_PROC]	= 1 << BARRIER_PROC_SIGNAL,
+	[CURTAINABL_PS]		= 1 << BARRIER_PROC_STATUS,
+	[CURTAINABL_SCHED]	= 1 << BARRIER_PROC_SCHED,
+	[CURTAINABL_DEBUG]	= 1 << BARRIER_PROC_DEBUG,
+	[CURTAINABL_SOCK]	= 1 << BARRIER_SOCK,
+	[CURTAINABL_POSIXIPC]	= 1 << BARRIER_POSIXIPC,
+	[CURTAINABL_SYSVIPC]	= 1 << BARRIER_SYSVIPC,
+};
+
 typedef union curtain_key ctkey;
 
 static inline void
@@ -822,9 +832,9 @@ curtain_need_exec_switch(const struct curtain *ct)
 		if (item->type != 0 && mode_need_exec_switch(item->mode))
 			return (true);
 	br = CURTAIN_BARRIER(ct);
-	for (size_t i = 0; i < BARRIER_COUNT; i++)
-		if (br->br_barriers[i].on_exec > BARRIER_PASS)
-			return (true);
+	if (br->br_mode.isolate != ct->ct_barrier_mode_on_exec.isolate ||
+	    br->br_mode.protect != ct->ct_barrier_mode_on_exec.protect)
+		return (true);
 	if (unveil_stash_need_exec_switch(&ct->ct_ustash))
 		return (true);
 	return (false);
@@ -854,26 +864,24 @@ curtain_is_restricted_on_self(const struct curtain *ct)
 	if (curtain_is_restricted(ct, mode))
 		return (true);
 	br = CURTAIN_BARRIER(ct);
-	for (size_t i = 0; i < BARRIER_COUNT; i++)
-		if (br->br_barriers[i].on_self > BARRIER_PASS)
-			return (true);
+	if (br->br_mode.isolate ||
+	    br->br_mode.protect)
+		return (true);
 	return (false);
 }
 
 static bool
 curtain_is_restricted_on_exec(const struct curtain *ct)
 {
-	const struct barrier *br;
 	const struct curtain_mode mode = {
 		.on_self = CURTAINACT_KILL, .on_self_max = CURTAINACT_KILL,
 		.on_exec = CURTAINACT_ALLOW, .on_exec_max = CURTAINACT_ALLOW,
 	};
 	if (curtain_is_restricted(ct, mode))
 		return (true);
-	br = CURTAIN_BARRIER(ct);
-	for (size_t i = 0; i < BARRIER_COUNT; i++)
-		if (br->br_barriers[i].on_exec > BARRIER_PASS)
-			return (true);
+	if (ct->ct_barrier_mode_on_exec.isolate ||
+	    ct->ct_barrier_mode_on_exec.protect)
+		return (true);
 	return (false);
 }
 
@@ -930,10 +938,8 @@ curtain_exec_switch(struct curtain *ct)
 		if (item->type != 0)
 			mode_exec_switch(&item->mode);
 	br = CURTAIN_BARRIER(ct);
-	for (size_t i = 0; i < BARRIER_COUNT; i++) {
-		br->br_barriers[i].on_self = br->br_barriers[i].on_exec;
-		br->br_barriers[i].on_exec = BARRIER_PASS;
-	}
+	br->br_mode.isolate = ct->ct_barrier_mode_on_exec.isolate;
+	br->br_mode.protect = ct->ct_barrier_mode_on_exec.protect;
 	unveil_stash_exec_switch(&ct->ct_ustash);
 	curtain_dirty(ct);
 }
@@ -1149,14 +1155,18 @@ static const enum curtain_action lvl2act[CURTAINLVL_COUNT] = {
 	[CURTAINLVL_KILL] = CURTAINACT_KILL,
 };
 
-static const enum barrier_stop lvl2bar[CURTAINLVL_COUNT] = {
-	[CURTAINLVL_PASS] = BARRIER_PASS,
-	[CURTAINLVL_GATE] = BARRIER_GATE,
-	[CURTAINLVL_WALL] = BARRIER_WALL,
-	[CURTAINLVL_DENY] = BARRIER_WALL,
-	[CURTAINLVL_TRAP] = BARRIER_WALL,
-	[CURTAINLVL_KILL] = BARRIER_WALL,
-};
+static void
+curtain_fill_barrier_mode(struct barrier_mode *mode, enum curtainreq_level lvl, barrier_bits barriers)
+{
+	if (lvl >= CURTAINLVL_GATE)
+		mode->protect |= barriers;
+	else
+		mode->protect &= ~barriers;
+	if (lvl >= CURTAINLVL_WALL)
+		mode->isolate |= barriers;
+	else
+		mode->isolate &= ~barriers;
+}
 
 static inline void
 fill_mode(struct curtain_mode *mode, const struct curtainreq *req)
@@ -1170,32 +1180,19 @@ fill_mode(struct curtain_mode *mode, const struct curtainreq *req)
 	mode->on_self_max = mode->on_exec_max = CURTAINACT_ALLOW;
 }
 
-static inline void
+static void
 curtain_fill_ability(struct curtain *ct, const struct curtainreq *req,
     enum curtain_ability abl)
 {
 	struct barrier *br;
-	enum barrier_type type;
-	enum barrier_stop bar;
 	fill_mode(&ct->ct_abilities[abl], req);
-	switch (abl) {
-	case CURTAINABL_PROC:		type = BARRIER_PROC_SIGNAL;	break;
-	case CURTAINABL_PS:		type = BARRIER_PROC_STATUS;	break;
-	case CURTAINABL_SCHED:		type = BARRIER_PROC_SCHED;	break;
-	case CURTAINABL_DEBUG:		type = BARRIER_PROC_DEBUG;	break;
-	case CURTAINABL_SOCK:		type = BARRIER_SOCK;		break;
-	case CURTAINABL_POSIXIPC:	type = BARRIER_POSIXIPC;	break;
-	case CURTAINABL_SYSVIPC:	type = BARRIER_SYSVIPC;		break;
-	default:
-		return;
-	}
 	br = CURTAIN_BARRIER(ct);
-	MPASS(br);
-	bar = lvl2bar[req->level];
 	if (req->flags & CURTAINREQ_ON_SELF)
-		br->br_barriers[type].on_self = bar;
+		curtain_fill_barrier_mode(&br->br_mode,
+		    req->level, abilities_barriers[abl]);
 	if (req->flags & CURTAINREQ_ON_EXEC)
-		br->br_barriers[type].on_exec = bar;
+		curtain_fill_barrier_mode(&ct->ct_barrier_mode_on_exec,
+		    req->level, abilities_barriers[abl]);
 }
 
 static struct curtain_item *
@@ -1265,10 +1262,8 @@ curtain_fill(struct curtain *ct, size_t reqc, const struct curtainreq *reqv)
 		ct->ct_abilities[abl].on_exec = lvl2act[def_on_exec];
 	}
 	br = CURTAIN_BARRIER(ct);
-	for (size_t i = 0; i < BARRIER_COUNT; i++) {
-		br->br_barriers[i].on_self = lvl2bar[def_on_self];
-		br->br_barriers[i].on_exec = lvl2bar[def_on_exec];
-	}
+	curtain_fill_barrier_mode(&br->br_mode, def_on_self, BARRIERS_ALL);
+	curtain_fill_barrier_mode(&ct->ct_barrier_mode_on_exec, def_on_exec, BARRIERS_ALL);
 
 	GROUP_FOREACH(CURTAINTYP_ABILITY, req) {
 		MPASS(req->type == CURTAINTYP_ABILITY);
@@ -2657,10 +2652,14 @@ curtain_sysvmsq_check_2(struct ucred *cr,
 static int
 curtain_generic_ipc_name_prefix(struct ucred *cr, char **prefix, char *end)
 {
+	struct barrier_mode mode = {
+		.isolate = 1 << BARRIER_POSIXIPC,
+		.protect = 0,
+	};
 	struct barrier *br;
 	size_t n, m;
 	m = end - *prefix;
-	br = barrier_cross(CRED_SLOT_BR(cr), BARRIER_POSIXIPC, BARRIER_GATE);
+	br = barrier_cross(CRED_SLOT_BR(cr), mode);
 	if (br) {
 		ssize_t r;
 		r = snprintf(*prefix, m,
