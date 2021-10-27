@@ -1092,7 +1092,6 @@ SYSCTL_PROC(_security_curtain, OID_AUTO, curtained_exec,
 static const int abilities_always[] = { CURTAINABL_UNCAPSICUM };
 /* Some abilities don't make much sense without some others. */
 static const int abilities_expand[][2] = {
-	/* NOTE: Make sure dependencies can be handled in a single pass! */
 	{ CURTAINABL_VFS_READ,		CURTAINABL_VFS_MISC		},
 	{ CURTAINABL_VFS_WRITE,		CURTAINABL_VFS_MISC		},
 	{ CURTAINABL_VFS_CREATE,	CURTAINABL_VFS_MISC		},
@@ -1113,18 +1112,28 @@ static const int abilities_expand[][2] = {
 static void
 curtain_fill_expand(struct curtain *ct)
 {
+	bool propagate;
+
 	for (size_t i = 0; i < nitems(abilities_always); i++) {
 		ct->ct_abilities[abilities_always[i]].on_self = CURTAINACT_ALLOW;
 		ct->ct_abilities[abilities_always[i]].on_exec = CURTAINACT_ALLOW;
 	}
-	for (size_t i = 0; i < nitems(abilities_expand); i++) {
-		ct->ct_abilities[abilities_expand[i][1]].on_self =
-		    MIN(ct->ct_abilities[abilities_expand[i][0]].on_self,
-		        ct->ct_abilities[abilities_expand[i][1]].on_self);
-		ct->ct_abilities[abilities_expand[i][1]].on_exec =
-		    MIN(ct->ct_abilities[abilities_expand[i][0]].on_exec,
-		        ct->ct_abilities[abilities_expand[i][1]].on_exec);
-	}
+
+	do {
+		propagate = false;
+		for (size_t i = 0; i < nitems(abilities_expand); i++) {
+			enum curtain_ability from = abilities_expand[i][0], to = abilities_expand[i][1];
+			if (ct->ct_abilities[to].on_self > ct->ct_abilities[from].on_self) {
+				ct->ct_abilities[to].on_self = ct->ct_abilities[from].on_self;
+				propagate = true;
+			}
+			if (ct->ct_abilities[to].on_exec > ct->ct_abilities[from].on_exec) {
+				ct->ct_abilities[to].on_exec = ct->ct_abilities[from].on_exec;
+				propagate = true;
+			}
+		}
+	} while (propagate);
+
 	ct->ct_abilities[CURTAINABL_PROT_EXEC_LOOSE].on_exec =
 	    MIN(MIN(ct->ct_abilities[CURTAINABL_EXEC].on_self,
 	            ct->ct_abilities[CURTAINABL_EXEC].on_exec),
