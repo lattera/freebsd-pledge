@@ -583,7 +583,7 @@ unveil_track_roll(struct unveil_tracker *track, int offset)
 		do {
 			if (track->fill-- == 0)
 				track->fill = UNVEIL_TRACKER_ENTRIES_COUNT - 1;
-		} while (--offset);
+		} while (++offset);
 	}
 	return (track->fill);
 }

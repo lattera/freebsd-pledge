@@ -669,8 +669,10 @@ namei(struct nameidata *ndp)
 		if (!(ndp->ni_lcf & NI_LCF_MACWALK_NOROLL))
 			mac_vnode_walk_roll(cnp->cn_cred, 1);
 		error = mac_vnode_walk_start(cnp->cn_cred, dp);
-		if (error != 0)
+		if (error != 0) {
+			mac_vnode_walk_roll(cnp->cn_cred, -1);
 			return (error);
+		}
 	}
 #endif
 	for (;;) {
@@ -695,12 +697,14 @@ namei(struct nameidata *ndp)
 			if (ndp->ni_lcf & NI_LCF_MACWALK_ACTIVE) {
 				error = mac_vnode_walk_fixup_errno(
 				    cnp->cn_cred, error);
-				if (error != 0)
+				if (error != 0) {
 					/*
 					 * The lookup() call was successful
 					 * (and was not a symlink special case).
 					 */
+					mac_vnode_walk_roll(cnp->cn_cred, -1);
 					NDFREE(ndp, 0);
+				}
 			}
 #endif
 			return (error);
@@ -797,8 +801,10 @@ out:
 	nameicap_cleanup(ndp);
 	pwd_drop(pwd);
 #ifdef MAC
-	if (ndp->ni_lcf & NI_LCF_MACWALK_ACTIVE)
+	if (ndp->ni_lcf & NI_LCF_MACWALK_ACTIVE) {
 		error = mac_vnode_walk_fixup_errno(cnp->cn_cred, error);
+		mac_vnode_walk_roll(cnp->cn_cred, -1);
+	}
 #endif
 	return (error);
 }
