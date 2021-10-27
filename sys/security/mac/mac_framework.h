@@ -59,6 +59,7 @@ struct bpf_d;
 struct cdev;
 struct componentname;
 struct devfs_dirent;
+struct dirent;
 struct file;
 struct ifnet;
 struct ifreq;
@@ -698,8 +699,8 @@ void	mac_vnode_relabel(struct ucred *cred, struct vnode *vp,
  */
 int	vop_stdsetlabel_ea(struct vop_setlabel_args *ap);
 
-#define	MAC_VNODE_WALK_ACTIVE	0x01
-#define	MAC_VNODE_WALK_UNVEIL	0x02
+int	mac_vnode_readdir_filtered(struct ucred *active_ucred,
+	    struct ucred *file_cred, struct vnode *vp, struct uio *uio);
 
 void	mac_vnode_walk_roll(struct ucred *cred, int offset);
 void	mac_vnode_walk_annotate_file(struct ucred *cred,
@@ -714,6 +715,9 @@ void	mac_vnode_walk_replace(struct ucred *cred,
 void	mac_vnode_walk_created(struct ucred *cred,
 	    struct vnode *dvp, struct vnode *vp);
 int	mac_vnode_walk_fixup_errno(struct ucred *cred, int error);
+bool	mac_vnode_walk_dirent_visible(struct ucred *cred,
+	    struct vnode *vp, struct dirent *dp);
+
 
 void	mac_cred_trim(struct ucred *cred);
 

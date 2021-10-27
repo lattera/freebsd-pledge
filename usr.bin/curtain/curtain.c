@@ -488,7 +488,7 @@ main(int argc, char *argv[])
 			if (r < 0)
 				errx(EX_USAGE, "invalid unveil permissions: %s", perms);
 			r = curtain_unveil(args_slot, path,
-			    ch == 'p' ? CURTAIN_UNVEIL_INSPECT : 0,
+			    ch == 'p' ? CURTAIN_UNVEIL_INSPECT | CURTAIN_UNVEIL_LIST : 0,
 			    uperms);
 			if (r < 0 && errno != ENOENT)
 				warn("%s", path);

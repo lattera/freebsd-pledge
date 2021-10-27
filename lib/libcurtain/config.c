@@ -600,7 +600,7 @@ parse_default(struct parser *par, struct word *w)
 	curtain_default(par->slot, par->directive_flags);
 }
 
-static const int path_flags = CURTAIN_UNVEIL_INSPECT;
+static const int path_flags = CURTAIN_UNVEIL_INSPECT | CURTAIN_UNVEIL_LIST;
 
 static const struct {
 	const char name[8];

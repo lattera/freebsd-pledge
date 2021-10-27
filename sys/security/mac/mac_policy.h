@@ -75,6 +75,7 @@ struct bpf_d;
 struct cdev;
 struct componentname;
 struct devfs_dirent;
+struct dirent;
 struct file;
 struct ifnet;
 struct image_params;
@@ -692,6 +693,8 @@ typedef void	(*mpo_vnode_walk_replace_t)(struct ucred *cred,
 typedef void	(*mpo_vnode_walk_created_t)(struct ucred *cred,
 		    struct vnode *dvp, struct vnode *vp);
 typedef int	(*mpo_vnode_walk_fixup_errno_t)(struct ucred *cred, int error);
+typedef bool	(*mpo_vnode_walk_dirent_visible_t)(struct ucred *cred,
+		    struct vnode *vp, struct dirent *dp);
 
 typedef int	(*mpo_generic_check_ioctl_t)(struct ucred *cred,
 		    struct file *file,
@@ -1019,6 +1022,7 @@ struct mac_policy_ops {
 	mpo_vnode_walk_replace_t		mpo_vnode_walk_replace;
 	mpo_vnode_walk_created_t		mpo_vnode_walk_created;
 	mpo_vnode_walk_fixup_errno_t		mpo_vnode_walk_fixup_errno;
+	mpo_vnode_walk_dirent_visible_t		mpo_vnode_walk_dirent_visible;
 
 	mpo_generic_check_ioctl_t		mpo_generic_check_ioctl;
 	mpo_generic_check_vm_prot_t		mpo_generic_check_vm_prot;

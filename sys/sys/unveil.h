@@ -131,6 +131,7 @@ void	unveil_vnode_walk_backtrack(struct ucred *, struct vnode *dvp);
 void	unveil_vnode_walk_replace(struct ucred *, struct vnode *from_vp, struct vnode *to_vp);
 void	unveil_vnode_walk_created(struct ucred *, struct vnode *dvp, struct vnode *vp);
 int	unveil_vnode_walk_fixup_errno(struct ucred *, int error);
+bool	unveil_vnode_walk_dirent_visible(struct ucred *, struct vnode *dvp, struct dirent *dp);
 
 #define	UNVEIL_ON_COUNT	2
 

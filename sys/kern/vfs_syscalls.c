@@ -4193,7 +4193,14 @@ unionread:
 	loff = auio.uio_offset = foffset;
 #ifdef MAC
 	error = mac_vnode_check_readdir(td->td_ucred, vp);
-	if (error == 0)
+	if (error != 0) {
+		VOP_UNLOCK(vp);
+		goto fail;
+	}
+	if (CRED_IN_LIMITED_VFS_VISIBILITY_MODE(td->td_ucred))
+		error = mac_vnode_readdir_filtered(td->td_ucred, fp->f_cred,
+		    vp, &auio);
+	else
 #endif
 		error = VOP_READDIR(vp, &auio, fp->f_cred, &eofflag, NULL,
 		    NULL);

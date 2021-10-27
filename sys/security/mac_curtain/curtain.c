@@ -3061,6 +3061,7 @@ static struct mac_policy_ops curtain_policy_ops = {
 	.mpo_vnode_walk_replace = unveil_vnode_walk_replace,
 	.mpo_vnode_walk_created = unveil_vnode_walk_created,
 	.mpo_vnode_walk_fixup_errno = unveil_vnode_walk_fixup_errno,
+	.mpo_vnode_walk_dirent_visible = unveil_vnode_walk_dirent_visible,
 
 	.mpo_posixshm_init_label = curtain_init_label_barrier,
 	.mpo_posixshm_destroy_label = curtain_destroy_label_barrier,

@@ -33,6 +33,7 @@ enum curtain_state {
 #define CURTAIN_UNVEIL_INHERIT	(CURTAIN_INHERIT)
 #define CURTAIN_UNVEIL_INSPECT	(1 << 1)
 #define CURTAIN_UNVEIL_NOFOLLOW	(1 << 2)
+#define CURTAIN_UNVEIL_LIST	(1 << 3)
 
 struct curtain_slot *curtain_slot(void);
 struct curtain_slot *curtain_slot_on(enum curtain_on);

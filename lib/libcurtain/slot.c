@@ -753,6 +753,8 @@ curtain_unveil(struct curtain_slot *slot,
 		item->mode.uperms |= UPERM_TRAVERSE;
 		if (flags & CURTAIN_UNVEIL_INSPECT)
 			item->mode.uperms |= UPERM_INSPECT;
+		if (flags & CURTAIN_UNVEIL_LIST)
+			item->mode.uperms |= UPERM_LIST;
 	}
 	if (item) {
 		item_set_flags(item, flags);

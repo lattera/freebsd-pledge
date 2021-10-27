@@ -21,6 +21,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/namei.h>
 #include <sys/vnode.h>
 #include <sys/mount.h>
+#include <sys/dirent.h>
 #include <sys/sysctl.h>
 #include <sys/sx.h>
 #include <sys/mutex.h>
@@ -65,6 +66,7 @@ STATNODE_COUNTER(traversals, unveil_stats_traversals, "");
 STATNODE_COUNTER(ascents, unveil_stats_ascents, "");
 STATNODE_COUNTER(ascents_cached, unveil_stats_ascents_cached, "");
 STATNODE_COUNTER(ascent_total_depth, unveil_stats_ascent_total_depth, "");
+STATNODE_COUNTER(dirent_lookups, unveil_stats_dirent_lookups, "");
 
 struct unveil_node {
 	struct unveil_node *cover;
@@ -81,6 +83,7 @@ struct unveil_node {
 	unveil_perms frozen_uperms[UNVEIL_ON_COUNT];
 	unveil_perms wanted_uperms[UNVEIL_ON_COUNT];
 	bool wanted[UNVEIL_ON_COUNT];
+	bool hidden_children[UNVEIL_ON_COUNT];
 	unveil_index index;
 };
 
@@ -243,6 +246,7 @@ unveil_tree_dup(struct unveil_tree *old_tree)
 			new_node->frozen_uperms[i] = old_node->frozen_uperms[i];
 			new_node->wanted_uperms[i] = old_node->wanted_uperms[i];
 			new_node->wanted[i] = old_node->wanted[i];
+			new_node->hidden_children[i] = old_node->hidden_children[i];
 		}
 		new_node->index = old_node->index;
 	}
@@ -422,9 +426,15 @@ void
 unveil_stash_inherit(struct unveil_stash *stash, enum unveil_on on)
 {
 	struct unveil_node *node;
-	UNVEIL_FOREACH(node, stash)
+	UNVEIL_FOREACH(node, stash) {
 		node->actual_uperms[on] = node->frozen_uperms[on] &
 		    unveil_node_wanted_uperms(node, on);
+		node->hidden_children[on] = false;
+	}
+	UNVEIL_FOREACH(node, stash) {
+		if (node->cover && !(node->actual_uperms[on] & UPERM_EXPOSE))
+			node->cover->hidden_children[on] = true;
+	}
 	unveil_stash_check(stash);
 }
 
@@ -463,6 +473,7 @@ unveil_stash_exec_switch(struct unveil_stash *stash)
 		node->frozen_uperms[d] = node->frozen_uperms[s];
 		node->wanted_uperms[d] = node->wanted_uperms[s];
 		node->wanted[d] = node->wanted[s];
+		node->hidden_children[d] = node->hidden_children[s];
 	}
 	stash->flags.on[d] = stash->flags.on[s];
 	unveil_stash_check(stash);
@@ -1111,6 +1122,84 @@ unveil_vnode_walk_fixup_errno(struct ucred *cr, int error)
 			error = ENOENT;
 	}
 	return (error);
+}
+
+bool
+unveil_vnode_walk_dirent_visible(struct ucred *cr, struct vnode *dvp, struct dirent *dp)
+{
+	struct unveil_node *node;
+	struct vnode *vp;
+	struct mount *mp;
+	struct componentname cn;
+	unveil_perms uperms;
+	int error;
+
+	struct unveil_tracker *track;
+	if (!(track = unveil_track_get(cr, false)))
+		return (false);
+
+	if (unveil_track_peek(track)->vp != dvp)
+		return (false); /* should not happen */
+
+	uperms = track->uperms;
+	if (!(uperms & UPERM_LIST))
+		return (false);
+
+	if (!dp) { /* request to check if all children are visible */
+		if (!(uperms & UPERM_BROWSE))
+			return (false); /* children not visible by default */
+		return (!(track->cover && track->cover->hidden_children[UNVEIL_ON_SELF]));
+	}
+
+	if ((dp->d_namlen == 2 && dp->d_name[0] == '.' && dp->d_name[1] == '.') ||
+	    (dp->d_namlen == 1 && dp->d_name[0] == '.'))
+		return (true);
+
+	/* TODO: Could skip lookups for non-directories if it were known that
+	 * they were always unveiled by name. */
+
+	counter_u64_add(unveil_stats_dirent_lookups, 1);
+	cn = (struct componentname){
+		.cn_nameiop = LOOKUP,
+		.cn_flags = ISLASTCN,
+		.cn_lkflags = LK_SHARED,
+		.cn_cred = cr,
+		.cn_nameptr = dp->d_name,
+		.cn_namelen = dp->d_namlen,
+	};
+	error = VOP_LOOKUP(dvp, &vp, &cn);
+	if (error)
+		return (false);
+
+	while (vp->v_type == VDIR && (mp = vp->v_mountedhere)) {
+		if (vfs_busy(mp, 0))
+			continue;
+		if (vp != dvp)
+			vput(vp);
+		else
+			vrele(vp);
+		error = VFS_ROOT(mp, LK_SHARED, &vp);
+		vfs_unbusy(mp);
+		if (error)
+			return (false);
+	}
+
+	if (track->tree) {
+		node = unveil_tree_lookup(track->tree, vp, NULL, 0);
+		if (!node && vp->v_type != VDIR)
+			node = unveil_tree_lookup(track->tree, dvp, cn.cn_nameptr, cn.cn_namelen);
+		if (node)
+			uperms = node->actual_uperms[UNVEIL_ON_SELF];
+		else
+			uperms = uperms_inherit(track->uperms);
+	}
+
+	if (vp != dvp)
+		vput(vp);
+	else
+		vrele(vp);
+
+	return (uperms & UPERM_EXPOSE);
 }
 
 

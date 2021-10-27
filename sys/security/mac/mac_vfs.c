@@ -60,6 +60,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/systm.h>
 #include <sys/vnode.h>
 #include <sys/mount.h>
+#include <sys/dirent.h>
 #include <sys/file.h>
 #include <sys/namei.h>
 #include <sys/sdt.h>
@@ -1078,6 +1079,103 @@ vn_setlabel(struct vnode *vp, struct label *intlabel, struct ucred *cred)
 	 */
 
 	return (0);
+}
+
+
+bool
+mac_vnode_walk_dirent_visible(struct ucred *cred, struct vnode *vp,
+    struct dirent *dp)
+{
+	bool result;
+
+	ASSERT_VOP_LOCKED(vp, "mac_vnode_walk_dirent_visible");
+
+	result = true;
+	MAC_POLICY_BOOLEAN(vnode_walk_dirent_visible, &&, cred, vp, dp);
+
+	return (result);
+}
+
+int
+mac_vnode_readdir_filtered(struct ucred *active_cred, struct ucred *file_cred,
+    struct vnode *dvp, struct uio *ruio)
+{
+	struct mount *mp;
+	struct vattr va;
+	void *buf;
+	size_t buf_size;
+	off_t offset;
+	int error, lkflags, eofflag;
+
+	ASSERT_VOP_LOCKED(dvp, "mac_vnode_readdir_filtered");
+	MPASS(ruio->uio_rw == UIO_READ);
+
+	if (!CRED_IN_LIMITED_VFS_VISIBILITY_MODE(active_cred) ||
+	    mac_vnode_walk_dirent_visible(active_cred, dvp, NULL))
+		return (VOP_READDIR(dvp, ruio, file_cred, &eofflag, NULL, NULL));
+
+	error = VOP_GETATTR(dvp, &va, file_cred);
+	if (error)
+		return (error);
+	buf_size = MIN(ruio->uio_resid, MAX(DEV_BSIZE, va.va_blocksize));
+	buf = malloc(buf_size, M_TEMP, M_WAITOK);
+
+	mac_vnode_walk_roll(active_cred, 1);
+	VOP_UNLOCK(dvp); /* vnode_walk_start may try to lock */
+	mac_vnode_walk_start(active_cred, dvp);
+	/* vnode_walk_dirent_visible may use VOP_LOOKUP() */
+	if (dvp->v_type == VDIR && (mp = dvp->v_mount) &&
+	    (mp->mnt_kern_flag & MNTK_LOOKUP_SHARED))
+		lkflags = LK_SHARED;
+	else
+		lkflags = LK_EXCLUSIVE;
+	vn_lock(dvp, lkflags | LK_RETRY);
+
+	offset = ruio->uio_offset;
+	do {
+		struct iovec iov;
+		struct uio uio;
+		char *pos, *end;
+		iov.iov_base = buf;
+		iov.iov_len = buf_size;
+		uio.uio_iov = &iov;
+		uio.uio_iovcnt = 1;
+		uio.uio_offset = offset;
+		uio.uio_resid = buf_size;
+		uio.uio_segflg = UIO_SYSSPACE;
+		uio.uio_rw = UIO_READ;
+		uio.uio_td = ruio->uio_td;
+		error = VOP_READDIR(dvp, &uio, file_cred, &eofflag, NULL, NULL);
+		if (error)
+			goto out;
+		pos = buf;
+		end = (char *)buf + (buf_size - uio.uio_resid);
+		if (pos == end)
+			goto out;
+		while (pos < end) {
+			struct dirent *dp = (void *)pos;
+			if (dp->d_reclen > end - pos) {
+				if (pos == buf)
+					goto out;
+				else
+					break;
+			}
+			if (mac_vnode_walk_dirent_visible(file_cred, dvp, dp)) {
+				if (ruio->uio_resid < dp->d_reclen)
+					goto out;
+				error = uiomove(dp, dp->d_reclen, ruio);
+				if (error)
+					goto out;
+			}
+			offset = dp->d_off;
+			pos += dp->d_reclen;
+		}
+	} while (true);
+out:
+	mac_vnode_walk_roll(active_cred, -1);
+	free(buf, M_TEMP);
+	ruio->uio_offset = offset;
+	return (error);
 }
 
 
