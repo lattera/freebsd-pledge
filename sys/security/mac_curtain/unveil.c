@@ -666,11 +666,37 @@ unveil_save_prefix(struct unveil_save *save, struct unveil_node *cover)
 	save->first = false;
 }
 
+static void
+unveil_node_set_cover(struct unveil_node *node, struct unveil_node *cover)
+{
+	for (struct unveil_node *iter = cover; iter; iter = iter->cover)
+		if (iter == node)
+			return; /* prevent loops */
+	node->cover = cover;
+}
+
+static void
+unveil_node_init_uperms(struct unveil_node *node, struct unveil_node *cover,
+    struct unveil_base_flags flags, struct ucred *cr)
+{
+	for (int i = 0; i < UNVEIL_ON_COUNT; i++) {
+		node->wanted[i] = false;
+		node->wanted_uperms[i] = UPERM_NONE;
+		node->frozen_uperms[i] =
+		    cover ? uperms_inherit(cover->frozen_uperms[i]) :
+		    flags.on[i].frozen ? UPERM_NONE : UPERM_ALL;
+		node->actual_uperms[i] =
+		    (cover ? uperms_inherit(cover->actual_uperms[i]) :
+		     CRED_IN_LIMITED_VFS_VISIBILITY_MODE(cr) ? UPERM_NONE : UPERM_ALL) &
+		    node->frozen_uperms[i];
+	}
+}
+
 static struct unveil_node *
 unveil_save(struct ucred *cr, struct unveil_tracker *track,
     struct vnode *dvp, const char *name, size_t name_len, struct vnode *vp)
 {
-	struct unveil_node *node, *iter;
+	struct unveil_node *node;
 	bool inserted;
 	MPASS(!(name && !dvp));
 
@@ -695,13 +721,8 @@ unveil_save(struct ucred *cr, struct unveil_tracker *track,
 	 * Update the cover link of the node.  If directories move around, the
 	 * cover hierarchy might become out of date.
 	 */
-	if (track->cover) {
-		for (iter = track->cover; iter; iter = iter->cover)
-			if (iter == node)
-				break;
-		if (!iter) /* prevent loops */
-			node->cover = track->cover;
-	}
+	if (track->cover)
+		unveil_node_set_cover(node, track->cover);
 
 	/*
 	 * Newly added unveil nodes can inherit frozen permissions from their
@@ -710,17 +731,7 @@ unveil_save(struct ucred *cr, struct unveil_tracker *track,
 	 * not come from a node's cover link.
 	 */
 	if (inserted)
-		for (int i = 0; i < UNVEIL_ON_COUNT; i++) {
-			node->wanted[i] = false;
-			node->wanted_uperms[i] = UPERM_NONE;
-			node->frozen_uperms[i] =
-			    track->cover ? uperms_inherit(track->cover->frozen_uperms[i]) :
-			    track->flags.on[i].frozen ? UPERM_NONE : UPERM_ALL;
-			node->actual_uperms[i] =
-			    (track->cover ? uperms_inherit(track->cover->actual_uperms[i]) :
-			     CRED_IN_LIMITED_VFS_VISIBILITY_MODE(cr) ? UPERM_NONE : UPERM_ALL) &
-			    node->frozen_uperms[i];
-		}
+		unveil_node_init_uperms(node, track->cover, track->flags, cr);
 
 	if (track->save->ter) {
 		(*track->save->tep)[0] = node->cover ? node->cover->index : node->index;
@@ -741,8 +752,9 @@ unveil_find_cover(struct ucred *cr, struct unveil_tree *tree,
 	struct vnode *vp;
 	struct componentname cn;
 
-	if ((mp = dp->v_mount) && (mp->mnt_kern_flag & MNTK_LOOKUP_SHARED) &&
-	    !(mp->mnt_kern_flag & MNTK_LOOKUP_EXCL_DOTDOT))
+	if (dp->v_type == VDIR && (mp = dp->v_mount) &&
+	    (mp->mnt_kern_flag & (MNTK_LOOKUP_SHARED | MNTK_LOOKUP_EXCL_DOTDOT)) ==
+	    MNTK_LOOKUP_SHARED)
 		lkflags = LK_SHARED;
 	else
 		lkflags = LK_EXCLUSIVE;
