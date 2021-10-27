@@ -33,9 +33,9 @@
 #define	UPERM_BIND		(1 << 16)
 #define	UPERM_CONNECT		(1 << 17)
 #define	UPERM_UNIX		(UPERM_BIND | UPERM_CONNECT)
-#define	UPERM_TMPDIR		(1 << 23)
-#define	UPERM_TMPDIR_CHILD	(1 << 24)
-#define	UPERM_DEVFS		(1 << 25)
+#define	UPERM_TMPDIR		(1 << 24)
+#define	UPERM_TMPDIR_CHILD	(1 << 25)
+#define	UPERM_DEVFS		(1 << 26)
 #define	UPERM_ALL		(-1)
 
 static const unveil_perms uperms_inheritable =
@@ -88,7 +88,7 @@ int unveilreg(int flags, struct unveilreg *);
 #define	UNVEILREG_VER_SHIFT	(24)
 #define	UNVEILREG_VER_MASK	(0xff << UNVEILREG_VER_SHIFT)
 #define	UNVEILREG_VERSION(v)	(((v) << UNVEILREG_VER_SHIFT) & UNVEILREG_VER_MASK)
-#define	UNVEILREG_THIS_VERSION	UNVEILREG_VERSION(2)
+#define	UNVEILREG_THIS_VERSION	UNVEILREG_VERSION(3)
 
 #define	UNVEILREG_REGISTER	(1 <<  0)
 #define	UNVEILREG_NONDIRBYNAME	(1 <<  9)
