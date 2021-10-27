@@ -2391,7 +2391,7 @@ curtain_vnode_check_getacl(struct ucred *cr,
     struct vnode *vp, struct label *vplabel, acl_type_t type)
 {
 	int error;
-	if ((error = unveil_check_uperms(get_vp_uperms(cr, vp), UPERM_READ)))
+	if ((error = unveil_check_uperms(get_vp_uperms(cr, vp), UPERM_STATUS)))
 		return (error);
 	if ((error = cred_ability_check(cr, CURTAINABL_ACL)))
 		return (error);
