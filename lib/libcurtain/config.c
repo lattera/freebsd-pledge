@@ -61,6 +61,7 @@ curtain_parse_unveil_perms(unveil_perms *uperms, const char *s)
 	*uperms = UPERM_NONE;
 	while (*s)
 		switch (*s++) {
+		case 'l': *uperms |= UPERM_LIST; break;
 		case 'b': *uperms |= UPERM_BROWSE; break;
 		case 'r': *uperms |= UPERM_READ; break;
 		case 'p': *uperms |= UPERM_APPEND; break;

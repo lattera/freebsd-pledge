@@ -2005,7 +2005,7 @@ curtain_vnode_check_open(struct ucred *cr,
 		break;
 	case VDIR:
 		if (accmode & VREAD &&
-		    (error = unveil_check_uperms(uperms, UPERM_BROWSE)))
+		    (error = unveil_check_uperms(uperms, UPERM_LIST)))
 			return (error);
 		if (accmode & VWRITE &&
 		    (error = unveil_check_uperms(uperms,

@@ -21,6 +21,7 @@
 #define	UPERM_SEARCH		(1 <<  2)
 #define	UPERM_STATUS		(1 <<  3)
 #define	UPERM_INSPECT		(UPERM_EXPOSE | UPERM_SEARCH | UPERM_STATUS)
+#define	UPERM_LIST		(1 <<  4)
 #define	UPERM_BROWSE		(1 <<  8)
 #define	UPERM_READ		(1 <<  9)
 #define	UPERM_WRITE		(1 << 10)
@@ -55,7 +56,7 @@ uperms_expand(unveil_perms uperms)
 	if (uperms & UPERM_WRITE)
 		uperms |= UPERM_APPEND;
 	if (uperms & (UPERM_BROWSE | UPERM_READ))
-		uperms |= UPERM_STATUS | UPERM_BROWSE;
+		uperms |= UPERM_STATUS | UPERM_BROWSE | UPERM_LIST;
 	if (uperms & UPERM_SEARCH)
 		uperms |= UPERM_TRAVERSE;
 	if (uperms & UPERM_READ && uperms & UPERM_WRITE &&
