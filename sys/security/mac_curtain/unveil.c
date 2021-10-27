@@ -23,6 +23,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/mount.h>
 #include <sys/sysctl.h>
 #include <sys/sx.h>
+#include <sys/mutex.h>
 #include <sys/refcount.h>
 #include <sys/eventhandler.h>
 #include <sys/filedesc.h>
@@ -102,6 +103,7 @@ struct unveil_save {
 };
 
 struct unveil_cache {
+	struct mtx mtx;
 	uint64_t serial;
 #define UNVEIL_CACHE_ENTRIES_COUNT 4
 	struct unveil_cache_entry {
@@ -278,6 +280,7 @@ unveil_base_init(struct unveil_base *base)
 {
 	*base = (struct unveil_base){ .tree = NULL };
 	sx_init_flags(&base->sx, "unveil base", SX_NEW);
+	mtx_init(&base->cover_cache.mtx, "unveil cover cache", NULL, MTX_DEF | MTX_NEW);
 }
 
 static struct unveil_tree *
@@ -332,6 +335,7 @@ void
 unveil_base_free(struct unveil_base *base)
 {
 	unveil_base_clear(base);
+	mtx_destroy(&base->cover_cache.mtx);
 	sx_destroy(&base->sx);
 }
 
@@ -880,17 +884,14 @@ unveil_vnode_walk_start(struct ucred *cr, struct vnode *dvp)
 	counter_u64_add(unveil_stats_traversals, 1);
 	depth = 0;
 	track->cover = NULL;
-	if (unveil_cover_cache_enabled && base &&  !track->save) {
+	if (unveil_cover_cache_enabled && base && !track->save) {
 		struct unveil_cache_entry *ent;
 		ent = NULL;
 		for (size_t i = 0; i < UNVEIL_CACHE_ENTRIES_COUNT; i++)
 			if (base->cover_cache.entries[i].vp == dvp)
 				ent = &base->cover_cache.entries[i];
 		if (ent) {
-			if (track->save)
-				sx_assert(&base->sx, SA_XLOCKED);
-			else
-				sx_slock(&base->sx);
+			mtx_lock(&base->cover_cache.mtx);
 			if (ent->vp == dvp &&
 			    ent->vp_nchash == dvp->v_nchash &&
 			    ent->vp_hash == dvp->v_hash &&
@@ -899,8 +900,7 @@ unveil_vnode_walk_start(struct ucred *cr, struct vnode *dvp)
 				depth = -1;
 				counter_u64_add(unveil_stats_ascents_cached, 1);
 			}
-			if (!track->save)
-				sx_sunlock(&base->sx);
+			mtx_unlock(&base->cover_cache.mtx);
 		}
 	}
 	if (!track->cover && track->tree) {
@@ -910,12 +910,9 @@ unveil_vnode_walk_start(struct ucred *cr, struct vnode *dvp)
 		if (depth > 0) {
 			counter_u64_add(unveil_stats_ascents, 1);
 			counter_u64_add(unveil_stats_ascent_total_depth, depth);
-			if (unveil_cover_cache_enabled && base &&  !track->save && track->cover) {
+			if (unveil_cover_cache_enabled && base && !track->save && track->cover) {
 				struct unveil_cache_entry *ent;
-				if (track->save)
-					sx_assert(&base->sx, SA_XLOCKED);
-				else
-					sx_xlock(&base->sx);
+				mtx_lock(&base->cover_cache.mtx);
 				ent = base->cover_cache.entries;
 				memcpy(ent, &ent[1], (UNVEIL_CACHE_ENTRIES_COUNT - 1) * sizeof *ent);
 				ent->cover = track->cover;
@@ -923,8 +920,7 @@ unveil_vnode_walk_start(struct ucred *cr, struct vnode *dvp)
 				ent->vp_nchash = dvp->v_nchash;
 				ent->vp_hash = dvp->v_hash;
 				base->cover_cache.serial = track->serial;
-				if (!track->save)
-					sx_xunlock(&base->sx);
+				mtx_unlock(&base->cover_cache.mtx);
 			}
 		}
 	}
