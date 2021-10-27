@@ -305,7 +305,7 @@ do_unveil(struct parser *par, const char *path)
 	size_t len;
 	int flags, r;
 	bool is_dir;
-	flags = CURTAIN_UNVEIL_INSPECT;
+	flags = par->directive_flags;
 	len = strlen(path);
 	/*
 	 * Do not follow symlinks on the final path component of the unveil
@@ -600,22 +600,26 @@ parse_default(struct parser *par, struct word *w)
 	curtain_default(par->slot, par->directive_flags);
 }
 
+static const int path_flags = CURTAIN_UNVEIL_INSPECT;
+
 static const struct {
 	const char name[8];
 	void (*func)(struct parser *, struct word *);
+	int flags;
 } directives[] = {
-	{ "merge",	parse_push	},
-	{ "push",	parse_push	},
-	{ "unveil",	parse_unveil	},
-	{ "ability",	parse_ability	},
-	{ "sysctl",	parse_sysctl	},
-	{ "priv",	parse_priv	},
-	{ "ioctl",	parse_ioctls	},
-	{ "ioctls",	parse_ioctls	},
-	{ "sockaf",	parse_sockaf	},
-	{ "socklvl",	parse_socklvl	},
-	{ "fibnum",	parse_fibnum	},
-	{ "default",	parse_default	},
+	{ "merge",	parse_push,	0 },
+	{ "push",	parse_push,	0 },
+	{ "unveil",	parse_unveil,	0 },
+	{ "path",	parse_unveil,	path_flags },
+	{ "ability",	parse_ability,	0 },
+	{ "sysctl",	parse_sysctl,	0 },
+	{ "priv",	parse_priv,	0 },
+	{ "ioctl",	parse_ioctls,	0 },
+	{ "ioctls",	parse_ioctls,	0 },
+	{ "sockaf",	parse_sockaf,	0 },
+	{ "socklvl",	parse_socklvl,	0 },
+	{ "fibnum",	parse_fibnum,	0 },
+	{ "default",	parse_default,	0 },
 };
 
 static const struct {
@@ -687,6 +691,7 @@ parse_directive(struct parser *par, char *p)
 		return;
 	for (size_t i = 0; i < nitems(directives); i++)
 		if (strmemcmp(directives[i].name, dir, dir_end - dir) == 0) {
+			par->directive_flags |= directives[i].flags;
 			need_slot(par);
 			parse_words(par, p, directives[i].func);
 			return;
@@ -862,6 +867,7 @@ next:	switch (*p) {
 	case '~':
 	case '%':
 		if (!par->skip) {
+			par->directive_flags = path_flags;
 			need_slot(par);
 			parse_words(par, p, parse_unveil);
 		}

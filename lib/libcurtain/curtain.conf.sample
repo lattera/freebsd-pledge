@@ -177,7 +177,7 @@ merge _crude _tty
 /etc/vi.exrc				: r
 # recovery handling needs to be able to read the user database
 merge! _pwddb
-unveil! /var/tmp/vi.recover/		: rw
+path! /var/tmp/vi.recover/		: rw
 
 [git]
 merge _basic

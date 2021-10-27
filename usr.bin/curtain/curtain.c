@@ -355,7 +355,7 @@ static void
 usage(void)
 {
 	fprintf(stderr, "usage: %s [-vfknaAXYW] "
-	    "[-t tag] [-p promises] [-u unveil ...] "
+	    "[-t tag] [-p path[:perms]] "
 	    "[-Ssl] [name=value ...] cmd [arg ...]\n",
 	    getprogname());
 	exit(EX_USAGE);
@@ -369,7 +369,6 @@ main(int argc, char *argv[])
 {
 	char *sh_argv[2];
 	int ch, r;
-	char *promises = NULL;
 	unsigned unsafety = 0;
 	unsigned level = DEFAULT_LEVEL;
 	bool has_level = false,
@@ -462,13 +461,8 @@ main(int argc, char *argv[])
 			}
 			break;
 		}
-		case 'p':
-			for (char *p = optarg; *p; p++)
-				if (*p == ',')
-					*p = ' ';
-			promises = optarg;
-			break;
-		case 'u': {
+		case 'u':
+		case 'p': {
 			char *path, *perms;
 			unveil_perms uperms;
 			path = optarg;
@@ -494,7 +488,8 @@ main(int argc, char *argv[])
 			if (r < 0)
 				errx(EX_USAGE, "invalid unveil permissions: %s", perms);
 			r = curtain_unveil(args_slot, path,
-			    CURTAIN_UNVEIL_INSPECT, uperms);
+			    ch == 'p' ? CURTAIN_UNVEIL_INSPECT : 0,
+			    uperms);
 			if (r < 0 && errno != ENOENT)
 				warn("%s", path);
 			break;
@@ -591,18 +586,9 @@ main(int argc, char *argv[])
 
 	curtain_config_load(cfg);
 
-	if (promises) {
-		r = pledge(NULL, promises);
-		if (r < 0)
-			err(EX_NOPERM, "pledge");
-		r = unveil_exec(NULL, NULL);
-		if (r < 0)
-			err(EX_NOPERM, "unveil");
-	} else {
-		r = unenforced ? curtain_engage() : curtain_enforce();
-		if (r < 0)
-			err(EX_NOPERM, "curtain_enforce");
-	}
+	r = unenforced ? curtain_engage() : curtain_enforce();
+	if (r < 0)
+		err(EX_NOPERM, "curtain_enforce");
 
 
 	pw = NULL;

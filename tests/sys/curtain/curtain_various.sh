@@ -222,7 +222,7 @@ atf_test_case reunveil_inheritance
 reunveil_inheritance_body() {
 	atf_check mkdir -p a/b/c/d
 	atf_check touch a/b/c/d/f
-	curtain -t curtain -u a:rw -u a/b/c:r -u a/b/c/d: -u a/b/c/d/f:rw \
+	atf_check curtain -t curtain -u a:rw -u a/b/c:r -u a/b/c/d: -u a/b/c/d/f:rw \
 		curtain -u /:rw test \
 			\( -r a -a -w a \) -a \
 			\( -r a/b -a -w a/b \) -a \
