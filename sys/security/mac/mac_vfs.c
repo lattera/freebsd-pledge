@@ -1104,7 +1104,7 @@ mac_vnode_readdir_filtered(struct ucred *active_cred, struct ucred *file_cred,
 	struct vattr va;
 	void *buf;
 	size_t buf_size;
-	off_t offset;
+	bool last_read;
 	int error, eofflag;
 
 	ASSERT_VOP_LOCKED(dvp, "mac_vnode_readdir_filtered");
@@ -1125,7 +1125,7 @@ mac_vnode_readdir_filtered(struct ucred *active_cred, struct ucred *file_cred,
 	    VOP_ISLOCKED(dvp) == LK_SHARED)
 		vn_lock(dvp, LK_UPGRADE | LK_RETRY);
 
-	offset = ruio->uio_offset;
+	last_read = false;
 	do {
 		struct iovec iov;
 		struct uio uio;
@@ -1134,7 +1134,7 @@ mac_vnode_readdir_filtered(struct ucred *active_cred, struct ucred *file_cred,
 		iov.iov_len = buf_size;
 		uio.uio_iov = &iov;
 		uio.uio_iovcnt = 1;
-		uio.uio_offset = offset;
+		uio.uio_offset = ruio->uio_offset;
 		uio.uio_resid = buf_size;
 		uio.uio_segflg = UIO_SYSSPACE;
 		uio.uio_rw = UIO_READ;
@@ -1143,30 +1143,55 @@ mac_vnode_readdir_filtered(struct ucred *active_cred, struct ucred *file_cred,
 		if (error)
 			goto out;
 		end = (pos = buf) + (buf_size - uio.uio_resid);
-		if (pos == end) /* eof */
+		if (pos == end) /* EOF */
 			goto out;
 		while (pos < end) {
 			struct dirent *dp = (void *)pos;
-			if (dp->d_reclen > end - pos) {
-				if (pos == buf)
+			if (__offsetof(struct dirent, d_name) > end - pos ||
+			    dp->d_reclen > end - pos) { /* partial entry */
+				if (pos == buf) {
+					error = EINVAL;
 					goto out; /* it'll never fit... */
-				else
-					break; /* try again with empty buffer */
+				}
+				break; /* try again with empty buffer */
 			}
-			if (mac_vnode_walk_dirent_visible(file_cred, dvp, dp)) {
+			if (dp->d_fileno != 0 &&
+			    mac_vnode_walk_dirent_visible(file_cred, dvp, dp)) {
+				/* Visible entry, append to return buffer. */
 				if (ruio->uio_resid < dp->d_reclen)
 					goto out; /* returned all we can */
 				error = uiomove(dp, dp->d_reclen, ruio);
 				if (error)
 					goto out;
 			}
-			offset = dp->d_off;
 			pos += dp->d_reclen;
+			/*
+			 * The NFS client (and maybe others?) sets d_off to 0.
+			 */
+			if (dp->d_off != 0) {
+				ruio->uio_offset = dp->d_off;
+			} else {
+				/*
+				 * Don't do another VOP_READDIR() unless the
+				 * return buffer has enough room for everything
+				 * we could potentially get or we'd have no way
+				 * to resume from where we left off.
+				 *
+				 * The caller may get a (very) short read, but
+				 * not a zero read (since our buffer cannot be
+				 * larger than the return buffer, the return
+				 * buffer necessarily must have been filled).
+				 *
+				 * Hopefully VOP_READDIR() never returns an
+				 * incomplete entry at the end of the buffer...
+				 */
+				last_read = ruio->uio_resid < buf_size;
+				ruio->uio_offset = uio.uio_offset;
+			}
 		}
-	} while (true);
+	} while (!last_read);
 out:
 	free(buf, M_TEMP);
-	ruio->uio_offset = offset;
 	return (error);
 }
 
