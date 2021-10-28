@@ -1105,7 +1105,7 @@ mac_vnode_readdir_filtered(struct ucred *active_cred, struct ucred *file_cred,
 	void *buf;
 	size_t buf_size;
 	off_t offset;
-	int error, lkflags, eofflag;
+	int error, eofflag;
 
 	ASSERT_VOP_LOCKED(dvp, "mac_vnode_readdir_filtered");
 	MPASS(ruio->uio_rw == UIO_READ);
@@ -1120,16 +1120,10 @@ mac_vnode_readdir_filtered(struct ucred *active_cred, struct ucred *file_cred,
 	buf_size = MIN(ruio->uio_resid, MAX(DEV_BSIZE, va.va_blocksize));
 	buf = malloc(buf_size, M_TEMP, M_WAITOK);
 
-	mac_vnode_walk_roll(active_cred, 1);
-	VOP_UNLOCK(dvp); /* vnode_walk_start may try to lock */
-	mac_vnode_walk_start(active_cred, dvp);
-	/* vnode_walk_dirent_visible may use VOP_LOOKUP() */
-	if (dvp->v_type == VDIR && (mp = dvp->v_mount) &&
-	    (mp->mnt_kern_flag & MNTK_LOOKUP_SHARED))
-		lkflags = LK_SHARED;
-	else
-		lkflags = LK_EXCLUSIVE;
-	vn_lock(dvp, lkflags | LK_RETRY);
+	/* The vnode_walk_dirent_visible handlers may use VOP_LOOKUP(). */
+	if ((mp = dvp->v_mount) && !(mp->mnt_kern_flag & MNTK_LOOKUP_SHARED) &&
+	    VOP_ISLOCKED(dvp) == LK_SHARED)
+		vn_lock(dvp, LK_UPGRADE | LK_RETRY);
 
 	offset = ruio->uio_offset;
 	do {
@@ -1148,21 +1142,20 @@ mac_vnode_readdir_filtered(struct ucred *active_cred, struct ucred *file_cred,
 		error = VOP_READDIR(dvp, &uio, file_cred, &eofflag, NULL, NULL);
 		if (error)
 			goto out;
-		pos = buf;
-		end = (char *)buf + (buf_size - uio.uio_resid);
-		if (pos == end)
+		end = (pos = buf) + (buf_size - uio.uio_resid);
+		if (pos == end) /* eof */
 			goto out;
 		while (pos < end) {
 			struct dirent *dp = (void *)pos;
 			if (dp->d_reclen > end - pos) {
 				if (pos == buf)
-					goto out;
+					goto out; /* it'll never fit... */
 				else
-					break;
+					break; /* try again with empty buffer */
 			}
 			if (mac_vnode_walk_dirent_visible(file_cred, dvp, dp)) {
 				if (ruio->uio_resid < dp->d_reclen)
-					goto out;
+					goto out; /* returned all we can */
 				error = uiomove(dp, dp->d_reclen, ruio);
 				if (error)
 					goto out;
@@ -1172,7 +1165,6 @@ mac_vnode_readdir_filtered(struct ucred *active_cred, struct ucred *file_cred,
 		}
 	} while (true);
 out:
-	mac_vnode_walk_roll(active_cred, -1);
 	free(buf, M_TEMP);
 	ruio->uio_offset = offset;
 	return (error);

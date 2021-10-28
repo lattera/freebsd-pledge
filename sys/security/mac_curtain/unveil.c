@@ -763,7 +763,7 @@ unveil_find_cover(struct ucred *cr, struct unveil_tree *tree,
 	struct vnode *vp;
 	struct componentname cn;
 
-	if (dp->v_type == VDIR && (mp = dp->v_mount) &&
+	if ((mp = dp->v_mount) &&
 	    (mp->mnt_kern_flag & (MNTK_LOOKUP_SHARED | MNTK_LOOKUP_EXCL_DOTDOT)) ==
 	    MNTK_LOOKUP_SHARED)
 		lkflags = LK_SHARED;
@@ -1127,6 +1127,8 @@ unveil_vnode_walk_fixup_errno(struct ucred *cr, int error)
 bool
 unveil_vnode_walk_dirent_visible(struct ucred *cr, struct vnode *dvp, struct dirent *dp)
 {
+	struct unveil_tracker *track;
+	struct unveil_tracker_entry *entry;
 	struct unveil_node *node;
 	struct vnode *vp;
 	struct mount *mp;
@@ -1134,21 +1136,19 @@ unveil_vnode_walk_dirent_visible(struct ucred *cr, struct vnode *dvp, struct dir
 	unveil_perms uperms;
 	int error;
 
-	struct unveil_tracker *track;
-	if (!(track = unveil_track_get(cr, false)))
+	if (!((track = unveil_track_get(cr, false)) &&
+	      (entry = unveil_track_find(track, dvp))))
 		return (false);
 
-	if (unveil_track_peek(track)->vp != dvp)
-		return (false); /* should not happen */
-
-	uperms = track->uperms;
+	uperms = entry->uperms;
 	if (!(uperms & UPERM_LIST))
 		return (false);
 
 	if (!dp) { /* request to check if all children are visible */
 		if (!(uperms & UPERM_BROWSE))
 			return (false); /* children not visible by default */
-		return (!(track->cover && track->cover->hidden_children[UNVEIL_ON_SELF]));
+		node = track->tree ? unveil_tree_lookup(track->tree, dvp, NULL, 0) : NULL;
+		return (!(node && node->hidden_children[UNVEIL_ON_SELF]));
 	}
 
 	if ((dp->d_namlen == 2 && dp->d_name[0] == '.' && dp->d_name[1] == '.') ||
@@ -1191,7 +1191,7 @@ unveil_vnode_walk_dirent_visible(struct ucred *cr, struct vnode *dvp, struct dir
 		if (node)
 			uperms = node->actual_uperms[UNVEIL_ON_SELF];
 		else
-			uperms = uperms_inherit(track->uperms);
+			uperms = uperms_inherit(uperms);
 	}
 
 	if (vp != dvp)
