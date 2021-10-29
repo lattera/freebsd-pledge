@@ -2815,7 +2815,7 @@ static inline void
 _fget_unveil(struct thread *td, struct filedesc *fdp, struct file *fp)
 {
 #ifdef MAC
-	if (CRED_IN_LIMITED_VFS_VISIBILITY_MODE(td->td_ucred))
+	if (CRED_IN_VFS_VEILED_MODE(td->td_ucred))
 		mac_vnode_walk_start_file(td->td_ucred, fp);
 #endif
 }

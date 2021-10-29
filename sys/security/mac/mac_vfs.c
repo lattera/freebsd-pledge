@@ -1110,7 +1110,7 @@ mac_vnode_readdir_filtered(struct ucred *active_cred, struct ucred *file_cred,
 	ASSERT_VOP_LOCKED(dvp, "mac_vnode_readdir_filtered");
 	MPASS(ruio->uio_rw == UIO_READ);
 
-	if (!CRED_IN_LIMITED_VFS_VISIBILITY_MODE(active_cred) ||
+	if (!CRED_IN_VFS_VEILED_MODE(active_cred) ||
 	    mac_vnode_walk_dirent_visible(active_cred, dvp, NULL))
 		return (VOP_READDIR(dvp, ruio, file_cred, &eofflag, NULL, NULL));
 

@@ -291,7 +291,7 @@ restart:
 #ifdef MAC
 			if (error == 0 &&
 			    (vn_open_flags & VN_OPEN_NOMACCHECK) == 0 &&
-			    CRED_IN_LIMITED_VFS_VISIBILITY_MODE(cred))
+			    CRED_IN_VFS_VEILED_MODE(cred))
 				mac_vnode_walk_created(cred, ndp->ni_dvp, ndp->ni_vp);
 #endif
 			vp = ndp->ni_vp;

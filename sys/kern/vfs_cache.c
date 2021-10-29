@@ -4240,7 +4240,7 @@ cache_can_fplookup(struct cache_fpl *fpl)
 		cache_fpl_aborted_early(fpl);
 		return (false);
 	}
-	if (CRED_IN_LIMITED_VFS_VISIBILITY_MODE(cnp->cn_cred)) {
+	if (CRED_IN_VFS_VEILED_MODE(cnp->cn_cred)) {
 		cache_fpl_aborted_early(fpl);
 		return (false);
 	}

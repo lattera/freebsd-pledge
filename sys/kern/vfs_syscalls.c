@@ -4197,7 +4197,7 @@ unionread:
 		VOP_UNLOCK(vp);
 		goto fail;
 	}
-	if (CRED_IN_LIMITED_VFS_VISIBILITY_MODE(td->td_ucred))
+	if (CRED_IN_VFS_VEILED_MODE(td->td_ucred))
 		error = mac_vnode_readdir_filtered(td->td_ucred, fp->f_cred,
 		    vp, &auio);
 	else

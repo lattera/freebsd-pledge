@@ -1955,7 +1955,7 @@ get_vp_uperms(struct ucred *cr, struct vnode *vp)
 {
 	struct unveil_tracker *track;
 	struct unveil_tracker_entry *entry;
-	if (CRED_IN_LIMITED_VFS_VISIBILITY_MODE(cr)) {
+	if (CRED_IN_VFS_VEILED_MODE(cr)) {
 		if ((track = unveil_track_get(cr, false)) &&
 		    (entry = unveil_track_find(track, vp)))
 			return (entry->uperms);
@@ -1970,7 +1970,7 @@ get_vp_pending_uperms(struct ucred *cr, struct vnode *dvp, struct componentname 
 {
 	struct unveil_tracker *track;
 	struct unveil_tracker_entry *entry;
-	if (CRED_IN_LIMITED_VFS_VISIBILITY_MODE(cr)) {
+	if (CRED_IN_VFS_VEILED_MODE(cr)) {
 		if ((track = unveil_track_get(cr, false))) {
 			if (vp && (entry = unveil_track_find(track, vp)))
 				return (entry->uperms);
@@ -2473,7 +2473,7 @@ curtain_mount_check_stat(struct ucred *cr,
 {
 	unveil_perms uperms;
 	int error;
-	if (CRED_IN_LIMITED_VFS_VISIBILITY_MODE(cr)) {
+	if (CRED_IN_VFS_VEILED_MODE(cr)) {
 		struct curtain *ct;
 		if (mtx_owned(&mountlist_mtx)) { /* getfsstat(2)? */
 			if ((ct = CRED_SLOT(cr)))

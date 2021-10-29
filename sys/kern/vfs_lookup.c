@@ -329,7 +329,7 @@ namei_setup(struct nameidata *ndp, struct vnode **dpp, struct pwd **pwdp)
 #ifdef MAC
 	if ((cnp->cn_flags & NOMACCHECK) == 0 &&
 	    ((cnp->cn_flags & FORCEMACWALK) != 0 ||
-	     CRED_IN_LIMITED_VFS_VISIBILITY_MODE(cnp->cn_cred)))
+	     CRED_IN_VFS_VEILED_MODE(cnp->cn_cred)))
 		ndp->ni_lcf |= NI_LCF_MACWALK_ACTIVE;
 #endif
 

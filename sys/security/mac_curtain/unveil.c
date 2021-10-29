@@ -698,7 +698,7 @@ unveil_node_init_uperms(struct unveil_node *node, struct unveil_node *cover,
 		    flags.on[i].frozen ? UPERM_NONE : UPERM_ALL;
 		node->actual_uperms[i] =
 		    (cover ? uperms_inherit(cover->actual_uperms[i]) :
-		     CRED_IN_LIMITED_VFS_VISIBILITY_MODE(cr) ? UPERM_NONE : UPERM_ALL) &
+		     CRED_IN_VFS_VEILED_MODE(cr) ? UPERM_NONE : UPERM_ALL) &
 		    node->frozen_uperms[i];
 	}
 }
@@ -867,7 +867,7 @@ unveil_vnode_walk_annotate_file(struct ucred *cr, struct file *fp, struct vnode 
 	struct unveil_tracker *track;
 	struct unveil_tracker_entry *entry;
 	fp->f_uldgen = unveil_stash_get(cr, NULL);
-	if (CRED_IN_LIMITED_VFS_VISIBILITY_MODE(cr)) {
+	if (CRED_IN_VFS_VEILED_MODE(cr)) {
 		if ((track = unveil_track_get(cr, false)) &&
 		    (entry = unveil_track_find(track, vp)))
 			fp->f_uperms = entry->uperms;
@@ -965,7 +965,7 @@ unveil_vnode_walk_start(struct ucred *cr, struct vnode *dvp)
 	} else {
 		track->uperms =
 		    (track->save ? track->flags.on[on].frozen :
-		     CRED_IN_LIMITED_VFS_VISIBILITY_MODE(cr)) ?
+		     CRED_IN_VFS_VEILED_MODE(cr)) ?
 		    UPERM_NONE : UPERM_ALL;
 	}
 
