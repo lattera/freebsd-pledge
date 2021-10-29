@@ -33,6 +33,9 @@
 # pulseaudio will be unusable, but thankfully some programs just start using
 # OSS directly instead.
 
+
+# XXX Those paths shouldn't be unveiled by default.
+
 [_editor]
 ~/Documents/				: rw
 ~/Templates/				: rw
@@ -297,14 +300,38 @@ merge _basic
 merge _basic
 ~/.purple/				: rw +
 
-[firefox : _browser]
+[firefox.base : _browser]
 # NOTE: Sometimes crash due to X11 errors with -X.  Works better under -Y/-W.
 # Run with GDK_BACKEND=wayland for -W.  When giving it DRM access, it sometimes
 # doesn't activate until the second start.
 merge _basic _fdpass _gtk
 ability posixipc prot_exec
+~/.mozilla/firefox/installs.ini
+~/.mozilla/firefox/profiles.ini
+
+[firefox : firefox.base]
+# Gives access to ALL profiles.
 ~/.mozilla/firefox/			: rw +
 ~/.cache/mozilla/firefox/		: rw +
+
+# If you have multiple profiles, you can run them in separate sandboxes.  See
+# the sample firefox-profile1.desktop file in /usr/share/examples/curtain/.
+# Create a copy of this file and a new section like the one below for each
+# profile and update the profile names and paths.
+#
+# Copying the .desktop files to ~/.local/share/applications/ might be enough to
+# make them available in your window manager's menu.
+#
+# Which profile a window belongs to will probably be hard to tell unless you
+# change something in the profile to make it distinctive somehow.
+#
+# NOTE: You can create new profiles in Firefox by entering "about:profiles" in
+# the address bar.
+#
+#[firefox-profile1 : firefox.base]
+#~/.mozilla/firefox/XXXXXXXX.profile1/		: rw +
+#~/.cache/mozilla/firefox/XXXXXXXX.profile1/	: rw +
+
 
 [chrome : _browser]
 # NOTE: When running chromium as an "untrusted" X11 client (curtain -X), the
@@ -355,8 +382,7 @@ merge _crude _ps _xdg
 
 [mpv : _player]
 merge _basic
-~/.mpv/					: rw +
-~/.config/mpv/				: rw +
+~/.config/mpv/ ~/.mpv/			: rw +
 
 [mplayer : _player]
 merge _basic

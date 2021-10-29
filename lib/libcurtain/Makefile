@@ -19,7 +19,7 @@ GUICONF=	fontconfig.conf
 GUICONFDIR=	/etc/curtain.d/_gui.d
 .if ${MK_EXAMPLES} != "no"
 FILESDIR=	${SHAREDIR}/examples/curtain
-FILES=		curtain.conf.sample make-drm-render-conf.c
+FILES=		curtain.conf.sample make-drm-render-conf.c firefox-profile1.desktop
 .endif
 
 MKTABFILES=	abilitytab.c privtab.c socklvltab.c sockaftab.c
