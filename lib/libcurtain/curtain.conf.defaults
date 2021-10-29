@@ -128,6 +128,9 @@ ability proc
 [_ps]
 ability ps
 
+[_localbase]
+sysctl user.localbase
+
 [_rtld]
 /etc/libmap.conf			: r
 /var/run/ld-elf.so.hints		: r
