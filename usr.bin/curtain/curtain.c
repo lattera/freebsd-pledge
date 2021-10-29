@@ -597,6 +597,7 @@ main(int argc, char *argv[])
 		const char *set_home = NULL, *set_shell = NULL,
 		      *set_user = NULL, *set_logname = NULL,
 		      *set_term = NULL,
+		      *set_tmpdir = NULL,
 		      *set_display = NULL, *set_xauthority = NULL,
 		      *set_wdisplay = NULL;
 		static char *null_env[] = { NULL };
@@ -622,6 +623,7 @@ main(int argc, char *argv[])
 			set_logname = getenv("LOGNAME");
 		}
 		set_term = getenv("TERM");
+		set_tmpdir = getenv("TMPDIR");
 		if (x11_mode != X11_NONE) {
 			set_display = getenv("DISPLAY");
 			set_xauthority = getenv("XAUTHORITY");
@@ -645,6 +647,8 @@ main(int argc, char *argv[])
 			esetenv("LOGNAME", set_logname, 1);
 		if (set_term)
 			esetenv("TERM", set_term, 1);
+		if (set_tmpdir)
+			esetenv("TMPDIR", set_tmpdir, 1);
 		if (set_display)
 			esetenv("DISPLAY", set_display, 1);
 		if (set_xauthority)
