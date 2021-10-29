@@ -1156,7 +1156,7 @@ mac_vnode_readdir_filtered(struct ucred *active_cred, struct ucred *file_cred,
 				break; /* try again with empty buffer */
 			}
 			if (dp->d_fileno != 0 &&
-			    mac_vnode_walk_dirent_visible(file_cred, dvp, dp)) {
+			    mac_vnode_walk_dirent_visible(active_cred, dvp, dp)) {
 				/* Visible entry, append to return buffer. */
 				if (ruio->uio_resid < dp->d_reclen)
 					goto out; /* returned all we can */
