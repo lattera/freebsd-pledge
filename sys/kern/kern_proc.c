@@ -2346,10 +2346,10 @@ sysctl_kern_proc_pathname(SYSCTL_HANDLER_ARGS)
 		error = pget(*pidp, PGET_CANSEE, &p);
 	}
 
-	if (p != req->td->td_proc) {
+	if (error == 0 && p != req->td->td_proc) {
 		error = sysfil_check(req->td, SYSFIL_PS);
 		if (error)
-			return (error);
+			PROC_UNLOCK(p);
 	}
 
 	if (error == 0)
