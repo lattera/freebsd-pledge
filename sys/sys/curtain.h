@@ -92,6 +92,8 @@ struct curtain_mode {
 
 typedef uint16_t curtain_index;
 
+CTASSERT(CURTAINCTL_MAX_ITEMS <= (curtain_index)-1);
+
 struct curtain_item {
 	uint8_t type;
 	struct curtain_mode mode;
@@ -142,8 +144,10 @@ struct barrier_mode {
 	barrier_bits protect : BARRIER_COUNT;
 };
 
+#define	CURTAIN_BARRIER(ct) ((ct)->ct_head.cth_barrier)
+
 struct barrier {
-	struct curtain_head br_head;
+	struct curtain_head br_head; /* cth_barrier will point to itself */
 	struct barrier *br_parent;
 	LIST_HEAD(, barrier) br_children;
 	LIST_ENTRY(barrier) br_sibling;
@@ -156,7 +160,8 @@ struct barrier {
 struct curtain {
 	struct curtain_head ct_head;
 #ifdef INVARIANTS
-	unsigned ct_magic;
+#define	CURTAIN_MAGIC 0x4355525441494e00ULL
+	unsigned long long ct_magic;
 #endif
 	volatile int ct_ref;
 	curtain_index ct_nslots;
@@ -177,11 +182,75 @@ struct curtain {
 	struct curtain_item ct_slots[];
 };
 
+#define CURTAIN_STATS
+#define CURTAIN_STATS_LOOKUP
+
+SDT_PROVIDER_DECLARE(curtain);
+
+SYSCTL_DECL(_security_curtain);
+#ifdef CURTAIN_STATS
+SYSCTL_DECL(_security_curtain_stats);
+#endif
+
+extern unsigned __read_mostly curtain_log_level;
+
+extern const sysfilset_t curtain_abilities_sysfils[CURTAINABL_COUNT];
+extern const barrier_bits curtain_abilities_barriers[CURTAINABL_COUNT];
+
+extern int __read_mostly curtain_slot;
+#define	CURTAIN_CTH_IS_CT(cth) ((cth) != &(cth)->cth_barrier->br_head)
+#define	CURTAIN_SLOT_CTH(l) ((l) ? (struct curtain_head *)mac_label_get((l), curtain_slot) : NULL)
+#define	CURTAIN_SLOT_CT_UNCHECKED(l) ((struct curtain *)CURTAIN_SLOT_CTH(l))
+#define	CURTAIN_SLOT_CT(l) ({ \
+	struct curtain_head *__cth; \
+	struct curtain *__ct; \
+	__cth = CURTAIN_SLOT_CTH(l); \
+	__ct = __cth && CURTAIN_CTH_IS_CT(__cth) ? (struct curtain *)__cth : NULL; \
+	MPASS(!__ct || __ct->ct_magic == CURTAIN_MAGIC); \
+	__ct; \
+})
+#define	CURTAIN_SLOT_BR(l) ({ \
+	struct curtain_head *__cth = CURTAIN_SLOT_CTH(l); \
+	__cth ? __cth->cth_barrier : NULL; \
+})
+
+struct barrier *barrier_hold(struct barrier *);
+
+void	barrier_bump(struct barrier *);
+void	barrier_link(struct barrier *child, struct barrier *parent);
+void	barrier_free(struct barrier *);
+struct barrier *barrier_cross(struct barrier *, struct barrier_mode);
+bool	barrier_visible(struct barrier *subject, const struct barrier *target,
+	    enum barrier_type);
+
+void	curtain_invariants(const struct curtain *);
+void	curtain_invariants_sync(const struct curtain *);
+struct curtain *curtain_make(size_t nitems);
+struct curtain *curtain_hold(struct curtain *);
+void	curtain_free(struct curtain *);
+struct curtain *curtain_dup(const struct curtain *);
+struct curtain *curtain_dup_with_shared_barrier(struct curtain *);
+struct curtain *curtain_dup_compact(const struct curtain *);
+uint64_t curtain_serial(const struct curtain *);
+struct curtain_item *curtain_lookup(const struct curtain *, enum curtainreq_type, union curtain_key);
+struct curtain_item *curtain_search(struct curtain *, enum curtainreq_type, union curtain_key,
+	    bool *inserted);
+struct curtain_mode curtain_resolve(const struct curtain *,
+	    enum curtainreq_type, union curtain_key );
+bool	curtain_need_exec_switch(const struct curtain *);
+bool	curtain_is_restricted_on_self(const struct curtain *);
+bool	curtain_is_restricted_on_exec(const struct curtain *);
+void	curtain_cache_update(struct curtain *);
+void	curtain_cred_sysfil_update(struct ucred *, const struct curtain *);
+void	curtain_exec_switch(struct curtain *);
+void	curtain_harden(struct curtain *);
+void	curtain_mask_sysfils(struct curtain *, sysfilset_t);
+struct curtain_item *curtain_spread(struct curtain *, enum curtainreq_type, union curtain_key);
+void	curtain_mask(struct curtain *dst, const struct curtain *src);
+
 bool	curtain_cred_visible(const struct ucred *subject, const struct ucred *target,
 	    enum barrier_type);
 struct curtain *curtain_from_cred(struct ucred *);
-
-uint64_t curtain_serial(const struct curtain *);
 
 #endif
 

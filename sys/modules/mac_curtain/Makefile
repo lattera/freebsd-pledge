@@ -4,6 +4,6 @@
 
 KMOD=	mac_curtain
 SRCS=	vnode_if.h \
-	curtain.c unveil.c
+	sys_curtain.c subr_curtain.c mac_curtain.c unveil.c
 
 .include <bsd.kmod.mk>
