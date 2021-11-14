@@ -2,7 +2,6 @@
  * SPDX-License-Identifier: BSD-2-Clause
  *
  * Copyright (c) 2019 Netflix Inc.
- * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -458,14 +457,10 @@ ktls_ocf_tls12_aead_decrypt(struct ktls_session *tls,
 	struct tls_aead_data ad;
 	struct cryptop crp;
 	struct ktls_ocf_session *os;
-	struct ocf_operation oo;
 	int error;
 	uint16_t tls_comp_len;
 
 	os = tls->ocf_session;
-
-	oo.os = os;
-	oo.done = false;
 
 	crypto_initreq(&crp, os->sid);
 
@@ -761,6 +756,9 @@ ktls_ocf_try(struct socket *so, struct ktls_session *tls, int direction)
 		if (tls->params.tls_vminor == TLS_MINOR_VER_ZERO) {
 			os->implicit_iv = true;
 			memcpy(os->iv, tls->params.iv, AES_BLOCK_LEN);
+#ifdef INVARIANTS
+			os->next_seqno = tls->next_seqno;
+#endif
 		}
 	}
 
