@@ -4792,7 +4792,6 @@ cache_fplookup_emptypath(struct cache_fpl *fpl)
 	struct componentname *cnp;
 	enum vgetstate tvs;
 	struct vnode *tvp;
-	seqc_t tvp_seqc;
 	int error, lkflags;
 
 	fpl->tvp = fpl->dvp;
@@ -4801,7 +4800,6 @@ cache_fplookup_emptypath(struct cache_fpl *fpl)
 	ndp = fpl->ndp;
 	cnp = fpl->cnp;
 	tvp = fpl->tvp;
-	tvp_seqc = fpl->tvp_seqc;
 
 	MPASS(*cnp->cn_pnbuf == '\0');
 
@@ -5096,11 +5094,13 @@ cache_fplookup_dotdot(struct cache_fpl *fpl)
 static int __noinline
 cache_fplookup_neg(struct cache_fpl *fpl, struct namecache *ncp, uint32_t hash)
 {
-	u_char nc_flag;
+	u_char nc_flag __diagused;
 	bool neg_promote;
 
+#ifdef INVARIANTS
 	nc_flag = atomic_load_char(&ncp->nc_flag);
 	MPASS((nc_flag & NCF_NEGATIVE) != 0);
+#endif
 	/*
 	 * If they want to create an entry we need to replace this one.
 	 */
