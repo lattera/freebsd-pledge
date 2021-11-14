@@ -66,7 +66,7 @@ get_sysctl_serial_cb(void *ptr)
 		*ctx->serial = oidp->oid_serial;
 }
 
-static uint64_t
+static int
 get_sysctl_serial(int *name, unsigned name_len, uint64_t *serial)
 {
 	struct get_sysctl_serial_ctx ctx = { serial, name, name_len };
@@ -380,10 +380,13 @@ curtain_fill(struct curtain *ct, size_t reqc, const struct curtainreq *reqv)
 				goto fail;
 			}
 			error = get_sysctl_serial(p, l, &serial);
-			if (error && error != ENOENT)
-				goto fail;
 			p += l;
 			c -= l;
+			if (error) {
+				if (error != ENOENT)
+					goto fail;
+				continue;
+			}
 			curtain_fill_item(ct, req,
 			    (ctkey){ .sysctl = { .serial = serial } });
 		}
