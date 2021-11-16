@@ -3226,7 +3226,7 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 	case 560: {
 		struct kevent_args *p = params;
 		iarg[0] = p->fd; /* int */
-		uarg[1] = (intptr_t)p->changelist; /* struct kevent * */
+		uarg[1] = (intptr_t)p->changelist; /* const struct kevent * */
 		iarg[2] = p->nchanges; /* int */
 		uarg[3] = (intptr_t)p->eventlist; /* struct kevent * */
 		iarg[4] = p->nevents; /* int */
@@ -8795,7 +8795,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			p = "int";
 			break;
 		case 1:
-			p = "userland struct kevent *";
+			p = "userland const struct kevent *";
 			break;
 		case 2:
 			p = "int";

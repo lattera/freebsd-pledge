@@ -449,8 +449,7 @@
 63	AUE_NULL	COMPAT|SYSFIL_STDIO {
 		int getkerninfo(
 		    int op,
-		    _Out_writes_bytes_opt(
-		    *size) char *where,
+		    _Out_writes_bytes_opt(*size) char *where,
 		    _Inout_opt_ size_t *size,
 		    int arg
 		);
@@ -1922,9 +1921,9 @@
 363	AUE_KEVENT	COMPAT11|SYSFIL_STDIO|CAPENABLED {
 		int kevent(
 		    int fd,
-		    _In_reads_opt_(nchanges) struct kevent_freebsd11 *changelist,
+		    _In_reads_opt_(nchanges) const struct freebsd11_kevent *changelist,
 		    int nchanges,
-		    _Out_writes_opt_(nevents) struct kevent_freebsd11 *eventlist,
+		    _Out_writes_opt_(nevents) struct freebsd11_kevent *eventlist,
 		    int nevents,
 		    _In_opt_ const struct timespec *timeout
 		);
@@ -3114,7 +3113,7 @@
 560	AUE_KEVENT	STD|SYSFIL_STDIO|CAPENABLED {
 		int kevent(
 		    int fd,
-		    _In_reads_opt_(nchanges) struct kevent *changelist,
+		    _In_reads_opt_(nchanges) const struct kevent *changelist,
 		    int nchanges,
 		    _Out_writes_opt_(nevents) struct kevent *eventlist,
 		    int nevents,
