@@ -791,24 +791,33 @@ freebsd11_fstatfs(struct thread *td, struct freebsd11_fstatfs_args *uap)
 int
 freebsd11_getfsstat(struct thread *td, struct freebsd11_getfsstat_args *uap)
 {
+	return (kern_freebsd11_getfsstat(td, uap->buf, uap->bufsize, uap->mode));
+}
+
+int
+kern_freebsd11_getfsstat(struct thread *td, struct freebsd11_statfs * ubuf,
+    long bufsize, int mode)
+{
 	struct freebsd11_statfs osb;
 	struct statfs *buf, *sp;
 	size_t count, size;
 	int error;
 
-	count = uap->bufsize / sizeof(struct ostatfs);
+	if (bufsize < 0)
+		return (EINVAL);
+
+	count = bufsize / sizeof(struct ostatfs);
 	size = count * sizeof(struct statfs);
-	error = kern_getfsstat(td, &buf, size, &count, UIO_SYSSPACE,
-	    uap->mode);
+	error = kern_getfsstat(td, &buf, size, &count, UIO_SYSSPACE, mode);
 	if (error == 0)
 		td->td_retval[0] = count;
 	if (size > 0) {
 		sp = buf;
 		while (count > 0 && error == 0) {
 			freebsd11_cvtstatfs(sp, &osb);
-			error = copyout(&osb, uap->buf, sizeof(osb));
+			error = copyout(&osb, ubuf, sizeof(osb));
 			sp++;
-			uap->buf++;
+			ubuf++;
 			count--;
 		}
 		free(buf, M_STATFS);
@@ -3247,7 +3256,7 @@ sys_futimesat(struct thread *td, struct futimesat_args *uap)
 
 int
 kern_utimesat(struct thread *td, int fd, const char *path,
-    enum uio_seg pathseg, struct timeval *tptr, enum uio_seg tptrseg)
+    enum uio_seg pathseg, const struct timeval *tptr, enum uio_seg tptrseg)
 {
 	struct nameidata nd;
 	struct timespec ts[2];
@@ -3285,7 +3294,7 @@ sys_lutimes(struct thread *td, struct lutimes_args *uap)
 
 int
 kern_lutimes(struct thread *td, const char *path, enum uio_seg pathseg,
-    struct timeval *tptr, enum uio_seg tptrseg)
+    const struct timeval *tptr, enum uio_seg tptrseg)
 {
 	struct timespec ts[2];
 	struct nameidata nd;
@@ -3319,7 +3328,7 @@ sys_futimes(struct thread *td, struct futimes_args *uap)
 }
 
 int
-kern_futimes(struct thread *td, int fd, struct timeval *tptr,
+kern_futimes(struct thread *td, int fd, const struct timeval *tptr,
     enum uio_seg tptrseg)
 {
 	struct timespec ts[2];
@@ -3353,7 +3362,7 @@ sys_futimens(struct thread *td, struct futimens_args *uap)
 }
 
 int
-kern_futimens(struct thread *td, int fd, struct timespec *tptr,
+kern_futimens(struct thread *td, int fd, const struct timespec *tptr,
     enum uio_seg tptrseg)
 {
 	struct timespec ts[2];
@@ -3391,7 +3400,7 @@ sys_utimensat(struct thread *td, struct utimensat_args *uap)
 
 int
 kern_utimensat(struct thread *td, int fd, const char *path,
-    enum uio_seg pathseg, struct timespec *tptr, enum uio_seg tptrseg,
+    enum uio_seg pathseg, const struct timespec *tptr, enum uio_seg tptrseg,
     int flag)
 {
 	struct nameidata nd;

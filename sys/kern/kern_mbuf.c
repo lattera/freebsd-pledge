@@ -197,7 +197,7 @@ tunable_mbinit(void *dummy)
 	 * map.
 	 */
 	if (PMAP_HAS_DMAP) {
-		extpg = mb_use_ext_pgs;
+		extpg = 1;
 		TUNABLE_INT_FETCH("kern.ipc.mb_use_ext_pgs", &extpg);
 		mb_use_ext_pgs = extpg != 0;
 	}
@@ -1428,7 +1428,7 @@ m_get3(int size, int how, short type, int flags)
 	else
 		zone = zone_jumbo16;
 
-	n = uma_zalloc_arg(zone_jumbop, m, how);
+	n = uma_zalloc_arg(zone, m, how);
 	if (n == NULL) {
 		m_free_raw(m);
 		return (NULL);
