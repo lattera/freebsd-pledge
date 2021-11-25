@@ -1357,12 +1357,11 @@ freebsd32_copy_msg_out(struct msghdr *msg, struct mbuf *control)
 	socklen_t clen, datalen, datalen_out, oldclen;
 	int error;
 	caddr_t ctlbuf;
-	int len, maxlen, copylen;
+	int len, copylen;
 	struct mbuf *m;
 	error = 0;
 
 	len    = msg->msg_controllen;
-	maxlen = msg->msg_controllen;
 	msg->msg_controllen = 0;
 
 	ctlbuf = msg->msg_control;
@@ -2471,6 +2470,93 @@ freebsd11_freebsd32_fhstat(struct thread *td,
 	error = freebsd11_cvtstat32(&sb, &sb32);
 	if (error == 0)
 		error = copyout(&sb32, uap->sb, sizeof (sb32));
+	return (error);
+}
+
+static int
+freebsd11_cvtnstat32(struct stat *sb, struct nstat32 *nsb32)
+{
+	struct nstat nsb;
+	int error;
+
+	error = freebsd11_cvtnstat(sb, &nsb);
+	if (error != 0)
+		return (error);
+
+	bzero(nsb32, sizeof(*nsb32));
+	CP(nsb, *nsb32, st_dev);
+	CP(nsb, *nsb32, st_ino);
+	CP(nsb, *nsb32, st_mode);
+	CP(nsb, *nsb32, st_nlink);
+	CP(nsb, *nsb32, st_uid);
+	CP(nsb, *nsb32, st_gid);
+	CP(nsb, *nsb32, st_rdev);
+	CP(nsb, *nsb32, st_atim.tv_sec);
+	CP(nsb, *nsb32, st_atim.tv_nsec);
+	CP(nsb, *nsb32, st_mtim.tv_sec);
+	CP(nsb, *nsb32, st_mtim.tv_nsec);
+	CP(nsb, *nsb32, st_ctim.tv_sec);
+	CP(nsb, *nsb32, st_ctim.tv_nsec);
+	CP(nsb, *nsb32, st_size);
+	CP(nsb, *nsb32, st_blocks);
+	CP(nsb, *nsb32, st_blksize);
+	CP(nsb, *nsb32, st_flags);
+	CP(nsb, *nsb32, st_gen);
+	CP(nsb, *nsb32, st_birthtim.tv_sec);
+	CP(nsb, *nsb32, st_birthtim.tv_nsec);
+	return (0);
+}
+
+int
+freebsd11_freebsd32_nstat(struct thread *td,
+    struct freebsd11_freebsd32_nstat_args *uap)
+{
+	struct stat sb;
+	struct nstat32 nsb;
+	int error;
+
+	error = kern_statat(td, 0, AT_FDCWD, uap->path, UIO_USERSPACE,
+	    &sb, NULL);
+	if (error != 0)
+		return (error);
+	error = freebsd11_cvtnstat32(&sb, &nsb);
+	if (error != 0)
+		error = copyout(&nsb, uap->ub, sizeof (nsb));
+	return (error);
+}
+
+int
+freebsd11_freebsd32_nlstat(struct thread *td,
+    struct freebsd11_freebsd32_nlstat_args *uap)
+{
+	struct stat sb;
+	struct nstat32 nsb;
+	int error;
+
+	error = kern_statat(td, AT_SYMLINK_NOFOLLOW, AT_FDCWD, uap->path,
+	    UIO_USERSPACE, &sb, NULL);
+	if (error != 0)
+		return (error);
+	error = freebsd11_cvtnstat32(&sb, &nsb);
+	if (error == 0)
+		error = copyout(&nsb, uap->ub, sizeof (nsb));
+	return (error);
+}
+
+int
+freebsd11_freebsd32_nfstat(struct thread *td,
+    struct freebsd11_freebsd32_nfstat_args *uap)
+{
+	struct nstat32 nub;
+	struct stat ub;
+	int error;
+
+	error = kern_fstat(td, uap->fd, &ub);
+	if (error != 0)
+		return (error);
+	error = freebsd11_cvtnstat32(&ub, &nub);
+	if (error == 0)
+		error = copyout(&nub, uap->sb, sizeof(nub));
 	return (error);
 }
 #endif
