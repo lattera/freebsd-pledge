@@ -6179,6 +6179,7 @@ struct vop_vector zfs_vnodeops = {
 	.vop_unlock =		vop_unlock,
 	.vop_islocked =		vop_islocked,
 #endif
+	.vop_add_writecount =	vop_stdadd_writecount_nomsync,
 };
 VFS_VOP_VECTOR_REGISTER(zfs_vnodeops);
 
@@ -6203,6 +6204,7 @@ struct vop_vector zfs_fifoops = {
 	.vop_getacl =		zfs_freebsd_getacl,
 	.vop_setacl =		zfs_freebsd_setacl,
 	.vop_aclcheck =		zfs_freebsd_aclcheck,
+	.vop_add_writecount =	vop_stdadd_writecount_nomsync,
 };
 VFS_VOP_VECTOR_REGISTER(zfs_fifoops);
 
@@ -6222,5 +6224,6 @@ struct vop_vector zfs_shareops = {
 	.vop_reclaim =		zfs_freebsd_reclaim,
 	.vop_fid =		zfs_freebsd_fid,
 	.vop_pathconf =		zfs_freebsd_pathconf,
+	.vop_add_writecount =	vop_stdadd_writecount_nomsync,
 };
 VFS_VOP_VECTOR_REGISTER(zfs_shareops);
