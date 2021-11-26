@@ -1268,7 +1268,7 @@ do_unveil_add(struct thread *td, struct unveil_base *base, int flags, struct unv
 	    (reg.atflags & AT_SYMLINK_NOFOLLOW ? NOFOLLOW : FOLLOW) |
 	    (reg.atflags & AT_RESOLVE_BENEATH ? RBENEATH : 0);
 	NDINIT_ATRIGHTS(&nd, LOOKUP, ndflags,
-	    UIO_USERSPACE, reg.path, reg.atfd, &cap_fchdir_rights, td);
+	    UIO_USERSPACE, reg.path, reg.atfd, &cap_fchdir_rights);
 	save = (struct unveil_save){ .flags = flags, .first = true, .error = 0 };
 	if (reg.tev) {
 		if ((save.ter = reg.tec) > UNVEILREG_MAX_TE)
