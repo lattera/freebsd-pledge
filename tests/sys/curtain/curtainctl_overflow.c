@@ -84,6 +84,8 @@ ATF_TC_BODY(curtainctl_overflow_items, tc)
 	ATF_CHECK_ERRNO(E2BIG, curtainctl(flags, nitems(reqs), reqs) < 0);
 }
 
+#if 0
+
 ATF_TC_WITHOUT_HEAD(unveilreg_overflow);
 ATF_TC_BODY(unveilreg_overflow, tc)
 {
@@ -100,12 +102,16 @@ ATF_TC_BODY(unveilreg_overflow, tc)
 	ATF_CHECK_ERRNO(E2BIG, r < 0);
 }
 
+#endif
+
 ATF_TP_ADD_TCS(tp)
 {
 	ATF_TP_ADD_TC(tp, curtainctl_sanity);
 	ATF_TP_ADD_TC(tp, curtainctl_overflow_reqs);
 	ATF_TP_ADD_TC(tp, curtainctl_overflow_size);
 	ATF_TP_ADD_TC(tp, curtainctl_overflow_items);
+#if 0
 	ATF_TP_ADD_TC(tp, unveilreg_overflow);
+#endif
 	return (atf_no_error());
 }

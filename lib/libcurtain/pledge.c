@@ -387,6 +387,7 @@ static const struct promise_unveil {
 static bool has_pledges_on[CURTAIN_ON_COUNT];
 static bool has_customs_on[CURTAIN_ON_COUNT];
 static struct curtain_slot *always_slot;
+static struct curtain_slot *unveil_traverse_slot;
 static struct curtain_slot *root_slot_on[CURTAIN_ON_COUNT];
 static struct curtain_slot *promise_slots[PROMISE_COUNT];
 static struct curtain_slot *promise_unveil_slots[PROMISE_COUNT];
@@ -653,6 +654,10 @@ unveil_enable_delayed(enum curtain_on on)
 static void
 do_unveil_init_on(enum curtain_on on)
 {
+	if (!unveil_traverse_slot) {
+		unveil_traverse_slot = curtain_slot_neutral();
+		curtain_unveil(unveil_traverse_slot, "/", 0, UPERM_BROWSE);
+	}
 	if (!custom_slot_on[on])
 		custom_slot_on[on] = curtain_slot_neutral();
 	curtain_enable(custom_slot_on[on], on);
@@ -675,54 +680,52 @@ do_unveil_init_on(enum curtain_on on)
 }
 
 static int
-do_unveil_on(enum curtain_on on, const char *path, unveil_perms uperms)
+do_unveil(bool *do_on, const char *path, unveil_perms uperms)
 {
-	do_unveil_init_on(on);
-	if (path) {
-		int r;
-		r = curtain_unveil(custom_slot_on[on], path, 0, uperms);
-		if (r < 0)
-			return (r);
-		return (curtain_engage());
-	} else /* unveil(NULL, NULL) */
-		return (curtain_enforce());
-}
+	enum curtain_on on;
+	struct curtain_slot *slotv[CURTAIN_ON_COUNT];
+	unveil_perms interm_upermsv[CURTAIN_ON_COUNT], final_upermsv[CURTAIN_ON_COUNT];
+	size_t nslot;
+	bool unveil_traverse;
+	int r;
 
-static int
-do_unveil_both(const char *path, unveil_perms uperms)
-{
-	/*
-	 * On OpenBSD, unveils are discarded on exec if the process does not
-	 * have on-exec pledges (which then allows it to run setuid binaries
-	 * or do its own unveiling, for example).
-	 *
-	 * To implement this, delay enabling the on-exec slot for unveils added
-	 * with unveil() until an on-exec pledge() or an unveilexec() is
-	 * explicitly done.  If the current process already had inherited
-	 * on-exec unveils, they will be left unmodified and an exec will
-	 * revert the process' unveils to those initially inherited unveils.
-	 * Otherwise, the process will be unrestricted on exec as on OpenBSD.
-	 */
-	bool ignore_on[CURTAIN_ON_COUNT] = { 0 };
-	ignore_on[CURTAIN_ON_EXEC] = !has_pledges_on[CURTAIN_ON_EXEC] &&
-	                             !has_customs_on[CURTAIN_ON_EXEC];
-	for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++)
-		if (ignore_on[on]) {
-			if (!custom_slot_on[on])
-				custom_slot_on[on] = curtain_slot_neutral();
-		} else
+	for (on = 0; on < CURTAIN_ON_COUNT; on++)
+		if (do_on[on])
 			do_unveil_init_on(on);
-	if (path) {
-		int r = 0;
-		/* XXX would be better to do a single unveilreg() for this */
-		for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++)
-			if (!ignore_on[on])
-				r = curtain_unveil(custom_slot_on[on], path, 0, uperms);
-		if (r < 0)
-			return (r);
-		return (curtain_engage());
-	} else /* unveil(NULL, NULL) */
+		else if (!custom_slot_on[on])
+			custom_slot_on[on] = curtain_slot_neutral();
+
+	if (!path) /* unveil(NULL, NULL) */
 		return (curtain_enforce());
+
+	/*
+	 * Temporarily enable hard permissions to search directories so that
+	 * curtain_unveil() can traverse the path.
+	 */
+	if ((unveil_traverse = has_customs_on[CURTAIN_ON_SELF])) {
+		curtain_state(unveil_traverse_slot, CURTAIN_ON_SELF, CURTAIN_ENABLED);
+		curtain_engage();
+	}
+
+	nslot = 0;
+	for (on = 0; on < CURTAIN_ON_COUNT; on++) {
+		interm_upermsv[nslot] = UPERM_TRAVERSE;
+		final_upermsv[nslot] = uperms;
+		slotv[nslot++] = custom_slot_on[on];
+	}
+
+	r = curtain_unveil_multi(slotv, nslot, path, 0, interm_upermsv, final_upermsv);
+
+	/* Drop temporary soft permissions to search paths. */
+	if (unveil_traverse)
+		curtain_state(unveil_traverse_slot, CURTAIN_ON_SELF, CURTAIN_NEUTRAL);
+	if (r < 0) {
+		if (unveil_traverse)
+			curtain_engage();
+		return (r);
+	}
+
+	return (curtain_engage());
 }
 
 static int
@@ -750,6 +753,8 @@ unveil_parse_perms(unveil_perms *uperms, const char *s)
 static int
 unveil_on(enum curtain_on on, const char *path, const char *perms)
 {
+	bool do_on[CURTAIN_ON_COUNT] = { 0 };
+	do_on[on] = true;
 	unveil_perms uperms;
 	int r;
 	if ((perms == NULL) != (path == NULL))
@@ -762,7 +767,7 @@ unveil_on(enum curtain_on on, const char *path, const char *perms)
 			return ((errno = EINVAL), -1);
 	} else
 		uperms = UPERM_NONE;
-	return (do_unveil_on(on, path, uperms));
+	return (do_unveil(do_on, path, uperms));
 }
 
 int
@@ -776,6 +781,7 @@ unveil_exec(const char *path, const char *perms)
 int
 unveil(const char *path, const char *perms)
 {
+	bool do_on[CURTAIN_ON_COUNT] = { 0 };
 	unveil_perms uperms;
 	int r;
 	if ((perms == NULL) != (path == NULL))
@@ -802,11 +808,30 @@ unveil(const char *path, const char *perms)
 			return ((errno = EINVAL), -1);
 	} else
 		uperms = UPERM_NONE;
-	return (do_unveil_both(path, uperms));
+	/*
+	 * On OpenBSD, unveils are discarded on exec if the process does not
+	 * have on-exec pledges (which then allows it to run setuid binaries
+	 * or do its own unveiling, for example).
+	 *
+	 * To implement this, delay enabling the on-exec slot for unveils added
+	 * with unveil() until an on-exec pledge() or an unveilexec() is
+	 * explicitly done.  If the current process already had inherited
+	 * on-exec unveils, they will be left unmodified and an exec will
+	 * revert the process' unveils to those initially inherited unveils.
+	 * Otherwise, the process will be unrestricted on exec as on OpenBSD.
+	 */
+	do_on[CURTAIN_ON_SELF] = true;
+	do_on[CURTAIN_ON_EXEC] = has_pledges_on[CURTAIN_ON_EXEC] ||
+	                         has_customs_on[CURTAIN_ON_EXEC];
+	return (do_unveil(do_on, path, uperms));
 }
 
 int
 unveil_freeze(void)
 {
-	return (do_unveil_both(NULL, UPERM_NONE));
+	bool do_on[CURTAIN_ON_COUNT] = { 0 };
+	do_on[CURTAIN_ON_SELF] = true;
+	do_on[CURTAIN_ON_EXEC] = has_pledges_on[CURTAIN_ON_EXEC] ||
+	                         has_customs_on[CURTAIN_ON_EXEC];
+	return (do_unveil(do_on, NULL, UPERM_NONE));
 }

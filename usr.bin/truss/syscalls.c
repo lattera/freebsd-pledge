@@ -80,7 +80,6 @@ __FBSDID("$FreeBSD$");
 #include <vis.h>
 
 #include <sys/curtain.h>
-#include <sys/unveil.h>
 
 #include "truss.h"
 #include "extern.h"
@@ -571,8 +570,6 @@ static const struct syscall_decode decoded_syscalls[] = {
 	  .args = { { Long, 0 }, { Name, 1 } } },
 	{ .name = "truncate", .ret_type = 1, .nargs = 2,
 	  .args = { { Name | IN, 0 }, { QuadHex | IN, 1 } } },
-	{ .name = "unveilreg", .ret_type = 1, .nargs = 2,
-	  .args = { { UnveilregFlags | IN, 0 }, { Unveilreg | OUT, 1 } } },
 #if 0
 	/* Does not exist */
 	{ .name = "umount", .ret_type = 1, .nargs = 2,
@@ -2738,41 +2735,6 @@ print_arg(struct syscall_arg *sc, unsigned long *args, register_t *retval,
 					print_pointer(fp, (uintptr_t)req->data);
 				fprintf(fp, " }");
 			}
-			fprintf(fp, " }");
-		} else
-			print_pointer(fp, args[sc->offset]);
-		break;
-	}
-
-	case UnveilregFlags:
-		print_mask_arg(sysdecode_unveilregflags, fp, args[sc->offset]);
-		break;
-
-	case Unveilreg: {
-		struct unveilreg reg;
-		if (get_struct(pid, args[sc->offset], &reg, sizeof(reg)) != -1) {
-			unveil_index tev[UNVEILREG_MAX_TE][2];
-			char *tmp2;
-			fprintf(fp, "{ atfd=");
-			print_integer_arg(sysdecode_atfd, fp, reg.atfd);
-			fprintf(fp, ",atflags=");
-			print_mask_arg(sysdecode_atflags, fp, reg.atflags);
-			tmp2 = get_string(pid, (uintptr_t)reg.path, 0);
-			fprintf(fp, ",path=\"%s\"", tmp2);
-			free(tmp2);
-			fprintf(fp, ",tec=%zu", reg.tec);
-			fprintf(fp, ",tev=");
-			if (retval[0] >= 0 && reg.tev != NULL &&
-			    get_struct(pid, (uintptr_t)reg.tev, tev,
-			    retval[0] * sizeof *tev) != -1) {
-				fprintf(fp, "[");
-				for (int i = 0; i < retval[0]; i++) {
-					fprintf(fp, "%s%u-%u",
-					    i == 0 ? "" : ",", tev[i][0], tev[i][1]);
-				}
-				fprintf(fp, "]");
-			} else
-				print_pointer(fp, (uintptr_t)reg.tev);
 			fprintf(fp, " }");
 		} else
 			print_pointer(fp, args[sc->offset]);

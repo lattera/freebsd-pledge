@@ -2,11 +2,12 @@
 #define	_SYS_CURTAIN_H_
 
 #include <sys/curtain_ability.h>
+#include <sys/_unveil.h>
 
 enum curtainreq_type {
 	CURTAINTYP_DEFAULT = 1,
 	CURTAINTYP_ABILITY = 2,
-	CURTAINTYP_UNVEIL = 3,
+	CURTAINTYP_OLD_UNVEIL = 3,
 	CURTAINTYP_IOCTL = 4,
 	CURTAINTYP_SOCKAF = 5,
 	CURTAINTYP_SOCKLVL = 6,
@@ -14,7 +15,8 @@ enum curtainreq_type {
 	CURTAINTYP_PRIV = 8,
 	CURTAINTYP_SYSCTL = 9,
 	CURTAINTYP_FIBNUM = 10,
-#define	CURTAINTYP_LAST 10 /* UPDATE ME!!! */
+	CURTAINTYP_UNVEIL = 11,
+#define	CURTAINTYP_LAST 11 /* UPDATE ME!!! */
 };
 
 enum curtainreq_level {
@@ -63,6 +65,15 @@ static const enum curtain_ability curtain_type_fallback[CURTAINTYP_LAST + 1] = {
 	[CURTAINTYP_SYSCTL] = CURTAINABL_ANY_SYSCTL,
 	[CURTAINTYP_FIBNUM] = CURTAINABL_ANY_FIBNUM,
 };
+#ifdef _KERNEL
+CTASSERT(CURTAINABL_DEFAULT == 0);
+#endif
+
+struct curtainent_unveil {
+	int dir_fd;
+	unveil_perms uperms;
+	char name[];
+};
 
 #ifdef _KERNEL
 
@@ -84,15 +95,28 @@ enum curtain_action {
 
 struct curtain_mode {
 	/* enum curtain_action */
-	uint8_t on_self     : 2;
-	uint8_t on_self_max : 2;
-	uint8_t on_exec     : 2;
-	uint8_t on_exec_max : 2;
+	uint8_t soft : 2;
+	uint8_t hard : 2;
 };
 
 typedef uint16_t curtain_index;
 
 CTASSERT(CURTAINCTL_MAX_ITEMS <= (curtain_index)-1);
+
+struct curtain_unveil {
+	struct curtain_unveil *parent;
+	struct vnode *vp;
+	uint32_t hash;
+	unveil_perms soft_uperms, hard_uperms;
+	uint8_t name_len;
+	uint8_t depth;
+	bool hidden_children : 1;
+	bool name_ext : 1;
+	char name[];
+};
+
+CTASSERT(NAME_MAX <= UINT8_MAX);
+CTASSERT(sizeof(struct curtain_unveil) <= 32);
 
 struct curtain_item {
 	uint8_t type;
@@ -115,6 +139,7 @@ struct curtain_item {
 			uint64_t serial;
 		} __packed sysctl;
 		int fibnum;
+		struct curtain_unveil __packed *unveil;
 	} key;
 };
 
@@ -163,6 +188,7 @@ struct curtain {
 #define	CURTAIN_MAGIC 0x4355525441494e00ULL
 	unsigned long long ct_magic;
 #endif
+	struct curtain *ct_on_exec;
 	volatile int ct_ref;
 	curtain_index ct_nslots;
 	curtain_index ct_nitems;
@@ -171,14 +197,10 @@ struct curtain {
 	bool ct_overflowed;
 	bool ct_finalized;
 	struct {
-		bool need_exec_switch;
-		bool is_restricted_on_self;
-		bool is_restricted_on_exec;
+		bool is_restricted;
 		uint8_t sysfilacts[SYSFILSET_BITS];
 	} ct_cached;
-	struct unveil_stash ct_ustash;
 	struct curtain_mode ct_abilities[CURTAINABL_COUNT];
-	struct barrier_mode ct_barrier_mode_on_exec;
 	struct curtain_item ct_slots[];
 };
 
@@ -188,6 +210,7 @@ struct curtain {
 SDT_PROVIDER_DECLARE(curtain);
 
 SYSCTL_DECL(_security_curtain);
+SYSCTL_DECL(_security_curtain_unveil);
 #ifdef CURTAIN_STATS
 SYSCTL_DECL(_security_curtain_stats);
 #endif
@@ -215,7 +238,7 @@ extern int __read_mostly curtain_slot;
 })
 
 struct barrier *barrier_hold(struct barrier *);
-
+struct barrier *barrier_dup(const struct barrier *);
 void	barrier_bump(struct barrier *);
 void	barrier_link(struct barrier *child, struct barrier *parent);
 void	barrier_free(struct barrier *);
@@ -229,7 +252,6 @@ struct curtain *curtain_make(size_t nitems);
 struct curtain *curtain_hold(struct curtain *);
 void	curtain_free(struct curtain *);
 struct curtain *curtain_dup(const struct curtain *);
-struct curtain *curtain_dup_with_shared_barrier(struct curtain *);
 struct curtain *curtain_dup_compact(const struct curtain *);
 uint64_t curtain_serial(const struct curtain *);
 struct curtain_item *curtain_lookup(const struct curtain *, enum curtainreq_type, union curtain_key);
@@ -238,14 +260,14 @@ struct curtain_item *curtain_search(struct curtain *, enum curtainreq_type, unio
 struct curtain_mode curtain_resolve(const struct curtain *,
 	    enum curtainreq_type, union curtain_key );
 bool	curtain_need_exec_switch(const struct curtain *);
-bool	curtain_is_restricted_on_self(const struct curtain *);
-bool	curtain_is_restricted_on_exec(const struct curtain *);
+bool	curtain_restricted(const struct curtain *);
+bool	curtain_equivalent(const struct curtain *, const struct curtain *);
 void	curtain_cache_update(struct curtain *);
 void	curtain_cred_sysfil_update(struct ucred *, const struct curtain *);
 void	curtain_exec_switch(struct curtain *);
 void	curtain_harden(struct curtain *);
 void	curtain_mask_sysfils(struct curtain *, sysfilset_t);
-struct curtain_item *curtain_spread(struct curtain *, enum curtainreq_type, union curtain_key);
+struct curtain_item *curtain_extend(struct curtain *, enum curtainreq_type, union curtain_key);
 void	curtain_mask(struct curtain *dst, const struct curtain *src);
 
 bool	curtain_cred_visible(const struct ucred *subject, const struct ucred *target,

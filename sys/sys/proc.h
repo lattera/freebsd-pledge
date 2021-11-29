@@ -744,7 +744,7 @@ struct proc {
 	TAILQ_HEAD(, kq_timer_cb_data)	p_kqtim_stop;	/* (c) */
 
 #ifndef NOUNVEIL
-	struct unveil_base *p_unveils;	/* (c) */
+	struct unveil_cache *p_unveil_cache;	/* (c) */
 #endif
 };
 

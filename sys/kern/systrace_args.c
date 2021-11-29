@@ -870,14 +870,6 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		*n_args = 3;
 		break;
 	}
-	/* unveilreg */
-	case 168: {
-		struct unveilreg_args *p = params;
-		iarg[a++] = p->flags; /* int */
-		uarg[a++] = (intptr_t)p->reg; /* struct unveilreg * */
-		*n_args = 2;
-		break;
-	}
 	/* semsys */
 	case 169: {
 		struct semsys_args *p = params;
@@ -4822,19 +4814,6 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		case 2:
 			p = "userland struct curtainreq *";
-			break;
-		default:
-			break;
-		};
-		break;
-	/* unveilreg */
-	case 168:
-		switch (ndx) {
-		case 0:
-			p = "int";
-			break;
-		case 1:
-			p = "userland struct unveilreg *";
 			break;
 		default:
 			break;
@@ -9680,11 +9659,6 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		break;
 	/* curtainctl */
 	case 167:
-		if (ndx == 0 || ndx == 1)
-			p = "int";
-		break;
-	/* unveilreg */
-	case 168:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;

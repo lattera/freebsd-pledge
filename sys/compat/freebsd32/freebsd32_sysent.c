@@ -225,7 +225,7 @@ struct sysent freebsd32_sysent[] = {
 	{ .sy_narg = AS(freebsd32_sysarch_args), .sy_call = (sy_call_t *)freebsd32_sysarch, .sy_auevent = AUE_SYSARCH, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 165 = freebsd32_sysarch */
 	{ .sy_narg = AS(rtprio_args), .sy_call = (sy_call_t *)sys_rtprio, .sy_auevent = AUE_RTPRIO, .sy_flags = SYF_SYSFILS(SYSFIL_SCHED), .sy_thrcnt = SY_THR_STATIC },	/* 166 = rtprio */
 	{ .sy_narg = AS(curtainctl_args), .sy_call = (sy_call_t *)lkmressys, .sy_auevent = AUE_NULL, .sy_flags = SYF_SYSFILS(SYSFIL_CURTAIN | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_ABSENT },	/* 167 = curtainctl */
-	{ .sy_narg = AS(unveilreg_args), .sy_call = (sy_call_t *)lkmressys, .sy_auevent = AUE_NULL, .sy_flags = SYF_SYSFILS(SYSFIL_CURTAIN | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_ABSENT },	/* 168 = unveilreg */
+	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 168 = reserved for local use */
 	{ .sy_narg = AS(freebsd32_semsys_args), .sy_call = (sy_call_t *)lkmressys, .sy_auevent = AUE_NULL, .sy_flags = SYF_SYSFILS(SYSFIL_SYSVIPC | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_ABSENT },	/* 169 = freebsd32_semsys */
 	{ .sy_narg = AS(freebsd32_msgsys_args), .sy_call = (sy_call_t *)lkmressys, .sy_auevent = AUE_NULL, .sy_flags = SYF_SYSFILS(SYSFIL_SYSVIPC | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_ABSENT },	/* 170 = freebsd32_msgsys */
 	{ .sy_narg = AS(freebsd32_shmsys_args), .sy_call = (sy_call_t *)lkmressys, .sy_auevent = AUE_NULL, .sy_flags = SYF_SYSFILS(SYSFIL_SYSVIPC | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_ABSENT },	/* 171 = freebsd32_shmsys */

@@ -163,7 +163,6 @@
 #define	FREEBSD32_SYS_freebsd32_sysarch	165
 #define	FREEBSD32_SYS_rtprio	166
 #define	FREEBSD32_SYS_curtainctl	167
-#define	FREEBSD32_SYS_unveilreg	168
 #define	FREEBSD32_SYS_freebsd32_semsys	169
 #define	FREEBSD32_SYS_freebsd32_msgsys	170
 #define	FREEBSD32_SYS_freebsd32_shmsys	171

@@ -212,8 +212,8 @@ ATF_TC_BODY(openat1, tc)
 	int fd1, fd2;
 	ATF_REQUIRE(unveil("/etc", "r") >= 0);
 	ATF_REQUIRE(unveil("/dev", "r") >= 0);
-	ATF_REQUIRE((fd1 = open("/etc", O_SEARCH)));
-	ATF_REQUIRE((fd2 = open("/dev", O_SEARCH)));
+	ATF_REQUIRE((fd1 = open("/etc", O_SEARCH)) >= 0);
+	ATF_REQUIRE((fd2 = open("/dev", O_SEARCH)) >= 0);
 	check_accessat(fd1, ".", "dr");
 	check_accessat(fd1, "rc", "r");
 	check_accessat(fd1, "../dev/null", "r");
@@ -235,8 +235,8 @@ ATF_TC_BODY(openat2, tc)
 	ATF_REQUIRE(unveil("a", "r") >= 0);
 	ATF_REQUIRE(unveil("b", "rw") >= 0);
 	ATF_REQUIRE(unveil(NULL, NULL) >= 0);
-	ATF_REQUIRE((fd1 = open("a", O_SEARCH)));
-	ATF_REQUIRE((fd2 = open("b", O_SEARCH)));
+	ATF_REQUIRE((fd1 = open("a", O_SEARCH)) >= 0);
+	ATF_REQUIRE((fd2 = open("b", O_SEARCH)) >= 0);
 	check_accessat(fd1, ".", "rd");
 	check_accessat(fd1, "0", "r");
 	check_accessat(fd1, "../b", "rwd");
@@ -612,6 +612,28 @@ ATF_TC_BODY(renameat_both_fds, tc)
 }
 
 
+ATF_TC_WITHOUT_HEAD(open_o_path);
+ATF_TC_BODY(open_o_path, tc)
+{
+	int fd, r;
+	ATF_REQUIRE(try_mkdir("d") >= 0);
+	ATF_REQUIRE(try_creat("d/u") >= 0);
+	ATF_REQUIRE(try_creat("d/p") >= 0);
+	ATF_CHECK((fd = open("d", O_PATH)) >= 0);
+	ATF_REQUIRE(unveil("d/u", "r") >= 0);
+	ATF_CHECK(openat(fd, ".", O_RDONLY) < 0);
+	ATF_CHECK(openat(fd, "p", O_RDONLY) < 0);
+	ATF_CHECK(openat(fd, "..", O_RDONLY) < 0);
+	ATF_CHECK(openat(fd, "../d", O_RDONLY) < 0);
+	ATF_CHECK(openat(fd, "../d/p", O_RDONLY) < 0);
+	ATF_CHECK((r = openat(fd, "u", O_RDONLY)) >= 0);
+	ATF_CHECK(close(r) >= 0);
+	ATF_CHECK((r = openat(fd, "./u", O_RDONLY)) >= 0);
+	ATF_CHECK(close(r) >= 0);
+	ATF_CHECK(close(fd) >= 0);
+}
+
+
 ATF_TP_ADD_TCS(tp)
 {
 	ATF_TP_ADD_TC(tp, do_nothing);
@@ -647,5 +669,6 @@ ATF_TP_ADD_TCS(tp)
 	ATF_TP_ADD_TC(tp, conceal_path);
 	ATF_TP_ADD_TC(tp, linkat_both_fds);
 	ATF_TP_ADD_TC(tp, renameat_both_fds);
+	ATF_TP_ADD_TC(tp, open_o_path);
 	return (atf_no_error());
 }

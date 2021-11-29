@@ -1880,6 +1880,9 @@ static struct ucred *
 crunuse(struct thread *td)
 {
 	struct ucred *cr, *crold;
+#ifdef MAC
+	bool trim;
+#endif
 
 	MPASS(td->td_realucred == td->td_ucred);
 	cr = td->td_realucred;
@@ -1892,16 +1895,23 @@ crunuse(struct thread *td)
 	if (cr->cr_users == 0) {
 		KASSERT(cr->cr_ref > 0, ("%s: ref %d not > 0 on cred %p",
 		    __func__, cr->cr_ref, cr));
-#ifdef MAC
-		mac_cred_trim(cr);
-#endif
 		crold = cr;
+#ifdef MAC
+		trim = true;
+#endif
 	} else {
 		cr->cr_ref--;
 		crold = NULL;
+#ifdef MAC
+		trim = false;
+#endif
 	}
 	mtx_unlock(&cr->cr_mtx);
 	td->td_realucred = NULL;
+#ifdef MAC
+	if (trim)
+		mac_cred_trim(cr);
+#endif
 	return (crold);
 }
 

@@ -281,7 +281,7 @@ proc_init(void *mem, int size, int flags)
 	p->p_stats = pstats_alloc();
 	p->p_pgrp = NULL;
 #ifndef NOUNVEIL /* XXX */
-	p->p_unveils = NULL;
+	p->p_unveil_cache = NULL;
 #endif
 	return (0);
 }

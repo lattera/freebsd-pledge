@@ -58,7 +58,10 @@ int curtain_sysctl(struct curtain_slot *, const char *sysctl, int flags);
 int curtain_fibnum(struct curtain_slot *, int fibnum, int flags);
 int curtain_unveil(struct curtain_slot *,
     const char *path, unsigned flags, unveil_perms uperms);
-int curtain_unveils_limit(struct curtain_slot *, unveil_perms uperms);
+int curtain_unveil_multi(struct curtain_slot **, size_t nslots,
+    const char *path, unsigned flags,
+    unveil_perms *interm_uperms, unveil_perms *final_uperms);
+int curtain_unveils_limit(struct curtain_slot *, unveil_perms final_uperms);
 int curtain_unveils_reset_all(void);
 
 

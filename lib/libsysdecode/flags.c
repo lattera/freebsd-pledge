@@ -71,7 +71,6 @@ __FBSDID("$FreeBSD$");
 #include <netgraph/bluetooth/include/ng_l2cap.h>
 #include <netgraph/bluetooth/include/ng_btsocket.h>
 #include <sys/curtain.h>
-#include <sys/unveil.h>
 
 /*
  * This is taken from the xlat tables originally in truss which were
@@ -1329,25 +1328,3 @@ sysdecode_curtainctlflags(FILE *fp, int flags, int *rem)
 	return (printed);
 }
 
-static struct name_table unveilreg_flags[] = {
-#define	M ~UNVEILREG_VER_MASK
-	V(UNVEILREG_REGISTER) V(UNVEILREG_NONDIRBYNAME) VEND
-#undef	M
-};
-
-bool
-sysdecode_unveilregflags(FILE *fp, int flags, int *rem)
-{
-	unsigned version;
-	uintmax_t val;
-	bool printed;
-	val = flags;
-	version = (val & UNVEILREG_VER_MASK) >> UNVEILREG_VER_SHIFT;
-	val &= ~UNVEILREG_VER_MASK;
-	fprintf(fp, "UNVEILREG_VERSION(%u)", version);
-	printed = true;
-	print_mask_part(fp, unveilreg_flags, &val, &printed);
-	if (rem != NULL)
-		*rem = val;
-	return (printed);
-}

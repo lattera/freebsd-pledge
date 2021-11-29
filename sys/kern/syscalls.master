@@ -1059,12 +1059,7 @@
 		    struct curtainreq *reqv
 		);
 	}
-168	AUE_UNVEILREG	NOSTD|SYSFIL_CURTAIN {
-		int unveilreg(
-		    int flags,
-		    struct unveilreg *reg
-		);
-	}
+168	AUE_NULL	RESERVED
 169	AUE_SEMSYS	NOSTD|SYSFIL_SYSVIPC {
 		int semsys(
 		    int which,

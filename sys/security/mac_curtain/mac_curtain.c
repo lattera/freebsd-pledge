@@ -2,11 +2,11 @@
 __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
+#include <sys/systm.h>
 #include <sys/sysproto.h>
 #include <sys/malloc.h>
 #include <sys/kernel.h>
 #include <sys/proc.h>
-#include <sys/systm.h>
 #include <sys/ucred.h>
 #include <sys/syslog.h>
 #include <sys/sysctl.h>
@@ -134,7 +134,7 @@ cred_key_action(const struct ucred *cr, enum curtainreq_type type, union curtain
 {
 	const struct curtain *ct;
 	if ((ct = CRED_SLOT(cr))) {
-		return (curtain_resolve(ct, type, key).on_self);
+		return (curtain_resolve(ct, type, key).soft);
 	} else {
 		if (sysfil_match_cred(cr,
 		    curtain_abilities_sysfils[type == CURTAINTYP_ABILITY ?
@@ -159,6 +159,7 @@ cred_key_failed(const struct ucred *cr, enum curtainreq_type type, union curtain
 	case CURTAINTYP_DEFAULT:
 		CURTAIN_CRED_LOG_ACTION(cr, act, "default%s", "");
 		break;
+	case CURTAINTYP_OLD_UNVEIL:
 	case CURTAINTYP_UNVEIL:
 		break;
 	case CURTAINTYP_ABILITY:
@@ -989,7 +990,7 @@ curtain_mount_check_stat(struct ucred *cr,
 		struct curtain *ct;
 		if (mtx_owned(&mountlist_mtx)) { /* getfsstat(2)? */
 			if ((ct = CRED_SLOT(cr)))
-				uperms = unveil_stash_mount_lookup(&ct->ct_ustash, mp);
+				uperms = curtain_lookup_mount(ct, mp);
 			else
 				uperms = UPERM_NONE;
 		} else {
@@ -1282,7 +1283,7 @@ curtain_system_check_sysctl(struct ucred *cr,
 			const struct curtain_item *item;
 			item = curtain_lookup(CRED_SLOT(cr), CURTAINTYP_SYSCTL,
 			    (ctkey){ .sysctl = { .serial = p->oid_serial } });
-			if (item && item->mode.on_self == CURTAINACT_ALLOW)
+			if (item && item->mode.soft == CURTAINACT_ALLOW)
 				return (0);
 		} while ((p = SYSCTL_PARENT(p)));
 	}
@@ -1446,7 +1447,7 @@ curtain_sysfil_update_mask(struct ucred *cr)
 	struct curtain *ct;
 	if (!CRED_SLOT(cr))
 		return (0);
-	ct = curtain_dup_with_shared_barrier(CRED_SLOT(cr));
+	ct = curtain_dup(CRED_SLOT(cr));
 	curtain_mask_sysfils(ct, cr->cr_sysfilset);
 	curtain_cache_update(ct);
 	MPASS(ct->ct_finalized);
@@ -1459,12 +1460,13 @@ curtain_sysfil_update_mask(struct ucred *cr)
 static int
 curtain_proc_check_exec_sugid(struct ucred *cr, struct proc *p)
 {
-	const struct curtain *ct;
+	const struct curtain *ct, *ct1;
 	enum curtain_action act;
 	if ((ct = CRED_SLOT(cr))) {
 		MPASS(ct->ct_finalized);
-		if (ct->ct_cached.is_restricted_on_exec)
-			act = ct->ct_abilities[CURTAINABL_EXEC_RSUGID].on_exec;
+		ct1 = ct->ct_on_exec ? ct->ct_on_exec : ct;
+		if (ct1->ct_cached.is_restricted)
+			act = ct1->ct_abilities[CURTAINABL_EXEC_RSUGID].soft;
 		else
 			act = CURTAINACT_ALLOW;
 	} else if (CRED_IN_RESTRICTED_MODE(cr))
@@ -1483,29 +1485,26 @@ curtain_proc_exec_adjust(struct image_params *imgp)
 		return; /* NOTE: sysfilset kept as-is */
 
 	MPASS(ct->ct_finalized);
-	if (!ct->ct_cached.need_exec_switch)
+	if (!ct->ct_on_exec)
 		return;
+	MPASS(ct->ct_on_exec->ct_finalized);
 
 	if (!(cr = imgp->newcred))
 		cr = imgp->newcred = crdup(imgp->proc->p_ucred);
 
-	if (!ct->ct_cached.is_restricted_on_exec) {
+	if (!ct->ct_on_exec->ct_cached.is_restricted) {
 		/* Can drop the curtain and unveils altogether. */
 		curtain_free(ct);
 		SLOT_SET(cr->cr_label, NULL);
 		sysfil_cred_init(cr);
 		MPASS(!CRED_IN_RESTRICTED_MODE(cr));
-		unveil_proc_drop_base(imgp->proc);
+		unveil_proc_drop_cache(imgp->proc);
 		return;
 	}
 
-	ct = curtain_dup(ct);
-	barrier_bump(CURTAIN_BARRIER(ct));
-	curtain_exec_switch(ct);
-	curtain_cache_update(ct);
-	curtain_cred_sysfil_update(cr, ct);
-	barrier_link(CURTAIN_BARRIER(ct), CURTAIN_BARRIER(CRED_SLOT(cr))->br_parent);
+	ct = curtain_hold(ct->ct_on_exec);
 	curtain_free(CRED_SLOT(cr));
+	curtain_cred_sysfil_update(cr, ct);
 	SLOT_SET(cr->cr_label, ct);
 	MPASS(CRED_IN_RESTRICTED_MODE(cr));
 }

@@ -166,8 +166,14 @@ cmd_timeout_body() {
 
 atf_test_case cmd_id
 cmd_id_body() {
+	atf_check -o save:exp id -u
+	atf_check -o file:exp curtain id -u
+	atf_check -o save:exp id -g
+	atf_check -o file:exp curtain id -g
 	atf_check -o save:exp id
 	atf_check -o file:exp curtain -t _pwddb id
+	atf_check -o save:exp id -p
+	atf_check -o file:exp curtain -t _pwddb id -p
 }
 
 atf_test_case uncurtain
@@ -222,13 +228,14 @@ atf_test_case reunveil_inheritance
 reunveil_inheritance_body() {
 	atf_check mkdir -p a/b/c/d
 	atf_check touch a/b/c/d/f
-	atf_check curtain -t curtain -u a:rw -u a/b/c:r -u a/b/c/d: -u a/b/c/d/f:rw \
+	atf_check chmod +x a/b/c/d/f
+	atf_check curtain -t curtain -u a:rw -u a/b/c:r -u a/b/c/d: -u a/b/c/d/f:rwx \
 		curtain -u /:rw test \
 			\( -r a -a -w a \) -a \
 			\( -r a/b -a -w a/b \) -a \
 			\( -r a/b/c -a ! -w a/b/c \) -a \
 			\( ! -r a/b/c/d -a ! -w a/b/c/d \) -a \
-			\( -r a/b/c/d/f -a -w a/b/c/d/f \)
+			\( -r a/b/c/d/f -a -w a/b/c/d/f -a ! -x a/b/c/d/f \)
 }
 
 atf_test_case chflags
@@ -247,6 +254,38 @@ chflags_system_body() {
 	atf_check -s not-exit:0 -e not-empty curtain -2 -u f:rw chflags 0 f
 	atf_check -s not-exit:0 -e not-empty curtain -2 -d ability:chflags -d ability:sysflags -u f:r chflags 0 f
 	atf_check curtain -2 -d ability:chflags -d ability:sysflags -u f:rw chflags 0 f
+}
+
+atf_test_case filtered_ls
+filtered_ls_body() {
+	atf_check mkdir d
+	atf_check touch d/1 d/2 d/3
+	atf_check -o empty curtain -p d:li ls d
+	atf_check -o inline:'1\n2\n3\n' curtain -p d ls d
+	atf_check -o inline:'1\n2\n3\n' curtain -p d/1 -p d/2 -p d/3 ls d
+	atf_check -o inline:'1\n' curtain -p d/1 ls d
+	atf_check -o inline:'2\n' curtain -p d/2 ls d
+	atf_check -o inline:'3\n' curtain -p d/3 ls d
+	atf_check -o inline:'2\n3\n' curtain -p d -p d/1: ls d
+	atf_check -o inline:'1\n3\n' curtain -p d -p d/2: ls d
+	atf_check -o inline:'1\n2\n' curtain -p d -p d/3: ls d
+}
+
+atf_test_case filtered_ls_nested
+filtered_ls_nested_body() {
+	local p
+	atf_check mkdir d
+	atf_check touch d/1 d/2 d/3 d/x
+	p='curtain -t curtain -p d/1 -p d/2 -p d/3'
+	atf_check -o empty $p curtain -p d:li ls d
+	atf_check -o inline:'1\n2\n3\n' $p curtain -p d ls d
+	atf_check -o inline:'1\n2\n3\n' $p curtain -p d/1 -p d/2 -p d/3 ls d
+	atf_check -o inline:'1\n' $p curtain -p d/1 ls d
+	atf_check -o inline:'2\n' $p curtain -p d/2 ls d
+	atf_check -o inline:'3\n' $p curtain -p d/3 ls d
+	atf_check -o inline:'2\n3\n' $p curtain -p d -p d/1: ls d
+	atf_check -o inline:'1\n3\n' $p curtain -p d -p d/2: ls d
+	atf_check -o inline:'1\n2\n' $p curtain -p d -p d/3: ls d
 }
 
 atf_init_test_cases() {
@@ -278,4 +317,6 @@ atf_init_test_cases() {
 	atf_add_test_case reunveil_inheritance
 	atf_add_test_case chflags
 	atf_add_test_case chflags_system
+	atf_add_test_case filtered_ls
+	atf_add_test_case filtered_ls_nested
 }

@@ -128,7 +128,6 @@ bool	sysdecode_wait4_options(FILE *_fp, int _options, int *_rem);
 bool	sysdecode_wait6_options(FILE *_fp, int _options, int *_rem);
 const char *sysdecode_whence(int _whence);
 bool	sysdecode_shmflags(FILE *_fp, int _flags, int *_rem);
-bool	sysdecode_unveilregflags(FILE *_fp, int _flags, int *_rem);
 bool	sysdecode_curtainctlflags(FILE *_fp, int _flags, int *_rem);
 
 #endif /* !__SYSDECODE_H__ */

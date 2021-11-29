@@ -2,10 +2,9 @@
 __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
-#include <sys/param.h>
+#include <sys/systm.h>
 #include <sys/malloc.h>
 #include <sys/kernel.h>
-#include <sys/systm.h>
 #include <sys/ucred.h>
 #include <sys/counter.h>
 #include <sys/rwlock.h>
@@ -13,8 +12,9 @@ __FBSDID("$FreeBSD$");
 #include <sys/conf.h>
 #include <sys/curtain.h>
 
-static MALLOC_DEFINE(M_CURTAIN, "curtain", "curtain structures");
-static MALLOC_DEFINE(M_BARRIER, "barrier", "barrier structures");
+static MALLOC_DEFINE(M_CURTAIN, "curtain", "mac_curtain curtains");
+static MALLOC_DEFINE(M_BARRIER, "curtain barrier", "mac_curtain barriers");
+static MALLOC_DEFINE(M_CURTAIN_UNVEIL, "curtain unveil", "mac_curtain unveils");
 
 #define STATNODE_COUNTER(name, varname, descr)				\
 	static COUNTER_U64_DEFINE_EARLY(varname);			\
@@ -33,47 +33,32 @@ STATNODE_COUNTER(long_probes, curtain_stats_long_probes, "");
 static inline void
 mode_set(struct curtain_mode *mode, enum curtain_action act)
 {
-	mode->on_self = mode->on_exec = act;
-	mode->on_self_max = mode->on_exec_max = act;
+	mode->soft = mode->hard = act;
 }
 
 static inline void
 mode_mask(struct curtain_mode *dst, const struct curtain_mode src)
 {
-	dst->on_self_max = MAX(src.on_self_max, dst->on_self_max);
-	dst->on_exec_max = MAX(src.on_exec_max, dst->on_exec_max);
-	dst->on_self = MAX(dst->on_self, dst->on_self_max);
-	dst->on_exec = MAX(dst->on_exec, dst->on_exec_max);
+	dst->hard = MAX(src.hard,  dst->hard);
+	dst->soft = MAX(dst->soft, dst->hard);
 }
 
 static inline void
 mode_harden(struct curtain_mode *mode)
 {
-	mode->on_self = mode->on_self_max = MAX(mode->on_self, mode->on_self_max);
-	mode->on_exec = mode->on_exec_max = MAX(mode->on_exec, mode->on_exec_max);
-}
-
-static inline void
-mode_exec_switch(struct curtain_mode *mode)
-{
-	mode->on_self     = mode->on_exec;
-	mode->on_self_max = mode->on_exec_max;
+	mode->hard = mode->soft = MAX(mode->soft, mode->hard);
 }
 
 static inline bool
-mode_need_exec_switch(struct curtain_mode mode)
+mode_equivalent(struct curtain_mode m0, struct curtain_mode m1)
 {
-	return (mode.on_self     != mode.on_exec ||
-	        mode.on_self_max != mode.on_exec_max);
+	return (m0.soft == m1.soft && m0.hard == m1.hard);
 }
 
 static inline bool
-mode_restricts(struct curtain_mode mode1, struct curtain_mode mode2)
+mode_restricted(struct curtain_mode mode)
 {
-	return (mode1.on_self > mode2.on_self ||
-	        mode1.on_exec > mode2.on_exec ||
-	        mode1.on_self_max > mode2.on_self_max ||
-	        mode1.on_exec_max > mode2.on_exec_max);
+	return (mode.soft != CURTAINACT_ALLOW || mode.hard != CURTAINACT_ALLOW);
 }
 
 
@@ -284,7 +269,7 @@ barrier_copy(struct barrier *dst, const struct barrier *src)
 	barrier_invariants_sync(dst);
 }
 
-static struct barrier *
+struct barrier *
 barrier_dup(const struct barrier *src)
 {
 	struct barrier *dst;
@@ -314,7 +299,6 @@ curtain_init(struct curtain *ct, size_t nslots)
 	};
 	for (curtain_index i = 0; i < nslots; i++)
 		ct->ct_slots[i].type = 0;
-	unveil_stash_init(&ct->ct_ustash);
 }
 
 void
@@ -327,6 +311,9 @@ curtain_invariants(const struct curtain *ct)
 	MPASS(ct->ct_nslots >= ct->ct_modulo);
 	MPASS(ct->ct_nslots >= ct->ct_cellar);
 	barrier_invariants(CURTAIN_BARRIER(ct));
+	MPASS(ct->ct_on_exec != ct);
+	if (ct->ct_on_exec)
+		curtain_invariants(ct->ct_on_exec);
 }
 
 void
@@ -334,6 +321,8 @@ curtain_invariants_sync(const struct curtain *ct)
 {
 	curtain_invariants(ct);
 	barrier_invariants_sync(CURTAIN_BARRIER(ct));
+	if (ct->ct_on_exec)
+		curtain_invariants_sync(ct->ct_on_exec);
 }
 
 static struct curtain *
@@ -373,12 +362,19 @@ curtain_hold(struct curtain *ct)
 	return (ct);
 }
 
+static void curtain_key_free(enum curtainreq_type, union curtain_key);
+
 static void
 curtain_free_1(struct curtain *ct)
 {
+	struct curtain_item *item;
+	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
+		if (item->type != 0)
+			curtain_key_free(item->type, item->key);
+	if (ct->ct_on_exec)
+		curtain_free(ct->ct_on_exec);
 	if (CURTAIN_BARRIER(ct))
 		barrier_free(CURTAIN_BARRIER(ct));
-	unveil_stash_free(&ct->ct_ustash);
 	free(ct, M_CURTAIN);
 }
 
@@ -388,45 +384,6 @@ curtain_free(struct curtain *ct)
 	curtain_invariants(ct);
 	if (refcount_release(&ct->ct_ref))
 		curtain_free_1(ct);
-}
-
-static void
-curtain_copy_without_barrier(struct curtain *dst, const struct curtain *src)
-{
-	memcpy(dst, src, sizeof *src + src->ct_nslots * sizeof *src->ct_slots);
-	dst->ct_ref = 1;
-	dst->ct_head.cth_barrier = NULL;
-	unveil_stash_copy(&dst->ct_ustash, &src->ct_ustash);
-}
-
-static struct curtain *
-curtain_dup_without_barrier(const struct curtain *src)
-{
-	struct curtain *dst;
-	curtain_invariants(src);
-	dst = curtain_alloc(src->ct_nslots);
-	curtain_copy_without_barrier(dst, src);
-	return (dst);
-}
-
-struct curtain *
-curtain_dup(const struct curtain *src)
-{
-	struct curtain *dst;
-	dst = curtain_dup_without_barrier(src);
-	dst->ct_head.cth_barrier = barrier_dup(CURTAIN_BARRIER(src));
-	curtain_invariants(dst);
-	return (dst);
-}
-
-struct curtain *
-curtain_dup_with_shared_barrier(struct curtain *src)
-{
-	struct curtain *dst;
-	dst = curtain_dup_without_barrier(src);
-	dst->ct_head.cth_barrier = barrier_hold(CURTAIN_BARRIER(src));
-	curtain_invariants(dst);
-	return (dst);
 }
 
 uint64_t
@@ -442,10 +399,11 @@ curtain_dirty(struct curtain *ct)
 	ct->ct_finalized = false;
 }
 
+
 #define CURTAIN_KEY_INVALID_TYPE_CASES	\
 	case CURTAINTYP_DEFAULT:	\
-	case CURTAINTYP_UNVEIL:		\
-	case CURTAINTYP_ABILITY:
+	case CURTAINTYP_ABILITY:	\
+	case CURTAINTYP_OLD_UNVEIL:
 
 static unsigned
 curtain_key_hash(enum curtainreq_type type, union curtain_key key)
@@ -467,6 +425,8 @@ curtain_key_hash(enum curtainreq_type type, union curtain_key key)
 		return (key.sysctl.serial);
 	case CURTAINTYP_FIBNUM:
 		return (key.fibnum);
+	case CURTAINTYP_UNVEIL:
+		return (key.unveil->hash);
 	}
 	MPASS(0);
 	return (-1);
@@ -494,11 +454,154 @@ curtain_key_same(enum curtainreq_type type,
 		return (key0.sysctl.serial == key1.sysctl.serial);
 	case CURTAINTYP_FIBNUM:
 		return (key0.fibnum == key1.fibnum);
+	case CURTAINTYP_UNVEIL: {
+		char *name0, *name1;
+		size_t name_len;
+		if (key0.unveil->hash != key1.unveil->hash)
+			return (false);
+		if (key0.unveil->name_len != key1.unveil->name_len)
+			return (false);
+		name_len = key0.unveil->name_len;
+		if (name_len == 0)
+			return (true);
+		name0 = key0.unveil->name_ext ? *(char **)(key0.unveil + 1) : key0.unveil->name;
+		name1 = key1.unveil->name_ext ? *(char **)(key1.unveil + 1) : key1.unveil->name;
+		return (memcmp(name0, name1, name_len) == 0);
+	}
 	}
 	MPASS(0);
 	return (false);
 }
 
+static void
+curtain_key_free(enum curtainreq_type type, union curtain_key key)
+{
+	switch (type) {
+	case CURTAINTYP_UNVEIL:
+		vrele(key.unveil->vp);
+		free(key.unveil, M_CURTAIN_UNVEIL);
+		break;
+	default:
+		break;
+	}
+}
+
+static void
+curtain_key_dup(enum curtainreq_type type, union curtain_key *dst, union curtain_key src)
+{
+	switch (type) {
+	case CURTAINTYP_UNVEIL: {
+		size_t name_size;
+		name_size = src.unveil->name_len + (src.unveil->name_len != 0);
+		*dst = src;
+		dst->unveil = malloc(sizeof *dst->unveil + name_size, M_CURTAIN_UNVEIL, M_WAITOK);
+		memcpy(dst->unveil, src.unveil, sizeof *dst->unveil + name_size);
+		vref(dst->unveil->vp);
+		break;
+	}
+	default:
+		*dst = src;
+		break;
+	}
+}
+
+static void
+curtain_key_dup_fixup(const struct curtain *ct, enum curtainreq_type type, union curtain_key *key)
+{
+	switch (type) {
+	case CURTAINTYP_UNVEIL:
+		if (key->unveil->parent) {
+			struct curtain_item *item;
+			item = curtain_lookup(ct, type,
+			    (union curtain_key){ .unveil = key->unveil->parent });
+			KASSERT(item || ct->ct_overflowed, ("parent unveil missing"));
+			key->unveil->parent = item ? item->key.unveil : NULL;
+		}
+		break;
+	default:
+		break;
+	}
+}
+
+static void
+curtain_key_harden(enum curtainreq_type type, union curtain_key *key)
+{
+	switch (type) {
+	case CURTAINTYP_UNVEIL:
+		key->unveil->hard_uperms &= key->unveil->soft_uperms;
+		break;
+	default:
+		break;
+	}
+}
+
+static inline void
+curtain_key_fallback(enum curtainreq_type *type, union curtain_key *key)
+{
+	switch (*type) {
+	case CURTAINTYP_SOCKOPT:
+		*key = (union curtain_key){ .socklvl = key->sockopt.level };
+		*type = CURTAINTYP_SOCKLVL;
+		break;
+	case CURTAINTYP_UNVEIL:
+		if (key->unveil->parent) {
+			*key = (union curtain_key){ .unveil = key->unveil->parent };
+			break;
+		}
+		/* FALLTHROUGH */
+	default:
+		*key = (union curtain_key){ .ability = curtain_type_fallback[*type] };
+		*type = CURTAINTYP_ABILITY;
+		break;
+	}
+}
+
+static void
+curtain_key_extend(enum curtainreq_type dst_type, union curtain_key *dst_key,
+    enum curtainreq_type src_type, union curtain_key src_key, struct curtain_mode src_mode)
+{
+	switch (dst_type) {
+	case CURTAINTYP_UNVEIL: {
+		unveil_perms soft_uperms, hard_uperms;
+		if (src_type == dst_type) {
+			soft_uperms = src_key.unveil->soft_uperms;
+			hard_uperms = src_key.unveil->hard_uperms;
+		} else {
+			soft_uperms = src_mode.soft == CURTAINACT_ALLOW ? UPERM_ALL : UPERM_NONE;
+			hard_uperms = src_mode.hard == CURTAINACT_ALLOW ? UPERM_ALL : UPERM_NONE;
+		}
+		dst_key->unveil->soft_uperms = uperms_inherit(soft_uperms);
+		dst_key->unveil->hard_uperms = uperms_inherit(hard_uperms);
+		break;
+	}
+	default:
+		break;
+	}
+}
+
+static void
+curtain_key_mask(enum curtainreq_type dst_type, union curtain_key *dst_key,
+    enum curtainreq_type src_type, union curtain_key src_key, struct curtain_mode src_mode)
+{
+	switch (dst_type) {
+	case CURTAINTYP_UNVEIL: {
+		unveil_perms mask_uperms;
+		if (src_type == dst_type) {
+			mask_uperms = src_key.unveil->hard_uperms;
+			if (!curtain_key_same(dst_type, *dst_key, src_key))
+				mask_uperms = uperms_inherit(mask_uperms);
+		} else
+			mask_uperms = src_mode.hard == CURTAINACT_ALLOW ? UPERM_ALL : UPERM_NONE;
+		dst_key->unveil->soft_uperms &= mask_uperms;
+		dst_key->unveil->hard_uperms &= mask_uperms;
+		break;
+	}
+	default:
+		break;
+	}
+}
+
+
 static inline struct curtain_item *
 curtain_hash_head(struct curtain *ct, unsigned key_hash)
 {
@@ -606,34 +709,37 @@ curtain_search(struct curtain *ct, enum curtainreq_type type, union curtain_key 
 }
 
 struct curtain *
-curtain_dup_compact(const struct curtain *src)
+curtain_dup(const struct curtain *src)
 {
 	struct curtain_item *di;
 	const struct curtain_item *si;
 	struct curtain *dst;
 	curtain_invariants(src);
 	dst = curtain_make_without_barrier(src->ct_nitems);
-	dst->ct_head.cth_barrier = barrier_dup(CURTAIN_BARRIER(src));
+	if (src->ct_on_exec && !curtain_equivalent(src, src->ct_on_exec))
+		dst->ct_on_exec = curtain_dup(src->ct_on_exec);
+	dst->ct_head.cth_barrier = barrier_hold(CURTAIN_BARRIER(src));
 	dst->ct_overflowed = src->ct_overflowed;
-	if ((dst->ct_finalized = src->ct_finalized))
-		dst->ct_cached = src->ct_cached;
 	memcpy(dst->ct_abilities, src->ct_abilities, sizeof dst->ct_abilities);
 	for (si = src->ct_slots; si < &src->ct_slots[src->ct_nslots]; si++)
 		if (si->type != 0) {
 			bool inserted;
 			di = curtain_search(dst, si->type, si->key, &inserted);
-			MPASS(di && inserted);
-			if (di)
-				di->mode = si->mode;
+			MPASS(inserted);
+			di->mode = si->mode;
+			curtain_key_dup(di->type, &di->key, si->key);
 		}
-	dst->ct_barrier_mode_on_exec = src->ct_barrier_mode_on_exec;
-	unveil_stash_copy(&dst->ct_ustash, &src->ct_ustash);
+	for (di = dst->ct_slots; di < &dst->ct_slots[dst->ct_nslots]; di++)
+		if (di->type != 0)
+			curtain_key_dup_fixup(dst, di->type, &di->key);
+	if ((dst->ct_finalized = src->ct_finalized))
+		dst->ct_cached = src->ct_cached;
 #ifdef INVARIANTS
 	for (si = src->ct_slots; si < &src->ct_slots[src->ct_nslots]; si++)
 		if (si->type != 0) {
 			di = curtain_lookup(dst, si->type, si->key);
 			MPASS(di);
-			MPASS(memcmp(&di->mode, &si->mode, sizeof di->mode) == 0);
+			MPASS(mode_equivalent(di->mode, si->mode));
 		}
 #endif
 	curtain_invariants_sync(dst);
@@ -702,106 +808,57 @@ const barrier_bits curtain_abilities_barriers[CURTAINABL_COUNT] = {
 	[CURTAINABL_SYSVIPC]	= 1 << BARRIER_SYSVIPC,
 };
 
-typedef union curtain_key ctkey;
-
-static inline void
-curtain_key_fallback(enum curtainreq_type *type, union curtain_key *key)
+static struct curtain_mode
+curtain_resolve_1(const struct curtain *ct,
+    enum curtainreq_type *type, union curtain_key *key)
 {
-	if (*type == CURTAINTYP_SOCKOPT) {
-		*key = (ctkey){ .socklvl = key->sockopt.level };
-		*type = CURTAINTYP_SOCKLVL;
-	} else {
-		*key = (ctkey){ .ability = curtain_type_fallback[*type] };
-		*type = CURTAINTYP_ABILITY;
-	}
+	const struct curtain_item *item;
+	do {
+		if (*type == CURTAINTYP_ABILITY)
+			return (ct->ct_abilities[key->ability]);
+		item = curtain_lookup(ct, *type, *key);
+		if (item) {
+			*key = item->key;
+			return (item->mode);
+		}
+		curtain_key_fallback(type, key);
+	} while (true);
 }
 
 struct curtain_mode
 curtain_resolve(const struct curtain *ct,
     enum curtainreq_type type, union curtain_key key)
 {
-	const struct curtain_item *item;
-	if (type == CURTAINTYP_ABILITY)
-		return (ct->ct_abilities[key.ability]);
-	item = curtain_lookup(ct, type, key);
-	if (item)
-		return (item->mode);
-	curtain_key_fallback(&type, &key);
-	return (curtain_resolve(ct, type, key));
+	return (curtain_resolve_1(ct, &type, &key));
 }
 
 bool
-curtain_need_exec_switch(const struct curtain *ct)
+curtain_restricted(const struct curtain *ct)
 {
-	const struct barrier *br;
 	const struct curtain_item *item;
+	const struct barrier *br;
 	for (enum curtain_ability abl = 0; abl <= CURTAINABL_LAST; abl++)
-		if (mode_need_exec_switch(ct->ct_abilities[abl]))
+		if (mode_restricted(ct->ct_abilities[abl]))
 			return (true);
 	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
-		if (item->type != 0 && mode_need_exec_switch(item->mode))
+		if (item->type != 0 && mode_restricted(item->mode))
 			return (true);
 	br = CURTAIN_BARRIER(ct);
-	if (br->br_mode.isolate != ct->ct_barrier_mode_on_exec.isolate ||
-	    br->br_mode.protect != ct->ct_barrier_mode_on_exec.protect)
-		return (true);
-	if (unveil_stash_need_exec_switch(&ct->ct_ustash))
-		return (true);
-	return (false);
-}
-
-static inline bool
-curtain_is_restricted(const struct curtain *ct, struct curtain_mode mode)
-{
-	const struct curtain_item *item;
-	for (enum curtain_ability abl = 0; abl <= CURTAINABL_LAST; abl++)
-		if (mode_restricts(ct->ct_abilities[abl], mode))
-			return (true);
-	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
-		if (item->type != 0 && mode_restricts(item->mode, mode))
-			return (true);
-	return (false);
-}
-
-bool
-curtain_is_restricted_on_self(const struct curtain *ct)
-{
-	const struct barrier *br;
-	const struct curtain_mode mode = {
-		.on_self = CURTAINACT_ALLOW, .on_self_max = CURTAINACT_ALLOW,
-		.on_exec = CURTAINACT_KILL, .on_exec_max = CURTAINACT_KILL,
-	};
-	if (curtain_is_restricted(ct, mode))
-		return (true);
-	br = CURTAIN_BARRIER(ct);
-	if (br->br_mode.isolate ||
-	    br->br_mode.protect)
+	if (br->br_mode.isolate || br->br_mode.protect)
 		return (true);
 	return (false);
 }
 
 bool
-curtain_is_restricted_on_exec(const struct curtain *ct)
+curtain_equivalent(const struct curtain *ct0, const struct curtain *ct1)
 {
-	const struct curtain_mode mode = {
-		.on_self = CURTAINACT_KILL, .on_self_max = CURTAINACT_KILL,
-		.on_exec = CURTAINACT_ALLOW, .on_exec_max = CURTAINACT_ALLOW,
-	};
-	if (curtain_is_restricted(ct, mode))
-		return (true);
-	if (ct->ct_barrier_mode_on_exec.isolate ||
-	    ct->ct_barrier_mode_on_exec.protect)
-		return (true);
-	return (false);
+	return (false); /* XXX */
 }
 
 void
 curtain_cache_update(struct curtain *ct)
 {
-	ct->ct_cached.need_exec_switch = curtain_need_exec_switch(ct);
-	ct->ct_cached.is_restricted_on_self = curtain_is_restricted_on_self(ct);
-	ct->ct_cached.is_restricted_on_exec = curtain_is_restricted_on_exec(ct);
-
+	ct->ct_cached.is_restricted = curtain_restricted(ct);
 	for (unsigned i = 0; i < SYSFILSET_BITS; i++)
 		ct->ct_cached.sysfilacts[i] = CURTAINACT_KILL;
 	for (enum curtain_ability abl = 0; abl < nitems(curtain_abilities_sysfils); abl++) {
@@ -809,11 +866,12 @@ curtain_cache_update(struct curtain *ct)
 		while (sfs) {
 			unsigned i = ffsll(sfs) - 1;
 			ct->ct_cached.sysfilacts[i] = MIN(ct->ct_cached.sysfilacts[i],
-			    ct->ct_abilities[abl].on_self);
+			    ct->ct_abilities[abl].soft);
 			sfs ^= (sysfilset_t)1 << i;
 		}
 	}
-
+	if (ct->ct_on_exec)
+		curtain_cache_update(ct->ct_on_exec);
 	ct->ct_finalized = true;
 }
 
@@ -821,7 +879,7 @@ void
 curtain_cred_sysfil_update(struct ucred *cr, const struct curtain *ct)
 {
 	MPASS(ct->ct_finalized);
-	if (ct->ct_cached.is_restricted_on_self) {
+	if (ct->ct_cached.is_restricted) {
 		cr->cr_sysfilset = 0;
 		for (unsigned i = 0; i < SYSFILSET_BITS; i++)
 			if (ct->ct_cached.sysfilacts[i] == CURTAINACT_ALLOW)
@@ -838,31 +896,18 @@ curtain_cred_sysfil_update(struct ucred *cr, const struct curtain *ct)
 }
 
 void
-curtain_exec_switch(struct curtain *ct)
-{
-	struct barrier *br;
-	struct curtain_item *item;
-	for (enum curtain_ability abl = 0; abl <= CURTAINABL_LAST; abl++)
-		mode_exec_switch(&ct->ct_abilities[abl]);
-	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
-		if (item->type != 0)
-			mode_exec_switch(&item->mode);
-	br = CURTAIN_BARRIER(ct);
-	br->br_mode.isolate = ct->ct_barrier_mode_on_exec.isolate;
-	br->br_mode.protect = ct->ct_barrier_mode_on_exec.protect;
-	unveil_stash_exec_switch(&ct->ct_ustash);
-	curtain_dirty(ct);
-}
-
-void
 curtain_harden(struct curtain *ct)
 {
 	struct curtain_item *item;
 	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
-		if (item->type != 0)
+		if (item->type != 0) {
 			mode_harden(&item->mode);
+			curtain_key_harden(item->type, &item->key);
+		}
 	for (enum curtain_ability abl = 0; abl <= CURTAINABL_LAST; abl++)
 		mode_harden(&ct->ct_abilities[abl]);
+	if (ct->ct_on_exec)
+		curtain_harden(ct->ct_on_exec);
 }
 
 void
@@ -874,11 +919,13 @@ curtain_mask_sysfils(struct curtain *ct, sysfilset_t sfs)
 	for (enum curtain_ability abl = 0; abl < nitems(curtain_abilities_sysfils); abl++)
 		if (curtain_abilities_sysfils[abl] & ~sfs)
 			mode_mask(&ct->ct_abilities[abl], deny);
+	if (ct->ct_on_exec)
+		curtain_mask_sysfils(ct->ct_on_exec, sfs);
 	curtain_dirty(ct);
 }
 
 struct curtain_item *
-curtain_spread(struct curtain *ct, enum curtainreq_type type, union curtain_key key)
+curtain_extend(struct curtain *ct, enum curtainreq_type type, union curtain_key key)
 {
 	struct curtain_item *item, *fallback_item;
 	bool inserted;
@@ -886,17 +933,32 @@ curtain_spread(struct curtain *ct, enum curtainreq_type type, union curtain_key 
 	if (!item)
 		return (NULL);
 	if (inserted) {
+		curtain_key_dup(type, &item->key, key);
 		curtain_key_fallback(&type, &key);
 		if (type == CURTAINTYP_ABILITY) {
 			item->mode = ct->ct_abilities[type];
 		} else {
-			fallback_item = curtain_spread(ct, type, key);
-			if (!fallback_item)
-				return (NULL);
-			item->mode = fallback_item->mode;
+			fallback_item = curtain_extend(ct, type, key);
+			if (fallback_item) {
+				key = fallback_item->key;
+				item->mode = fallback_item->mode;
+			}
 		}
+		curtain_key_dup_fixup(ct, item->type, &item->key);
+		curtain_key_extend(item->type, &item->key, type, key, item->mode);
 	}
 	return (item);
+}
+
+static void
+curtain_item_mask(struct curtain_item *item, const struct curtain *src)
+{
+	enum curtainreq_type type = item->type;
+	union curtain_key key = item->key;
+	struct curtain_mode mode;
+	mode = curtain_resolve_1(src, &type, &key);
+	mode_mask(&item->mode, mode);
+	curtain_key_mask(item->type, &item->key, type, key, mode);
 }
 
 void
@@ -906,19 +968,24 @@ curtain_mask(struct curtain *dst, const struct curtain *src)
 	const struct curtain_item *si;
 	curtain_invariants(src);
 	KASSERT(dst->ct_ref == 1, ("modifying shared curtain"));
+	if (src->ct_on_exec && !dst->ct_on_exec)
+		dst->ct_on_exec = curtain_dup(dst);
 	for (si = src->ct_slots; si < &src->ct_slots[src->ct_nslots]; si++)
 		/* Insert missing items and mask them in the next loop. */
 		if (si->type != 0)
-			curtain_spread(dst, si->type, si->key);
+			curtain_extend(dst, si->type, si->key);
 	for (di = dst->ct_slots; di < &dst->ct_slots[dst->ct_nslots]; di++)
 		if (di->type != 0)
-			mode_mask(&di->mode, curtain_resolve(src, di->type, di->key));
+			curtain_item_mask(di, src);
 	for (enum curtain_ability abl = 0; abl <= CURTAINABL_LAST; abl++)
 		mode_mask(&dst->ct_abilities[abl], src->ct_abilities[abl]);
 	curtain_dirty(dst);
 	curtain_invariants(dst);
+	if (dst->ct_on_exec)
+		curtain_mask(dst->ct_on_exec, src->ct_on_exec ? src->ct_on_exec : src);
 }
 
+
 static void
 subr_curtain_sysinit(void *arg)
 {

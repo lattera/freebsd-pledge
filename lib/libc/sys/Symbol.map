@@ -416,7 +416,6 @@ FBSD_1.6 {
 	shm_create_largepage;
 	shm_rename;
 	curtainctl;
-	unveilreg;
 };
 
 FBSD_1.7 {

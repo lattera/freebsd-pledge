@@ -140,8 +140,6 @@ enum Argtype {
 	Sysarch,
 	Sysctl,
 	Umtxop,
-	Unveilreg,
-	UnveilregFlags,
 	Waitoptions,
 	Whence,
 

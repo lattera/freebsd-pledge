@@ -166,7 +166,6 @@
 #define	SYS_sysarch	165
 #define	SYS_rtprio	166
 #define	SYS_curtainctl	167
-#define	SYS_unveilreg	168
 #define	SYS_semsys	169
 #define	SYS_msgsys	170
 #define	SYS_shmsys	171
