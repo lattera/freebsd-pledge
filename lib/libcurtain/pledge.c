@@ -395,6 +395,8 @@ static struct curtain_slot *unveil_traverse_slot;
 static struct curtain_slot *root_slot_on[CURTAIN_ON_COUNT];
 static struct curtain_slot *promise_slots[PROMISE_COUNT];
 static struct curtain_slot *promise_unveil_slots[PROMISE_COUNT];
+static bool promise_slots_needed_on[PROMISE_COUNT][CURTAIN_ON_COUNT];
+static bool promise_unveil_slots_needed_on[PROMISE_COUNT][CURTAIN_ON_COUNT];
 static struct curtain_slot *custom_slot_on[CURTAIN_ON_COUNT];
 
 
@@ -472,6 +474,35 @@ abilities_for_uperms(struct curtain_slot *slot, unveil_perms uperms, unsigned fl
 }
 
 
+static bool
+prepare_promise_slot(enum curtain_on on, bool needed_on[CURTAIN_ON_COUNT], struct curtain_slot **slot,
+    enum curtain_state state)
+{
+	bool must_fill, needed;
+	if ((needed_on[on] = state >= CURTAIN_RESERVED)) {
+		if ((must_fill = !*slot))
+			*slot = curtain_slot_neutral();
+	} else
+		must_fill = false;
+	if (*slot) {
+		needed = false;
+		for (enum curtain_on on1 = 0; on1 < CURTAIN_ON_COUNT; on1++)
+			if (needed_on[on1])
+				needed = true;
+		if (needed) {
+			curtain_state(*slot, on, state);
+		} else {
+			/*
+			 * Drop slots disabled both on-self and on-exec to
+			 * close the cached O_PATH FDs for dropped promises.
+			 */
+			curtain_drop(*slot);
+			*slot = NULL;
+		}
+	}
+	return (must_fill);
+}
+
 static void
 do_promises_slots(enum curtain_on on, struct promise_mode modes[])
 {
@@ -503,34 +534,12 @@ do_promises_slots(enum curtain_on on, struct promise_mode modes[])
 	 */
 
 	for (enum promise_type promise = 0; promise < PROMISE_COUNT; promise++) {
-		enum curtain_state state;
-		state = modes[promise].state;
-		if (state >= CURTAIN_RESERVED) {
-			if ((fill[promise] = !promise_slots[promise]))
-				promise_slots[promise] = curtain_slot_neutral();
-		} else
-			fill[promise] = false;
-		if (promise_slots[promise]) {
-			curtain_state(promise_slots[promise], on, state);
-			if (curtain_max_state(promise_slots[promise]) < CURTAIN_RESERVED) {
-				curtain_drop(promise_slots[promise]);
-				promise_slots[promise] = NULL;
-			}
-		}
-
-		state = modes[promise].unveil_state;
-		if (state >= CURTAIN_RESERVED) {
-			if ((fill_unveils[promise] = !promise_unveil_slots[promise]))
-				promise_unveil_slots[promise] = curtain_slot_neutral();
-		} else
-			fill_unveils[promise] = false;
-		if (promise_unveil_slots[promise]) {
-			curtain_state(promise_unveil_slots[promise], on, state);
-			if (curtain_max_state(promise_unveil_slots[promise]) < CURTAIN_RESERVED) {
-				curtain_drop(promise_unveil_slots[promise]);
-				promise_unveil_slots[promise] = NULL;
-			}
-		}
+		fill[promise] = prepare_promise_slot(on,
+		    promise_slots_needed_on[promise], &promise_slots[promise],
+		    modes[promise].state);
+		fill_unveils[promise] = prepare_promise_slot(on,
+		    promise_unveil_slots_needed_on[promise], &promise_unveil_slots[promise],
+		    modes[promise].unveil_state);
 	}
 
 	flags = CURTAIN_PASS;

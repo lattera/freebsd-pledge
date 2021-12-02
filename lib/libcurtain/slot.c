@@ -169,15 +169,6 @@ curtain_state(struct curtain_slot *slot, enum curtain_on on, enum curtain_state 
 
 enum { CURTAIN_LEVEL_COUNT = CURTAINLVL_COUNT };
 
-enum curtain_state
-curtain_max_state(struct curtain_slot *slot)
-{
-	enum curtain_state state = CURTAIN_NEUTRAL;
-	for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++)
-		state = MAX(slot->state_on[on], state);
-	return (state);
-}
-
 
 static enum curtainreq_level
 flags2level(int flags)
