@@ -41,9 +41,10 @@ struct curtain_slot *curtain_slot_neutral(void);
 void curtain_enable(struct curtain_slot *, enum curtain_on);
 void curtain_disable(struct curtain_slot *, enum curtain_on);
 void curtain_state(struct curtain_slot *, enum curtain_on, enum curtain_state);
+void curtain_drop(struct curtain_slot *);
+enum curtain_state curtain_max_state(struct curtain_slot *);
 int curtain_engage(void);
 int curtain_enforce(void);
-void curtain_reinit(void);
 
 int curtain_default(struct curtain_slot *slot, unsigned flags);
 int curtain_ability(struct curtain_slot *, enum curtain_ability ability, int flags);

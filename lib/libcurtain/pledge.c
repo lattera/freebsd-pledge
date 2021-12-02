@@ -502,16 +502,26 @@ do_promises_slots(enum curtain_on on,
 				promise_slots[promise] = curtain_slot_neutral();
 		} else
 			fill[promise] = false;
-		if (promise_slots[promise])
+		if (promise_slots[promise]) {
 			curtain_state(promise_slots[promise], on, state);
+			if (curtain_max_state(promise_slots[promise]) < CURTAIN_RESERVED) {
+				curtain_drop(promise_slots[promise]);
+				promise_slots[promise] = NULL;
+			}
+		}
 
 		if ((state = unveil_promises[promise]) >= CURTAIN_RESERVED) {
 			if ((fill_unveils[promise] = !promise_unveil_slots[promise]))
 				promise_unveil_slots[promise] = curtain_slot_neutral();
 		} else
 			fill_unveils[promise] = false;
-		if (promise_unveil_slots[promise])
+		if (promise_unveil_slots[promise]) {
 			curtain_state(promise_unveil_slots[promise], on, state);
+			if (curtain_max_state(promise_unveil_slots[promise]) < CURTAIN_RESERVED) {
+				curtain_drop(promise_unveil_slots[promise]);
+				promise_unveil_slots[promise] = NULL;
+			}
+		}
 	}
 
 	flags = CURTAIN_PASS;

@@ -31,7 +31,6 @@
 
 struct curtain_slot {
 	struct curtain_slot *next;
-	struct curtain_node *nodes;
 	struct curtain_item *items;
 	size_t items_count;
 	enum curtain_state state_on[CURTAIN_ON_COUNT];
@@ -58,7 +57,7 @@ struct curtain_key_unveil {
 struct curtain_node {
 	struct curtain_type *type;
 	struct curtain_node *parent, *children, *sibling;
-	struct curtain_node *slot_next, *type_next;
+	struct curtain_node *type_next;
 	struct curtain_item *items;
 	size_t items_count;
 	union curtain_key {
@@ -103,6 +102,7 @@ struct curtain_type {
 	enum curtainreq_type req_type;
 	size_t nodes_count, items_count;
 	struct curtain_node *nodes;
+	void (*cleanup)(struct curtain_node *);
 	struct curtain_node *(*fallback)(struct curtain_node *);
 	int (*key_cmp)(const union curtain_key *, const union curtain_key *);
 	size_t (*ent_size)(const union curtain_key *);
@@ -112,6 +112,7 @@ struct curtain_type {
 
 
 static struct curtain_slot *curtain_slots = NULL;
+static struct curtain_node *curtain_root_nodes = NULL;
 
 static struct curtain_slot *
 curtain_slot_1(const enum curtain_state state_on[CURTAIN_ON_COUNT])
@@ -168,6 +169,15 @@ curtain_state(struct curtain_slot *slot, enum curtain_on on, enum curtain_state 
 
 enum { CURTAIN_LEVEL_COUNT = CURTAINLVL_COUNT };
 
+enum curtain_state
+curtain_max_state(struct curtain_slot *slot)
+{
+	enum curtain_state state = CURTAIN_NEUTRAL;
+	for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++)
+		state = MAX(slot->state_on[on], state);
+	return (state);
+}
+
 
 static enum curtainreq_level
 flags2level(int flags)
@@ -184,8 +194,65 @@ flags2level(int flags)
 	}
 }
 
-static struct curtain_node *curtain_root_nodes;
+static void
+node_remove(struct curtain_node *node)
+{
+	struct curtain_node **link, *child;
+	/* unlink from parent node */
+	for (link = node->parent ? &node->parent->children : &curtain_root_nodes;
+	    *link != node; link = &(*link)->sibling);
+	*link = node->sibling;
+	/* merge children node into parent node */
+	for (child = node->children; child; child = child->sibling) {
+		child->sibling = *link;
+		(*link)->children = child;
+	}
+	/* unlink from list of all nodes for this type */
+	for (link = &node->type->nodes; *link != node; link = &(*link)->type_next);
+	*link = node->type_next;
+}
 
+static void
+node_drop(struct curtain_node *node)
+{
+	assert(!node->items);
+	if (node->type->cleanup)
+		node->type->cleanup(node);
+	node_remove(node);
+	free(node);
+}
+
+static void
+node_trim(struct curtain_node *node)
+{
+	if (!node->children && !node->items)
+		node_drop(node);
+}
+
+void
+curtain_drop(struct curtain_slot *slot)
+{
+	struct curtain_slot **slot_link;
+	struct curtain_item *item, **item_link;
+	/* unlink slot from list of all slots */
+	for (slot_link = &curtain_slots;
+	    *slot_link != slot;
+	    slot_link = &(*slot_link)->next);
+	*slot_link = slot->next;
+	/* unlink all slot items from their nodes */
+	while ((item = slot->items)) {
+		for (item_link = &item->node->items;
+		    *item_link != item;
+		    item_link = &(*item_link)->node_next);
+		*item_link = item->node_next;
+		node_trim(item->node);
+		slot->items = item->slot_next;
+		free(item);
+	}
+	free(slot);
+}
+
+
 static void
 node_reparent(struct curtain_node *child, struct curtain_node *parent)
 {
@@ -728,9 +795,10 @@ unveil_key_cmp(const union curtain_key *key0, const union curtain_key *key1)
 }
 
 static size_t
-unveil_ent_size(const union curtain_key *key __unused)
+unveil_ent_size(const union curtain_key *key)
 {
-	size_t n = sizeof (struct curtainent_unveil);
+	size_t n = 0;
+	n += sizeof (struct curtainent_unveil);
 	n += __align_up((key->unveil.is_dir ? 0 : strlen(key->unveil.name)) + 1,
 	    __alignof(struct curtainent_unveil));
 	return (n);
@@ -738,19 +806,30 @@ unveil_ent_size(const union curtain_key *key __unused)
 
 static void *
 unveil_ent_fill(void *dest,
-    const union curtain_key *key, struct curtain_mode mode __unused)
+    const union curtain_key *key, struct curtain_mode mode)
 {
 	struct curtainent_unveil *fill = dest;
+	size_t size;
+	if (!(size = unveil_ent_size(key)))
+		return (fill);
 	*fill = (struct curtainent_unveil){
 		.dir_fd = key->unveil.is_dir ? key->unveil.fd : key->unveil.parent->fd,
 		.uperms = mode.uperms,
 	};
 	strcpy(fill->name, key->unveil.is_dir ? "" : key->unveil.name);
-	return ((char *)fill + unveil_ent_size(key));
+	return ((char *)fill + size);
+}
+
+static void
+unveil_node_cleanup(struct curtain_node *node)
+{
+	if (node->key.unveil.opened && node->key.unveil.fd >= 0)
+		close(node->key.unveil.fd);
 }
 
 static struct curtain_type unveils_type = {
 	.req_type = CURTAINTYP_UNVEIL,
+	.cleanup = unveil_node_cleanup,
 	.fallback = ability_fallback_helper,
 	.key_cmp = unveil_key_cmp,
 	.ent_size = unveil_ent_size,
