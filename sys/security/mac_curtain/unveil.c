@@ -52,8 +52,10 @@ STATNODE_COUNTER(traversals, unveil_stats_traversals, "");
 STATNODE_COUNTER(ascents, unveil_stats_ascents, "");
 STATNODE_COUNTER(ascents_cached, unveil_stats_ascents_cached, "");
 STATNODE_COUNTER(ascent_total_depth, unveil_stats_ascent_total_depth, "");
-STATNODE_COUNTER(dirent_dirs, unveil_stats_dirent_dirs, "");
-STATNODE_COUNTER(dirent_nondirs, unveil_stats_dirent_nondirs, "");
+STATNODE_COUNTER(dirent_unknowns, unveil_stats_dirent_unknowns, "");
+STATNODE_COUNTER(dirent_vnode_lookups, unveil_stats_dirent_vnode_lookups, "");
+STATNODE_COUNTER(dirent_vnode_errors, unveil_stats_dirent_vnode_errors, "");
+STATNODE_COUNTER(dirent_name_lookups, unveil_stats_dirent_name_lookups, "");
 
 #endif
 
@@ -717,51 +719,62 @@ unveil_vnode_walk_dirent_visible(struct ucred *cr, struct vnode *dvp, struct dir
 	    (dp->d_namlen == 1 && dp->d_name[0] == '.'))
 		return (true);
 
-	if (!track->ct) {
-		uv = NULL;
-
-	} else if (dp->d_type == DT_DIR) {
+	if (track->ct)
+		switch (dp->d_type) {
+		case DT_UNKNOWN:
 #ifdef CURTAIN_STATS
-		counter_u64_add(unveil_stats_dirent_dirs, 1);
+			counter_u64_add(unveil_stats_dirent_unknowns, 1);
 #endif
-		cn = (struct componentname){
-			.cn_nameiop = LOOKUP,
-			.cn_flags = ISLASTCN,
-			.cn_lkflags = LK_SHARED,
-			.cn_cred = cr,
-			.cn_nameptr = dp->d_name,
-			.cn_namelen = dp->d_namlen,
-		};
-		error = VOP_LOOKUP(dvp, &vp, &cn);
-		if (error)
-			return (false);
-
-		while (vp->v_type == VDIR && (mp = vp->v_mountedhere)) {
-			if (vfs_busy(mp, 0))
-				continue;
-			if (vp != dvp)
-				vput(vp);
-			else
-				vrele(vp);
-			error = VFS_ROOT(mp, LK_SHARED, &vp);
-			vfs_unbusy(mp);
-			if (error)
+			/* FALLTHROUGH */
+		case DT_DIR:
+#ifdef CURTAIN_STATS
+			counter_u64_add(unveil_stats_dirent_vnode_lookups, 1);
+#endif
+			cn = (struct componentname){
+				.cn_nameiop = LOOKUP,
+				.cn_flags = ISLASTCN,
+				.cn_lkflags = LK_SHARED,
+				.cn_cred = cr,
+				.cn_nameptr = dp->d_name,
+				.cn_namelen = dp->d_namlen,
+			};
+			error = VOP_LOOKUP(dvp, &vp, &cn);
+			if (error) {
+#ifdef CURTAIN_STATS
+				counter_u64_add(unveil_stats_dirent_vnode_errors, 1);
+#endif
 				return (false);
-		}
-
-		uv = curtain_lookup_unveil(track->ct, vp, NULL, 0);
-
-		if (vp != dvp)
-			vput(vp);
-		else
-			vrele(vp);
-
-	} else {
+			}
+			while (vp->v_type == VDIR && (mp = vp->v_mountedhere)) {
+				if (vfs_busy(mp, 0))
+					continue;
+				if (vp != dvp)
+					vput(vp);
+				else
+					vrele(vp);
+				error = VFS_ROOT(mp, LK_SHARED, &vp);
+				vfs_unbusy(mp);
+				if (error)
+					return (false);
+			}
+			if (vp != dvp)
+				VOP_UNLOCK(vp);
+			if (vp->v_type == VDIR) {
+				uv = curtain_lookup_unveil(track->ct, vp, NULL, 0);
+				vrele(vp);
+				break;
+			} else
+				vrele(vp);
+			/* FALLTHROUGH */
+		default:
 #ifdef CURTAIN_STATS
-		counter_u64_add(unveil_stats_dirent_nondirs, 1);
+			counter_u64_add(unveil_stats_dirent_name_lookups, 1);
 #endif
-		uv = curtain_lookup_unveil(track->ct, dvp, dp->d_name, dp->d_namlen);
-	}
+			uv = curtain_lookup_unveil(track->ct, dvp, dp->d_name, dp->d_namlen);
+			break;
+		}
+	else
+		uv = NULL;
 
 	if (uv)
 		uperms = uv->soft_uperms;
