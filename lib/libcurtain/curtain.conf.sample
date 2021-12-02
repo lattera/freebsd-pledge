@@ -408,6 +408,39 @@ merge _crude _proc _cmds
 merge _crude _proc _cmds
 merge! _pwddb
 
+[wine, winecfg]
+# NOTES:
+#
+# 1) wine will sometimes busy-loop trying to write some ~/.local files after
+# installing an application.  Unticking the "Manage file associations" checkbox
+# in the "Desktop Integration" tab of winecfg seems to help with that but
+# doesn't completely stop it.
+#
+# 2) The 32-bits fontconfig wine uses for WoW64 won't be able to use the host's
+# 64-bits system font cache, greatly slowing down wine's startup.  The 32-bits
+# cache files can be pre-generated for the current user with this command:
+#     LD_32_LIBRARY_PATH=~/.i386-wine-pkg/usr/local/lib ~/.i386-wine-pkg/usr/local/bin/fc-cache
+#
+# 3) wine will by default symlink its Windows "My Documents" folder to the
+# user's UNIX home directory (and then symlink many other "My" folders to "My
+# Documents").  Look in ~/.wine/drive_c/users/$USER/ and point "My Documents"
+# to something usable.  Can also be changed in winecfg.
+#
+# 4) wine needs procfs(5) mounted.
+#
+# 5) Games most likely will need "trusted" X11 access and DRM access.
+merge _basic
+merge _fdpass
+merge _compat32
+merge _audio
+ability passdir
+ability prot_exec
+/tmp/.wine-%u/ : rwu 0700
+/proc/ : r
+~/.wine/ : rw +
+~/.i386-wine-pkg/ : rx
+~/.cache/fontconfig/ : r
+
 
 [_devel]
 /usr/include/
