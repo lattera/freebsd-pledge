@@ -82,6 +82,7 @@ merge _drm_render
 sysctl kern.devname
 sysctl dev.drm
 sysctl hw.dri
+merge _fdpass
 [_drm_full : _drm_base]
 ability! any_ioctl # XXX
 [_drm_render]
