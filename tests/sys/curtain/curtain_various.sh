@@ -18,16 +18,16 @@ atf_test_case cmd_cat
 cmd_cat_body() {
 	local f="/etc/rc"
 	atf_check -s not-exit:0 -e not-empty -o empty curtain cat "$f"
-	atf_check -s exit:0 -e empty -o file:"$f" curtain -u "$f" cat "$f"
+	atf_check -s exit:0 -e empty -o file:"$f" curtain -p "$f" cat "$f"
 }
 
 atf_test_case cmd_curtain_cat
 cmd_curtain_cat_body() {
 	local f="/etc/rc"
-	atf_check -s not-exit:0 -e not-empty -o empty curtain -t curtain curtain -u "$f" cat "$f"
-	atf_check -s not-exit:0 -e not-empty -o empty curtain -t curtain -u "$f" curtain cat "$f"
+	atf_check -s not-exit:0 -e not-empty -o empty curtain -t curtain curtain -p "$f" cat "$f"
+	atf_check -s not-exit:0 -e not-empty -o empty curtain -t curtain -p "$f" curtain cat "$f"
 	atf_check -s not-exit:0 -e not-empty -o empty curtain -t curtain curtain cat "$f"
-	atf_check -s exit:0 -e empty -o file:"$f" curtain -t curtain -u "$f" curtain -u "$f" cat "$f"
+	atf_check -s exit:0 -e empty -o file:"$f" curtain -t curtain -p "$f" curtain -p "$f" cat "$f"
 }
 
 
@@ -50,16 +50,16 @@ atf_test_case cmd_execpledge_cat
 cmd_execpledge_cat_body() {
 	local f="/etc/rc"
 	atf_check -s not-exit:0 -e not-empty -o empty curtain execpledge -p 'stdio rpath' cat "$f"
-	atf_check -s exit:0 -e empty -o file:"$f" curtain -u "$f" execpledge -p 'stdio rpath' cat "$f"
+	atf_check -s exit:0 -e empty -o file:"$f" curtain -p "$f" execpledge -p 'stdio rpath' cat "$f"
 }
 
 atf_test_case cmd_curtain_execpledge_cat
 cmd_curtain_execpledge_cat_body() {
 	local f="/etc/rc"
-	atf_check -s not-exit:0 -e not-empty -o empty curtain -t curtain curtain -u "$f" execpledge -p 'stdio rpath' cat "$f"
-	atf_check -s not-exit:0 -e not-empty -o empty curtain -t curtain -u "$f" curtain execpledge -p 'stdio rpath' cat "$f"
+	atf_check -s not-exit:0 -e not-empty -o empty curtain -t curtain curtain -p "$f" execpledge -p 'stdio rpath' cat "$f"
+	atf_check -s not-exit:0 -e not-empty -o empty curtain -t curtain -p "$f" curtain execpledge -p 'stdio rpath' cat "$f"
 	atf_check -s not-exit:0 -e not-empty -o empty curtain -t curtain curtain execpledge -p 'stdio rpath' cat "$f"
-	atf_check -s exit:0 -e empty -o file:"$f" curtain -t curtain -u "$f" curtain -u "$f" execpledge -p 'stdio rpath' cat "$f"
+	atf_check -s exit:0 -e empty -o file:"$f" curtain -t curtain -p "$f" curtain -p "$f" execpledge -p 'stdio rpath' cat "$f"
 }
 
 atf_test_case date_localtime # check if localtime(3) works
@@ -98,7 +98,7 @@ session_with_non_tty_body() {
 
 atf_test_case script_with_cmd # this tests openpty(3)
 script_with_cmd_body() {
-	atf_check -o not-empty curtain -t _pty -u typescript:w script typescript echo test
+	atf_check -o not-empty curtain -t _pty -p typescript:w script typescript echo test
 	sed -e '1d' -e '$d' -e 's;\r$;!;g' typescript > out
 	cat << '.' >> exp
 Command: echo test
@@ -192,12 +192,12 @@ uncurtain_body() {
 atf_test_case unenforced_unveil
 unenforced_unveil_body() {
 	atf_check -o save:f echo test
-	atf_check -o file:f curtain -U -t curtain curtain -u f cat f
-	atf_check -o file:f curtain -U -t curtain curtain -u / cat f
-	atf_check -o file:f curtain -U -t curtain curtain -U -t curtain curtain -u f cat f
-	atf_check -o file:f curtain -U -t curtain curtain -U -t curtain curtain -u / cat f
-	atf_check -s not-exit:0 -o empty -e not-empty curtain -U -t curtain curtain -t curtain curtain -u f cat f
-	atf_check -s not-exit:0 -o empty -e not-empty curtain -U -t curtain curtain -t curtain curtain -u / cat f
+	atf_check -o file:f curtain -U -t curtain curtain -p f cat f
+	atf_check -o file:f curtain -U -t curtain curtain -p / cat f
+	atf_check -o file:f curtain -U -t curtain curtain -U -t curtain curtain -p f cat f
+	atf_check -o file:f curtain -U -t curtain curtain -U -t curtain curtain -p / cat f
+	atf_check -s not-exit:0 -o empty -e not-empty curtain -U -t curtain curtain -t curtain curtain -p f cat f
+	atf_check -s not-exit:0 -o empty -e not-empty curtain -U -t curtain curtain -t curtain curtain -p / cat f
 }
 
 atf_test_case extattrs
@@ -214,14 +214,14 @@ extattrs_body() {
 	atf_check -s not-exit:0 -e not-empty curtain getextattr user k f
 	atf_check -s not-exit:0 -e not-empty curtain setextattr user k V f
 	atf_check -s not-exit:0 -e not-empty curtain rmextattr user k f
-	atf_check -o file:exp-ls-1 curtain -d ability:extattr -u f lsextattr user f
-	atf_check -o file:exp-get-1 curtain -d ability:extattr -u f getextattr user k f
-	atf_check -s not-exit:0 -e not-empty curtain -d ability:extattr -u f:r setextattr user k V f
-	atf_check curtain -d ability:extattr -u f:rw setextattr user k V f
-	atf_check -o file:exp-get-0 curtain -d ability:extattr -u f getextattr user k f
-	atf_check -s not-exit:0 -e not-empty curtain -d ability:extattr -u f:r rmextattr user k f
-	atf_check curtain -d ability:extattr -u f:rw rmextattr user k f
-	atf_check -o file:exp-ls-0 curtain -d ability:extattr -u f lsextattr user f
+	atf_check -o file:exp-ls-1 curtain -d ability:extattr -p f lsextattr user f
+	atf_check -o file:exp-get-1 curtain -d ability:extattr -p f getextattr user k f
+	atf_check -s not-exit:0 -e not-empty curtain -d ability:extattr -p f:r setextattr user k V f
+	atf_check curtain -d ability:extattr -p f:rw setextattr user k V f
+	atf_check -o file:exp-get-0 curtain -d ability:extattr -p f getextattr user k f
+	atf_check -s not-exit:0 -e not-empty curtain -d ability:extattr -p f:r rmextattr user k f
+	atf_check curtain -d ability:extattr -p f:rw rmextattr user k f
+	atf_check -o file:exp-ls-0 curtain -d ability:extattr -p f lsextattr user f
 }
 
 atf_test_case reunveil_inheritance
@@ -242,18 +242,18 @@ atf_test_case chflags
 chflags_body() {
 	atf_check touch f
 	chflags uchg f || atf_skip "chflags not supported?"
-	atf_check -s not-exit:0 -e not-empty curtain -2 -u f:rw chflags 0 f
-	atf_check -s not-exit:0 -e not-empty curtain -2 -d ability:chflags -u f:r chflags 0 f
-	atf_check curtain -2 -d ability:chflags -u f:rw chflags 0 f
+	atf_check -s not-exit:0 -e not-empty curtain -2 -p f:rw chflags 0 f
+	atf_check -s not-exit:0 -e not-empty curtain -2 -d ability:chflags -p f:r chflags 0 f
+	atf_check curtain -2 -d ability:chflags -p f:rw chflags 0 f
 }
 
 atf_test_case chflags_system
 chflags_system_body() {
 	atf_check touch f
 	chflags schg f || atf_skip "modifying system flags already disabled"
-	atf_check -s not-exit:0 -e not-empty curtain -2 -u f:rw chflags 0 f
-	atf_check -s not-exit:0 -e not-empty curtain -2 -d ability:chflags -d ability:sysflags -u f:r chflags 0 f
-	atf_check curtain -2 -d ability:chflags -d ability:sysflags -u f:rw chflags 0 f
+	atf_check -s not-exit:0 -e not-empty curtain -2 -p f:rw chflags 0 f
+	atf_check -s not-exit:0 -e not-empty curtain -2 -d ability:chflags -d ability:sysflags -p f:r chflags 0 f
+	atf_check curtain -2 -d ability:chflags -d ability:sysflags -p f:rw chflags 0 f
 }
 
 atf_test_case filtered_ls
