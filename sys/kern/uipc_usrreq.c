@@ -2285,10 +2285,9 @@ unp_internalize(struct mbuf **controlp, struct thread *td)
 					error = EOPNOTSUPP;
 					goto out;
 				}
-				if (CRED_IN_VFS_VEILED_MODE(td->td_ucred) &&
-				    fp->f_vnode && fp->f_vnode->v_type == VDIR) {
+				if (fp->f_vnode && fp->f_vnode->v_type == VDIR &&
+				    (error = sysfil_check(td, SYSFIL_PASSDIR))) {
 					FILEDESC_SUNLOCK(fdesc);
-					error = EPERM;
 					goto out;
 				}
 			}
