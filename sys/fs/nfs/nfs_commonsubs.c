@@ -943,7 +943,7 @@ nfsm_fhtom(struct nfsrv_descript *nd, u_int8_t *fhp, int size, int set_true)
 {
 	u_int32_t *tl;
 	u_int8_t *cp;
-	int fullsiz, rem, bytesize = 0;
+	int fullsiz, bytesize = 0;
 
 	if (size == 0)
 		size = NFSX_MYFH;
@@ -960,7 +960,6 @@ nfsm_fhtom(struct nfsrv_descript *nd, u_int8_t *fhp, int size, int set_true)
 	case ND_NFSV3:
 	case ND_NFSV4:
 		fullsiz = NFSM_RNDUP(size);
-		rem = fullsiz - size;
 		if (set_true) {
 		    bytesize = 2 * NFSX_UNSIGNED + fullsiz;
 		    NFSM_BUILD(tl, u_int32_t *, NFSX_UNSIGNED);
@@ -1108,6 +1107,14 @@ nfsrv_dissectacl(struct nfsrv_descript *nd, NFSACL_T *aclp, int *aclerrp,
 	NFSM_DISSECT(tl, u_int32_t *, NFSX_UNSIGNED);
 	aclsize = NFSX_UNSIGNED;
 	acecnt = fxdr_unsigned(int, *tl);
+	/*
+	 * The RFCs do not define a fixed limit to the number of ACEs in
+	 * an ACL, but 10240 should be more than sufficient.
+	 */
+	if (acecnt < 0 || acecnt > 10240) {
+		error = NFSERR_BADXDR;
+		goto nfsmout;
+	}
 	if (acecnt > ACL_MAX_ENTRIES)
 		aceerr = NFSERR_ATTRNOTSUPP;
 	if (nfsrv_useacl == 0)
@@ -1493,6 +1500,8 @@ nfsv4_loadattr(struct nfsrv_descript *nd, vnode_t vp,
 			    } else {
 				error = nfsrv_dissectacl(nd, NULL, &aceerr,
 				    &cnt, p);
+				if (error)
+				    goto nfsmout;
 				*retcmpp = NFSERR_ATTRNOTSUPP;
 			    }
 			  }

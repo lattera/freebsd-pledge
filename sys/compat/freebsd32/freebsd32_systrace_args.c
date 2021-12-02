@@ -15,14 +15,14 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 	int64_t *iarg = (int64_t *)uarg;
 	int a = 0;
 	switch (sysnum) {
-	/* nosys */
+	/* syscall */
 	case 0: {
 		*n_args = 0;
 		break;
 	}
-	/* sys_exit */
+	/* exit */
 	case 1: {
-		struct sys_exit_args *p = params;
+		struct exit_args *p = params;
 		iarg[a++] = p->rval; /* int */
 		*n_args = 1;
 		break;
@@ -447,7 +447,7 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 	/* freebsd32_mprotect */
 	case 74: {
 		struct freebsd32_mprotect_args *p = params;
-		uarg[a++] = (intptr_t)p->addr; /* const void * */
+		uarg[a++] = (intptr_t)p->addr; /* void * */
 		uarg[a++] = p->len; /* size_t */
 		iarg[a++] = p->prot; /* int */
 		*n_args = 3;
@@ -933,7 +933,7 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 	}
 	/* getrlimit */
 	case 194: {
-		struct __getrlimit_args *p = params;
+		struct getrlimit_args *p = params;
 		uarg[a++] = p->which; /* u_int */
 		uarg[a++] = (intptr_t)p->rlp; /* struct rlimit * */
 		*n_args = 2;
@@ -941,13 +941,13 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 	}
 	/* setrlimit */
 	case 195: {
-		struct __setrlimit_args *p = params;
+		struct setrlimit_args *p = params;
 		uarg[a++] = p->which; /* u_int */
 		uarg[a++] = (intptr_t)p->rlp; /* struct rlimit * */
 		*n_args = 2;
 		break;
 	}
-	/* nosys */
+	/* __syscall */
 	case 198: {
 		*n_args = 0;
 		break;
@@ -3339,10 +3339,10 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 {
 	const char *p = NULL;
 	switch (sysnum) {
-	/* nosys */
+	/* syscall */
 	case 0:
 		break;
-	/* sys_exit */
+	/* exit */
 	case 1:
 		switch (ndx) {
 		case 0:
@@ -4004,7 +4004,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 	case 74:
 		switch (ndx) {
 		case 0:
-			p = "userland const void *";
+			p = "userland void *";
 			break;
 		case 1:
 			p = "size_t";
@@ -4846,7 +4846,7 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
-	/* nosys */
+	/* __syscall */
 	case 198:
 		break;
 	/* freebsd32___sysctl */
@@ -8996,9 +8996,9 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 {
 	const char *p = NULL;
 	switch (sysnum) {
-	/* nosys */
+	/* syscall */
 	case 0:
-	/* sys_exit */
+	/* exit */
 	case 1:
 		if (ndx == 0 || ndx == 1)
 			p = "void";
@@ -9537,7 +9537,7 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;
-	/* nosys */
+	/* __syscall */
 	case 198:
 	/* freebsd32___sysctl */
 	case 202:
