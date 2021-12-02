@@ -384,6 +384,10 @@ static const struct promise_unveil {
 };
 
 
+struct promise_mode {
+	enum curtain_state state, unveil_state;
+};
+
 static bool has_pledges_on[CURTAIN_ON_COUNT];
 static bool has_customs_on[CURTAIN_ON_COUNT];
 static struct curtain_slot *always_slot;
@@ -395,7 +399,7 @@ static struct curtain_slot *custom_slot_on[CURTAIN_ON_COUNT];
 
 
 static int
-parse_promises(enum curtain_state *promises, const char *promises_str)
+parse_promises(struct promise_mode modes[], const char *promises_str)
 {
 	const char *p = promises_str;
 	do {
@@ -420,7 +424,8 @@ parse_promises(enum curtain_state *promises, const char *promises_str)
 				break;
 			type++;
 		} while (true);
-		promises[type] = CURTAIN_ENABLED; /* found */
+		/* found */
+		modes[type].state = modes[type].unveil_state = CURTAIN_ENABLED;
 	} while (true);
 	return (0);
 inval:	errno = EINVAL;
@@ -429,15 +434,15 @@ inval:	errno = EINVAL;
 
 
 static unveil_perms
-uperms_for_promises(const enum curtain_state *promises)
+uperms_for_promises(const struct promise_mode modes[])
 {
 	unveil_perms uperms = UPERM_NONE;
-	if (promises[PROMISE_RPATH] >= CURTAIN_ENABLED) uperms |= UPERM_READ;
-	if (promises[PROMISE_WPATH] >= CURTAIN_ENABLED) uperms |= UPERM_WRITE;
-	if (promises[PROMISE_CPATH] >= CURTAIN_ENABLED) uperms |= UPERM_CREATE | UPERM_DELETE;
-	if (promises[PROMISE_EXEC]  >= CURTAIN_ENABLED) uperms |= UPERM_EXECUTE;
-	if (promises[PROMISE_FATTR] >= CURTAIN_ENABLED) uperms |= UPERM_SETATTR;
-	if (promises[PROMISE_UNIX]  >= CURTAIN_ENABLED) uperms |= UPERM_UNIX;
+	if (modes[PROMISE_RPATH].state >= CURTAIN_ENABLED) uperms |= UPERM_READ;
+	if (modes[PROMISE_WPATH].state >= CURTAIN_ENABLED) uperms |= UPERM_WRITE;
+	if (modes[PROMISE_CPATH].state >= CURTAIN_ENABLED) uperms |= UPERM_CREATE | UPERM_DELETE;
+	if (modes[PROMISE_EXEC].state  >= CURTAIN_ENABLED) uperms |= UPERM_EXECUTE;
+	if (modes[PROMISE_FATTR].state >= CURTAIN_ENABLED) uperms |= UPERM_SETATTR;
+	if (modes[PROMISE_UNIX].state  >= CURTAIN_ENABLED) uperms |= UPERM_UNIX;
 	return (uperms);
 }
 
@@ -468,9 +473,7 @@ abilities_for_uperms(struct curtain_slot *slot, unveil_perms uperms, unsigned fl
 
 
 static void
-do_promises_slots(enum curtain_on on,
-    enum curtain_state promises[],
-    enum curtain_state unveil_promises[])
+do_promises_slots(enum curtain_on on, struct promise_mode modes[])
 {
 	bool fill[PROMISE_COUNT], fill_unveils[PROMISE_COUNT];
 	bool tainted, changed;
@@ -482,8 +485,12 @@ do_promises_slots(enum curtain_on on,
 	do { /* enable promises that enabled promises depend on */
 		changed = false;
 		FOREACH_ARRAY(e, depends_table) {
-			if (promises[(*e)[1]] < promises[(*e)[0]]) {
-				promises[(*e)[1]] = promises[(*e)[0]];
+			if (modes[(*e)[1]].state < modes[(*e)[0]].state) {
+				modes[(*e)[1]].state = modes[(*e)[0]].state;
+				changed = true;
+			}
+			if (modes[(*e)[1]].unveil_state < modes[(*e)[0]].unveil_state) {
+				modes[(*e)[1]].unveil_state = modes[(*e)[0]].unveil_state;
 				changed = true;
 			}
 		}
@@ -492,12 +499,13 @@ do_promises_slots(enum curtain_on on,
 	/*
 	 * Initialize promise slots on first use.  Abilities and unveils are
 	 * separated because unveil() needs to deal with them differently when
-	 * unveil() is done before pledge().
+	 * it's called before pledge().
 	 */
 
 	for (enum promise_type promise = 0; promise < PROMISE_COUNT; promise++) {
 		enum curtain_state state;
-		if ((state = promises[promise]) >= CURTAIN_RESERVED) {
+		state = modes[promise].state;
+		if (state >= CURTAIN_RESERVED) {
 			if ((fill[promise] = !promise_slots[promise]))
 				promise_slots[promise] = curtain_slot_neutral();
 		} else
@@ -510,7 +518,8 @@ do_promises_slots(enum curtain_on on,
 			}
 		}
 
-		if ((state = unveil_promises[promise]) >= CURTAIN_RESERVED) {
+		state = modes[promise].unveil_state;
+		if (state >= CURTAIN_RESERVED) {
 			if ((fill_unveils[promise] = !promise_unveil_slots[promise]))
 				promise_unveil_slots[promise] = curtain_slot_neutral();
 		} else
@@ -596,21 +605,21 @@ do_promises_slots(enum curtain_on on,
 static void unveil_enable_delayed(enum curtain_on);
 
 static int
-do_pledge(enum curtain_state *promises_on[CURTAIN_ON_COUNT])
+do_pledge(struct promise_mode *modes_on[CURTAIN_ON_COUNT])
 {
 	for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++) {
 		unveil_perms wanted_uperms;
-		if (!promises_on[on])
+		if (!modes_on[on])
 			continue;
 		has_pledges_on[on] = true;
-		do_promises_slots(on, promises_on[on], promises_on[on]);
-		wanted_uperms = uperms_for_promises(promises_on[on]);
+		do_promises_slots(on, modes_on[on]);
+		wanted_uperms = uperms_for_promises(modes_on[on]);
 		if (custom_slot_on[on]) {
 			curtain_unveils_limit(custom_slot_on[on], wanted_uperms);
 			unveil_enable_delayed(on); /* see do_unveil_both() */
 		}
 		if (!has_customs_on[on] ||
-		    promises_on[on][PROMISE_UNVEIL] >= CURTAIN_RESERVED) {
+		    modes_on[on][PROMISE_UNVEIL].state >= CURTAIN_RESERVED) {
 			if (!root_slot_on[on])
 				root_slot_on[on] = curtain_slot_neutral();
 			curtain_state(root_slot_on[on], on,
@@ -626,23 +635,23 @@ do_pledge(enum curtain_state *promises_on[CURTAIN_ON_COUNT])
 int
 pledge(const char *promises_str, const char *execpromises_str)
 {
-	enum curtain_state self_promises[PROMISE_COUNT] = { 0 };
-	enum curtain_state exec_promises[PROMISE_COUNT] = { 0 };
-	enum curtain_state *promises_on[CURTAIN_ON_COUNT] = { 0 };
+	struct promise_mode self_modes[PROMISE_COUNT] = { 0 };
+	struct promise_mode exec_modes[PROMISE_COUNT] = { 0 };
+	struct promise_mode *modes_on[CURTAIN_ON_COUNT] = { 0 };
 	int r;
 	if (promises_str) {
-		r = parse_promises(self_promises, promises_str);
+		r = parse_promises(self_modes, promises_str);
 		if (r < 0)
 			return (-1);
-		promises_on[CURTAIN_ON_SELF] = self_promises;
+		modes_on[CURTAIN_ON_SELF] = self_modes;
 	}
 	if (execpromises_str) {
-		r = parse_promises(exec_promises, execpromises_str);
+		r = parse_promises(exec_modes, execpromises_str);
 		if (r < 0)
 			return (-1);
-		promises_on[CURTAIN_ON_EXEC] = exec_promises;
+		modes_on[CURTAIN_ON_EXEC] = exec_modes;
 	}
-	return (do_pledge(promises_on));
+	return (do_pledge(modes_on));
 }
 
 
@@ -672,17 +681,17 @@ do_unveil_init_on(enum curtain_on on)
 		custom_slot_on[on] = curtain_slot_neutral();
 	curtain_enable(custom_slot_on[on], on);
 	if (!has_pledges_on[on] && !has_customs_on[on]) {
-		enum curtain_state promises[PROMISE_COUNT],
-		                   unveil_promises[PROMISE_COUNT];
+		struct promise_mode modes[PROMISE_COUNT];
 		/*
 		 * unveil() was called before pledge().  Enable abilities for
 		 * all promises and reserve their unveils.
 		 */
-		for (enum promise_type i = 0; i < PROMISE_COUNT; i++) {
-			promises[i] = CURTAIN_ENABLED;
-			unveil_promises[i] = CURTAIN_RESERVED;
-		}
-		do_promises_slots(on, promises, unveil_promises);
+		for (enum promise_type i = 0; i < PROMISE_COUNT; i++)
+			modes[i] = (struct promise_mode){
+				.state = CURTAIN_ENABLED,
+				.unveil_state = CURTAIN_RESERVED,
+			};
+		do_promises_slots(on, modes);
 	}
 	if (root_slot_on[on])
 		curtain_disable(root_slot_on[on], on);
