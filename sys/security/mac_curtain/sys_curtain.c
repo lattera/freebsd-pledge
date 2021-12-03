@@ -360,102 +360,46 @@ curtain_fill_unveil(struct curtain *ct, const struct curtainreq *req,
 }
 
 static int
-curtain_fill(struct curtain *ct, struct ucred *cr,
-    int flags_filter, size_t reqc, const struct curtainreq *reqv)
+curtain_fill_req(struct curtain *ct, const struct curtainreq *req)
 {
-	struct barrier *br;
-	const struct curtainreq *req;
-	enum curtainreq_level def;
-	int error;
-	unsigned short group_counts[CURTAINTYP_LAST + 1] = { 0 },
-	               group_jumps[CURTAINTYP_LAST + 1],
-	               group_fills[CURTAINTYP_LAST + 1],
-	               group_entries[reqc], /* CURTAINCTL_MAX_REQS */
-	               group_index;
-
-	SDT_PROBE2(curtain,, curtain_fill, begin, reqc, reqv);
-
-	/* Validate and group requests by type. */
-	for (req = reqv; req < &reqv[reqc]; req++) {
-		if (!(req->level >= 0 && req->level < CURTAINLVL_COUNT) ||
-		    !(req->type >= CURTAINTYP_DEFAULT && req->type <= CURTAINTYP_LAST)) {
-			error = EINVAL;
-			goto fail;
-		}
-		if (req->flags & flags_filter)
-			group_counts[req->type]++;
-	}
-	group_jumps[0] = group_fills[0] = 0;
-	for (int i = 0; i < CURTAINTYP_LAST; i++)
-		group_jumps[i + 1] = group_fills[i + 1] = group_counts[i] + group_jumps[i];
-	for (size_t reqi = 0; reqi < reqc; reqi++)
-		if (reqv[reqi].flags & flags_filter)
-			group_entries[group_fills[reqv[reqi].type]++] = reqi;
-#ifdef INVARIANTS
-	for (int i = 0; i <= CURTAINTYP_LAST; i++)
-		MPASS(group_fills[i] == group_jumps[i] + group_counts[i]);
-#endif
-
-	/*
-	 * Requests for items of a certain type must be processed before
-	 * requests for items of types that can inherit from them.
-	 */
-
-#define	GROUP_FOREACH(t, req) \
-	for (group_index = group_jumps[t]; \
-	    group_index < group_fills[t] && (req = &reqv[group_entries[group_index]]); \
-	    group_index++)
-
-	def = CURTAINLVL_KILL;
-	GROUP_FOREACH(CURTAINTYP_DEFAULT, req) {
-		MPASS(req->type == CURTAINTYP_DEFAULT);
-		def = req->level;
-	}
-	for (enum curtain_ability abl = 0; abl <= CURTAINABL_LAST; abl++)
-		ct->ct_abilities[abl].soft = lvl2act[def];
-	br = CURTAIN_BARRIER(ct);
-	curtain_fill_barrier_mode(&br->br_mode, def, BARRIERS_ALL);
-
-	GROUP_FOREACH(CURTAINTYP_ABILITY, req) {
-		MPASS(req->type == CURTAINTYP_ABILITY);
+	switch (req->type) {
+	case CURTAINTYP_DEFAULT:
+		/* handled earlier */
+		break;
+	case CURTAINTYP_ABILITY: {
 		enum curtain_ability *ablp = req->data;
 		size_t ablc = req->size / sizeof *ablp;
 		while (ablc--) {
 			enum curtain_ability abl = *ablp++;
-			if (!CURTAINABL_USER_VALID(abl)) {
-				error = EINVAL;
-				goto fail;
-			}
+			if (!CURTAINABL_USER_VALID(abl))
+				return (EINVAL);
 			curtain_fill_ability(ct, req, abl);
 		}
+		break;
 	}
-
-	GROUP_FOREACH(CURTAINTYP_IOCTL, req) {
-		MPASS(req->type == CURTAINTYP_IOCTL);
+	case CURTAINTYP_IOCTL: {
 		unsigned long *p = req->data;
 		size_t c = req->size / sizeof *p;
 		while (c--)
 			curtain_fill_item(ct, req, (ctkey){ .ioctl = *p++ });
+		break;
 	}
-
-	GROUP_FOREACH(CURTAINTYP_SOCKAF, req) {
-		MPASS(req->type == CURTAINTYP_SOCKAF);
+	case CURTAINTYP_SOCKAF: {
 		int *p = req->data;
 		size_t c = req->size / sizeof *p;
 		while (c--)
 			curtain_fill_item(ct, req, (ctkey){ .sockaf = *p++ });
+		break;
 	}
-
-	GROUP_FOREACH(CURTAINTYP_SOCKLVL, req) {
-		MPASS(req->type == CURTAINTYP_SOCKLVL);
+	case CURTAINTYP_SOCKLVL: {
 		int *p = req->data;
 		size_t c = req->size / sizeof *p;
 		while (c--)
 			curtain_fill_item(ct, req, (ctkey){ .socklvl = *p++ });
+		break;
 	}
 
-	GROUP_FOREACH(CURTAINTYP_SOCKOPT, req) {
-		MPASS(req->type == CURTAINTYP_SOCKOPT);
+	case CURTAINTYP_SOCKOPT: {
 		int (*p)[2] = req->data;
 		size_t c = req->size / sizeof *p;
 		while (c--) {
@@ -463,65 +407,100 @@ curtain_fill(struct curtain *ct, struct ucred *cr,
 			    (ctkey){ .sockopt = { (*p)[0], (*p)[1] } });
 			p++;
 		}
+		break;
 	}
 
-	GROUP_FOREACH(CURTAINTYP_PRIV, req) {
-		MPASS(req->type == CURTAINTYP_PRIV);
+	case CURTAINTYP_PRIV: {
 		int *p = req->data;
 		size_t c = req->size / sizeof *p;
 		while (c--)
 			curtain_fill_item(ct, req, (ctkey){ .priv = *p++ });
+		break;
 	}
 
-	GROUP_FOREACH(CURTAINTYP_SYSCTL, req) {
-		MPASS(req->type == CURTAINTYP_SYSCTL);
+	case CURTAINTYP_SYSCTL: {
 		int *p = req->data;
 		size_t c = req->size / sizeof *p;
+		int error;
 		while (c--) {
 			uint64_t serial;
 			size_t l;
 			l = *p++;
-			if (l > c) {
-				error = EINVAL;
-				goto fail;
-			}
+			if (l > c)
+				return (EINVAL);
 			error = get_sysctl_serial(p, l, &serial);
 			p += l;
 			c -= l;
 			if (error) {
 				if (error != ENOENT)
-					goto fail;
+					return (error);
 				continue;
 			}
 			curtain_fill_item(ct, req,
 			    (ctkey){ .sysctl = { .serial = serial } });
 		}
+		break;
 	}
 
-	GROUP_FOREACH(CURTAINTYP_FIBNUM, req) {
-		MPASS(req->type == CURTAINTYP_FIBNUM);
+	case CURTAINTYP_FIBNUM: {
 		int *p = req->data;
 		size_t c = req->size / sizeof *p;
 		while (c--)
 			curtain_fill_item(ct, req, (ctkey){ .fibnum = *p++ });
+		break;
 	}
 
-	GROUP_FOREACH(CURTAINTYP_UNVEIL, req) {
-		MPASS(req->type == CURTAINTYP_UNVEIL);
+	case CURTAINTYP_UNVEIL: {
 		struct curtainent_unveil *entp = (void *)req->data;
 		char *endp = (char *)req->data + req->size;
+		int error;
 		while ((char *)entp < endp) {
-			if (endp - (char *)entp < sizeof *entp) {
+			if (endp - (char *)entp < sizeof *entp)
+				return (EINVAL);
+			error = curtain_fill_unveil(ct, req, &entp, endp);
+			if (error)
+				return (error);
+		}
+		break;
+	}
+	default:
+		return (EINVAL);
+	}
+	return (0);
+}
+
+static int
+curtain_fill(struct curtain *ct, struct ucred *cr,
+    int flags_filter, size_t reqc, const struct curtainreq *reqv)
+{
+	const struct curtainreq *req;
+	enum curtainreq_level def;
+	int error;
+
+	SDT_PROBE2(curtain,, curtain_fill, begin, reqc, reqv);
+
+	def = CURTAINLVL_KILL;
+	for (req = reqv; req < &reqv[reqc]; req++)
+		if (req->flags & flags_filter) {
+			if (!(req->level >= 0 && req->level < CURTAINLVL_COUNT) ||
+			    !(req->type >= CURTAINTYP_DEFAULT && req->type <= CURTAINTYP_LAST)) {
 				error = EINVAL;
 				goto fail;
 			}
-			error = curtain_fill_unveil(ct, req, &entp, endp);
+			if (req->type == CURTAINTYP_DEFAULT)
+				def = req->level;
+		}
+
+	for (enum curtain_ability abl = 0; abl <= CURTAINABL_LAST; abl++)
+		ct->ct_abilities[abl].soft = lvl2act[def];
+	curtain_fill_barrier_mode(&CURTAIN_BARRIER(ct)->br_mode, def, BARRIERS_ALL);
+
+	for (req = reqv; req < &reqv[reqc]; req++)
+		if (req->flags & flags_filter) {
+			error = curtain_fill_req(ct, req);
 			if (error)
 				goto fail;
 		}
-	}
-
-#undef	GROUP_FOREACH
 
 	if (ct->ct_overflowed || ct->ct_nitems > CURTAINCTL_MAX_ITEMS) {
 		error = E2BIG;
