@@ -93,7 +93,7 @@ struct sysent freebsd32_sysent[] = {
 	{ .sy_narg = AS(access_args), .sy_call = (sy_call_t *)sys_access, .sy_auevent = AUE_ACCESS, .sy_flags = SYF_SYSFILS(SYSFIL_VFS_MISC | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 33 = access */
 	{ .sy_narg = AS(chflags_args), .sy_call = (sy_call_t *)sys_chflags, .sy_auevent = AUE_CHFLAGS, .sy_flags = SYF_SYSFILS(SYSFIL_FATTR | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 34 = chflags */
 	{ .sy_narg = AS(fchflags_args), .sy_call = (sy_call_t *)sys_fchflags, .sy_auevent = AUE_FCHFLAGS, .sy_flags = SYF_SYSFILS(SYSFIL_FATTR), .sy_thrcnt = SY_THR_STATIC },	/* 35 = fchflags */
-	{ .sy_narg = 0, .sy_call = (sy_call_t *)sys_sync, .sy_auevent = AUE_SYNC, .sy_flags = SYF_SYSFILS(SYSFIL_MOUNT), .sy_thrcnt = SY_THR_STATIC },	/* 36 = sync */
+	{ .sy_narg = 0, .sy_call = (sy_call_t *)sys_sync, .sy_auevent = AUE_SYNC, .sy_flags = SYF_SYSFILS(SYSFIL_VFS_WRITE), .sy_thrcnt = SY_THR_STATIC },	/* 36 = sync */
 	{ .sy_narg = AS(kill_args), .sy_call = (sy_call_t *)sys_kill, .sy_auevent = AUE_KILL, .sy_flags = SYF_SYSFILS(SYSFIL_PROC_CHECKED), .sy_thrcnt = SY_THR_STATIC },	/* 37 = kill */
 	{ compat(AS(ofreebsd32_stat_args),freebsd32_stat), .sy_auevent = AUE_STAT, .sy_flags = SYF_SYSFILS(SYSFIL_VFS_READ | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 38 = old freebsd32_stat */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)sys_getppid, .sy_auevent = AUE_GETPPID, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 39 = getppid */
