@@ -161,14 +161,14 @@ merge _spwddb
 
 [su : _login]
 merge _basic
-ability id any_id
+merge _setcred
 ability audit
 ability! rsugid_exec
 merge _syslog
 
 [doas : _login]
 merge _basic
-ability id any_id
+merge _setcred
 ability! rsugid_exec
 merge _syslog
 [doas _localbase]
@@ -189,25 +189,25 @@ merge _basic
 
 [ping, ping6]
 merge _basic _fdpass
-ability id
+ability cred
 priv net_raw netinet_raw
 socklvl icmpv6
 
 [traceroute, traceroute6]
 merge _basic _fdpass
-ability id
+ability cred
 priv net_raw netinet_raw
 sysctl net.inet.ip.ttl
 sysctl net.inet6.ip6.hlim
 
 [mtr]
 merge _basic
-ability id
+ability cred
 priv net_raw netinet_raw
 
 [tcpdump]
 merge _basic
-ability id
+ability cred
 merge _bpf
 
 [wireshark]
@@ -399,7 +399,7 @@ ability prot_exec
 [xterm : _terminal]
 # Dies with an X11 error when trying to select text under -X.
 merge _crude _proc _cmds
-ability id
+ability cred
 
 [urxvt : _terminal]
 merge _crude _proc _cmds
@@ -491,7 +491,7 @@ merge _basic
 merge _login
 merge _syslog
 merge _shared_tmpdir # mail.local(8) uses /tmp directly
-ability id any_id chown
+merge _setcred
 /etc/mail/
 /etc/aliases
 /var/run/sendmail.pid : rw
@@ -504,7 +504,8 @@ merge _basic
 merge _login
 merge _syslog
 merge _fdpass
-ability id any_id chown
+merge _setcred
+ability chown
 /etc/aliases
 /usr/local/etc/exim/
 /var/run/ : b
@@ -518,7 +519,8 @@ ability id any_id chown
 merge _basic
 merge _login
 merge _syslog
-ability id any_id chown
+merge _setcred
+ability chown
 /etc/ftpusers
 /etc/ftpchroot
 /etc/ftphosts
@@ -536,7 +538,8 @@ merge _basic
 merge _login
 merge _syslog
 merge _fdpass
-ability id any_id chown
+merge _setcred
+ability chown
 ability extattr acl quota
 sysctl kern.corefile
 /usr/local/etc/smb4.conf

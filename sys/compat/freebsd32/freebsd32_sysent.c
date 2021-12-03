@@ -80,7 +80,7 @@ struct sysent freebsd32_sysent[] = {
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)sys_getpid, .sy_auevent = AUE_GETPID, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 20 = getpid */
 	{ .sy_narg = AS(mount_args), .sy_call = (sy_call_t *)sys_mount, .sy_auevent = AUE_MOUNT, .sy_flags = SYF_SYSFILS(SYSFIL_MOUNT | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 21 = mount */
 	{ .sy_narg = AS(unmount_args), .sy_call = (sy_call_t *)sys_unmount, .sy_auevent = AUE_UMOUNT, .sy_flags = SYF_SYSFILS(SYSFIL_MOUNT | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 22 = unmount */
-	{ .sy_narg = AS(setuid_args), .sy_call = (sy_call_t *)sys_setuid, .sy_auevent = AUE_SETUID, .sy_flags = SYF_SYSFILS(SYSFIL_ID), .sy_thrcnt = SY_THR_STATIC },	/* 23 = setuid */
+	{ .sy_narg = AS(setuid_args), .sy_call = (sy_call_t *)sys_setuid, .sy_auevent = AUE_SETUID, .sy_flags = SYF_SYSFILS(SYSFIL_CRED), .sy_thrcnt = SY_THR_STATIC },	/* 23 = setuid */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)sys_getuid, .sy_auevent = AUE_GETUID, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 24 = getuid */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)sys_geteuid, .sy_auevent = AUE_GETEUID, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 25 = geteuid */
 	{ .sy_narg = AS(freebsd32_ptrace_args), .sy_call = (sy_call_t *)freebsd32_ptrace, .sy_auevent = AUE_PTRACE, .sy_flags = SYF_SYSFILS(SYSFIL_DEBUG | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 26 = freebsd32_ptrace */
@@ -107,7 +107,7 @@ struct sysent freebsd32_sysent[] = {
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)sys_getgid, .sy_auevent = AUE_GETGID, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 47 = getgid */
 	{ compat(AS(osigprocmask_args),sigprocmask), .sy_auevent = AUE_SIGPROCMASK, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 48 = old sigprocmask */
 	{ .sy_narg = AS(getlogin_args), .sy_call = (sy_call_t *)sys_getlogin, .sy_auevent = AUE_GETLOGIN, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 49 = getlogin */
-	{ .sy_narg = AS(setlogin_args), .sy_call = (sy_call_t *)sys_setlogin, .sy_auevent = AUE_SETLOGIN, .sy_flags = SYF_SYSFILS(SYSFIL_ID | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 50 = setlogin */
+	{ .sy_narg = AS(setlogin_args), .sy_call = (sy_call_t *)sys_setlogin, .sy_auevent = AUE_SETLOGIN, .sy_flags = SYF_SYSFILS(SYSFIL_CRED | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 50 = setlogin */
 	{ .sy_narg = AS(acct_args), .sy_call = (sy_call_t *)sys_acct, .sy_auevent = AUE_ACCT, .sy_flags = SYF_SYSFILS(SYSFIL_DEFAULT | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 51 = acct */
 	{ compat(0,sigpending), .sy_auevent = AUE_SIGPENDING, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 52 = old sigpending */
 	{ .sy_narg = AS(freebsd32_sigaltstack_args), .sy_call = (sy_call_t *)freebsd32_sigaltstack, .sy_auevent = AUE_SIGALTSTACK, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 53 = freebsd32_sigaltstack */
@@ -137,7 +137,7 @@ struct sysent freebsd32_sysent[] = {
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 77 = obsolete vlimit */
 	{ .sy_narg = AS(mincore_args), .sy_call = (sy_call_t *)sys_mincore, .sy_auevent = AUE_MINCORE, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 78 = mincore */
 	{ .sy_narg = AS(getgroups_args), .sy_call = (sy_call_t *)sys_getgroups, .sy_auevent = AUE_GETGROUPS, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 79 = getgroups */
-	{ .sy_narg = AS(setgroups_args), .sy_call = (sy_call_t *)sys_setgroups, .sy_auevent = AUE_SETGROUPS, .sy_flags = SYF_SYSFILS(SYSFIL_ID | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 80 = setgroups */
+	{ .sy_narg = AS(setgroups_args), .sy_call = (sy_call_t *)sys_setgroups, .sy_auevent = AUE_SETGROUPS, .sy_flags = SYF_SYSFILS(SYSFIL_CRED | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 80 = setgroups */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)sys_getpgrp, .sy_auevent = AUE_GETPGRP, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 81 = getpgrp */
 	{ .sy_narg = AS(setpgid_args), .sy_call = (sy_call_t *)sys_setpgid, .sy_auevent = AUE_SETPGRP, .sy_flags = SYF_SYSFILS(SYSFIL_PROC | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 82 = setpgid */
 	{ .sy_narg = AS(freebsd32_setitimer_args), .sy_call = (sy_call_t *)freebsd32_setitimer, .sy_auevent = AUE_SETITIMER, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 83 = freebsd32_setitimer */
@@ -183,8 +183,8 @@ struct sysent freebsd32_sysent[] = {
 	{ .sy_narg = AS(fchown_args), .sy_call = (sy_call_t *)sys_fchown, .sy_auevent = AUE_FCHOWN, .sy_flags = SYF_SYSFILS(SYSFIL_CHOWN_CHECKED), .sy_thrcnt = SY_THR_STATIC },	/* 123 = fchown */
 	{ .sy_narg = AS(fchmod_args), .sy_call = (sy_call_t *)sys_fchmod, .sy_auevent = AUE_FCHMOD, .sy_flags = SYF_SYSFILS(SYSFIL_FATTR), .sy_thrcnt = SY_THR_STATIC },	/* 124 = fchmod */
 	{ compat(AS(orecvfrom_args),recvfrom), .sy_auevent = AUE_RECVFROM, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 125 = old recvfrom */
-	{ .sy_narg = AS(setreuid_args), .sy_call = (sy_call_t *)sys_setreuid, .sy_auevent = AUE_SETREUID, .sy_flags = SYF_SYSFILS(SYSFIL_ID), .sy_thrcnt = SY_THR_STATIC },	/* 126 = setreuid */
-	{ .sy_narg = AS(setregid_args), .sy_call = (sy_call_t *)sys_setregid, .sy_auevent = AUE_SETREGID, .sy_flags = SYF_SYSFILS(SYSFIL_ID), .sy_thrcnt = SY_THR_STATIC },	/* 127 = setregid */
+	{ .sy_narg = AS(setreuid_args), .sy_call = (sy_call_t *)sys_setreuid, .sy_auevent = AUE_SETREUID, .sy_flags = SYF_SYSFILS(SYSFIL_CRED), .sy_thrcnt = SY_THR_STATIC },	/* 126 = setreuid */
+	{ .sy_narg = AS(setregid_args), .sy_call = (sy_call_t *)sys_setregid, .sy_auevent = AUE_SETREGID, .sy_flags = SYF_SYSFILS(SYSFIL_CRED), .sy_thrcnt = SY_THR_STATIC },	/* 127 = setregid */
 	{ .sy_narg = AS(rename_args), .sy_call = (sy_call_t *)sys_rename, .sy_auevent = AUE_RENAME, .sy_flags = SYF_SYSFILS(SYSFIL_VFS_CREATE | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 128 = rename */
 	{ compat(AS(ofreebsd32_truncate_args),freebsd32_truncate), .sy_auevent = AUE_TRUNCATE, .sy_flags = SYF_SYSFILS(SYSFIL_VFS_WRITE | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 129 = old freebsd32_truncate */
 	{ compat(AS(ofreebsd32_ftruncate_args),freebsd32_ftruncate), .sy_auevent = AUE_FTRUNCATE, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 130 = old freebsd32_ftruncate */
@@ -238,9 +238,9 @@ struct sysent freebsd32_sysent[] = {
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 178 = reserved for local use */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 179 = reserved for local use */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 180 = reserved for local use */
-	{ .sy_narg = AS(setgid_args), .sy_call = (sy_call_t *)sys_setgid, .sy_auevent = AUE_SETGID, .sy_flags = SYF_SYSFILS(SYSFIL_ID), .sy_thrcnt = SY_THR_STATIC },	/* 181 = setgid */
-	{ .sy_narg = AS(setegid_args), .sy_call = (sy_call_t *)sys_setegid, .sy_auevent = AUE_SETEGID, .sy_flags = SYF_SYSFILS(SYSFIL_ID), .sy_thrcnt = SY_THR_STATIC },	/* 182 = setegid */
-	{ .sy_narg = AS(seteuid_args), .sy_call = (sy_call_t *)sys_seteuid, .sy_auevent = AUE_SETEUID, .sy_flags = SYF_SYSFILS(SYSFIL_ID), .sy_thrcnt = SY_THR_STATIC },	/* 183 = seteuid */
+	{ .sy_narg = AS(setgid_args), .sy_call = (sy_call_t *)sys_setgid, .sy_auevent = AUE_SETGID, .sy_flags = SYF_SYSFILS(SYSFIL_CRED), .sy_thrcnt = SY_THR_STATIC },	/* 181 = setgid */
+	{ .sy_narg = AS(setegid_args), .sy_call = (sy_call_t *)sys_setegid, .sy_auevent = AUE_SETEGID, .sy_flags = SYF_SYSFILS(SYSFIL_CRED), .sy_thrcnt = SY_THR_STATIC },	/* 182 = setegid */
+	{ .sy_narg = AS(seteuid_args), .sy_call = (sy_call_t *)sys_seteuid, .sy_auevent = AUE_SETEUID, .sy_flags = SYF_SYSFILS(SYSFIL_CRED), .sy_thrcnt = SY_THR_STATIC },	/* 183 = seteuid */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 184 = obsolete lfs_bmapv */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 185 = obsolete lfs_markv */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 186 = obsolete lfs_segclean */
@@ -368,8 +368,8 @@ struct sysent freebsd32_sysent[] = {
 	{ .sy_narg = AS(freebsd32_kldstat_args), .sy_call = (sy_call_t *)freebsd32_kldstat, .sy_auevent = AUE_NULL, .sy_flags = SYF_SYSFILS(SYSFIL_KMOD | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 308 = freebsd32_kldstat */
 	{ .sy_narg = AS(kldfirstmod_args), .sy_call = (sy_call_t *)sys_kldfirstmod, .sy_auevent = AUE_NULL, .sy_flags = SYF_SYSFILS(SYSFIL_KMOD | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 309 = kldfirstmod */
 	{ .sy_narg = AS(getsid_args), .sy_call = (sy_call_t *)sys_getsid, .sy_auevent = AUE_GETSID, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 310 = getsid */
-	{ .sy_narg = AS(setresuid_args), .sy_call = (sy_call_t *)sys_setresuid, .sy_auevent = AUE_SETRESUID, .sy_flags = SYF_SYSFILS(SYSFIL_ID), .sy_thrcnt = SY_THR_STATIC },	/* 311 = setresuid */
-	{ .sy_narg = AS(setresgid_args), .sy_call = (sy_call_t *)sys_setresgid, .sy_auevent = AUE_SETRESGID, .sy_flags = SYF_SYSFILS(SYSFIL_ID), .sy_thrcnt = SY_THR_STATIC },	/* 312 = setresgid */
+	{ .sy_narg = AS(setresuid_args), .sy_call = (sy_call_t *)sys_setresuid, .sy_auevent = AUE_SETRESUID, .sy_flags = SYF_SYSFILS(SYSFIL_CRED), .sy_thrcnt = SY_THR_STATIC },	/* 311 = setresuid */
+	{ .sy_narg = AS(setresgid_args), .sy_call = (sy_call_t *)sys_setresgid, .sy_auevent = AUE_SETRESGID, .sy_flags = SYF_SYSFILS(SYSFIL_CRED), .sy_thrcnt = SY_THR_STATIC },	/* 312 = setresgid */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 313 = obsolete signanosleep */
 	{ .sy_narg = AS(freebsd32_aio_return_args), .sy_call = (sy_call_t *)freebsd32_aio_return, .sy_auevent = AUE_AIO_RETURN, .sy_flags = SYF_SYSFILS(SYSFIL_AIO), .sy_thrcnt = SY_THR_STATIC },	/* 314 = freebsd32_aio_return */
 	{ .sy_narg = AS(freebsd32_aio_suspend_args), .sy_call = (sy_call_t *)freebsd32_aio_suspend, .sy_auevent = AUE_AIO_SUSPEND, .sy_flags = SYF_SYSFILS(SYSFIL_AIO), .sy_thrcnt = SY_THR_STATIC },	/* 315 = freebsd32_aio_suspend */
@@ -431,7 +431,7 @@ struct sysent freebsd32_sysent[] = {
 	{ .sy_narg = AS(extattr_set_fd_args), .sy_call = (sy_call_t *)sys_extattr_set_fd, .sy_auevent = AUE_EXTATTR_SET_FD, .sy_flags = SYF_SYSFILS(SYSFIL_EXTATTR), .sy_thrcnt = SY_THR_STATIC },	/* 371 = extattr_set_fd */
 	{ .sy_narg = AS(extattr_get_fd_args), .sy_call = (sy_call_t *)sys_extattr_get_fd, .sy_auevent = AUE_EXTATTR_GET_FD, .sy_flags = SYF_SYSFILS(SYSFIL_EXTATTR), .sy_thrcnt = SY_THR_STATIC },	/* 372 = extattr_get_fd */
 	{ .sy_narg = AS(extattr_delete_fd_args), .sy_call = (sy_call_t *)sys_extattr_delete_fd, .sy_auevent = AUE_EXTATTR_DELETE_FD, .sy_flags = SYF_SYSFILS(SYSFIL_EXTATTR), .sy_thrcnt = SY_THR_STATIC },	/* 373 = extattr_delete_fd */
-	{ .sy_narg = AS(__setugid_args), .sy_call = (sy_call_t *)sys___setugid, .sy_auevent = AUE_SETUGID, .sy_flags = SYF_SYSFILS(SYSFIL_ID | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 374 = __setugid */
+	{ .sy_narg = AS(__setugid_args), .sy_call = (sy_call_t *)sys___setugid, .sy_auevent = AUE_SETUGID, .sy_flags = SYF_SYSFILS(SYSFIL_CRED | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 374 = __setugid */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 375 = obsolete nfsclnt */
 	{ .sy_narg = AS(eaccess_args), .sy_call = (sy_call_t *)sys_eaccess, .sy_auevent = AUE_EACCESS, .sy_flags = SYF_SYSFILS(SYSFIL_VFS_MISC | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 376 = eaccess */
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 377 = afs3_syscall */
@@ -581,7 +581,7 @@ struct sysent freebsd32_sysent[] = {
 	{ .sy_narg = 0, .sy_call = (sy_call_t *)nosys, .sy_auevent = AUE_NULL, .sy_flags = 0, .sy_thrcnt = SY_THR_ABSENT },			/* 521 = reserved for local use */
 	{ .sy_narg = AS(freebsd32_pselect_args), .sy_call = (sy_call_t *)freebsd32_pselect, .sy_auevent = AUE_SELECT, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 522 = freebsd32_pselect */
 	{ .sy_narg = AS(getloginclass_args), .sy_call = (sy_call_t *)sys_getloginclass, .sy_auevent = AUE_GETLOGINCLASS, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 523 = getloginclass */
-	{ .sy_narg = AS(setloginclass_args), .sy_call = (sy_call_t *)sys_setloginclass, .sy_auevent = AUE_SETLOGINCLASS, .sy_flags = SYF_SYSFILS(SYSFIL_ID | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 524 = setloginclass */
+	{ .sy_narg = AS(setloginclass_args), .sy_call = (sy_call_t *)sys_setloginclass, .sy_auevent = AUE_SETLOGINCLASS, .sy_flags = SYF_SYSFILS(SYSFIL_CRED | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 524 = setloginclass */
 	{ .sy_narg = AS(rctl_get_racct_args), .sy_call = (sy_call_t *)sys_rctl_get_racct, .sy_auevent = AUE_NULL, .sy_flags = SYF_SYSFILS(SYSFIL_DEFAULT | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 525 = rctl_get_racct */
 	{ .sy_narg = AS(rctl_get_rules_args), .sy_call = (sy_call_t *)sys_rctl_get_rules, .sy_auevent = AUE_NULL, .sy_flags = SYF_SYSFILS(SYSFIL_DEFAULT | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 526 = rctl_get_rules */
 	{ .sy_narg = AS(rctl_get_limits_args), .sy_call = (sy_call_t *)sys_rctl_get_limits, .sy_auevent = AUE_NULL, .sy_flags = SYF_SYSFILS(SYSFIL_DEFAULT | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 527 = rctl_get_limits */

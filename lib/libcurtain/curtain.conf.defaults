@@ -88,14 +88,14 @@ ability posixipc
 ability mlock
 ability aio
 ability sendfile
-ability id
+ability cred
 merge _pty
 merge _cryptodev
 
 [_level5 : _level4]
 ability chroot
 ability chown
-ability any_id
+ability any_cred
 ability! sysflags
 
 [_level6 : _level5]
@@ -184,6 +184,9 @@ sockaf unix
 
 [_fdpass : _unix]
 ability sendfd recvfd
+
+[_setcred]
+ability cred any_cred
 
 [_tty]
 /dev/tty				: rma

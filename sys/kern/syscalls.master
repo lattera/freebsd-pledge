@@ -249,7 +249,7 @@
 		    int flags
 		);
 	}
-23	AUE_SETUID	STD|SYSFIL_ID|CAPENABLED {
+23	AUE_SETUID	STD|SYSFIL_CRED|CAPENABLED {
 		int setuid(
 		    uid_t uid
 		);
@@ -407,7 +407,7 @@
 		    u_int namelen
 		);
 	}
-50	AUE_SETLOGIN	STD|SYSFIL_ID {
+50	AUE_SETLOGIN	STD|SYSFIL_CRED {
 		int setlogin(
 		    _In_z_ const char *namebuf
 		);
@@ -562,7 +562,7 @@
 		    _Out_writes_opt_(gidsetsize) gid_t *gidset
 		);
 	}
-80	AUE_SETGROUPS	STD|SYSFIL_ID {
+80	AUE_SETGROUPS	STD|SYSFIL_CRED {
 		int setgroups(
 		    int gidsetsize,
 		    _In_reads_(gidsetsize) const gid_t *gidset
@@ -832,13 +832,13 @@
 		    _Inout_ __socklen_t *fromlenaddr
 		);
 	}
-126	AUE_SETREUID	STD|SYSFIL_ID|CAPENABLED {
+126	AUE_SETREUID	STD|SYSFIL_CRED|CAPENABLED {
 		int setreuid(
 		    int ruid,
 		    int euid
 		);
 	}
-127	AUE_SETREGID	STD|SYSFIL_ID|CAPENABLED {
+127	AUE_SETREGID	STD|SYSFIL_CRED|CAPENABLED {
 		int setregid(
 		    int rgid,
 		    int egid
@@ -1125,17 +1125,17 @@
 		);
 	}
 177-180	AUE_NULL	RESERVED
-181	AUE_SETGID	STD|SYSFIL_ID|CAPENABLED {
+181	AUE_SETGID	STD|SYSFIL_CRED|CAPENABLED {
 		int setgid(
 		    gid_t gid
 		);
 	}
-182	AUE_SETEGID	STD|SYSFIL_ID|CAPENABLED {
+182	AUE_SETEGID	STD|SYSFIL_CRED|CAPENABLED {
 		int setegid(
 		    gid_t egid
 		);
 	}
-183	AUE_SETEUID	STD|SYSFIL_ID|CAPENABLED {
+183	AUE_SETEUID	STD|SYSFIL_CRED|CAPENABLED {
 		int seteuid(
 		    uid_t euid
 		);
@@ -1640,14 +1640,14 @@
 		    pid_t pid
 		);
 	}
-311	AUE_SETRESUID	STD|SYSFIL_ID|CAPENABLED {
+311	AUE_SETRESUID	STD|SYSFIL_CRED|CAPENABLED {
 		int setresuid(
 		    uid_t ruid,
 		    uid_t euid,
 		    uid_t suid
 		);
 	}
-312	AUE_SETRESGID	STD|SYSFIL_ID|CAPENABLED {
+312	AUE_SETRESGID	STD|SYSFIL_CRED|CAPENABLED {
 		int setresgid(
 		    gid_t rgid,
 		    gid_t egid,
@@ -1991,7 +1991,7 @@
 		    _In_z_ const char *attrname
 		);
 	}
-374	AUE_SETUGID	STD|SYSFIL_ID {
+374	AUE_SETUGID	STD|SYSFIL_CRED {
 		int __setugid(
 		    int flag
 		);
@@ -2897,7 +2897,7 @@
 		    size_t namelen
 		);
 	}
-524	AUE_SETLOGINCLASS	STD|SYSFIL_ID {
+524	AUE_SETLOGINCLASS	STD|SYSFIL_CRED {
 		int setloginclass(
 		    _In_z_ const char *namebuf
 		);

@@ -1331,7 +1331,7 @@ curtain_priv_check(struct ucred *cr, int priv)
 	case PRIV_CRED_SETRESGID:
 	case PRIV_PROC_SETLOGIN:
 	case PRIV_PROC_SETLOGINCLASS:
-		abl = CURTAINABL_ANY_ID;
+		abl = CURTAINABL_ANY_CRED;
 		break;
 	case PRIV_SEEOTHERGIDS:
 	case PRIV_SEEOTHERUIDS:
