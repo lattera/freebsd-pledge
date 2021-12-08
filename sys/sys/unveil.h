@@ -126,8 +126,8 @@ struct unveil_tracker_entry *unveil_track_find_mount(struct unveil_tracker *, st
 void unveil_track_reset(struct unveil_tracker *);
 
 unveil_perms curtain_lookup_mount(const struct curtain *, struct mount *);
-int	curtain_fixup_unveils_pre_mask(struct curtain *, struct ucred *);
-int	curtain_fixup_unveils_post_mask(struct curtain *, struct ucred *);
+int	curtain_fixup_unveils_parents(struct curtain *, struct ucred *);
+int	curtain_finish_unveils(struct curtain *, struct ucred *);
 
 #endif /* _KERNEL */
 

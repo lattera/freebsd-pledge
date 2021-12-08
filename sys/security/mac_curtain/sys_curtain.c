@@ -507,7 +507,7 @@ curtain_fill(struct curtain *ct, struct ucred *cr,
 		goto fail;
 	}
 
-	error = curtain_fixup_unveils_pre_mask(ct, cr);
+	error = curtain_fixup_unveils_parents(ct, cr);
 	if (error)
 		goto fail;
 
@@ -551,6 +551,7 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 	}
 
 	curtain_fill_expand(ct);
+	curtain_fill_restrict(ct, td->td_ucred);
 
 	/*
 	 * Mask the requested curtain against the curtain (or sysfilset) of the
@@ -591,16 +592,10 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 		goto err1;
 	}
 
-	error = curtain_fixup_unveils_post_mask(ct, old_cr);
+	error = curtain_finish(ct, old_cr);
 	if (error)
 		goto err1;
-	if (ct->ct_on_exec) {
-		error = curtain_fixup_unveils_post_mask(ct->ct_on_exec, old_cr);
-		if (error)
-			goto err1;
-	}
-	curtain_fill_restrict(ct, old_cr);
-	curtain_cache_update(ct);
+
 	curtain_cred_sysfil_update(cr, ct);
 
 	if (flags & CURTAINCTL_ENFORCE) {

@@ -289,7 +289,7 @@ unveil_fixup_depth(struct curtain_unveil *unv, size_t depth)
 }
 
 int
-curtain_fixup_unveils_pre_mask(struct curtain *ct, struct ucred *cr)
+curtain_fixup_unveils_parents(struct curtain *ct, struct ucred *cr)
 {
 	struct curtain_item *item;
 	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
@@ -334,7 +334,7 @@ curtain_fixup_unveils_pre_mask(struct curtain *ct, struct ucred *cr)
 }
 
 int
-curtain_fixup_unveils_post_mask(struct curtain *ct, struct ucred *cr __unused)
+curtain_finish_unveils(struct curtain *ct, struct ucred *cr __unused)
 {
 	struct curtain_item *item;
 	size_t count;

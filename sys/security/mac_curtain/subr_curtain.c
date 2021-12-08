@@ -892,14 +892,6 @@ curtain_cache_update(struct curtain *ct)
 }
 
 void
-curtain_cred_sysfil_update(struct ucred *cr, const struct curtain *ct)
-{
-	MPASS(ct->ct_finalized);
-	cr->cr_sysfilset = ct->ct_cached.sysfilset;
-	MPASS(CRED_IN_RESTRICTED_MODE(cr) == SYSFILSET_IS_RESTRICTED(ct->ct_cached.sysfilset));
-}
-
-void
 curtain_harden(struct curtain *ct)
 {
 	struct curtain_item *item;
@@ -987,6 +979,37 @@ curtain_mask(struct curtain *dst, const struct curtain *src)
 	curtain_invariants(dst);
 	if (dst->ct_on_exec)
 		curtain_mask(dst->ct_on_exec, src->ct_on_exec ? src->ct_on_exec : src);
+}
+
+
+static int
+curtain_finish_1(struct curtain *ct, struct ucred *cr)
+{
+	return (curtain_finish_unveils(ct, cr));
+}
+
+int
+curtain_finish(struct curtain *ct, struct ucred *cr)
+{
+	int error;
+	error = curtain_finish_1(ct, cr);
+	if (error)
+		return (error);
+	if (ct->ct_on_exec) {
+		error = curtain_finish_1(ct->ct_on_exec, cr);
+		if (error)
+			return (error);
+	}
+	curtain_cache_update(ct);
+	return (0);
+}
+
+void
+curtain_cred_sysfil_update(struct ucred *cr, const struct curtain *ct)
+{
+	MPASS(ct->ct_finalized);
+	cr->cr_sysfilset = ct->ct_cached.sysfilset;
+	MPASS(CRED_IN_RESTRICTED_MODE(cr) == SYSFILSET_IS_RESTRICTED(ct->ct_cached.sysfilset));
 }
 
 
