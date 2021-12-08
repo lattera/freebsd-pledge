@@ -82,7 +82,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysfil.h>
 
 #include <security/audit/audit.h>
-#include <security/mac/mac_framework.h>
 
 #include <vm/uma.h>
 #include <vm/vm.h>
@@ -104,35 +103,23 @@ int
 sys_cap_enter(struct thread *td, struct cap_enter_args *uap)
 {
 	struct proc *p;
-	sysfilset_t mask;
-#ifdef MAC
-	int error;
-#else
 	struct ucred *newcred, *oldcred;
-#endif
 	if (IN_CAPABILITY_MODE(td))
 		return (0);
 	p = td->td_proc;
-	mask = ~SYSFIL_UNCAPSICUM;
-#ifdef MAC
-	error = mac_sysfil_update_mask(p, mask);
-	if (error != 0)
-		return (error);
-#else
 	newcred = crget();
 	PROC_LOCK(p);
 	oldcred = crcopysafe(p, newcred);
-	cred->cr_sysfilset &= mask_sfs;
+	newcred->cr_sysfilset &= ~SYSFIL_UNCAPSICUM;
 	MPASS(CRED_IN_CAPABILITY_MODE(newcred));
 	MPASS(CRED_IN_RESTRICTED_MODE(newcred));
 	proc_set_cred(p, newcred);
-	PROC_UNLOCK(p);
-	crfree(oldcred);
-#endif
 	if (!PROC_IN_RESTRICTED_MODE(p))
 		panic("PROC_IN_RESTRICTED_MODE() bogus");
 	if (!PROC_IN_CAPABILITY_MODE(p))
 		panic("PROC_IN_CAPABILITY_MODE() bogus");
+	PROC_UNLOCK(p);
+	crfree(oldcred);
 	return (0);
 }
 

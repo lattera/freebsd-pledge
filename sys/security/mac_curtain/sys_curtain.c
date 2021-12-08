@@ -168,8 +168,6 @@ SYSCTL_PROC(_debug, OID_AUTO, show_curtain,
 #endif
 
 
-/* Some abilities shouldn't be disabled via curtainctl(2). */
-static const int abilities_always[] = { CURTAINABL_UNCAPSICUM };
 /* Some abilities don't make much sense without some others. */
 static const int abilities_expand[][2] = {
 	{ CURTAINABL_VFS_READ,		CURTAINABL_VFS_MISC		},
@@ -194,9 +192,6 @@ curtain_fill_expand(struct curtain *ct)
 {
 	struct curtain *ct1;
 	bool propagate;
-
-	for (size_t i = 0; i < nitems(abilities_always); i++)
-		ct->ct_abilities[abilities_always[i]].soft = CURTAINACT_ALLOW;
 
 	do {
 		propagate = false;
@@ -223,13 +218,13 @@ static void
 curtain_fill_restrict(struct curtain *ct, struct ucred *cr)
 {
 	struct curtain *ct1;
-	if (curtain_restricted(ct))
+	if (curtain_restrictive(ct))
 		if (ct->ct_abilities[CURTAINABL_DEFAULT].soft < CURTAINACT_DENY)
 			ct->ct_abilities[CURTAINABL_DEFAULT].soft = CURTAINACT_DENY;
 	if (ct->ct_on_exec)
 		curtain_fill_restrict(ct->ct_on_exec, cr);
 	ct1 = ct->ct_on_exec ? ct->ct_on_exec : ct;
-	if (curtain_restricted(ct1) &&
+	if (curtain_restrictive(ct1) &&
 	    ct1->ct_abilities[CURTAINABL_EXEC_RSUGID].soft < CURTAINACT_DENY &&
 	    priv_check_cred(cr, PRIV_VFS_CHROOT) != 0)
 		ct1->ct_abilities[CURTAINABL_EXEC_RSUGID].soft = CURTAINACT_DENY;

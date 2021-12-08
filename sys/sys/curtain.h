@@ -218,6 +218,7 @@ SYSCTL_DECL(_security_curtain_stats);
 
 extern unsigned __read_mostly curtain_log_level;
 
+extern const sysfilset_t curtain_preserve_sysfils;
 extern const sysfilset_t curtain_abilities_sysfils[CURTAINABL_COUNT];
 extern const barrier_bits curtain_abilities_barriers[CURTAINABL_COUNT];
 
@@ -261,7 +262,7 @@ struct curtain_item *curtain_search(struct curtain *, enum curtainreq_type, unio
 struct curtain_mode curtain_resolve(const struct curtain *,
 	    enum curtainreq_type, union curtain_key );
 bool	curtain_need_exec_switch(const struct curtain *);
-bool	curtain_restricted(const struct curtain *);
+bool	curtain_restrictive(const struct curtain *);
 bool	curtain_equivalent(const struct curtain *, const struct curtain *);
 void	curtain_cache_update(struct curtain *);
 void	curtain_cred_sysfil_update(struct ucred *, const struct curtain *);
@@ -272,6 +273,7 @@ struct curtain_item *curtain_extend(struct curtain *, enum curtainreq_type, unio
 void	curtain_mask(struct curtain *dst, const struct curtain *src);
 int	curtain_finish(struct curtain *, struct ucred *);
 
+bool	curtain_cred_restricted(const struct curtain *, const struct ucred *);
 bool	curtain_cred_visible(const struct ucred *subject, const struct ucred *target,
 	    enum barrier_type);
 struct curtain *curtain_from_cred(struct ucred *);

@@ -747,8 +747,9 @@ curtain_dup(const struct curtain *src)
 }
 
 
+const sysfilset_t curtain_preserve_sysfils = SYSFIL_UNCAPSICUM;
+
 const sysfilset_t curtain_abilities_sysfils[CURTAINABL_COUNT] = {
-	[CURTAINABL_UNCAPSICUM] = SYSFIL_UNCAPSICUM,
 	[CURTAINABL_DEFAULT] = SYSFIL_DEFAULT,
 	[CURTAINABL_STDIO] = SYSFIL_STDIO,
 	[CURTAINABL_VFS_MISC] = SYSFIL_VFS_MISC,
@@ -834,7 +835,7 @@ curtain_resolve(const struct curtain *ct,
 }
 
 bool
-curtain_restricted(const struct curtain *ct)
+curtain_restrictive(const struct curtain *ct)
 {
 	const struct curtain_item *item;
 	const struct barrier *br;
@@ -859,7 +860,7 @@ curtain_equivalent(const struct curtain *ct0, const struct curtain *ct1)
 void
 curtain_cache_update(struct curtain *ct)
 {
-	ct->ct_cached.restrictive = curtain_restricted(ct);
+	ct->ct_cached.restrictive = curtain_restrictive(ct);
 
 	for (unsigned i = 0; i < SYSFILSET_BITS; i++)
 		ct->ct_cached.sysfilacts[i] = CURTAINACT_KILL;
@@ -877,13 +878,12 @@ curtain_cache_update(struct curtain *ct)
 		for (unsigned i = 0; i < SYSFILSET_BITS; i++)
 			if (ct->ct_cached.sysfilacts[i] == CURTAINACT_ALLOW)
 				ct->ct_cached.sysfilset |= SYSFIL_INDEX(i);
-		MPASS(SYSFILSET_IS_RESTRICTED(ct->ct_cached.sysfilset));
 	} else {
 		/* NOTE: Unrestricted processes must have their whole sysfilset
 		 * filled, not just the bits for existing sysfils. */
 		ct->ct_cached.sysfilset = SYSFIL_FULL;
-		MPASS(!SYSFILSET_IS_RESTRICTED(ct->ct_cached.sysfilset));
 	}
+	MPASS(SYSFILSET_IS_RESTRICTED(ct->ct_cached.sysfilset) == ct->ct_cached.restrictive);
 
 	if (ct->ct_on_exec)
 		curtain_cache_update(ct->ct_on_exec);
@@ -1004,12 +1004,31 @@ curtain_finish(struct curtain *ct, struct ucred *cr)
 	return (0);
 }
 
+static sysfilset_t
+curtain_to_sysfils(const struct curtain *ct, const struct ucred *cr)
+{
+	sysfilset_t sysfils;
+	MPASS(ct->ct_cached.valid);
+	sysfils = (cr->cr_sysfilset & curtain_preserve_sysfils) | ct->ct_cached.sysfilset;
+	MPASS(SYSFILSET_IS_RESTRICTED(sysfils) ==
+	    SYSFILSET_IS_RESTRICTED(cr->cr_sysfilset | ~curtain_preserve_sysfils) ||
+	    ct->ct_cached.restrictive);
+	return (sysfils);
+}
+
+bool
+curtain_cred_restricted(const struct curtain *ct, const struct ucred *cr)
+{
+	return (SYSFILSET_IS_RESTRICTED(curtain_to_sysfils(ct, cr)));
+}
+
 void
 curtain_cred_sysfil_update(struct ucred *cr, const struct curtain *ct)
 {
-	MPASS(ct->ct_cached.valid);
-	cr->cr_sysfilset = ct->ct_cached.sysfilset;
-	MPASS(CRED_IN_RESTRICTED_MODE(cr) == SYSFILSET_IS_RESTRICTED(ct->ct_cached.sysfilset));
+	sysfilset_t sysfils;
+	sysfils = curtain_to_sysfils(ct, cr);
+	cr->cr_sysfilset = sysfils;
+	MPASS(SYSFILSET_IS_RESTRICTED(sysfils) == CRED_IN_RESTRICTED_MODE(cr));
 }
 
 
