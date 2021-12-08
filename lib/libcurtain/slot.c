@@ -875,9 +875,11 @@ unveil_node_get(struct curtain_node *parent, const char *name)
 static void
 unveil_node_chain(struct curtain_node **head, struct curtain_node *node)
 {
-	for (struct curtain_node *iter = *head; iter; iter = iter->key.unveil.chain)
-		if (iter == node)
-			return;
+	for (struct curtain_node **link = head; *link; link = &(*link)->key.unveil.chain)
+		if (*link == node) {
+			*link = (*link)->key.unveil.chain;
+			break;
+		}
 	node->key.unveil.chain = *head;
 	*head = node;
 }
@@ -975,6 +977,12 @@ unveil_path_1(struct curtain_node **trail, bool nofollow, bool last,
 				if (parent_node->parent)
 					parent_node = parent_node->parent;
 				path = next;
+				/*
+				 * Move parent to the head of the chain so that
+				 * curtain_unveil_multi() gives it the final
+				 * uperms if it is the last path component.
+				 */
+				unveil_node_chain(trail, parent_node);
 				continue;
 			}
 		}

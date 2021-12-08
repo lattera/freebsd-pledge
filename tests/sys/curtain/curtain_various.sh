@@ -224,6 +224,21 @@ extattrs_body() {
 	atf_check -o file:exp-ls-0 curtain -d ability:extattr -p f lsextattr user f
 }
 
+atf_test_case unveil_dotdot
+unveil_dotdot_body() {
+	mkdir -p a/b/c
+	local p
+	for p in a/b/c a/b/c/../c a/b/c/../../b/c a/b/../b/c a/../a/b/c a/../a/b/c/../c a/b/c/../../b/c
+	do atf_check curtain -u $p test ! -r a -a ! -r a/b -a -r a/b/c
+	done
+	for p in a/b a/b/c/.. a/b/../b a/b/c/../../b a/b/../b/../b/c/../../b
+	do atf_check curtain -u $p test ! -r a -a -r a/b -a -r a/b/c
+	done
+	for p in a a/b/.. a/b/c/../.. a/b/../b/../b/c/../c/../../b/..
+	do atf_check curtain -u $p test -r a -a -r a/b -a -r a/b/c
+	done
+}
+
 atf_test_case reunveil_inheritance
 reunveil_inheritance_body() {
 	atf_check mkdir -p a/b/c/d
@@ -349,6 +364,7 @@ atf_init_test_cases() {
 	atf_add_test_case uncurtain
 	atf_add_test_case unenforced_unveil
 	atf_add_test_case extattrs
+	atf_add_test_case unveil_dotdot
 	atf_add_test_case reunveil_inheritance
 	atf_add_test_case chflags
 	atf_add_test_case chflags_system
