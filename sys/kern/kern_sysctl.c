@@ -2542,7 +2542,6 @@ sysctl_shadow_get(struct sysctl_oid *oidp)
 		sdw = malloc(sizeof *sdw, M_SYSCTLSDW, M_WAITOK);
 		*sdw = (struct sysctl_shadow){
 			.refcnt = 2, /* one for caller and one for oid */
-			.oidp = oidp,
 			.number = oidp->oid_number,
 			.parent = p ? sysctl_shadow_get(p) : NULL,
 		};

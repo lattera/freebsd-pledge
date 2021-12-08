@@ -1188,7 +1188,6 @@ struct sbuf *sbuf_new_for_sysctl(struct sbuf *, char *, int,
  */
 struct sysctl_shadow {
 	struct sysctl_shadow *parent;
-	struct sysctl_oid *oidp;
 	int refcnt;
 	int number;
 };
