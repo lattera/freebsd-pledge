@@ -1265,24 +1265,52 @@ curtain_generic_check_vm_prot(struct ucred *cr, struct file *fp, vm_prot_t prot)
 }
 
 
+static char *
+sysctl_name_str(const struct sysctl_oid *oidp, char *p, size_t n)
+{
+	char *q = &p[n];
+	if (!(q > p))
+		return (NULL);
+	*--q = '\0';
+	while (oidp) {
+		size_t l = strlen(oidp->oid_name);
+		if (l > q - p)
+			break;
+		memcpy((q -= l), oidp->oid_name, l);
+		if ((oidp = SYSCTL_PARENT(oidp))) {
+			if (!(q > p))
+				break;
+			*--q = '.';
+		}
+	}
+	return (q);
+}
+
 static int
 curtain_system_check_sysctl(struct ucred *cr,
     struct sysctl_oid *oidp, void *arg1, int arg2,
     struct sysctl_req *req)
 {
+	enum curtain_action act;
 	struct sysctl_oid *p;
-	int error;
 	if (oidp->oid_kind & (CTLFLAG_RESTRICT|CTLFLAG_CAPRW))
 		return (0);
 	if (!CRED_SLOT(cr))
 		return (0);
 	for (p = oidp; p && !p->oid_shadow; p = SYSCTL_PARENT(p));
 	if (p)
-		error = cred_key_check(cr, CURTAINTYP_SYSCTL,
+		act = cred_key_action(cr, CURTAINTYP_SYSCTL,
 		    (ctkey){ .sysctl = p->oid_shadow });
 	else
-		error = cred_ability_check(cr, curtain_type_fallback[CURTAINTYP_SYSCTL]);
-	return (error);
+		act = cred_ability_action(cr, curtain_type_fallback[CURTAINTYP_SYSCTL]);
+	if (__predict_true(act == CURTAINACT_ALLOW))
+		return (0);
+	if (curtain_log_sysctls) {
+		char buf[256], *name;
+		if ((name = sysctl_name_str(oidp, buf, sizeof buf)))
+			CURTAIN_CRED_LOG_ACTION(cr, act, "sysctl %s", name);
+	}
+	return (act2err[act]);
 }
 
 
