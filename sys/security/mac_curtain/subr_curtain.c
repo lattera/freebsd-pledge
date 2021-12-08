@@ -950,7 +950,7 @@ curtain_extend(struct curtain *ct, enum curtainreq_type type, union curtain_key 
 		curtain_key_dup(type, &item->key, key);
 		curtain_key_fallback(&type, &key);
 		if (type == CURTAINTYP_ABILITY) {
-			item->mode = ct->ct_abilities[type];
+			item->mode = ct->ct_abilities[key.ability];
 		} else {
 			fallback_item = curtain_extend(ct, type, key);
 			if (fallback_item) {
