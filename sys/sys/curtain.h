@@ -243,6 +243,7 @@ struct barrier *barrier_hold(struct barrier *);
 struct barrier *barrier_dup(const struct barrier *);
 void	barrier_bump(struct barrier *);
 void	barrier_link(struct barrier *child, struct barrier *parent);
+void	barrier_unlink(struct barrier *);
 void	barrier_free(struct barrier *);
 struct barrier *barrier_cross(struct barrier *, struct barrier_mode);
 bool	barrier_visible(struct barrier *subject, const struct barrier *target,
@@ -265,7 +266,7 @@ bool	curtain_need_exec_switch(const struct curtain *);
 bool	curtain_restrictive(const struct curtain *);
 bool	curtain_equivalent(const struct curtain *, const struct curtain *);
 void	curtain_cache_update(struct curtain *);
-void	curtain_cred_sysfil_update(struct ucred *, const struct curtain *);
+void	curtain_cred_update(const struct curtain *ct, struct ucred *cr);
 void	curtain_exec_switch(struct curtain *);
 void	curtain_harden(struct curtain *);
 void	curtain_mask_sysfils(struct curtain *, sysfilset_t);

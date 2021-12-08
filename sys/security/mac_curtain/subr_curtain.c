@@ -127,32 +127,6 @@ barrier_bump(struct barrier *br)
 	br->br_serial = atomic_fetchadd_64(&barrier_serial, 1);
 }
 
-void
-barrier_link(struct barrier *child, struct barrier *parent)
-{
-	rw_wlock(&barrier_tree_lock);
-	barrier_invariants_sync(child);
-#ifdef INVARIANTS
-	if (parent)
-		for (const struct barrier *iter = child; iter; iter = iter->br_parent)
-			MPASS(iter != parent);
-#endif
-	if ((child->br_parent = parent)) {
-		barrier_invariants_sync(parent);
-		parent->br_nchildren++;
-		if (parent->br_nchildren == 0)
-			panic("barrier nchildren overflow");
-		LIST_INSERT_HEAD(&parent->br_children, child, br_sibling);
-		barrier_invariants_sync(parent);
-	} else {
-#ifdef INVARIANTS
-		memset(&child->br_sibling, -1, sizeof child->br_sibling);
-#endif
-	}
-	barrier_invariants_sync(child);
-	rw_wunlock(&barrier_tree_lock);
-}
-
 static void
 barrier_collapse(const struct barrier *src, struct barrier *dst)
 {
@@ -161,10 +135,9 @@ barrier_collapse(const struct barrier *src, struct barrier *dst)
 }
 
 static void
-barrier_unlink(struct barrier *victim)
+barrier_unlink_locked(struct barrier *victim)
 {
 	struct barrier *child;
-	rw_wlock(&barrier_tree_lock);
 	MPASS(LIST_EMPTY(&victim->br_children) == (victim->br_nchildren == 0));
 	if (victim->br_parent) {
 		barrier_invariants_sync(victim->br_parent);
@@ -196,6 +169,40 @@ barrier_unlink(struct barrier *victim)
 	}
 	MPASS(victim->br_nchildren == 0);
 	victim->br_parent = NULL;
+}
+
+void
+barrier_link(struct barrier *child, struct barrier *parent)
+{
+	rw_wlock(&barrier_tree_lock);
+	if (child->br_parent)
+		barrier_unlink_locked(child);
+	barrier_invariants_sync(child);
+#ifdef INVARIANTS
+	for (const struct barrier *iter = parent; iter; iter = iter->br_parent)
+		MPASS(iter != child);
+#endif
+	if ((child->br_parent = parent)) {
+		barrier_invariants_sync(parent);
+		parent->br_nchildren++;
+		if (parent->br_nchildren == 0)
+			panic("barrier nchildren overflow");
+		LIST_INSERT_HEAD(&parent->br_children, child, br_sibling);
+		barrier_invariants_sync(parent);
+	} else {
+#ifdef INVARIANTS
+		memset(&child->br_sibling, -1, sizeof child->br_sibling);
+#endif
+	}
+	barrier_invariants_sync(child);
+	rw_wunlock(&barrier_tree_lock);
+}
+
+void
+barrier_unlink(struct barrier *victim)
+{
+	rw_wlock(&barrier_tree_lock);
+	barrier_unlink_locked(victim);
 	rw_wunlock(&barrier_tree_lock);
 }
 
@@ -1019,13 +1026,15 @@ curtain_to_sysfils(const struct curtain *ct, const struct ucred *cr)
 bool
 curtain_cred_restricted(const struct curtain *ct, const struct ucred *cr)
 {
+	curtain_invariants(ct);
 	return (SYSFILSET_IS_RESTRICTED(curtain_to_sysfils(ct, cr)));
 }
 
 void
-curtain_cred_sysfil_update(struct ucred *cr, const struct curtain *ct)
+curtain_cred_update(const struct curtain *ct, struct ucred *cr)
 {
 	sysfilset_t sysfils;
+	curtain_invariants(ct);
 	sysfils = curtain_to_sysfils(ct, cr);
 	cr->cr_sysfilset = sysfils;
 	MPASS(SYSFILSET_IS_RESTRICTED(sysfils) == CRED_IN_RESTRICTED_MODE(cr));

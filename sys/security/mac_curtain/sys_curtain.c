@@ -516,11 +516,56 @@ fail:	SDT_PROBE0(curtain,, curtain_fill, failed);
 
 
 static int
+update_ucred_curtain(struct ucred *cr, struct curtain *ct, bool harden)
+{
+	struct curtain *old_ct;
+	int error;
+
+	/*
+	 * NOTE: If multiple attempts are needed, the curtain may be masked
+	 * multiple times.  This is fine since masking can only drop
+	 * permissions.  This avoids having to do an extra copy.
+	 */
+	if ((old_ct = CRED_SLOT(cr)))
+		curtain_mask(ct, old_ct);
+	else
+		curtain_mask_sysfils(ct, cr->cr_sysfilset);
+
+	ct = curtain_dup(ct); /* compaction */
+	if (old_ct)
+		/* old_ct can still be used since there's still a reference to
+		   it in the old ucred referenced by the caller. */
+		curtain_free(old_ct);
+	/* Must assign new curtain to (tentative) new ucred before we return so
+	   that it can be cleaned up on failure. */
+	mac_label_set(cr->cr_label, curtain_slot, (uintptr_t)ct);
+
+	if (ct->ct_overflowed) /* masking can overflow */
+		return (E2BIG);
+
+	error = curtain_finish(ct, cr);
+	if (error)
+		return (error);
+
+	if (harden)
+		curtain_harden(ct);
+
+	/* Will be unlinked on failure when the new ucred is freed. */
+	if (old_ct)
+		barrier_link(CURTAIN_BARRIER(ct), CURTAIN_BARRIER(old_ct));
+	if (ct->ct_on_exec)
+		barrier_link(CURTAIN_BARRIER(ct->ct_on_exec), CURTAIN_BARRIER(ct));
+
+	curtain_cred_update(ct, cr);
+	return (0);
+}
+
+static int
 do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq *reqv)
 {
 	struct proc *p = td->td_proc;
-	struct ucred *cr, *old_cr;
-	struct curtain *ct, *old_ct;
+	struct ucred *new_cr, *old_cr;
+	struct curtain *ct;
 	int error;
 
 	if (!curtainctl_enabled)
@@ -536,13 +581,12 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 	error = curtain_fill(ct, td->td_ucred, CURTAINREQ_ON_SELF, reqc, reqv);
 	if (error) {
 		curtain_free(ct);
-		goto err2;
+		return (error);
 	}
-
 	error = curtain_fill(ct->ct_on_exec, td->td_ucred, CURTAINREQ_ON_EXEC, reqc, reqv);
 	if (error) {
 		curtain_free(ct);
-		goto err2;
+		return (error);
 	}
 
 	curtain_fill_expand(ct);
@@ -555,76 +599,42 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 	 * process unlocks.
 	 */
 	do {
-		struct curtain *new_ct;
-		cr = crget();
+		new_cr = crget();
 		PROC_LOCK(p);
-		old_cr = crcopysafe(p, cr);
+		old_cr = crcopysafe(p, new_cr);
 		crhold(old_cr);
 		PROC_UNLOCK(p);
-		if (CRED_SLOT(cr))
-			curtain_mask(ct, CRED_SLOT(cr));
-		else
-			curtain_mask_sysfils(ct, cr->cr_sysfilset);
-		SDT_PROBE1(curtain,, do_curtainctl, mask, ct);
-		new_ct = curtain_dup(ct); /* compact */
-		if (CRED_SLOT(cr))
-			curtain_free(CRED_SLOT(cr));
-		mac_label_set(cr->cr_label, curtain_slot, (uintptr_t)new_ct);
-		SDT_PROBE1(curtain,, do_curtainctl, compact, new_ct);
+		error = update_ucred_curtain(new_cr, ct, flags & CURTAINCTL_ENFORCE);
+		if (error) {
+			crfree(old_cr);
+			crfree(new_cr);
+			curtain_free(ct);
+			return (error);
+		}
 		PROC_LOCK(p);
 		if (old_cr == p->p_ucred) {
 			crfree(old_cr);
-			old_ct = ct;
-			ct = new_ct;
+			curtain_free(ct);
+			ct = NULL;
 			break;
 		}
 		PROC_UNLOCK(p);
 		crfree(old_cr);
-		crfree(cr);
+		crfree(new_cr);
 	} while (true);
-	if (ct->ct_overflowed) { /* masking can overflow */
-		error = E2BIG;
-		goto err1;
+
+	if (flags & (CURTAINCTL_ENFORCE | CURTAINCTL_ENGAGE)) {
+		proc_set_cred(p, new_cr);
+		if (CRED_IN_RESTRICTED_MODE(new_cr) != PROC_IN_RESTRICTED_MODE(p))
+			panic("PROC_IN_RESTRICTED_MODE() bogus");
+		PROC_UNLOCK(p);
+		crfree(old_cr);
+		unveil_proc_get_cache(p, true);
+	} else {
+		PROC_UNLOCK(p);
+		crfree(new_cr);
 	}
-
-	error = curtain_finish(ct, old_cr);
-	if (error)
-		goto err1;
-
-	curtain_cred_sysfil_update(cr, ct);
-
-	if (flags & CURTAINCTL_ENFORCE) {
-		SDT_PROBE1(curtain,, do_curtainctl, harden, ct);
-		curtain_harden(ct);
-	}
-
-	if (!(flags & (CURTAINCTL_ENFORCE | CURTAINCTL_ENGAGE)))
-		goto err1;
-
-	/* Install new ucred and curtain. */
-
-	if (CRED_SLOT(old_cr))
-		barrier_link(CURTAIN_BARRIER(ct), CURTAIN_BARRIER(CRED_SLOT(old_cr)));
-	if (ct->ct_on_exec)
-		barrier_link(CURTAIN_BARRIER(ct->ct_on_exec), CURTAIN_BARRIER(ct));
-	proc_set_cred(p, cr);
-	if (CRED_IN_RESTRICTED_MODE(cr) != PROC_IN_RESTRICTED_MODE(p))
-		panic("PROC_IN_RESTRICTED_MODE() bogus");
-	PROC_UNLOCK(p);
-
-	unveil_proc_get_cache(p, true);
-
-	crfree(old_cr);
-	curtain_free(old_ct);
-	SDT_PROBE1(curtain,, do_curtainctl, assign, ct);
 	return (0);
-
-err1:
-	PROC_UNLOCK(p);
-	crfree(cr);
-	curtain_free(old_ct);
-err2:
-	return (error);
 }
 
 int

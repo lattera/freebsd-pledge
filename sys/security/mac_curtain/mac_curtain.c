@@ -1488,7 +1488,7 @@ curtain_proc_exec_adjust(struct image_params *imgp)
 
 	ct = curtain_hold(ct->ct_on_exec);
 	curtain_free(CRED_SLOT(cr));
-	curtain_cred_sysfil_update(cr, ct);
+	curtain_cred_update(ct, cr);
 	SLOT_SET(cr->cr_label, ct);
 	MPASS(CRED_IN_RESTRICTED_MODE(cr));
 }
