@@ -199,6 +199,7 @@ struct curtain {
 	struct {
 		bool is_restricted;
 		uint8_t sysfilacts[SYSFILSET_BITS];
+		sysfilset_t sysfilset;
 	} ct_cached;
 	struct curtain_mode ct_abilities[CURTAINABL_COUNT];
 	struct curtain_item ct_slots[];

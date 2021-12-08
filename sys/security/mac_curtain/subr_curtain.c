@@ -732,6 +732,7 @@ curtain_dup(const struct curtain *src)
 	for (di = dst->ct_slots; di < &dst->ct_slots[dst->ct_nslots]; di++)
 		if (di->type != 0)
 			curtain_key_dup_fixup(dst, di->type, &di->key);
+	MPASS(!dst->ct_overflowed);
 	if ((dst->ct_finalized = src->ct_finalized))
 		dst->ct_cached = src->ct_cached;
 #ifdef INVARIANTS
@@ -860,6 +861,7 @@ void
 curtain_cache_update(struct curtain *ct)
 {
 	ct->ct_cached.is_restricted = curtain_restricted(ct);
+
 	for (unsigned i = 0; i < SYSFILSET_BITS; i++)
 		ct->ct_cached.sysfilacts[i] = CURTAINACT_KILL;
 	for (enum curtain_ability abl = 0; abl < nitems(curtain_abilities_sysfils); abl++) {
@@ -871,6 +873,19 @@ curtain_cache_update(struct curtain *ct)
 			sfs ^= (sysfilset_t)1 << i;
 		}
 	}
+	if (ct->ct_cached.is_restricted) {
+		ct->ct_cached.sysfilset = 0;
+		for (unsigned i = 0; i < SYSFILSET_BITS; i++)
+			if (ct->ct_cached.sysfilacts[i] == CURTAINACT_ALLOW)
+				ct->ct_cached.sysfilset |= (sysfilset_t)1 << i;
+		MPASS(SYSFILSET_IS_RESTRICTED(ct->ct_cached.sysfilset));
+	} else {
+		/* NOTE: Unrestricted processes must have their whole sysfilset
+		 * filled, not just the bits for existing sysfils. */
+		ct->ct_cached.sysfilset = ~(sysfilset_t)0;
+		MPASS(!SYSFILSET_IS_RESTRICTED(ct->ct_cached.sysfilset));
+	}
+
 	if (ct->ct_on_exec)
 		curtain_cache_update(ct->ct_on_exec);
 	ct->ct_finalized = true;
@@ -880,20 +895,8 @@ void
 curtain_cred_sysfil_update(struct ucred *cr, const struct curtain *ct)
 {
 	MPASS(ct->ct_finalized);
-	if (ct->ct_cached.is_restricted) {
-		cr->cr_sysfilset = 0;
-		for (unsigned i = 0; i < SYSFILSET_BITS; i++)
-			if (ct->ct_cached.sysfilacts[i] == CURTAINACT_ALLOW)
-				cr->cr_sysfilset |= (sysfilset_t)1 << i;
-		MPASS(SYSFILSET_IS_RESTRICTED(cr->cr_sysfilset));
-		MPASS(CRED_IN_RESTRICTED_MODE(cr));
-	} else {
-		/* NOTE: Unrestricted processes must have their whole sysfilset
-		 * filled, not just the bits for existing sysfils. */
-		cr->cr_sysfilset = ~(sysfilset_t)0;
-		MPASS(!SYSFILSET_IS_RESTRICTED(cr->cr_sysfilset));
-		MPASS(!CRED_IN_RESTRICTED_MODE(cr));
-	}
+	cr->cr_sysfilset = ct->ct_cached.sysfilset;
+	MPASS(CRED_IN_RESTRICTED_MODE(cr) == SYSFILSET_IS_RESTRICTED(ct->ct_cached.sysfilset));
 }
 
 void
