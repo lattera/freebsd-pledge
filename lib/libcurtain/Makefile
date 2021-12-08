@@ -30,7 +30,7 @@ SYS_PRIV_H=	${SYSROOT:U${DESTDIR}}${INCLUDEDIR}/sys/priv.h
 NETINET_IN=	${SYSROOT:U${DESTDIR}}${INCLUDEDIR}/netinet/in.h
 SYS_SOCKET_H=	${SYSROOT:U${DESTDIR}}${INCLUDEDIR}/sys/socket.h
 abilitytab.c: mkabilitytab.awk ${SYS_ABILITY_H}
-	awk -f ${.CURDIR}/mkabilitytab.awk < ${SYS_ABILITY_H} > ${.TARGET}
+	unifdef -U _KERNEL ${SYS_ABILITY_H} | awk -f ${.CURDIR}/mkabilitytab.awk > ${.TARGET}
 privtab.c: mkprivtab.awk ${SYS_PRIV_H}
 	awk -f ${.CURDIR}/mkprivtab.awk < ${SYS_PRIV_H} > ${.TARGET}
 socklvltab.c: mksocklvltab.awk ${NETINET_IN}
