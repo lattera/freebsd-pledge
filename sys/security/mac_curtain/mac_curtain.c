@@ -1430,7 +1430,7 @@ curtain_sysfil_check(struct ucred *cr, sysfilset_t sfs)
 	while (sfs) {
 		unsigned i = ffsll(sfs) - 1;
 		act = MAX(act, ct->ct_cached.sysfilacts[i]);
-		sfs ^= (sysfilset_t)1 << i;
+		sfs ^= SYSFIL_INDEX(i);
 	}
 	sfs = orig_sfs;
 	if (act == CURTAINACT_ALLOW)

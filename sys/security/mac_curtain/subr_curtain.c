@@ -870,19 +870,19 @@ curtain_cache_update(struct curtain *ct)
 			unsigned i = ffsll(sfs) - 1;
 			ct->ct_cached.sysfilacts[i] = MIN(ct->ct_cached.sysfilacts[i],
 			    ct->ct_abilities[abl].soft);
-			sfs ^= (sysfilset_t)1 << i;
+			sfs ^= SYSFIL_INDEX(i);
 		}
 	}
 	if (ct->ct_cached.is_restricted) {
-		ct->ct_cached.sysfilset = 0;
+		ct->ct_cached.sysfilset = SYSFIL_NONE;
 		for (unsigned i = 0; i < SYSFILSET_BITS; i++)
 			if (ct->ct_cached.sysfilacts[i] == CURTAINACT_ALLOW)
-				ct->ct_cached.sysfilset |= (sysfilset_t)1 << i;
+				ct->ct_cached.sysfilset |= SYSFIL_INDEX(i);
 		MPASS(SYSFILSET_IS_RESTRICTED(ct->ct_cached.sysfilset));
 	} else {
 		/* NOTE: Unrestricted processes must have their whole sysfilset
 		 * filled, not just the bits for existing sysfils. */
-		ct->ct_cached.sysfilset = ~(sysfilset_t)0;
+		ct->ct_cached.sysfilset = SYSFIL_FULL;
 		MPASS(!SYSFILSET_IS_RESTRICTED(ct->ct_cached.sysfilset));
 	}
 

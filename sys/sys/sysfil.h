@@ -13,9 +13,8 @@
 #endif
 
 #define	SYSFIL_INDEX(i)		((sysfilset_t)1 << (i))
-
-/* Various operations that should always be allowed. */
-#define	SYSFIL_ALWAYS		0
+#define	SYSFIL_NONE		((sysfilset_t)0)
+#define	SYSFIL_FULL		((sysfilset_t)-1)
 
 /* Represents the state of NOT being in Capsicum capability mode. */
 #define	SYSFIL_UNCAPSICUM	SYSFIL_INDEX(0)
@@ -97,11 +96,13 @@ CTASSERT(SYSFIL_DEFAULT == SYSFIL_INDEX(SYSFILSET_VFS_VEILED_MODE_BIT));
  * track of them and make it more explicit.
  */
 #ifdef _KERNEL
+/* Various operations that should always be allowed. */
+#define	SYSFIL_ALWAYS		SYSFIL_NONE
 /*
  * SYSFIL_CAPCOMPAT is for certain syscalls that are allowed under Capsicum but
  * not under OpenBSD's "stdio" pledge.  This is to get at least some basic
- * level of compatibility when attempting to run Capsicum applications with
- * inherited pledges.
+ * level of compatibility when attempting to run Capsicum applications with an
+ * inherited curtain.
  */
 #define	SYSFIL_CAPCOMPAT	SYSFIL_STDIO
 /* Can do certain operations on self. */
@@ -173,7 +174,7 @@ static inline void
 sysfil_cred_init(struct ucred *cr)
 {
 #ifndef NOSYSFIL
-	cr->cr_sysfilset = ~(sysfilset_t)0;
+	cr->cr_sysfilset = SYSFIL_FULL;
 #endif
 }
 
