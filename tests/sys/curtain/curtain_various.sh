@@ -288,6 +288,41 @@ filtered_ls_nested_body() {
 	atf_check -o inline:'1\n2\n' $p curtain -p d -p d/3: ls d
 }
 
+atf_test_case sysctl_inherit
+sysctl_inherit_body() {
+	local n='security.curtain.enabled'
+	atf_check -o save:works sysctl $n
+	local works="atf_check -o file:works"
+	local fails="atf_check -o empty"
+	$fails curtain sysctl $n
+	$fails curtain -t curtain \
+		curtain -d ability:any_sysctl sysctl $n
+	$works curtain -d ability:any_sysctl sysctl $n
+	$works curtain -d sysctl:$n sysctl $n
+	$works curtain -t curtain -d ability:any_sysctl \
+		curtain -d ability:any_sysctl sysctl $n
+	local a b
+	for a in security.curtain.enabled security.curtain security
+	do
+		$fails curtain -t curtain \
+			curtain -d sysctl:$a sysctl $n
+		$fails curtain -t curtain -d ability:any_sysctl -d sysctl-deny:$a \
+			curtain -d ability:any_sysctl sysctl $n
+		$works curtain -d sysctl:$a sysctl $n
+		$works curtain -t curtain -d ability:any_sysctl \
+			curtain -d sysctl:$a sysctl $n
+		$works curtain -t curtain -d sysctl:$a \
+			curtain -d ability:any_sysctl sysctl $n
+		for b in security.curtain.enabled security.curtain security
+		do
+			$fails curtain -t curtain -d ability:any_sysctl -d sysctl-deny:$a \
+				curtain -d sysctl:$b sysctl $n
+			$works curtain -t curtain -d sysctl:$a \
+				curtain -d sysctl:$b sysctl $n
+		done
+	done
+}
+
 atf_init_test_cases() {
 	atf_add_test_case cmd_true
 	atf_add_test_case cmd_false
@@ -319,4 +354,5 @@ atf_init_test_cases() {
 	atf_add_test_case chflags_system
 	atf_add_test_case filtered_ls
 	atf_add_test_case filtered_ls_nested
+	atf_add_test_case sysctl_inherit
 }
