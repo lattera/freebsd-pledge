@@ -496,40 +496,6 @@ mac_sysfil_check(struct ucred *cred, sysfilset_t sfs)
 }
 
 int
-mac_sysfil_update_mask(struct proc *p, sysfilset_t mask_sfs)
-{
-	struct ucred *cred, *oldcred;
-	do {
-		int error;
-		cred = crget();
-		PROC_LOCK(p);
-		oldcred = crcopysafe(p, cred);
-		cred->cr_sysfilset &= mask_sfs;
-		crhold(oldcred);
-		PROC_UNLOCK(p);
-		MAC_POLICY_CHECK(sysfil_update_mask, cred);
-		if (error != 0) {
-			crfree(oldcred);
-			crfree(cred);
-			return (error);
-		}
-		PROC_LOCK(p);
-		if (oldcred == p->p_ucred) {
-			crfree(oldcred);
-			break;
-		}
-		/* retry if the process' ucred was replaced */
-		PROC_UNLOCK(p);
-		crfree(oldcred);
-		crfree(cred);
-	} while (true);
-	proc_set_cred(p, cred);
-	PROC_UNLOCK(p);
-	crfree(oldcred);
-	return (0);
-}
-
-int
 mac_proc_check_exec_sugid(struct ucred *cred, struct proc *p)
 {
 	int error;

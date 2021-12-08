@@ -1442,21 +1442,6 @@ curtain_sysfil_check(struct ucred *cr, sysfilset_t sfs)
 	return (act2err[act]);
 }
 
-static int
-curtain_sysfil_update_mask(struct ucred *cr)
-{
-	struct curtain *ct;
-	if (!CRED_SLOT(cr))
-		return (0);
-	ct = curtain_dup(CRED_SLOT(cr));
-	curtain_mask_sysfils(ct, cr->cr_sysfilset);
-	curtain_cache_update(ct);
-	MPASS(ct->ct_cached.valid);
-	curtain_free(CRED_SLOT(cr));
-	SLOT_SET(cr->cr_label, ct);
-	return (0);
-}
-
 
 static int
 curtain_proc_check_exec_sugid(struct ucred *cr, struct proc *p)
@@ -1623,7 +1608,6 @@ static struct mac_policy_ops curtain_policy_ops = {
 	.mpo_priv_check = curtain_priv_check,
 
 	.mpo_sysfil_check = curtain_sysfil_check,
-	.mpo_sysfil_update_mask = curtain_sysfil_update_mask,
 
 	.mpo_proc_check_exec_sugid = curtain_proc_check_exec_sugid,
 	.mpo_proc_exec_adjust = curtain_proc_exec_adjust,

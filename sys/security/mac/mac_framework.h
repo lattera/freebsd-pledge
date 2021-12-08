@@ -728,11 +728,7 @@ int	mac_generic_check_vm_prot(struct ucred *cred, struct file *fp,
 int	mac_generic_ipc_name_prefix(struct ucred *cred, char **prefix, char *end);
 
 int	mac_sysfil_check(struct ucred *cred, sysfilset_t sfs);
-int	mac_sysfil_update_mask(struct proc *p, sysfilset_t mask_sfs);
 
 int	mac_proc_check_exec_sugid(struct ucred *cred, struct proc *p);
-
-bool	mac_sysfil_need_exec_adjust(struct thread *td, struct ucred *cred);
-void	mac_sysfil_exec_adjust(struct thread *td, struct ucred *newcred);
 
 #endif /* !_SECURITY_MAC_MAC_FRAMEWORK_H_ */

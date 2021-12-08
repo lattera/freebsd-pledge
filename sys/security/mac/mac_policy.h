@@ -708,7 +708,6 @@ typedef int	(*mpo_generic_ipc_name_prefix_t)(struct ucred *cred,
 typedef void	(*mpo_cred_trim_t)(struct ucred *cred);
 
 typedef int	(*mpo_sysfil_check_t)(struct ucred *cred, sysfilset_t sfs);
-typedef int	(*mpo_sysfil_update_mask_t)(struct ucred *newcred);
 
 typedef int	(*mpo_proc_check_exec_sugid_t)(struct ucred *cred,
 		    struct proc *);
@@ -1030,7 +1029,6 @@ struct mac_policy_ops {
 
 	mpo_cred_trim_t				mpo_cred_trim;
 	mpo_sysfil_check_t			mpo_sysfil_check;
-	mpo_sysfil_update_mask_t		mpo_sysfil_update_mask;
 
 	mpo_proc_check_exec_sugid_t		mpo_proc_check_exec_sugid;
 	mpo_proc_exec_adjust_t			mpo_proc_exec_adjust;
