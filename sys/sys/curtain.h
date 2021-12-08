@@ -135,10 +135,8 @@ struct curtain_item {
 			int level, optname;
 		} sockopt;
 		int priv;
-		struct {
-			uint64_t serial;
-		} __packed sysctl;
 		int fibnum;
+		struct sysctl_shadow __packed *sysctl;
 		struct curtain_unveil __packed *unveil;
 	} key;
 };

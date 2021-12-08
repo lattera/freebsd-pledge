@@ -65,6 +65,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/sx.h>
 #include <sys/sysproto.h>
 #include <sys/uio.h>
+#include <sys/refcount.h>
 #ifdef KTRACE
 #include <sys/ktrace.h>
 #endif
@@ -84,6 +85,7 @@ __FBSDID("$FreeBSD$");
 static MALLOC_DEFINE(M_SYSCTL, "sysctl", "sysctl internal magic");
 static MALLOC_DEFINE(M_SYSCTLOID, "sysctloid", "sysctl dynamic oids");
 static MALLOC_DEFINE(M_SYSCTLTMP, "sysctltmp", "sysctl temp output buffer");
+static MALLOC_DEFINE(M_SYSCTLSDW, "sysctlsdw", "sysctl shadow handles");
 
 /*
  * The sysctllock protects the MIB tree.  It also protects sysctl
@@ -510,11 +512,6 @@ retry:
 	else
 		SLIST_INSERT_HEAD(parent, oidp, oid_link);
 
-	if (oidp->oid_serial == 0) {
-		static uint64_t newserial = 1;
-		oidp->oid_serial = newserial++;
-	}
-
 	if ((oidp->oid_kind & CTLTYPE) != CTLTYPE_NODE &&
 #ifdef VIMAGE
 	    (oidp->oid_kind & CTLFLAG_VNET) == 0 &&
@@ -559,6 +556,8 @@ sysctl_enable_oid(struct sysctl_oid *oidp)
 	oidp->oid_kind &= ~CTLFLAG_DORMANT;
 }
 
+static void sysctl_shadow_free_locked(struct sysctl_shadow *);
+
 void
 sysctl_unregister_oid(struct sysctl_oid *oidp)
 {
@@ -578,6 +577,11 @@ sysctl_unregister_oid(struct sysctl_oid *oidp)
 				break;
 			}
 		}
+	}
+
+	if (oidp->oid_shadow != NULL) {
+		sysctl_shadow_free_locked(oidp->oid_shadow);
+		oidp->oid_shadow = NULL;
 	}
 
 	/* 
@@ -2526,6 +2530,98 @@ sbuf_new_for_sysctl(struct sbuf *s, char *buf, int length,
 	sbuf_set_drain(s, sbuf_sysctl_drain, req);
 	return (s);
 }
+
+
+static struct sysctl_shadow *
+sysctl_shadow_get(struct sysctl_oid *oidp)
+{
+	struct sysctl_shadow *sdw;
+	SYSCTL_ASSERT_WLOCKED();
+	if ((sdw = oidp->oid_shadow) == NULL) {
+		struct sysctl_oid *p = SYSCTL_PARENT(oidp);
+		sdw = malloc(sizeof *sdw, M_SYSCTLSDW, M_WAITOK);
+		*sdw = (struct sysctl_shadow){
+			.refcnt = 2, /* one for caller and one for oid */
+			.oidp = oidp,
+			.number = oidp->oid_number,
+			.parent = p ? sysctl_shadow_get(p) : NULL,
+		};
+		oidp->oid_shadow = sdw;
+	} else
+		refcount_acquire(&sdw->refcnt);
+	return (sdw);
+}
+
+int
+sysctl_shadow_find(int *name, u_int namelen,
+    struct sysctl_shadow **shadow, int *nindx, struct sysctl_req *req)
+{
+	struct rm_priotracker tracker;
+	struct sysctl_oid *oid;
+	int error;
+	SYSCTL_RLOCK(&tracker);
+	error = sysctl_find_oid(name, namelen, &oid, nindx, req);
+	if (error) {
+		SYSCTL_RUNLOCK(&tracker);
+		return (error);
+	}
+	if (oid->oid_shadow != NULL) {
+		refcount_acquire(&oid->oid_shadow->refcnt);
+		SYSCTL_RUNLOCK(&tracker);
+		*shadow = oid->oid_shadow;
+		return (0);
+	}
+	SYSCTL_RUNLOCK(&tracker);
+
+	SYSCTL_WLOCK();
+	error = sysctl_find_oid(name, namelen, &oid, nindx, req);
+	if (error) {
+		SYSCTL_WUNLOCK();
+		return (error);
+	}
+	*shadow = sysctl_shadow_get(oid);
+	SYSCTL_WUNLOCK();
+	return (0);
+}
+
+struct sysctl_shadow *
+sysctl_shadow_hold(struct sysctl_shadow *sdw)
+{
+	refcount_acquire(&sdw->refcnt);
+	return (sdw);
+}
+
+static void sysctl_shadow_free_locked(struct sysctl_shadow *);
+
+static void
+sysctl_shadow_free_1(struct sysctl_shadow *sdw)
+{
+	struct sysctl_shadow *parent_sdw;
+	SYSCTL_ASSERT_WLOCKED();
+	parent_sdw = sdw->parent;
+	free(sdw, M_SYSCTLSDW);
+	if (parent_sdw)
+		sysctl_shadow_free_locked(parent_sdw);
+}
+
+static void
+sysctl_shadow_free_locked(struct sysctl_shadow *sdw)
+{
+	SYSCTL_ASSERT_WLOCKED();
+	if (refcount_release(&sdw->refcnt))
+		sysctl_shadow_free_1(sdw);
+}
+
+void
+sysctl_shadow_free(struct sysctl_shadow *sdw)
+{
+	if (refcount_release(&sdw->refcnt)) {
+		SYSCTL_WLOCK();
+		sysctl_shadow_free_1(sdw);
+		SYSCTL_WUNLOCK();
+	}
+}
+
 
 #ifdef DDB
 

@@ -429,7 +429,7 @@ curtain_key_hash(enum curtainreq_type type, union curtain_key key)
 	case CURTAINTYP_PRIV:
 		return (key.priv);
 	case CURTAINTYP_SYSCTL:
-		return (key.sysctl.serial);
+		return ((uintptr_t)key.sysctl >> 5);
 	case CURTAINTYP_FIBNUM:
 		return (key.fibnum);
 	case CURTAINTYP_UNVEIL:
@@ -458,7 +458,7 @@ curtain_key_same(enum curtainreq_type type,
 	case CURTAINTYP_PRIV:
 		return (key0.priv == key1.priv);
 	case CURTAINTYP_SYSCTL:
-		return (key0.sysctl.serial == key1.sysctl.serial);
+		return (key0.sysctl == key1.sysctl);
 	case CURTAINTYP_FIBNUM:
 		return (key0.fibnum == key1.fibnum);
 	case CURTAINTYP_UNVEIL: {
@@ -484,6 +484,9 @@ static void
 curtain_key_free(enum curtainreq_type type, union curtain_key key)
 {
 	switch (type) {
+	case CURTAINTYP_SYSCTL:
+		sysctl_shadow_free(key.sysctl);
+		break;
 	case CURTAINTYP_UNVEIL:
 		vrele(key.unveil->vp);
 		free(key.unveil, M_CURTAIN_UNVEIL);
@@ -496,18 +499,20 @@ curtain_key_free(enum curtainreq_type type, union curtain_key key)
 static void
 curtain_key_dup(enum curtainreq_type type, union curtain_key *dst, union curtain_key src)
 {
+	*dst = src;
 	switch (type) {
+	case CURTAINTYP_SYSCTL:
+		sysctl_shadow_hold(dst->sysctl);
+		break;
 	case CURTAINTYP_UNVEIL: {
 		size_t name_size;
 		name_size = src.unveil->name_len + (src.unveil->name_len != 0);
-		*dst = src;
 		dst->unveil = malloc(sizeof *dst->unveil + name_size, M_CURTAIN_UNVEIL, M_WAITOK);
 		memcpy(dst->unveil, src.unveil, sizeof *dst->unveil + name_size);
 		vref(dst->unveil->vp);
 		break;
 	}
 	default:
-		*dst = src;
 		break;
 	}
 }
@@ -549,18 +554,24 @@ curtain_key_fallback(enum curtainreq_type *type, union curtain_key *key)
 	case CURTAINTYP_SOCKOPT:
 		*key = (union curtain_key){ .socklvl = key->sockopt.level };
 		*type = CURTAINTYP_SOCKLVL;
+		return;
+	case CURTAINTYP_SYSCTL:
+		if (key->sysctl->parent) {
+			*key = (union curtain_key){ .sysctl = key->sysctl->parent };
+			return;
+		}
 		break;
 	case CURTAINTYP_UNVEIL:
 		if (key->unveil->parent) {
 			*key = (union curtain_key){ .unveil = key->unveil->parent };
-			break;
+			return;
 		}
-		/* FALLTHROUGH */
+		break;
 	default:
-		*key = (union curtain_key){ .ability = curtain_type_fallback[*type] };
-		*type = CURTAINTYP_ABILITY;
 		break;
 	}
+	*key = (union curtain_key){ .ability = curtain_type_fallback[*type] };
+	*type = CURTAINTYP_ABILITY;
 }
 
 static void

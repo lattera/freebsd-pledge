@@ -55,32 +55,6 @@ curtain_from_cred(struct ucred *cr)
 }
 
 
-struct get_sysctl_serial_ctx {
-	uint64_t *serial;
-	int *name;
-	unsigned namelen;
-	int error;
-};
-
-static void
-get_sysctl_serial_cb(void *ptr)
-{
-	struct get_sysctl_serial_ctx *ctx = ptr;
-	struct sysctl_oid *oidp;
-	ctx->error = sysctl_find_oid(ctx->name, ctx->namelen, &oidp, NULL, NULL);
-	if (!ctx->error)
-		*ctx->serial = oidp->oid_serial;
-}
-
-static int
-get_sysctl_serial(int *name, unsigned name_len, uint64_t *serial)
-{
-	struct get_sysctl_serial_ctx ctx = { serial, name, name_len };
-	sysctl_call_with_rlock(get_sysctl_serial_cb, &ctx);
-	return (ctx.error);
-}
-
-
 static bool __read_mostly curtainctl_enabled = true;
 unsigned __read_mostly curtain_log_level = CURTAINLVL_TRAP;
 
@@ -416,23 +390,20 @@ curtain_fill_req(struct curtain *ct, const struct curtainreq *req)
 	case CURTAINTYP_SYSCTL: {
 		int *p = req->data;
 		size_t c = req->size / sizeof *p;
-		int error;
 		while (c--) {
-			uint64_t serial;
+			struct sysctl_shadow *sdw;
 			size_t l;
+			int error;
 			l = *p++;
-			if (l > c)
+			if (l == 0 || l > c)
 				return (EINVAL);
-			error = get_sysctl_serial(p, l, &serial);
+			error = sysctl_shadow_find(p, l, &sdw, NULL, NULL);
+			if (!error)
+				curtain_fill_item(ct, req, (ctkey){ .sysctl = sdw });
+			else if (error != ENOENT)
+				return (error);
 			p += l;
 			c -= l;
-			if (error) {
-				if (error != ENOENT)
-					return (error);
-				continue;
-			}
-			curtain_fill_item(ct, req,
-			    (ctkey){ .sysctl = { .serial = serial } });
 		}
 		break;
 	}
@@ -728,7 +699,7 @@ db_print_curtain(struct curtain *ct)
 				db_printf(" priv: %d\n", key.priv);
 				break;
 			case CURTAINTYP_SYSCTL:
-				db_printf(" sysctl: %ju\n", (uintmax_t)key.sysctl.serial);
+				db_printf(" sysctl: %p\n", key.sysctl);
 				break;
 			case CURTAINTYP_FIBNUM:
 				db_printf(" fibnum: %d\n", key.fibnum);

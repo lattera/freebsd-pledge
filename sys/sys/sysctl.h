@@ -199,7 +199,7 @@ struct sysctl_oid {
 	u_int		 oid_running;
 	const char	*oid_descr;
 	const char	*oid_label;
-	uint64_t	 oid_serial;
+	struct sysctl_shadow *oid_shadow;
 };
 
 #define	SYSCTL_IN(r, p, l)	(r->newfunc)(r, p, l)
@@ -1180,6 +1180,24 @@ int	kern___sysctlbyname(struct thread *td, const char *name,
 struct sbuf;
 struct sbuf *sbuf_new_for_sysctl(struct sbuf *, char *, int,
 	    struct sysctl_req *);
+
+/*
+ * Indirect handles to OIDs.  Allows to hold reference to and traverse the
+ * parent chain of OIDs even after their module is unloaded.  Needed by
+ * mac_curtain(4).
+ */
+struct sysctl_shadow {
+	struct sysctl_shadow *parent;
+	struct sysctl_oid *oidp;
+	int refcnt;
+	int number;
+};
+
+int	sysctl_shadow_find(int *name, u_int namelen,
+	    struct sysctl_shadow **shadow, int *nindx, struct sysctl_req *req);
+struct sysctl_shadow *sysctl_shadow_hold(struct sysctl_shadow *);
+void	sysctl_shadow_free(struct sysctl_shadow *);
+
 #else	/* !_KERNEL */
 #include <sys/cdefs.h>
 #include <sys/_types.h>

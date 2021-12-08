@@ -1274,27 +1274,22 @@ curtain_system_check_sysctl(struct ucred *cr,
     struct sysctl_oid *oidp, void *arg1, int arg2,
     struct sysctl_req *req)
 {
-	enum curtain_action act;
+	struct sysctl_oid *p;
+	int error;
 	if (oidp->oid_kind & (CTLFLAG_RESTRICT|CTLFLAG_CAPRW))
 		return (0);
-	if (CRED_SLOT(cr)) {
-		struct sysctl_oid *p = oidp;
-		do {
-			const struct curtain_item *item;
-			item = curtain_lookup(CRED_SLOT(cr), CURTAINTYP_SYSCTL,
-			    (ctkey){ .sysctl = { .serial = p->oid_serial } });
-			if (item && item->mode.soft == CURTAINACT_ALLOW)
-				return (0);
-		} while ((p = SYSCTL_PARENT(p)));
-	}
-	act = cred_ability_action(cr, CURTAINABL_ANY_SYSCTL);
-	if (act == CURTAINACT_ALLOW)
+	if (!CRED_SLOT(cr))
 		return (0);
-	act = CURTAINACT_DENY; /* XXX */
-#if 0
-	CURTAIN_CRED_LOG_ACTION(cr, act, "sysctl %ju", (uintmax_t)oidp->oid_serial); /* XXX */
-#endif
-	return (act2err[act]);
+	for (p = oidp; p && !p->oid_shadow; p = SYSCTL_PARENT(p));
+	if (p)
+		error = cred_key_check(cr, CURTAINTYP_SYSCTL,
+		    (ctkey){ .sysctl = p->oid_shadow });
+	else
+		error = cred_key_check(cr, CURTAINTYP_ABILITY,
+		    (ctkey){ .ability = curtain_type_fallback[CURTAINTYP_SYSCTL] });
+	if (error == ESYSFILTRAP || error == ESYSFILKILL)
+		error = EPERM; /* XXX */
+	return (error);
 }
 
 
