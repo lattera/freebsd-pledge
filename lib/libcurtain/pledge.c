@@ -606,6 +606,11 @@ do_promises_slots(enum curtain_on on, struct promise_mode modes[])
 		 * issues if the program isn't in the directory that it expects).
 		 */
 		curtain_unveil(always_slot, root_path, flags, UPERM_SEARCH);
+		/*
+		 * Don't signal when trying to use forbidden sysctls.  This
+		 * happens too much.
+		 */
+		curtain_ability(always_slot, CURTAINABL_ANY_SYSCTL, CURTAIN_DENY);
 	}
 	curtain_enable(always_slot, on);
 }

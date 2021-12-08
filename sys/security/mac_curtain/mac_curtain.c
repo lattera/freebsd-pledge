@@ -161,6 +161,8 @@ cred_key_failed(const struct ucred *cr, enum curtainreq_type type, union curtain
 		break;
 	case CURTAINTYP_OLD_UNVEIL:
 	case CURTAINTYP_UNVEIL:
+	case CURTAINTYP_SYSCTL:
+		noise = true;
 		break;
 	case CURTAINTYP_ABILITY:
 		CURTAIN_CRED_LOG_ACTION(cr, act, "ability %d", key.ability);
@@ -195,12 +197,6 @@ cred_key_failed(const struct ucred *cr, enum curtainreq_type type, union curtain
 			CURTAIN_CRED_LOG_ACTION(cr, act, "priv %d", key.priv);
 			break;
 		}
-		break;
-	case CURTAINTYP_SYSCTL:
-#if 0
-		CURTAIN_CRED_LOG_ACTION(cr, act, "sysctl %ju", (uintmax_t)key.sysctl.serial); /* XXX */
-#endif
-		noise = true;
 		break;
 	case CURTAINTYP_FIBNUM:
 		CURTAIN_CRED_LOG_ACTION(cr, act, "fibnum %d", key.fibnum);
@@ -1285,10 +1281,7 @@ curtain_system_check_sysctl(struct ucred *cr,
 		error = cred_key_check(cr, CURTAINTYP_SYSCTL,
 		    (ctkey){ .sysctl = p->oid_shadow });
 	else
-		error = cred_key_check(cr, CURTAINTYP_ABILITY,
-		    (ctkey){ .ability = curtain_type_fallback[CURTAINTYP_SYSCTL] });
-	if (error == ESYSFILTRAP || error == ESYSFILKILL)
-		error = EPERM; /* XXX */
+		error = cred_ability_check(cr, curtain_type_fallback[CURTAINTYP_SYSCTL]);
 	return (error);
 }
 
