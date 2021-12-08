@@ -291,7 +291,7 @@ curtain_init(struct curtain *ct, size_t nslots)
 		.ct_magic = CURTAIN_MAGIC,
 #endif
 		.ct_ref = 1,
-		.ct_finalized = false,
+		.ct_cached = { .valid = false },
 		.ct_nitems = 0,
 		.ct_nslots = nslots,
 		.ct_modulo = nslots,
@@ -396,7 +396,7 @@ curtain_serial(const struct curtain *ct)
 static inline void
 curtain_dirty(struct curtain *ct)
 {
-	ct->ct_finalized = false;
+	ct->ct_cached.valid = false;
 }
 
 
@@ -733,8 +733,7 @@ curtain_dup(const struct curtain *src)
 		if (di->type != 0)
 			curtain_key_dup_fixup(dst, di->type, &di->key);
 	MPASS(!dst->ct_overflowed);
-	if ((dst->ct_finalized = src->ct_finalized))
-		dst->ct_cached = src->ct_cached;
+	dst->ct_cached = src->ct_cached;
 #ifdef INVARIANTS
 	for (si = src->ct_slots; si < &src->ct_slots[src->ct_nslots]; si++)
 		if (si->type != 0) {
@@ -860,7 +859,7 @@ curtain_equivalent(const struct curtain *ct0, const struct curtain *ct1)
 void
 curtain_cache_update(struct curtain *ct)
 {
-	ct->ct_cached.is_restricted = curtain_restricted(ct);
+	ct->ct_cached.restrictive = curtain_restricted(ct);
 
 	for (unsigned i = 0; i < SYSFILSET_BITS; i++)
 		ct->ct_cached.sysfilacts[i] = CURTAINACT_KILL;
@@ -873,7 +872,7 @@ curtain_cache_update(struct curtain *ct)
 			sfs ^= SYSFIL_INDEX(i);
 		}
 	}
-	if (ct->ct_cached.is_restricted) {
+	if (ct->ct_cached.restrictive) {
 		ct->ct_cached.sysfilset = SYSFIL_NONE;
 		for (unsigned i = 0; i < SYSFILSET_BITS; i++)
 			if (ct->ct_cached.sysfilacts[i] == CURTAINACT_ALLOW)
@@ -888,7 +887,8 @@ curtain_cache_update(struct curtain *ct)
 
 	if (ct->ct_on_exec)
 		curtain_cache_update(ct->ct_on_exec);
-	ct->ct_finalized = true;
+
+	ct->ct_cached.valid = true;
 }
 
 void
@@ -1007,7 +1007,7 @@ curtain_finish(struct curtain *ct, struct ucred *cr)
 void
 curtain_cred_sysfil_update(struct ucred *cr, const struct curtain *ct)
 {
-	MPASS(ct->ct_finalized);
+	MPASS(ct->ct_cached.valid);
 	cr->cr_sysfilset = ct->ct_cached.sysfilset;
 	MPASS(CRED_IN_RESTRICTED_MODE(cr) == SYSFILSET_IS_RESTRICTED(ct->ct_cached.sysfilset));
 }

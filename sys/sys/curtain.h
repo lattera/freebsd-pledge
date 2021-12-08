@@ -194,14 +194,14 @@ struct curtain {
 	curtain_index ct_nitems;
 	curtain_index ct_modulo;
 	curtain_index ct_cellar;
-	bool ct_overflowed;
-	bool ct_finalized;
 	struct {
-		bool is_restricted;
-		uint8_t sysfilacts[SYSFILSET_BITS];
 		sysfilset_t sysfilset;
+		bool valid;
+		bool restrictive;
+		uint8_t sysfilacts[SYSFILSET_BITS];
 	} ct_cached;
 	struct curtain_mode ct_abilities[CURTAINABL_COUNT];
+	bool ct_overflowed;
 	struct curtain_item ct_slots[];
 };
 

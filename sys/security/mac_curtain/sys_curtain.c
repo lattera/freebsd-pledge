@@ -108,7 +108,7 @@ sysctl_curtain_curtained(SYSCTL_HANDLER_ARGS)
 {
 	struct curtain *ct;
 	int ret;
-	ret = ((ct = CRED_SLOT(req->td->td_ucred)) ? ct->ct_cached.is_restricted : 0);
+	ret = ((ct = CRED_SLOT(req->td->td_ucred)) ? ct->ct_cached.restrictive : 0);
 	return (SYSCTL_OUT(req, &ret, sizeof(ret)));
 }
 
@@ -123,7 +123,7 @@ sysctl_curtain_curtained_exec(SYSCTL_HANDLER_ARGS)
 	int ret;
 	if ((ct = CRED_SLOT(req->td->td_ucred))) {
 		ct1 = ct->ct_on_exec ? ct->ct_on_exec : ct;
-		ret = ct1->ct_cached.is_restricted;
+		ret = ct1->ct_cached.restrictive;
 	} else
 		ret = 0;
 	return (SYSCTL_OUT(req, &ret, sizeof(ret)));
@@ -690,44 +690,46 @@ db_print_curtain(struct curtain *ct)
 	db_printf("ct_on_exec: %p\n", ct->ct_on_exec);
 	db_printf("ct_nslots: %u ct_nitems: %u ct_modulo: %u ct_cellar: %u\n",
 	    ct->ct_nslots, ct->ct_nitems, ct->ct_modulo, ct->ct_cellar);
-	db_printf("ct_overflowed: %d ct_finalized: %d\n",
-	    ct->ct_overflowed, ct->ct_finalized);
+	db_printf("ct_overflowed: %d\n", ct->ct_overflowed);
+	db_printf("ct_cached:\n");
+	db_printf("\tvalid: %d restrictive: %d sysfilset: %#016jx\n",
+	    ct->ct_cached.valid, ct->ct_cached.restrictive, ct->ct_cached.sysfilset);
 	db_printf("ct_abilities:\n");
 	for (enum curtain_ability abl = 0; abl <= CURTAINABL_LAST; abl++)
-		db_printf("\tability %3d soft %d hard %d\n", abl,
+		db_printf("\tability: %3d soft: %d hard: %d\n", abl,
 		    ct->ct_abilities[abl].soft, ct->ct_abilities[abl].hard);
 	db_printf("ct_slots:\n");
 	for (struct curtain_item *item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
 		if (item->type != 0) {
 			union curtain_key key = item->key;
-			db_printf("\tslot %3zu chain %3zu type %2d soft %d hard %d",
+			db_printf("\tslot: %3zu chain: %3zu type: %2d soft: %d hard: %d",
 			    (size_t)(item - ct->ct_slots), (size_t)item->chain,
 			    item->type, item->mode.soft, item->mode.hard);
 			switch (item->type) {
 			case CURTAINTYP_IOCTL:
-				db_printf(" ioctl %#jx\n", (uintmax_t)key.ioctl);
+				db_printf(" ioctl: %#jx\n", (uintmax_t)key.ioctl);
 				break;
 			case CURTAINTYP_SOCKAF:
-				db_printf(" sockaf %d\n", key.sockaf);
+				db_printf(" sockaf: %d\n", key.sockaf);
 				break;
 			case CURTAINTYP_SOCKLVL:
-				db_printf(" socklvl %d\n", key.socklvl);
+				db_printf(" socklvl: %d\n", key.socklvl);
 				break;
 			case CURTAINTYP_SOCKOPT:
-				db_printf(" sockopt %d:%d\n",
+				db_printf(" sockopt: %d:%d\n",
 				    key.sockopt.level, key.sockopt.optname);
 				break;
 			case CURTAINTYP_PRIV:
-				db_printf(" priv %d\n", key.priv);
+				db_printf(" priv: %d\n", key.priv);
 				break;
 			case CURTAINTYP_SYSCTL:
-				db_printf(" sysctl %ju\n", (uintmax_t)key.sysctl.serial);
+				db_printf(" sysctl: %ju\n", (uintmax_t)key.sysctl.serial);
 				break;
 			case CURTAINTYP_FIBNUM:
-				db_printf(" fibnum %d\n", key.fibnum);
+				db_printf(" fibnum: %d\n", key.fibnum);
 				break;
 			case CURTAINTYP_UNVEIL:
-				db_printf(" unveil %p parent: %p\n",
+				db_printf(" unveil: %p parent: %p\n",
 				    key.unveil, key.unveil->parent);
 				db_printf("\t\tvp: %p", key.unveil->vp);
 				if (key.unveil->name_len != 0)

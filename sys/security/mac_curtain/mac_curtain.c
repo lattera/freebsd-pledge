@@ -1450,7 +1450,7 @@ curtain_sysfil_update_mask(struct ucred *cr)
 	ct = curtain_dup(CRED_SLOT(cr));
 	curtain_mask_sysfils(ct, cr->cr_sysfilset);
 	curtain_cache_update(ct);
-	MPASS(ct->ct_finalized);
+	MPASS(ct->ct_cached.valid);
 	curtain_free(CRED_SLOT(cr));
 	SLOT_SET(cr->cr_label, ct);
 	return (0);
@@ -1463,9 +1463,9 @@ curtain_proc_check_exec_sugid(struct ucred *cr, struct proc *p)
 	const struct curtain *ct, *ct1;
 	enum curtain_action act;
 	if ((ct = CRED_SLOT(cr))) {
-		MPASS(ct->ct_finalized);
+		MPASS(ct->ct_cached.valid);
 		ct1 = ct->ct_on_exec ? ct->ct_on_exec : ct;
-		if (ct1->ct_cached.is_restricted)
+		if (ct1->ct_cached.restrictive)
 			act = ct1->ct_abilities[CURTAINABL_EXEC_RSUGID].soft;
 		else
 			act = CURTAINACT_ALLOW;
@@ -1484,15 +1484,15 @@ curtain_proc_exec_adjust(struct image_params *imgp)
 	if (!(ct = CRED_SLOT(imgp->proc->p_ucred)))
 		return; /* NOTE: sysfilset kept as-is */
 
-	MPASS(ct->ct_finalized);
+	MPASS(ct->ct_cached.valid);
 	if (!ct->ct_on_exec)
 		return;
-	MPASS(ct->ct_on_exec->ct_finalized);
+	MPASS(ct->ct_on_exec->ct_cached.valid);
 
 	if (!(cr = imgp->newcred))
 		cr = imgp->newcred = crdup(imgp->proc->p_ucred);
 
-	if (!ct->ct_on_exec->ct_cached.is_restricted) {
+	if (!ct->ct_on_exec->ct_cached.restrictive) {
 		/* Can drop the curtain and unveils altogether. */
 		curtain_free(ct);
 		SLOT_SET(cr->cr_label, NULL);
