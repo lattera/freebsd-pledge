@@ -114,6 +114,8 @@ struct curtain_type {
 static struct curtain_slot *curtain_slots = NULL;
 static struct curtain_node *curtain_root_nodes = NULL;
 
+#define	DEBUG_ENV(name) (issetugid() ? NULL : getenv(name))
+
 static struct curtain_slot *
 curtain_slot_1(const enum curtain_state state_on[CURTAIN_ON_COUNT])
 {
@@ -1231,15 +1233,15 @@ root_nodes_inherit(enum curtain_state min_state)
 		node_inherit(node, NULL, min_state);
 	}
 
-	if (getenv("LIBCURTAIN_DEBUG") && issetugid() == 0) {
+	if (DEBUG_ENV("LIBCURTAIN_DEBUG_DUMP_UNVEILS")) {
 		warnx("%s", __func__);
 		for (node = unveils_type.nodes; node; node = node->type_next) {
 			char path[PATH_MAX];
 			unveil_node_path(node, path);
-			warnx("%s: %s 0x%08x:0x%08x", __func__,
-			    path,
+			warnx("%s: 0x%08x:0x%08x %s", __func__,
 			    node->combined_mode_on[CURTAIN_ON_SELF].uperms,
-			    node->combined_mode_on[CURTAIN_ON_EXEC].uperms);
+			    node->combined_mode_on[CURTAIN_ON_EXEC].uperms,
+			    path);
 		}
 	}
 }
@@ -1389,15 +1391,19 @@ curtain_submit(bool enforce)
 			break;
 	}
 
-	flags = CURTAINCTL_ENGAGE;
-	if (enforce) {
-		int flags1 = flags | CURTAINCTL_ENFORCE;
-		if (has_reserve) {
-			r = curtain_submit_1(flags1, neutral_on, CURTAIN_RESERVED);
-			if (r < 0 && errno != ENOSYS)
-				err(EX_OSERR, "curtainctl");
-		} else
-			flags = flags1;
+	if (DEBUG_ENV("LIBCURTAIN_DEBUG_DUMMY")) {
+		flags = 0;
+	} else {
+		flags = CURTAINCTL_ENGAGE;
+		if (enforce) {
+			int flags1 = flags | CURTAINCTL_ENFORCE;
+			if (has_reserve) {
+				r = curtain_submit_1(flags1, neutral_on, CURTAIN_RESERVED);
+				if (r < 0 && errno != ENOSYS)
+					err(EX_OSERR, "curtainctl");
+			} else
+				flags = flags1;
+		}
 	}
 	r = curtain_submit_1(flags, neutral_on, CURTAIN_ENABLED);
 	if (r < 0 && errno != ENOSYS)
