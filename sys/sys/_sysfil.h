@@ -17,7 +17,7 @@ typedef uint64_t sysfilset_t;
 #define	SYSFILSET_IN_CAPABILITY_MODE(sfs) \
 	!((sfs) & ((sysfilset_t)1 << SYSFILSET_NOT_IN_CAPABILITY_MODE_BIT))
 
-#define	SYSFILSET_VFS_VEILED_MODE_BIT 1 /* must match SYSFIL_DEFAULT */
+#define	SYSFILSET_VFS_VEILED_MODE_BIT 63 /* must match SYSFIL_CATCHALL */
 #define	SYSFILSET_IN_VFS_VEILED_MODE(sfs) \
 	!((sfs) & ((sysfilset_t)1 << SYSFILSET_VFS_VEILED_MODE_BIT))
 

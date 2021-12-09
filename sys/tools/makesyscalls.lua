@@ -1099,7 +1099,7 @@ process_syscall_def = function(line)
 		end
 	end
 	if #sysfils_list == 0 then
-		sysfils_list[#sysfils_list + 1] = "SYSFIL_DEFAULT"
+		sysfils_list[#sysfils_list + 1] = "SYSFIL_CATCHALL"
 	end
 
 	if (flags & get_mask({"RESERVED", "UNIMPL"})) == 0 and sysnum == nil then
