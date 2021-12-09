@@ -184,6 +184,8 @@ sockaf unix
 
 [_fdpass : _unix]
 ability sendfd recvfd
+[_fdpassdir : _fdpass]
+ability passdir
 
 [_setcred]
 ability cred any_cred

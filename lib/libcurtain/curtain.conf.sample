@@ -83,6 +83,7 @@ sysctl kern.devname
 sysctl dev.drm
 sysctl hw.dri
 merge _fdpass
+~/.drirc
 [_drm_full : _drm_base]
 ability! any_ioctl # XXX
 [_drm_render]
@@ -96,6 +97,18 @@ ability! any_ioctl # XXX
 merge _xdg
 # Seems like GTK-2 also will use this file.
 ~/.config/gtk-3.0/bookmarks
+
+[_memstat]
+sysctl hw.physmem
+sysctl vm.stats.vm.v_page_size
+sysctl vm.stats.vm.v_page_count
+sysctl vm.stats.vm.v_wire_count
+sysctl vm.stats.vm.v_active_count
+sysctl vm.stats.vm.v_inactive_count
+sysctl vm.stats.vm.v_laundry_count
+sysctl vm.stats.vm.v_cache_count
+sysctl vm.stats.vm.v_free_count
+sysctl kstat.zfs.misc.arcstats.size
 
 
 [_shell]
@@ -231,6 +244,7 @@ merge _crude _gtk
 
 [gimp : _editor]
 merge _crude _proc _cmds _gtk
+merge! _memstat
 ability sysvipc
 /usr/local/etc/gimp/			: r
 ~/.config/GIMP/				: rw +
@@ -306,6 +320,7 @@ merge _basic
 # Run with GDK_BACKEND=wayland for -W.  When giving it DRM access, it sometimes
 # doesn't activate until the second start.
 merge _basic _fdpass _gtk
+merge! _memstat
 ability posixipc prot_exec
 ~/.mozilla/firefox/installs.ini
 ~/.mozilla/firefox/profiles.ini
@@ -338,7 +353,8 @@ ability posixipc prot_exec
 # NOTE: When running chromium as an "untrusted" X11 client (curtain -X), the
 # setting "Use system title bar and borders" in the "Appearance" section must
 # be enabled.
-merge _basic _fdpass _gtk
+merge _basic _fdpassdir _gtk
+merge! _memstat
 ability posixipc prot_exec sendfile
 ~/.config/chromium/			: rw +
 ~/.cache/chromium/			: rw +
@@ -351,6 +367,7 @@ ability posixipc prot_exec
 
 [_webkit]
 merge _fdpass
+merge! _memstat
 ability prot_exec
 
 [falkon : _browser]
@@ -430,10 +447,9 @@ merge! _pwddb
 #
 # 5) Games most likely will need "trusted" X11 access and DRM access.
 merge _basic
-merge _fdpass
+merge _fdpassdir
 merge _compat32
 merge _audio
-ability passdir
 ability prot_exec
 /tmp/.wine-%u/ : rwu 0700
 /proc/ : r
@@ -492,6 +508,7 @@ merge _login
 merge _syslog
 merge _shared_tmpdir # mail.local(8) uses /tmp directly
 merge _setcred
+sysctl vm.loadavg
 /etc/mail/
 /etc/aliases
 /var/run/sendmail.pid : rw
