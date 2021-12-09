@@ -878,16 +878,22 @@ curtain_equivalent(const struct curtain *ct0, const struct curtain *ct1)
 void
 curtain_cache_update(struct curtain *ct)
 {
+	sysfilset_t handled_sfs;
+
 	ct->ct_cached.restrictive = curtain_restrictive(ct);
 
 	for (unsigned i = 0; i < SYSFILSET_BITS; i++)
-		ct->ct_cached.sysfilacts[i] = CURTAINACT_KILL;
+		ct->ct_cached.sysfilacts[i] = ct->ct_abilities[CURTAINABL_DEFAULT].soft;
+	handled_sfs = SYSFIL_NONE;
 	for (enum curtain_ability abl = 0; abl < nitems(curtain_abilities_sysfils); abl++) {
 		sysfilset_t sfs = curtain_abilities_sysfils[abl];
 		while (sfs) {
 			unsigned i = ffsll(sfs) - 1;
-			ct->ct_cached.sysfilacts[i] = MIN(ct->ct_cached.sysfilacts[i],
+			ct->ct_cached.sysfilacts[i] = MIN(
+			    handled_sfs & SYSFIL_INDEX(i) ? ct->ct_cached.sysfilacts[i]
+			                                  : CURTAINACT_KILL,
 			    ct->ct_abilities[abl].soft);
+			handled_sfs |= SYSFIL_INDEX(i);
 			sfs ^= SYSFIL_INDEX(i);
 		}
 	}
@@ -1027,7 +1033,8 @@ curtain_to_sysfils(const struct curtain *ct, const struct ucred *cr)
 {
 	sysfilset_t sysfils;
 	MPASS(ct->ct_cached.valid);
-	sysfils = (cr->cr_sysfilset & curtain_preserve_sysfils) | ct->ct_cached.sysfilset;
+	sysfils = (cr->cr_sysfilset & curtain_preserve_sysfils) |
+	    (ct->ct_cached.sysfilset & ~curtain_preserve_sysfils);
 	MPASS(SYSFILSET_IS_RESTRICTED(sysfils) ==
 	    SYSFILSET_IS_RESTRICTED(cr->cr_sysfilset | ~curtain_preserve_sysfils) ||
 	    ct->ct_cached.restrictive);

@@ -884,7 +884,7 @@ sys_procctl(struct thread *td, struct procctl_args *uap)
 		error = sysfil_check(td, SYSFIL_REAP);
 		break;
 	default:
-		error = sysfil_check(td, SYSFIL_DEFAULT);
+		error = sysfil_check(td, SYSFIL_FULL);
 		break;
 	}
 	if (error)

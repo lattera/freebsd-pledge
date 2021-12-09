@@ -492,6 +492,13 @@ mac_sysfil_check(struct ucred *cred, sysfilset_t sfs)
 
 	MAC_POLICY_CHECK_NOSLEEP(sysfil_check, cred, sfs);
 
+	/*
+	 * Individual modules only need to check the sysfils that they know
+	 * about. The ucred's sysfils are checked by sysfil_cred_check(), but
+	 * check it here too incase mac_sysfil_check() is called directly.
+	 */
+	error = mac_error_select(error, sysfil_probe_cred(cred, sfs));
+
 	return (error);
 }
 
