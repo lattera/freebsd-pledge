@@ -594,19 +594,6 @@ do_promises_slots(enum curtain_on on, struct promise_mode modes[])
 		 */
 		curtain_ability(always_slot, CURTAINABL_CURTAIN, flags);
 		/*
-		 * Always keep the root directory chdir()-able (but not
-		 * necessarily stat()-able or readable).  This is sufficient to
-		 * let child processes do their own unveils on it (which is
-		 * necessary to set new permissions that will inherit to all
-		 * reachable paths).
-		 *
-		 * In addition, it lets all programs do a chdir("/").  Which is
-		 * something that a lot of daemon programs do and they might
-		 * not expect the call to fail (which could lead to security
-		 * issues if the program isn't in the directory that it expects).
-		 */
-		curtain_unveil(always_slot, root_path, flags, UPERM_SEARCH);
-		/*
 		 * Don't signal when trying to use forbidden sysctls.  This
 		 * happens too much.
 		 */
@@ -640,7 +627,6 @@ do_pledge(struct promise_mode *modes_on[CURTAIN_ON_COUNT])
 			    has_customs_on[on] ? CURTAIN_RESERVED : CURTAIN_ENABLED);
 		}
 		if (root_slot_on[on])
-			/* XXX problem when / isn't inspectable */
 			curtain_unveil(root_slot_on[on], root_path, 0, wanted_uperms);
 	}
 	return (curtain_apply());

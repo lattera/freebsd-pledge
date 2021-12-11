@@ -1033,6 +1033,8 @@ unveil_path_1(struct curtain_node **trail, bool nofollow, bool last,
 	return (0);
 }
 
+static const unveil_perms curtain_preserve_uperms = UPERM_TRAVERSE;
+
 int
 curtain_unveil_multi(struct curtain_slot **slots, size_t nslots,
     const char *path, unsigned flags,
@@ -1079,7 +1081,8 @@ curtain_unveil_multi(struct curtain_slot **slots, size_t nslots,
 			if (!item)
 				return (-1);
 			item_set_flags(item, flags);
-			item->mode.uperms = uperms;
+			item->mode.uperms &= curtain_preserve_uperms;
+			item->mode.uperms |= uperms;
 		}
 		while ((trail = trail->key.unveil.chain)) {
 			for (size_t i = 0; i < nslots; i++) {
@@ -1113,7 +1116,7 @@ int
 curtain_unveils_limit(struct curtain_slot *slot, unveil_perms uperms)
 {
 	struct curtain_item *item;
-	uperms = uperms_expand(uperms | UPERM_TRAVERSE);
+	uperms = uperms_expand(uperms | curtain_preserve_uperms);
 	for (item = slot->items; item; item = item->slot_next)
 		if (item->node->type == &unveils_type)
 			item->mode.uperms &= uperms;
