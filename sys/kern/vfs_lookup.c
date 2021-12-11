@@ -328,8 +328,7 @@ namei_setup(struct nameidata *ndp, struct vnode **dpp, struct pwd **pwdp)
 #endif
 #ifdef MAC
 	if ((cnp->cn_flags & NOMACCHECK) == 0 &&
-	    ((cnp->cn_flags & FORCEMACWALK) != 0 ||
-	     CRED_IN_VFS_VEILED_MODE(cnp->cn_cred)))
+	    CRED_IN_VFS_VEILED_MODE(cnp->cn_cred))
 		ndp->ni_lcf |= NI_LCF_MACWALK_ACTIVE;
 #endif
 
@@ -1221,13 +1220,7 @@ unionlookup:
 			goto good;
 		}
 
-		if (error != EJUSTRETURN
-#ifdef MAC
-		    && !(error == ENOENT &&
-		    (cnp->cn_flags & (ISLASTCN | FORCEMACWALK)) ==
-		    (ISLASTCN | FORCEMACWALK))
-#endif
-		    )
+		if (error != EJUSTRETURN)
 			goto bad;
 		/*
 		 * At this point, we know we're at the end of the
