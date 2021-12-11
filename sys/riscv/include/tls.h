@@ -1,10 +1,15 @@
 /*-
- * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ * Copyright (c) 2005 David Xu <davidxu@freebsd.org>
+ * Copyright (c) 2015 Ruslan Bukin <br@bsdpad.com>
+ * All rights reserved.
  *
- * Copyright (c) 2021 The FreeBSD Foundation
+ * Portions of this software were developed by SRI International and the
+ * University of Cambridge Computer Laboratory under DARPA/AFRL contract
+ * FA8750-10-C-0237 ("CTSRD"), as part of the DARPA CRASH research programme.
  *
- * This software were developed by Konstantin Belousov
- * under sponsorship from the FreeBSD Foundation.
+ * Portions of this software were developed by the University of Cambridge
+ * Computer Laboratory as part of the CTSRD Project, with support from the
+ * UK Higher Education Innovation Fund (HEIF).
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,20 +33,28 @@
  * SUCH DAMAGE.
  */
 
-#include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
+#ifndef _MACHINE_TLS_H_
+#define	_MACHINE_TLS_H_
 
-#include <sys/types.h>
-#include <string.h>
-#include <stdint.h>
-#include "libc_private.h"
-#include "rtld.h"
+#include <sys/_tls_variant_i.h>
 
-void *
-_get_tp(void)
+#define	TLS_DTV_OFFSET	0x800
+#define	TLS_TCB_ALIGN	16
+#define	TLS_TP_OFFSET	0
+
+static __inline void
+_tcb_set(struct tcb *tcb)
 {
-	Elf_Addr tp;
-
-	__asm __volatile("mv %0, tp" : "=r" (tp));
-	return ((void *)(tp - TLS_TP_OFFSET - TLS_TCB_SIZE));
+	__asm __volatile("addi tp, %0, %1" :: "r" (tcb), "I" (TLS_TCB_SIZE));
 }
+
+static __inline struct tcb *
+_tcb_get(void)
+{
+	struct tcb *tcb;
+
+	__asm __volatile("addi %0, tp, %1" : "=r" (tcb) : "I" (-TLS_TCB_SIZE));
+	return (tcb);
+}
+
+#endif /* !_MACHINE_TLS_H_ */
