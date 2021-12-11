@@ -98,19 +98,19 @@ check_accessat(int atfd, const char *path, const char *flags)
 	     x, /* executable (for regular files) */
 	     d, /* is a directory */
 	     p, /* may have extra permissions */
-	     a; /* fail with EPERM instead of EACCES */
+	     a; /* fail with EACCES instead of ENOENT */
 	e = s = i = r = w = x = d = p = a = false;
 	for (const char *ptr = flags; *ptr; ptr++)
 		switch (*ptr) {
-		case 's':         s     = true; break;
-		case 'e':         s = e = true; break;
-		case 'i':     i = s = e = true; break;
-		case 'r': r = i = s = e = true; break;
-		case 'w': w =     s = e = true; break;
-		case 'x': x =     s = e = true; break;
-		case 'd': d =             true; break;
-		case '+': p =             true; break;
-		case '*': a =             true; break;
+		case 's':         s         = true; break;
+		case 'e':         s = e = a = true; break;
+		case 'i':     i = s = e = a = true; break;
+		case 'r': r = i = s = e = a = true; break;
+		case 'w': w =     s = e = a = true; break;
+		case 'x': x =     s = e = a = true; break;
+		case 'd': d =                 true; break;
+		case '+': p =                 true; break;
+		case '*':                 a = true; break;
 		default: assert(0); break;
 		}
 	if ((is_root = atfd == AT_FDCWD && path && strcmp(path, "/") == 0))
@@ -120,16 +120,10 @@ check_accessat(int atfd, const char *path, const char *flags)
 		 * deny errno is still ENOENT as if the path was not unveiled.
 		 */
 		s = true;
-	if (a)
-		/*
-		 * The sysfil-level restrictions only allow chdir()/O_SEARCH
-		 * when reading is allowed.
-		 */
-		s = i;
 
 	warnx("%s: %i:\"%s\" %s", __FUNCTION__, atfd, path ? path : "", flags);
 
-	int expected_errno = a ? EPERM : e ? EACCES : ENOENT;
+	int expected_errno = a ? EACCES : ENOENT;
 
 	if (i)
 		ATF_CHECK(try_statat(atfd, path) >= 0);

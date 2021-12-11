@@ -633,6 +633,72 @@ ATF_TC_BODY(open_o_path, tc)
 	ATF_CHECK(close(fd) >= 0);
 }
 
+static void
+openat_before_unveil(bool list)
+{
+	int fda, fdc;
+	ATF_REQUIRE(try_mkdir("a") >= 0);
+	ATF_REQUIRE(try_mkdir("a/b") >= 0);
+	ATF_REQUIRE(try_mkdir("a/b/c") >= 0);
+	ATF_REQUIRE(try_mkdir("a/b/c/d") >= 0);
+	ATF_REQUIRE(try_creat("a/0") >= 0);
+	ATF_REQUIRE(try_creat("a/b/1") >= 0);
+	ATF_REQUIRE(try_creat("a/b/c/2") >= 0);
+	ATF_REQUIRE(try_creat("a/b/c/d/3") >= 0);
+	ATF_CHECK((fda = open("a", O_RDONLY|O_DIRECTORY)) >= 0);
+	ATF_CHECK((fdc = open("a/b/c", O_RDONLY|O_DIRECTORY)) >= 0);
+	ATF_REQUIRE(unveil("a/b", list ? "li" : "r") >= 0);
+	check_accessat(fda, NULL, "dr");
+	check_accessat(fda, ".", "");
+	check_accessat(fda, "..", "");
+	check_accessat(fda, "../a", "");
+	check_accessat(fda, "../a/0", "");
+	check_accessat(fda, "0", "");
+	check_accessat(fda, "b", "dr");
+	check_accessat(fdc, NULL, "dr");
+	check_accessat(fdc, ".", list ? "" : "dr");
+	check_accessat(fdc, "..", list ? "" : "dr");
+	check_accessat(fdc, "../1", list ? "" : "r");
+	check_accessat(fdc, "../c", list ? "" : "dr");
+	check_accessat(fdc, "2", list ? "" : "r");
+	check_accessat(fdc, "d", list ? "" : "dr");
+	check_accessat(fdc, "d/3", list ? "" : "r");
+	check_accessat(fdc, "../..", "");
+	check_accessat(fdc, "../../0", "");
+	ATF_CHECK(close(fda) >= 0);
+	ATF_CHECK(close(fdc) >= 0);
+}
+
+#define TEST_CASE_EXPR(name, expr) ATF_TC_WITHOUT_HEAD(name); ATF_TC_BODY(name, tc) { expr; }
+
+TEST_CASE_EXPR(openat_before_unveil_with_read, openat_before_unveil(false))
+TEST_CASE_EXPR(openat_before_unveil_with_list, openat_before_unveil(true))
+
+ATF_TC(openat_cutoff);
+ATF_TC_HEAD(openat_cutoff, tc)
+{
+	atf_tc_set_md_var(tc, "require.user", "unprivileged");
+}
+ATF_TC_BODY(openat_cutoff, tc)
+{
+	/*
+	 * What happens if we cutoff access to parent directories such that the
+	 * covering unveils cannot be found for a pre-opened directory FD?
+	 */
+	int fd;
+	ATF_REQUIRE(try_mkdir("a") >= 0);
+	ATF_REQUIRE(try_mkdir("a/b") >= 0);
+	ATF_REQUIRE(try_mkdir("a/b/c") >= 0);
+	ATF_REQUIRE(try_creat("a/b/c/f") >= 0);
+	ATF_CHECK((fd = open("a/b/c", O_RDONLY|O_DIRECTORY)) >= 0);
+	ATF_REQUIRE(unveil("a", "a") >= 0);
+	ATF_REQUIRE(chmod("a/b", 0) >= 0);
+	check_accessat(fd, NULL, "dr");
+	check_accessat(fd, ".", "*");
+	check_accessat(fd, "f", "*");
+	ATF_CHECK(chmod("a/b", 0755) >= 0); /* allow cleanup */
+	ATF_CHECK(close(fd) >= 0);
+}
 
 ATF_TP_ADD_TCS(tp)
 {
@@ -670,5 +736,8 @@ ATF_TP_ADD_TCS(tp)
 	ATF_TP_ADD_TC(tp, linkat_both_fds);
 	ATF_TP_ADD_TC(tp, renameat_both_fds);
 	ATF_TP_ADD_TC(tp, open_o_path);
+	ATF_TP_ADD_TC(tp, openat_before_unveil_with_read);
+	ATF_TP_ADD_TC(tp, openat_before_unveil_with_list);
+	ATF_TP_ADD_TC(tp, openat_cutoff);
 	return (atf_no_error());
 }
