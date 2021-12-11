@@ -1369,7 +1369,7 @@ curtain_submit_1(int flags, bool neutral_on[CURTAIN_ON_COUNT], enum curtain_stat
 }
 
 static int
-curtain_submit(bool enforce)
+curtain_submit(bool soft)
 {
 	bool neutral_on[CURTAIN_ON_COUNT], has_reserve;
 	int r, flags;
@@ -1391,18 +1391,15 @@ curtain_submit(bool enforce)
 			break;
 	}
 
-	if (DEBUG_ENV("LIBCURTAIN_DEBUG_DUMMY")) {
-		flags = 0;
+	flags = DEBUG_ENV("LIBCURTAIN_DEBUG_DUMMY") ? 0 : CURTAINCTL_REPLACE;
+	if (soft) {
+		flags |= CURTAINCTL_SOFT;
 	} else {
-		flags = CURTAINCTL_ENGAGE;
-		if (enforce) {
-			int flags1 = flags | CURTAINCTL_ENFORCE;
-			if (has_reserve) {
-				r = curtain_submit_1(flags1, neutral_on, CURTAIN_RESERVED);
-				if (r < 0 && errno != ENOSYS)
-					err(EX_OSERR, "curtainctl");
-			} else
-				flags = flags1;
+		if (has_reserve) {
+			r = curtain_submit_1(flags, neutral_on, CURTAIN_RESERVED);
+			if (r < 0 && errno != ENOSYS)
+				err(EX_OSERR, "curtainctl");
+			flags |= CURTAINCTL_SOFT;
 		}
 	}
 	r = curtain_submit_1(flags, neutral_on, CURTAIN_ENABLED);
@@ -1412,7 +1409,7 @@ curtain_submit(bool enforce)
 }
 
 int
-curtain_engage(void) { return (curtain_submit(false)); }
+curtain_apply_soft(void) { return (curtain_submit(true)); }
 
 int
-curtain_enforce(void) { return (curtain_submit(true)); }
+curtain_apply(void) { return (curtain_submit(false)); }

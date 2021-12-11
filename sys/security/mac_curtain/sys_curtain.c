@@ -580,7 +580,7 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 		old_cr = crcopysafe(p, new_cr);
 		crhold(old_cr);
 		PROC_UNLOCK(p);
-		error = update_ucred_curtain(new_cr, ct, flags & CURTAINCTL_ENFORCE);
+		error = update_ucred_curtain(new_cr, ct, !(flags & CURTAINCTL_SOFT));
 		if (error) {
 			crfree(old_cr);
 			crfree(new_cr);
@@ -599,7 +599,7 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 		crfree(new_cr);
 	} while (true);
 
-	if (flags & (CURTAINCTL_ENFORCE | CURTAINCTL_ENGAGE)) {
+	if (flags & CURTAINCTL_REPLACE) {
 		proc_set_cred(p, new_cr);
 		if (CRED_IN_RESTRICTED_MODE(new_cr) != PROC_IN_RESTRICTED_MODE(p))
 			panic("PROC_IN_RESTRICTED_MODE() bogus");

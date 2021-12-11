@@ -586,9 +586,9 @@ main(int argc, char *argv[])
 
 	curtain_config_load(cfg);
 
-	r = unenforced ? curtain_engage() : curtain_enforce();
+	r = unenforced ? curtain_apply_soft() : curtain_apply();
 	if (r < 0)
-		err(EX_NOPERM, "curtain_enforce");
+		err(EX_NOPERM, "curtain_apply");
 
 
 	pw = NULL;

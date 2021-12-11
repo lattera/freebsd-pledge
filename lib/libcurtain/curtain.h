@@ -42,8 +42,8 @@ void curtain_enable(struct curtain_slot *, enum curtain_on);
 void curtain_disable(struct curtain_slot *, enum curtain_on);
 void curtain_state(struct curtain_slot *, enum curtain_on, enum curtain_state);
 void curtain_drop(struct curtain_slot *);
-int curtain_engage(void);
-int curtain_enforce(void);
+int curtain_apply_soft(void);
+int curtain_apply(void);
 
 int curtain_default(struct curtain_slot *slot, unsigned flags);
 int curtain_ability(struct curtain_slot *, enum curtain_ability ability, int flags);
@@ -62,7 +62,6 @@ int curtain_unveil_multi(struct curtain_slot **, size_t nslots,
     const char *path, unsigned flags,
     unveil_perms *interm_uperms, unveil_perms *final_uperms);
 int curtain_unveils_limit(struct curtain_slot *, unveil_perms final_uperms);
-int curtain_unveils_reset_all(void);
 
 
 extern const unsigned long curtain_ioctls_tty_basic[];

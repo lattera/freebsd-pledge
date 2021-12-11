@@ -16,7 +16,7 @@ ATF_TC_BODY(ability_level_pass, tc)
 	curtain_ability(slot, CURTAINABL_STDIO, CURTAIN_PASS);
 	curtain_ability(slot, CURTAINABL_FLOCK, CURTAIN_PASS);
 	ATF_REQUIRE((fd = creat("test", 0666)) >= 0);
-	ATF_REQUIRE(curtain_enforce() >= 0);
+	ATF_REQUIRE(curtain_apply() >= 0);
 	ATF_CHECK(flock(fd, LOCK_EX) >= 0);
 }
 
@@ -29,7 +29,7 @@ ATF_TC_BODY(ability_level_deny, tc)
 	curtain_ability(slot, CURTAINABL_STDIO, CURTAIN_PASS);
 	curtain_ability(slot, CURTAINABL_FLOCK, CURTAIN_DENY);
 	ATF_REQUIRE((fd = creat("test", 0666)) >= 0);
-	ATF_REQUIRE(curtain_enforce() >= 0);
+	ATF_REQUIRE(curtain_apply() >= 0);
 	ATF_CHECK_ERRNO(EPERM, flock(fd, LOCK_EX) < 0);
 }
 
@@ -43,7 +43,7 @@ ATF_TC_BODY(ability_level_trap, tc)
 	curtain_ability(slot, CURTAINABL_FLOCK, CURTAIN_TRAP);
 	ATF_REQUIRE((fd = creat("test", 0666)) >= 0);
 	atf_tc_expect_signal(SIGTRAP, "CURTAIN_TRAP");
-	ATF_REQUIRE(curtain_enforce() >= 0);
+	ATF_REQUIRE(curtain_apply() >= 0);
 	ATF_CHECK_ERRNO(EPERM, flock(fd, LOCK_EX) < 0);
 }
 
@@ -57,7 +57,7 @@ ATF_TC_BODY(ability_level_kill, tc)
 	curtain_ability(slot, CURTAINABL_FLOCK, CURTAIN_KILL);
 	ATF_REQUIRE((fd = creat("test", 0666)) >= 0);
 	atf_tc_expect_signal(SIGKILL, "CURTAIN_KILL");
-	ATF_REQUIRE(curtain_enforce() >= 0);
+	ATF_REQUIRE(curtain_apply() >= 0);
 	ATF_CHECK_ERRNO(EPERM, flock(fd, LOCK_EX) < 0);
 }
 
@@ -75,10 +75,10 @@ ATF_TC_BODY(ability_raise_allow, tc)
 	curtain_ability(slot0, CURTAINABL_CURTAIN, CURTAIN_PASS);
 	curtain_state(slot1, CURTAIN_ON_SELF, CURTAIN_RESERVED);
 	curtain_ability(slot1, CURTAINABL_FLOCK, CURTAIN_PASS);
-	ATF_REQUIRE(curtain_enforce() >= 0);
+	ATF_REQUIRE(curtain_apply() >= 0);
 	ATF_CHECK_ERRNO(EPERM, flock(fd, LOCK_EX) < 0);
 	curtain_state(slot1, CURTAIN_ON_SELF, CURTAIN_ENABLED);
-	ATF_REQUIRE(curtain_enforce() >= 0);
+	ATF_REQUIRE(curtain_apply() >= 0);
 	ATF_CHECK(flock(fd, LOCK_EX) >= 0);
 }
 
@@ -95,10 +95,10 @@ ATF_TC_BODY(ability_raise_block, tc)
 	curtain_ability(slot0, CURTAINABL_STDIO, CURTAIN_PASS);
 	curtain_ability(slot0, CURTAINABL_CURTAIN, CURTAIN_PASS);
 	curtain_ability(slot1, CURTAINABL_FLOCK, CURTAIN_PASS);
-	ATF_REQUIRE(curtain_enforce() >= 0);
+	ATF_REQUIRE(curtain_apply() >= 0);
 	ATF_CHECK_ERRNO(EPERM, flock(fd, LOCK_EX) < 0);
 	curtain_state(slot1, CURTAIN_ON_SELF, CURTAIN_ENABLED);
-	ATF_REQUIRE(curtain_enforce() >= 0);
+	ATF_REQUIRE(curtain_apply() >= 0);
 	ATF_CHECK_ERRNO(EPERM, flock(fd, LOCK_EX) < 0);
 }
 
@@ -117,11 +117,11 @@ ATF_TC_BODY(unrestrict_unveils, tc)
 	curtain_default(slot1, CURTAIN_DENY);
 	curtain_ability(slot1, CURTAINABL_STDIO, CURTAIN_PASS);
 	curtain_ability(slot1, CURTAINABL_CURTAIN, CURTAIN_PASS);
-	ATF_REQUIRE(curtain_enforce() >= 0);
+	ATF_REQUIRE(curtain_apply() >= 0);
 	ATF_CHECK_ERRNO(EPERM, access("/etc/rc", R_OK) < 0);
 	curtain_state(slot0, CURTAIN_ON_SELF, CURTAIN_ENABLED);
 	curtain_state(slot0, CURTAIN_ON_EXEC, CURTAIN_ENABLED);
-	ATF_REQUIRE(curtain_enforce() >= 0);
+	ATF_REQUIRE(curtain_apply() >= 0);
 	ATF_CHECK(access("/etc/rc", R_OK) >= 0);
 }
 

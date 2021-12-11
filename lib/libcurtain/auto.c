@@ -45,7 +45,7 @@ auto_curtain_setup_1(const char *name, char *buf)
 	}
 	curtain_config_load(cfg);
 	curtain_config_free(cfg);
-	curtain_enforce();
+	curtain_apply();
 }
 
 static void

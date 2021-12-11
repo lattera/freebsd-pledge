@@ -20,7 +20,7 @@ ATF_TC_BODY(curtainctl_sanity, tc)
 			.size = sizeof abilities,
 		}
 	};
-	int flags = CURTAINCTL_THIS_VERSION | CURTAINCTL_ENFORCE;
+	int flags = CURTAINCTL_THIS_VERSION | CURTAINCTL_REPLACE;
 	ATF_REQUIRE(curtainctl(flags, nitems(reqs), reqs) >= 0);
 	ATF_CHECK(write(STDOUT_FILENO, "Hello?", 6) == 6);
 }
@@ -30,7 +30,7 @@ ATF_TC_BODY(curtainctl_overflow_reqs, tc)
 {
 	enum curtain_ability abilities[] = { CURTAINABL_STDIO };
 	struct curtainreq reqs[CURTAINCTL_MAX_REQS + 1];
-	int flags = CURTAINCTL_THIS_VERSION | CURTAINCTL_ENFORCE;
+	int flags = CURTAINCTL_THIS_VERSION | CURTAINCTL_REPLACE;
 	for (size_t i = 0; i < nitems(reqs); i++)
 		reqs[i] = (struct curtainreq){
 			.type = CURTAINTYP_ABILITY,
@@ -46,7 +46,7 @@ ATF_TC_BODY(curtainctl_overflow_size, tc)
 {
 	enum curtain_ability abilities[CURTAINCTL_MAX_SIZE / sizeof (int) / 8];
 	struct curtainreq reqs[32];
-	int flags = CURTAINCTL_THIS_VERSION | CURTAINCTL_ENFORCE;
+	int flags = CURTAINCTL_THIS_VERSION | CURTAINCTL_REPLACE;
 	for (size_t i = 0; i < nitems(abilities); i++)
 		abilities[i] = CURTAINABL_STDIO;
 	for (size_t i = 0; i < nitems(reqs); i++)
@@ -78,7 +78,7 @@ ATF_TC_BODY(curtainctl_overflow_items, tc)
 			.size = sizeof ioctls,
 		},
 	};
-	int flags = CURTAINCTL_THIS_VERSION | CURTAINCTL_ENFORCE;
+	int flags = CURTAINCTL_THIS_VERSION | CURTAINCTL_REPLACE;
 	for (size_t i = 0; i < nitems(ioctls); i++)
 		ioctls[i] = 1 + i;
 	ATF_CHECK_ERRNO(E2BIG, curtainctl(flags, nitems(reqs), reqs) < 0);

@@ -643,7 +643,7 @@ do_pledge(struct promise_mode *modes_on[CURTAIN_ON_COUNT])
 			/* XXX problem when / isn't inspectable */
 			curtain_unveil(root_slot_on[on], root_path, 0, wanted_uperms);
 	}
-	return (curtain_enforce());
+	return (curtain_apply());
 }
 
 int
@@ -729,7 +729,7 @@ do_unveil(bool *do_on, const char *path, unveil_perms uperms)
 			custom_slot_on[on] = curtain_slot_neutral();
 
 	if (!path) /* unveil(NULL, NULL) */
-		return (curtain_enforce());
+		return (curtain_apply());
 
 	/*
 	 * Temporarily enable hard permissions to search directories so that
@@ -737,7 +737,7 @@ do_unveil(bool *do_on, const char *path, unveil_perms uperms)
 	 */
 	if ((unveil_traverse = has_customs_on[CURTAIN_ON_SELF])) {
 		curtain_state(unveil_traverse_slot, CURTAIN_ON_SELF, CURTAIN_ENABLED);
-		curtain_engage();
+		curtain_apply_soft();
 	}
 
 	nslot = 0;
@@ -754,11 +754,11 @@ do_unveil(bool *do_on, const char *path, unveil_perms uperms)
 		curtain_state(unveil_traverse_slot, CURTAIN_ON_SELF, CURTAIN_NEUTRAL);
 	if (r < 0) {
 		if (unveil_traverse)
-			curtain_engage();
+			curtain_apply_soft();
 		return (r);
 	}
 
-	return (curtain_engage());
+	return (curtain_apply_soft());
 }
 
 static int
