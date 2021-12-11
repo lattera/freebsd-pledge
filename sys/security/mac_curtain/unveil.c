@@ -87,14 +87,16 @@ static unveil_perms
 unveil_fflags_uperms(enum vtype type, int fflags)
 {
 	unveil_perms uperms = UPERM_NONE;
-	if (fflags & FREAD)
-		uperms |= UPERM_READ;
-	if (fflags & FWRITE)
-		uperms |= UPERM_WRITE | UPERM_SETATTR;
 	if (type == VDIR) {
 		if (fflags & FSEARCH)
-			uperms |= UPERM_SEARCH;
+			uperms |= UPERM_INSPECT;
+		if (fflags & FREAD)
+			uperms |= UPERM_LIST | UPERM_INSPECT;
 	} else {
+		if (fflags & FREAD)
+			uperms |= UPERM_READ;
+		if (fflags & FWRITE)
+			uperms |= UPERM_WRITE | UPERM_SETATTR;
 		if (fflags & FEXEC)
 			uperms |= UPERM_EXECUTE;
 	}
