@@ -4,6 +4,7 @@
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <paths.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -12,6 +13,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/unveil.h>
+#include <sys/param.h>
 #include <sysexits.h>
 #include <unistd.h>
 

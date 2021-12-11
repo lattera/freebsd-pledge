@@ -1,6 +1,3 @@
-#include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
-
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/types.h>
@@ -14,7 +11,10 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysproto.h>
 #include <sys/ucred.h>
 #include <sys/vnode.h>
+#include <sys/file.h>
+#include <sys/fcntl.h>
 #include <sys/mount.h>
+#include <sys/namei.h>
 #include <sys/dirent.h>
 #include <sys/sysctl.h>
 #include <sys/mutex.h>
@@ -24,7 +24,8 @@ __FBSDID("$FreeBSD$");
 #include <sys/syscall.h>
 #include <sys/fnv_hash.h>
 #include <sys/unveil.h>
-#include <sys/curtain.h>
+
+#include <security/mac_curtain/curtain_int.h>
 
 static MALLOC_DEFINE(M_UNVEIL_CACHE, "unveil cache", "mac_curtain per-procecess unveil caches");
 static MALLOC_DEFINE(M_UNVEIL_TRACK, "unveil track", "mac_curtain per-thread unveil trackers");

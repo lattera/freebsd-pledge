@@ -3,7 +3,7 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <errno.h>
-#include <sys/curtain.h>
+#include <sys/curtainctl.h>
 #include <sys/unveil.h>
 #include <sys/param.h>
 #include <atf-c.h>

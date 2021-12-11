@@ -9,6 +9,7 @@
 #include <sys/ucred.h>
 #include <sys/lock.h>
 #include <sys/mutex.h>
+#include <sys/limits.h>
 #include <security/mac/mac_framework.h>
 #endif
 

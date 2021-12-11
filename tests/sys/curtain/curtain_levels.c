@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <termios.h>
+#include <sys/param.h>
 #include <sys/ttycom.h>
 #include <atf-c.h>
 #include <curtain.h>

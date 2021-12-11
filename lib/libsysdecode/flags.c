@@ -70,7 +70,7 @@ __FBSDID("$FreeBSD$");
 #include <netgraph/bluetooth/include/ng_hci.h>
 #include <netgraph/bluetooth/include/ng_l2cap.h>
 #include <netgraph/bluetooth/include/ng_btsocket.h>
-#include <sys/curtain.h>
+#include <sys/curtainctl.h>
 
 /*
  * This is taken from the xlat tables originally in truss which were

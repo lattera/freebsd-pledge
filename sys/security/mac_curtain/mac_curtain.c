@@ -1,6 +1,3 @@
-#include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
-
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/sysproto.h>
@@ -24,11 +21,11 @@ __FBSDID("$FreeBSD$");
 #include <sys/stat.h>
 #include <sys/conf.h>
 #include <sys/vnode.h>
+#include <sys/file.h>
 #include <sys/mount.h>
 
+#include <security/mac_curtain/curtain_int.h>
 #include <security/mac/mac_policy.h>
-#include <sys/unveil.h>
-#include <sys/curtain.h>
 
 #include <sys/imgact.h>
 #include <sys/socket.h>

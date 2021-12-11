@@ -4,7 +4,7 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/curtain.h>
+#include <sys/curtainctl.h>
 #include <sys/param.h>
 #include <sys/queue.h>
 #include <sys/sysctl.h>

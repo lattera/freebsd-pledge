@@ -1,6 +1,3 @@
-#include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
-
 #include "opt_ddb.h"
 
 #include <sys/param.h>
@@ -17,14 +14,17 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysent.h>
 #include <sys/syscall.h>
 #include <sys/conf.h>
+#include <sys/filedesc.h>
+#include <sys/file.h>
 #include <sys/fnv_hash.h>
 #ifdef DDB
+#include <sys/vnode.h>
 #include <ddb/ddb.h>
 #endif
 
+#include <security/mac_curtain/curtain_int.h>
 #include <security/mac/mac_policy.h>
 #include <sys/unveil.h>
-#include <sys/curtain.h>
 
 SDT_PROVIDER_DEFINE(curtain);
 SDT_PROBE_DEFINE2(curtain,, curtain_fill, begin,

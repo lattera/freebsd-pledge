@@ -1,16 +1,16 @@
-#include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
-
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/malloc.h>
 #include <sys/kernel.h>
+#include <sys/refcount.h>
 #include <sys/ucred.h>
 #include <sys/counter.h>
 #include <sys/rwlock.h>
+#include <sys/vnode.h>
 #include <sys/sysfil.h>
 #include <sys/conf.h>
-#include <sys/curtain.h>
+
+#include <security/mac_curtain/curtain_int.h>
 
 static MALLOC_DEFINE(M_CURTAIN, "curtain", "mac_curtain curtains");
 static MALLOC_DEFINE(M_BARRIER, "curtain barrier", "mac_curtain barriers");

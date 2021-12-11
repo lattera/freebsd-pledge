@@ -65,7 +65,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/namei.h>
 #include <sys/sysctl.h>
 #include <sys/sysfil.h>
-#include <sys/curtain.h>
 
 #include <vm/vm.h>
 #include <vm/pmap.h>
