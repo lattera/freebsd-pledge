@@ -154,7 +154,8 @@ static const int abilities_expand[][2] = {
 	{ CURTAINABL_VFS_CREATE,	CURTAINABL_VFS_MISC		},
 	{ CURTAINABL_VFS_DELETE,	CURTAINABL_VFS_MISC		},
 	{ CURTAINABL_FATTR,		CURTAINABL_VFS_MISC		},
-	{ CURTAINABL_PROT_EXEC,		CURTAINABL_PROT_EXEC_LOOSE	},
+	{ CURTAINABL_PROT_EXEC,		CURTAINABL_PROT_EXEC_LOOSER	},
+	{ CURTAINABL_PROT_EXEC_LOOSER,	CURTAINABL_PROT_EXEC_LOOSE	},
 	{ CURTAINABL_VFS_SOCK,		CURTAINABL_VFS_BIND		},
 	{ CURTAINABL_VFS_SOCK,		CURTAINABL_VFS_CONNECT		},
 	{ CURTAINABL_VFS_BIND,		CURTAINABL_SOCK			},
@@ -169,9 +170,7 @@ static const int abilities_expand[][2] = {
 static void
 curtain_fill_expand(struct curtain *ct)
 {
-	struct curtain *ct1;
 	bool propagate;
-
 	do {
 		propagate = false;
 		for (size_t i = 0; i < nitems(abilities_expand); i++) {
@@ -185,12 +184,6 @@ curtain_fill_expand(struct curtain *ct)
 
 	if (ct->ct_on_exec)
 		curtain_fill_expand(ct->ct_on_exec);
-
-	ct1 = ct->ct_on_exec ? ct->ct_on_exec : ct;
-	ct1->ct_abilities[CURTAINABL_PROT_EXEC_LOOSE].soft =
-	    MIN(MIN(ct1->ct_abilities[CURTAINABL_EXEC].soft,
-		    ct->ct_abilities[CURTAINABL_EXEC].soft),
-	        ct1->ct_abilities[CURTAINABL_PROT_EXEC_LOOSE].soft);
 }
 
 static void

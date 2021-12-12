@@ -40,6 +40,7 @@ enum promise_type {
 	PROMISE_THREAD,
 	PROMISE_EXEC,
 	PROMISE_PROT_EXEC,
+	PROMISE_PROT_EXEC_LOOSE,
 	PROMISE_TTY,
 	PROMISE_PTS,
 	PROMISE_RLIMIT,
@@ -108,6 +109,7 @@ static const struct promise_name {
 	[PROMISE_THREAD] =		{ "thread" },
 	[PROMISE_EXEC] =		{ "exec" },
 	[PROMISE_PROT_EXEC] =		{ "prot_exec" },
+	[PROMISE_PROT_EXEC_LOOSE] =	{ "prot_exec_loose" },
 	[PROMISE_TTY] =			{ "tty" },
 	[PROMISE_PTS] =			{ "pts" },
 	[PROMISE_RLIMIT] =		{ "rlimit" },
@@ -185,6 +187,7 @@ static const struct promise_ability {
 	{ PROMISE_THREAD,		CURTAINABL_SCHED },
 	{ PROMISE_EXEC,			CURTAINABL_EXEC },
 	{ PROMISE_PROT_EXEC,		CURTAINABL_PROT_EXEC },
+	{ PROMISE_PROT_EXEC_LOOSE,	CURTAINABL_PROT_EXEC_LOOSE },
 	{ PROMISE_TTY,			CURTAINABL_TTY },
 	{ PROMISE_PTS,			CURTAINABL_TTY },
 	{ PROMISE_RLIMIT,		CURTAINABL_RLIMIT },
@@ -608,6 +611,14 @@ static void unveil_enable_delayed(enum curtain_on);
 static int
 do_pledge(struct promise_mode *modes_on[CURTAIN_ON_COUNT])
 {
+	if (modes_on[CURTAIN_ON_EXEC])
+		modes_on[CURTAIN_ON_EXEC][PROMISE_PROT_EXEC_LOOSE].state =
+		    MAX(modes_on[CURTAIN_ON_EXEC][PROMISE_PROT_EXEC_LOOSE].state,
+		        MAX(modes_on[CURTAIN_ON_EXEC][PROMISE_EXEC].state,
+		            (modes_on[CURTAIN_ON_SELF] ?
+		                 modes_on[CURTAIN_ON_SELF][PROMISE_EXEC].state :
+		                 CURTAIN_ENABLED)));
+
 	for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++) {
 		unveil_perms wanted_uperms;
 		if (!modes_on[on])

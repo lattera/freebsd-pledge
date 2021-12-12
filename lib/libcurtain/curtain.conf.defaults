@@ -44,6 +44,7 @@ ability thread
 ability rlimit
 ability posixrt
 ability sched
+ability prot_exec_loose
 ability curtain
 
 merge _vfs
