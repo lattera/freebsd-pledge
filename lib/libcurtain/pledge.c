@@ -41,6 +41,7 @@ enum promise_type {
 	PROMISE_EXEC,
 	PROMISE_PROT_EXEC,
 	PROMISE_PROT_EXEC_LOOSE,
+	PROMISE_RTLD,
 	PROMISE_TTY,
 	PROMISE_PTS,
 	PROMISE_RLIMIT,
@@ -110,6 +111,7 @@ static const struct promise_name {
 	[PROMISE_EXEC] =		{ "exec" },
 	[PROMISE_PROT_EXEC] =		{ "prot_exec" },
 	[PROMISE_PROT_EXEC_LOOSE] =	{ "prot_exec_loose" },
+	[PROMISE_RTLD] =		{ "rtld" },
 	[PROMISE_TTY] =			{ "tty" },
 	[PROMISE_PTS] =			{ "pts" },
 	[PROMISE_RLIMIT] =		{ "rlimit" },
@@ -159,6 +161,7 @@ static const enum promise_type depends_table[][2] = {
 	{ PROMISE_DNS, PROMISE_ROUTE }, /* XXX */
 	{ PROMISE_INET, PROMISE_NET },
 	{ PROMISE_UNIX, PROMISE_NET },
+	{ PROMISE_RTLD, PROMISE_PROT_EXEC_LOOSE },
 };
 
 static const struct promise_ability {
@@ -347,8 +350,6 @@ static const struct promise_unveil {
 	 * the UPERM_CREATE unveil permission if the file already exists.
 	 */
 	{ _PATH_ETC "/malloc.conf", R,			PROMISE_STDIO },
-	{ _PATH_LIBMAP_CONF, R,				PROMISE_STDIO },
-	{ _PATH_VARRUN "/ld-elf.so.hints", R,		PROMISE_STDIO },
 	{ _PATH_ETC "/localtime", R,			PROMISE_STDIO },
 	{ "/usr/share/zoneinfo/", R,			PROMISE_STDIO },
 	{ "/usr/share/nls/", R,				PROMISE_STDIO },
@@ -357,6 +358,16 @@ static const struct promise_unveil {
 	{ _PATH_DEV "/random", R,			PROMISE_STDIO },
 	{ _PATH_DEV "/urandom", R,			PROMISE_STDIO },
 	{ "/libexec/ld-elf.so.1", X,			PROMISE_EXEC },
+	{ _PATH_LIBMAP_CONF, R,				PROMISE_RTLD },
+	{ _PATH_VARRUN "/ld-elf.so.hints", R,		PROMISE_RTLD },
+	/*
+	 * PROMISE_RTLD enables PROMISE_PROT_EXEC_LOOSE which only allows
+	 * PROT_EXEC mappings on paths unveiled with UPERM_EXECUTE.
+	 */
+	{ "/lib", X,					PROMISE_RTLD },
+	{ "/usr/lib", X,				PROMISE_RTLD },
+	{ "/usr/lib32", X,				PROMISE_RTLD },
+	{ _PATH_LOCALBASE "/lib", X,			PROMISE_RTLD },
 	{ _PATH_NS_CONF, R,				PROMISE_DNS },
 	{ _PATH_RESCONF, R,				PROMISE_DNS },
 	{ _PATH_HOSTS, R,				PROMISE_DNS },
@@ -611,13 +622,21 @@ static void unveil_enable_delayed(enum curtain_on);
 static int
 do_pledge(struct promise_mode *modes_on[CURTAIN_ON_COUNT])
 {
-	if (modes_on[CURTAIN_ON_EXEC])
-		modes_on[CURTAIN_ON_EXEC][PROMISE_PROT_EXEC_LOOSE].state =
-		    MAX(modes_on[CURTAIN_ON_EXEC][PROMISE_PROT_EXEC_LOOSE].state,
-		        MAX(modes_on[CURTAIN_ON_EXEC][PROMISE_EXEC].state,
-		            (modes_on[CURTAIN_ON_SELF] ?
-		                 modes_on[CURTAIN_ON_SELF][PROMISE_EXEC].state :
-		                 CURTAIN_ENABLED)));
+	if (modes_on[CURTAIN_ON_EXEC]) {
+		/*
+		 * Implicitly enable what's needed for the rtld(1) to work when
+		 * the promises imply an ability to exec with restrictions.
+		 */
+		struct promise_mode *exec_rtld, *exec_exec, *self_exec;
+		exec_rtld = &modes_on[CURTAIN_ON_EXEC][PROMISE_RTLD];
+		exec_exec = &modes_on[CURTAIN_ON_EXEC][PROMISE_EXEC];
+		self_exec = modes_on[CURTAIN_ON_SELF] ?
+		    &modes_on[CURTAIN_ON_SELF][PROMISE_EXEC] : NULL;
+		exec_rtld->state = MAX(exec_rtld->state, MAX(exec_exec->state,
+		    self_exec ? self_exec->state : CURTAIN_ENABLED));
+		exec_rtld->unveil_state = MAX(exec_rtld->unveil_state, MAX(exec_exec->unveil_state,
+		    self_exec ? self_exec->unveil_state : CURTAIN_ENABLED));
+	}
 
 	for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++) {
 		unveil_perms wanted_uperms;

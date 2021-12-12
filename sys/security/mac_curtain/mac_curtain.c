@@ -1249,32 +1249,13 @@ curtain_generic_check_ioctl(struct ucred *cr, struct file *fp, u_long com, void 
 	return (error ? error : dangerous ? EPERM : 0);
 }
 
-static bool
-vnode_looks_trustworthy_for_prot_exec(struct ucred *cr, struct vnode *vp)
-{
-	struct vattr va;
-	int error;
-	if (unveil_check_uperms(get_vp_uperms(cr, vp), UPERM_EXECUTE) == 0)
-		return (true);
-	error = VOP_GETATTR(vp, &va, cr);
-	if (error)
-		return (false);
-	if (va.va_uid != UID_ROOT && va.va_uid != UID_BIN)
-		return (false);
-	if (va.va_mode & S_IWGRP && va.va_gid != GID_WHEEL && va.va_gid != GID_BIN)
-		return (false);
-	if (va.va_mode & S_IWOTH)
-		return (false);
-	return (true);
-}
-
 static int
 curtain_generic_check_vm_prot(struct ucred *cr, struct file *fp, vm_prot_t prot)
 {
 	if (prot & VM_PROT_EXECUTE) {
 		enum curtain_ability abl;
 		if (!(prot & VM_PROT_WRITE) && fp && fp->f_vnode) {
-			if (vnode_looks_trustworthy_for_prot_exec(cr, fp->f_vnode))
+			if (unveil_check_uperms(get_vp_uperms(cr, fp->f_vnode), UPERM_EXECUTE) == 0)
 				abl = CURTAINABL_PROT_EXEC_LOOSE;
 			else
 				abl = CURTAINABL_PROT_EXEC_LOOSER;
