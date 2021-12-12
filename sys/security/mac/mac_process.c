@@ -213,9 +213,21 @@ mac_execve_check_imgp(struct image_params *imgp)
 }
 
 void
-mac_execve_adjust(struct image_params *imgp)
+mac_execve_alter(struct image_params *imgp)
 {
-	MAC_POLICY_PERFORM(proc_exec_adjust, imgp);
+	struct ucred *oldcred;
+	bool result;
+
+	oldcred = imgp->proc->p_ucred;
+	result = false;
+	MAC_POLICY_BOOLEAN(proc_exec_will_alter, ||, imgp->proc, oldcred);
+
+	if (!result)
+		return;
+
+	if (!imgp->newcred)
+		imgp->newcred = crdup(oldcred);
+	MAC_POLICY_PERFORM(proc_exec_alter, imgp->proc, imgp->newcred);
 }
 
 /*

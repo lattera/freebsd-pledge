@@ -1513,19 +1513,21 @@ curtain_proc_exec_check(struct image_params *imgp)
 	return (0);
 }
 
-static void
-curtain_proc_exec_adjust(struct image_params *imgp)
+static bool
+curtain_proc_exec_will_alter(struct proc *p, struct ucred *cr)
 {
-	struct ucred *cr;
 	struct curtain *ct;
-	if (!(ct = CRED_SLOT(imgp->proc->p_ucred)))
-		return; /* NOTE: sysfilset kept as-is */
+	if (!(ct = CRED_SLOT(cr)))
+		return (false); /* NOTE: the ucred's sysfilset will be kept as-is */
+	return (ct->ct_on_exec);
+}
 
-	if (!ct->ct_on_exec)
+static void
+curtain_proc_exec_alter(struct proc *p, struct ucred *cr)
+{
+	struct curtain *ct;
+	if (!(ct = CRED_SLOT(cr)) || !ct->ct_on_exec)
 		return;
-
-	if (!(cr = imgp->newcred))
-		cr = imgp->newcred = crdup(imgp->proc->p_ucred);
 
 	if (!curtain_cred_restricted(ct->ct_on_exec, cr)) {
 		/* Can drop the curtain and unveils altogether. */
@@ -1533,7 +1535,7 @@ curtain_proc_exec_adjust(struct image_params *imgp)
 		SLOT_SET(cr->cr_label, NULL);
 		sysfil_cred_init(cr);
 		MPASS(!CRED_IN_RESTRICTED_MODE(cr));
-		unveil_proc_drop_cache(imgp->proc);
+		unveil_proc_drop_cache(p);
 		return;
 	}
 
@@ -1662,7 +1664,8 @@ static struct mac_policy_ops curtain_policy_ops = {
 
 	.mpo_proc_check_exec_sugid = curtain_proc_check_exec_sugid,
 	.mpo_proc_exec_check = curtain_proc_exec_check,
-	.mpo_proc_exec_adjust = curtain_proc_exec_adjust,
+	.mpo_proc_exec_will_alter = curtain_proc_exec_will_alter,
+	.mpo_proc_exec_alter = curtain_proc_exec_alter,
 };
 
 MAC_POLICY_SET(&curtain_policy_ops, mac_curtain, "MAC/curtain", 0, &curtain_slot);

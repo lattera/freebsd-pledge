@@ -712,7 +712,8 @@ typedef int	(*mpo_sysfil_check_t)(struct ucred *cred, sysfilset_t sfs);
 typedef int	(*mpo_proc_check_exec_sugid_t)(struct ucred *cred,
 		    struct proc *);
 typedef int	(*mpo_proc_exec_check_t)(struct image_params *imgp);
-typedef void	(*mpo_proc_exec_adjust_t)(struct image_params *imgp);
+typedef bool	(*mpo_proc_exec_will_alter_t)(struct proc *p, struct ucred *cred);
+typedef void	(*mpo_proc_exec_alter_t)(struct proc *p, struct ucred *cred);
 
 
 struct mac_policy_ops {
@@ -1033,7 +1034,8 @@ struct mac_policy_ops {
 
 	mpo_proc_check_exec_sugid_t		mpo_proc_check_exec_sugid;
 	mpo_proc_exec_check_t			mpo_proc_exec_check;
-	mpo_proc_exec_adjust_t			mpo_proc_exec_adjust;
+	mpo_proc_exec_will_alter_t		mpo_proc_exec_will_alter;
+	mpo_proc_exec_alter_t			mpo_proc_exec_alter;
 };
 
 /*

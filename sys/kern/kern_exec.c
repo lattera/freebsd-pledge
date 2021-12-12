@@ -815,7 +815,7 @@ interpret:
 	    (p->p_flag2 & P2_NO_NEW_PRIVS) != 0)
 		execve_nosetid(imgp);
 #ifdef MAC
-	mac_execve_adjust(imgp);
+	mac_execve_alter(imgp);
 #endif
 
 	vn_lock(imgp->vp, LK_SHARED | LK_RETRY);
