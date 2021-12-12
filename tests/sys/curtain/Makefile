@@ -23,7 +23,6 @@ ATF_TESTS_C+=	pledge_proc
 ATF_TESTS_C+=	pledge_exec
 ATF_TESTS_C+=	pledge_chown_same
 ATF_TESTS_C+=	pledge_fattr
-ATF_TESTS_C+=	pledge_prot_exec
 ATF_TESTS_C+=	pledge_netdb
 ATF_TESTS_C+=	pledge_socket
 ATF_TESTS_C+=	pledge_tty
@@ -36,6 +35,8 @@ ATF_TESTS_C+=	unveil_pledge
 ATF_TESTS_C+=	unveil_exec
 ATF_TESTS_C+=	unveil_fattr
 ATF_TESTS_C+=	unveil_emptypath
+
+ATF_TESTS_C+=	prot_exec
 
 ATF_TESTS_C+=	curtain_levels
 ATF_TESTS_C+=	curtainctl_overflow
