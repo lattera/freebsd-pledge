@@ -338,6 +338,36 @@ sysctl_inherit_body() {
 	done
 }
 
+atf_test_case tmpdir_exec
+tmpdir_exec_body() {
+	cat > exec-script <<'EOF1'
+f=$TMPDIR/test.sh
+cat > $f <<'EOF2'
+#!/bin/sh
+echo TEST
+EOF2
+chmod +x $f
+$f
+e=$?
+rm $f
+exit $e
+EOF1
+	cat > exec-binary <<'EOF1'
+f=$TMPDIR/test-echo
+cp /bin/echo $f
+$f TEST
+e=$?
+rm $f
+exit $e
+EOF1
+	atf_check -s not-exit:0 -e not-empty curtain sh < exec-script
+	atf_check -s not-exit:0 -e not-empty curtain sh < exec-binary
+	atf_check -o inline:'TEST\n' curtain -t _tmpdir_shellexec sh < exec-script
+	atf_check -s not-exit:0 -e not-empty curtain -t _tmpdir_shellexec sh < exec-binary
+	atf_check -o inline:'TEST\n' curtain -t _tmpdir_exec sh < exec-script
+	atf_check -o inline:'TEST\n' curtain -t _tmpdir_exec sh < exec-binary
+}
+
 atf_init_test_cases() {
 	atf_add_test_case cmd_true
 	atf_add_test_case cmd_false
@@ -371,4 +401,5 @@ atf_init_test_cases() {
 	atf_add_test_case filtered_ls
 	atf_add_test_case filtered_ls_nested
 	atf_add_test_case sysctl_inherit
+	atf_add_test_case tmpdir_exec
 }
