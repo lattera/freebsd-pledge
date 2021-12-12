@@ -711,6 +711,7 @@ typedef int	(*mpo_sysfil_check_t)(struct ucred *cred, sysfilset_t sfs);
 
 typedef int	(*mpo_proc_check_exec_sugid_t)(struct ucred *cred,
 		    struct proc *);
+typedef int	(*mpo_proc_exec_check_t)(struct image_params *imgp);
 typedef void	(*mpo_proc_exec_adjust_t)(struct image_params *imgp);
 
 
@@ -1031,6 +1032,7 @@ struct mac_policy_ops {
 	mpo_sysfil_check_t			mpo_sysfil_check;
 
 	mpo_proc_check_exec_sugid_t		mpo_proc_check_exec_sugid;
+	mpo_proc_exec_check_t			mpo_proc_exec_check;
 	mpo_proc_exec_adjust_t			mpo_proc_exec_adjust;
 };
 

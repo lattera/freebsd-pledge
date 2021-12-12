@@ -72,6 +72,7 @@ curtain_parse_unveil_perms(unveil_perms *uperms, const char *s)
 		                     UPERM_CREATE | UPERM_DELETE; break;
 		case 'a': *uperms |= UPERM_SETATTR; break;
 		case 'c': *uperms |= UPERM_CREATE | UPERM_DELETE; break;
+		case 's': *uperms |= UPERM_SHELL; break;
 		case 'x': *uperms |= UPERM_EXECUTE; break;
 		case 'i': *uperms |= UPERM_INSPECT; break;
 		case 't': *uperms |= UPERM_TMPDIR; break;

@@ -22,6 +22,7 @@
 #define	UPERM_BIND		(1 << 16)
 #define	UPERM_CONNECT		(1 << 17)
 #define	UPERM_UNIX		(UPERM_BIND | UPERM_CONNECT)
+#define	UPERM_SHELL		(1 << 18)
 #define	UPERM_TMPDIR		(1 << 24)
 #define	UPERM_TMPDIR_CHILD	(1 << 25)
 #define	UPERM_DEVFS		(1 << 26)
@@ -30,7 +31,7 @@
 static const unveil_perms uperms_inheritable =
     UPERM_BROWSE | UPERM_READ | UPERM_APPEND | UPERM_WRITE | UPERM_CREATE | UPERM_DELETE |
     UPERM_EXECUTE | UPERM_SETATTR | UPERM_BIND | UPERM_CONNECT |
-    UPERM_DEVFS;
+    UPERM_SHELL | UPERM_DEVFS;
 
 static const unveil_perms uperms_searchable = uperms_inheritable | UPERM_TMPDIR;
 static const unveil_perms uperms_exposable = uperms_searchable & ~UPERM_DEVFS;
@@ -48,6 +49,8 @@ uperms_expand(unveil_perms uperms)
 		uperms |= UPERM_STATUS | UPERM_BROWSE | UPERM_LIST;
 	if (uperms & UPERM_SEARCH)
 		uperms |= UPERM_TRAVERSE;
+	if (uperms & UPERM_EXECUTE)
+		uperms |= UPERM_SHELL;
 	if (uperms & UPERM_READ && uperms & UPERM_WRITE &&
 	    uperms & UPERM_CREATE && uperms & UPERM_DELETE)
 		uperms |= UPERM_TMPDIR;

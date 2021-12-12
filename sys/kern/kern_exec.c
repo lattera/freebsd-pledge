@@ -694,6 +694,12 @@ interpret:
 		goto exec_fail_dealloc;
 	}
 
+#ifdef MAC
+	error = mac_execve_check_imgp(imgp);
+	if (error)
+		goto exec_fail_dealloc;
+#endif
+
 	/*
 	 * Special interpreter operation, cleanup and loop up to try to
 	 * activate the interpreter.

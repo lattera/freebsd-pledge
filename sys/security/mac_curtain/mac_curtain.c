@@ -965,7 +965,7 @@ curtain_vnode_check_exec(struct ucred *cr,
     struct image_params *imgp, struct label *execlabel)
 {
 	int error;
-	if ((error = unveil_check_uperms(get_vp_uperms(cr, vp), UPERM_EXECUTE)))
+	if ((error = unveil_check_uperms(get_vp_uperms(cr, vp), UPERM_SHELL)))
 		return (error);
 	if ((error = cred_ability_check(cr, CURTAINABL_EXEC)))
 		return (error);
@@ -1499,6 +1499,20 @@ curtain_proc_check_exec_sugid(struct ucred *cr, struct proc *p)
 	return (act2err[act]);
 }
 
+static int
+curtain_proc_exec_check(struct image_params *imgp)
+{
+	struct ucred *cr = imgp->proc->p_ucred;
+	struct vnode *vp = imgp->vp;
+	int error;
+	if ((error = unveil_check_uperms(get_vp_uperms(cr, vp),
+	    imgp->interpreted == IMGACT_SHELL ? UPERM_SHELL : UPERM_EXECUTE)))
+		return (error);
+	if ((error = cred_ability_check(cr, CURTAINABL_EXEC)))
+		return (error);
+	return (0);
+}
+
 static void
 curtain_proc_exec_adjust(struct image_params *imgp)
 {
@@ -1647,6 +1661,7 @@ static struct mac_policy_ops curtain_policy_ops = {
 	.mpo_sysfil_check = curtain_sysfil_check,
 
 	.mpo_proc_check_exec_sugid = curtain_proc_check_exec_sugid,
+	.mpo_proc_exec_check = curtain_proc_exec_check,
 	.mpo_proc_exec_adjust = curtain_proc_exec_adjust,
 };
 

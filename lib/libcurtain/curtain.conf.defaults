@@ -98,9 +98,11 @@ ability chroot
 ability chown
 ability any_cred
 ability! sysflags
+merge _tmpdir_shellexec
 
 [_level6 : _level5]
 ability prot_exec
+merge _tmpdir_exec
 
 [_level7 : _level6]
 ability reap
@@ -217,7 +219,11 @@ ioctls cryptodev
 merge _pty
 
 [_separate_tmpdir]
-${TMPDIR}/				: rwxu
+${TMPDIR}/				: rwu
+[_tmpdir_exec _separate_tmpdir]
+${TMPDIR}/				: x
+[_tmpdir_shellexec _separate_tmpdir]
+${TMPDIR}/				: s
 
 [_shared_tmpdir]
 ${TMPDIR:-/tmp}/			: t

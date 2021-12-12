@@ -202,6 +202,16 @@ mac_execve_interpreter_exit(struct label *interpvplabel)
 		mac_vnode_label_free(interpvplabel);
 }
 
+int
+mac_execve_check_imgp(struct image_params *imgp)
+{
+	int error;
+
+	MAC_POLICY_CHECK(proc_exec_check, imgp);
+
+	return (error);
+}
+
 void
 mac_execve_adjust(struct image_params *imgp)
 {
