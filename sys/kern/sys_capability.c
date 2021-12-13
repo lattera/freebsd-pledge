@@ -102,12 +102,14 @@ FEATURE(security_capability_mode, "Capsicum Capability Mode");
 int
 sys_cap_enter(struct thread *td, struct cap_enter_args *uap)
 {
-	struct proc *p;
 	struct ucred *newcred, *oldcred;
+	struct proc *p;
+
 	if (IN_CAPABILITY_MODE(td))
 		return (0);
-	p = td->td_proc;
+
 	newcred = crget();
+	p = td->td_proc;
 	PROC_LOCK(p);
 	oldcred = crcopysafe(p, newcred);
 	newcred->cr_sysfilset &= ~SYSFIL_UNCAPSICUM;

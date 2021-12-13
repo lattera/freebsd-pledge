@@ -50,7 +50,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/timepps.h>
 #include <sys/syscallsubr.h>
 #include <sys/sysctl.h>
-#include <sys/sysfil.h>
 
 #ifdef PPS_SYNC
 FEATURE(pps_sync, "Support usage of external PPS signal by kernel PLL");
@@ -1000,9 +999,6 @@ kern_adjtime(struct thread *td, struct timeval *delta, struct timeval *olddelta)
 
 	if (delta != NULL) {
 		error = priv_check(td, PRIV_ADJTIME);
-		if (error != 0)
-			return (error);
-		error = sysfil_check(td, SYSFIL_SETTIME);
 		if (error != 0)
 			return (error);
 		ltw = (int64_t)delta->tv_sec * 1000000 + delta->tv_usec;

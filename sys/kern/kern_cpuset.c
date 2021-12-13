@@ -907,6 +907,13 @@ cpuset_which(cpuwhich_t which, id_t id, struct proc **pp, struct thread **tdp,
 		}
 		if ((p = pfind(id)) == NULL)
 			return (ESRCH);
+		if (p != curthread->td_proc) {
+			error = sysfil_check(curthread, SYSFIL_CPUSET);
+			if (error) {
+				PROC_UNLOCK(p);
+				return (error);
+			}
+		}
 		break;
 	case CPU_WHICH_TID:
 		if (id == -1) {
@@ -939,9 +946,6 @@ cpuset_which(cpuwhich_t which, id_t id, struct proc **pp, struct thread **tdp,
 	{
 		struct prison *pr;
 		error = sysfil_check(curthread, SYSFIL_CPUSET);
-		if (error)
-			return (error);
-		error = sysfil_check(curthread, SYSFIL_JAIL);
 		if (error)
 			return (error);
 		/* Find `set' for prison with given id. */

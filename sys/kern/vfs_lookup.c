@@ -1850,4 +1850,3 @@ keeporig:
 		bcopy(ptr, buf, len);
 	return (error);
 }
-
