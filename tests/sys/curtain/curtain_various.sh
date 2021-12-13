@@ -368,6 +368,32 @@ EOF1
 	atf_check -o inline:'TEST\n' curtain -t _tmpdir_exec sh < exec-binary
 }
 
+atf_test_case append_only
+append_only_body() {
+	local p
+	for p in d di dmi dmr
+	do atf_check -s not-exit:0 -e not-empty curtain -p out:$p sh -c 'echo x > out'
+	done
+	atf_check test ! -e out
+	atf_check curtain -p out:cm sh -c 'echo 1 > out'
+	atf_check test -f out
+	atf_check curtain -p out:p sh -c 'echo 2 >> out'
+	for p in p pi pr cdp cdpi cdpr
+	do
+		atf_check -s not-exit:0 -e not-empty curtain -p out:$p sh -c 'echo x > out'
+		atf_check -s not-exit:0 -e not-empty curtain -p out:$p truncate -s 0 out
+	done
+	atf_check curtain -p tmp:cp sh -c 'echo 3 >> tmp'
+	atf_check curtain -p out:p -p tmp:r sh -c 'tee -a out < tmp > /dev/null'
+	for p in c ci cr cm cmi cmr
+	do atf_check -s not-exit:0 -e not-empty curtain -p out:$p sh -c 'unlink out'
+	done
+	atf_check test -f out
+	atf_check -o inline:'1\n2\n3\n' cat out
+	atf_check curtain -p out:di sh -c 'unlink out'
+	atf_check test ! -e out
+}
+
 atf_init_test_cases() {
 	atf_add_test_case cmd_true
 	atf_add_test_case cmd_false
@@ -402,4 +428,5 @@ atf_init_test_cases() {
 	atf_add_test_case filtered_ls_nested
 	atf_add_test_case sysctl_inherit
 	atf_add_test_case tmpdir_exec
+	atf_add_test_case append_only
 }
