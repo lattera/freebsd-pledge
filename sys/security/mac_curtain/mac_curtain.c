@@ -126,22 +126,17 @@ cred_action_failed(const struct ucred *cr, enum curtain_action act, bool noise)
 #endif
 }
 
-static enum curtain_action
+static inline enum curtain_action
 cred_key_action(const struct ucred *cr, enum curtainreq_type type, union curtain_key key)
 {
 	const struct curtain *ct;
-	if ((ct = CRED_SLOT(cr))) {
+	if ((ct = CRED_SLOT(cr)))
 		return (curtain_resolve(ct, type, key).soft);
-	} else {
-		if (sysfil_match_cred(cr,
-		    curtain_abilities_sysfils[type == CURTAINTYP_ABILITY ?
-		    key.ability : curtain_type_fallback[type]]))
-			return (CURTAINACT_ALLOW);
-		return (CURTAINACT_DENY);
-	}
+	else
+		return (CURTAINACT_ALLOW);
 }
 
-static enum curtain_action
+static inline enum curtain_action
 cred_ability_action(const struct ucred *cr, enum curtain_ability abl)
 {
 	return (cred_key_action(cr, CURTAINTYP_ABILITY, (ctkey){ .ability = abl }));
@@ -203,7 +198,7 @@ cred_key_failed(const struct ucred *cr, enum curtainreq_type type, union curtain
 	cred_action_failed(cr, act, noise);
 }
 
-static int
+static inline int
 cred_key_check(const struct ucred *cr, enum curtainreq_type type, union curtain_key key)
 {
 	enum curtain_action act;
@@ -215,7 +210,7 @@ cred_key_check(const struct ucred *cr, enum curtainreq_type type, union curtain_
 	return (act2err[act]);
 }
 
-static int
+static inline int
 cred_ability_check(const struct ucred *cr, enum curtain_ability abl)
 {
 	return (cred_key_check(cr, CURTAINTYP_ABILITY, (ctkey){ .ability = abl }));
