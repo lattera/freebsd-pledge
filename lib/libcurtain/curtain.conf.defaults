@@ -1,27 +1,39 @@
-# Sections can be introduced with square brackets.  One or more sections to
-# include can be specified following a colon.
+# Sections can be introduced with square brackets.  All following lines until
+# the next section will only apply when all of the section's tags are enabled.
 #
-#	[some_app : some_other_app _some_unveils]
+#  	[first_tag second_tag ...]
 #
-# Sections should generally be named after applications or libraries as
-# curtain(1) will load sections named after the executed program when given the
-# "-a" flag.  By convention, a name can be prefixed with "_" to indicate that
-# it is not named after an application.
+# Tags should generally be named after applications or libraries.  curtain(1)
+# will enable tags named after the executed program when given the "-a" flag.
+# By convention, a name is prefixed with "_" to indicate that it is not named
+# after an application.
+#
+# One or more tags to enable can be specified following a colon. This is
+# equivalent to the "merge" directive.
+#
+# 	[some_app _something : some_other_app _some_unveils]
+#
+# There are directives to specify permission to use abilities, sysctls, ioctls,
+# privileges, etc, and to specify filesystem path unveils, include other
+# configuration files, etc.  Lines that look like a path will be interpreted as
+# if they were an argument to the "path" directive.
 #
 # Path patterns support brace expansion, tilde expansion and environment
 # variable expansion similar to shells.  Permissions are specified following a
-# colon and defaults to read-only access.
+# colon and default to read-only access.  An octal or symbolic creation mode
+# can follow which will be used to create the file (or directory if the path
+# ends with "/") if it does not exist.
 #
 # Note that the "w" permission allows writes, file attribute changes and
 # files/directories creations/deletions.  It does not allow creating or
 # connecting to local-domain sockets.  This is different from unveil(3)
 # permission strings!  The "m" permission only allows writes to existing files
-# and no attribute changes.  The "a" permission allows attribute changes.
+# and no attribute changes.  The "c"/"d" permissions allow file/directory
+# creation/deletion.  The "a" permission allows attribute changes.
 #
-# It is important to not give attribute change or creation/deletion permissions
-# unless needed because curtain(1) will run applications under the equivalent
-# of a fairly permissive pledge() with regard to filesystem access.
-#
+# Note that curtain(1) will generally run applications with the equivalent of a
+# very permissive pledge(3) with regard to filesystem access, so restricting
+# unveil permissions is more important than for pledged applications.
 
 [_stdio]
 
@@ -64,6 +76,7 @@ merge _cmds
 
 
 # Permission tower used by curtain(1)'s -0 to -9 options.
+# Probably should not be used for application profiles.
 
 [_level0]
 
@@ -233,7 +246,7 @@ ${TMPDIR:-/tmp}/			: t
 ${TMPDIR:-/tmp}/krb5cc_%u		:
 
 [_shared_system_tmpdir]
-/tmp					: t
+/tmp/					: t
 /tmp/krb5cc_%u				:
 
 [_unsafe_system_tmpdir]

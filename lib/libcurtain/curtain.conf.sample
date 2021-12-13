@@ -4,21 +4,12 @@
 #
 # VARIOUS NOTES:
 #
-# Unveil paths that end in "/" will be ignored if the path does not refer to an
-# existing directory.  While it's possible to unveil a directory by name, the
-# semantics are different, so these configurations attempt to consistently only
-# do it one way.  Consequence is that applications' private directories must
-# already exist before attempting to run them in a sandbox.
-#
 # Some applications actually require their "unsafe" permissions (directives
 # suffixed with "!"), while some of them just work better with them.
 #
 # Menus and windows often have a thick black border in untrusted X11 mode.
 # Windows from applications that try to use client-side decorations (most Gnome
 # and XFCE applications by default) will not be movable.
-#
-# The file browsing dialogs will generally not react well to trying to browse
-# outside of the unveiled areas (but doesn't seem to crash so far).
 #
 # Video players are greatly slowed down under untrusted X11 mode.  Fullscreen
 # mode will not work.
