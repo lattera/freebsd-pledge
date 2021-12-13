@@ -557,16 +557,12 @@ unveil_vnode_walk_backtrack(struct ucred *cr, struct vnode *dvp)
 	struct curtain_unveil *uv;
 	if (!(track = unveil_track_get(cr, false)))
 		return;
-	if (!track->uncharted)
-		track->uperms = UPERM_NONE;
 
 	if (track->ct && (uv = curtain_lookup_unveil(track->ct, dvp, NULL, 0))) {
 		track->uncharted = false;
 		track->uperms = uv->soft_uperms;
-	} else {
-		track->uncharted = true;
-		track->uperms = uperms_inherit(track->uperms);
-	}
+	} else if (!track->uncharted)
+		track->uperms = UPERM_NONE;
 
 	unveil_track_fill(track, dvp)->uperms = track->uperms;
 }
