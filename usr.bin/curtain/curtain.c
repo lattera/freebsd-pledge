@@ -373,6 +373,7 @@ main(int argc, char *argv[])
 	unsigned level = DEFAULT_LEVEL;
 	bool has_level = false,
 	     app_tag = false,
+	     app_tag_unsafe = false,
 	     signaling = false,
 	     no_fork = false,
 	     run_shell = false,
@@ -440,12 +441,12 @@ main(int argc, char *argv[])
 		case 'n':
 			no_network = true;
 			break;
+		case 'A':
+			app_tag_unsafe = true;
+			/* FALLTHROUGH */
 		case 'a':
 			app_tag = true;
 			break;
-		case 'A':
-			app_tag = true;
-			/* FALLTHROUGH */
 		case '!':
 			unsafety++;
 			break;
@@ -536,11 +537,15 @@ main(int argc, char *argv[])
 	argc -= optind;
 
 
+	if (app_tag) {
+		unsafety = MAX(unsafety, app_tag_unsafe ? 1 : 0);
+		if (!has_level)
+			level = APP_TAG_LEVEL;
+	}
+
 	curtain_config_unsafety(cfg, unsafety);
 	curtain_config_tags_from_env(cfg, NULL);
 	curtain_config_tag_push(cfg, "_default");
-	if (!has_level && app_tag)
-		level = APP_TAG_LEVEL;
 	{
 		char name[] = "_levelX";
 		name[strlen(name) - 1] = '0' + level;
