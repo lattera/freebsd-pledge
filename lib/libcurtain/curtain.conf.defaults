@@ -117,6 +117,7 @@ ability debug
 
 [_level9 : _level8]
 merge _pwddb
+merge _syslog
 ability any_ioctl
 ability any_sysctl
 
