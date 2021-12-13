@@ -80,7 +80,7 @@ ability extattr
 ability chflags
 # May allow privilege escalations if untrusted processes have access to paths
 # writable by the sandboxed process.
-ability! fsugid # chmod ug+s
+ability!! fsugid # chmod ug+s
 merge _fdpass
 
 [_level4 : _level3]
