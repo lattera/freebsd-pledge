@@ -276,9 +276,8 @@ ioctls net_route
 /usr/local/etc/ssl/private/		:
 
 [_syslog]
-# XXX Should only allow to connect, not bind/unlink.
-/var/run/log : u
-/var/run/logpriv : u
+/var/run/log : v
+/var/run/logpriv : v
 
 [_bpf]
 ioctls bpf
