@@ -1503,6 +1503,11 @@ makeman: .PHONY
 	${_+_}cd ${.CURDIR}/tools/build/options; sh makeman > \
 	    ${.CURDIR}/share/man/man5/src.conf.5
 
+# Ensure no regressions in self-includeability of sys/*.h and net*/*.h
+test-includes: .PHONY
+	${_+_}cd ${.CURDIR}/tools/build/test-includes; \
+	    ${WMAKEENV} ${MAKE} ${WORLD_FLAGS} DESTDIR=${WORLDTMP} test-includes
+
 # We can't assume here that ${TMPPATH} will include ${PATH} or /usr/libexec
 # because we may be building with a STRICTTMPPATH, so we explicitly include
 # /usr/libexec here for flua.  ${TMPPATH} still usefully includes anything else
