@@ -445,6 +445,20 @@ chroot_body() {
 		chroot d sh -c 'echo "test 2" > /dev/stdout'
 }
 
+atf_test_case exec_rsugid
+exec_rsugid_body() {
+	local p="$(atf_get_srcdir)/suid-check"
+	[ "$(sysctl -n security.curtain.curtained)" = 0 ] || atf_skip "already curtained"
+	atf_check -s exit:30 $p
+	if [ $(id -u) -eq 0 ]
+	then
+		atf_check -s exit:32 curtain -fS -d ability:exec_rsugid --setuser tests $p
+		atf_check -s exit:33 curtain -fS --setuser tests $p
+	else
+		atf_check -s exit:33 curtain -fS -d ability:exec_rsugid $p
+	fi
+}
+
 atf_init_test_cases() {
 	atf_add_test_case cmd_true
 	atf_add_test_case cmd_false
@@ -481,4 +495,5 @@ atf_init_test_cases() {
 	atf_add_test_case tmpdir_exec
 	atf_add_test_case append_only
 	atf_add_test_case chroot
+	atf_add_test_case exec_rsugid
 }

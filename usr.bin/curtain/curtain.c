@@ -373,12 +373,14 @@ main(int argc, char *argv[])
 		LONGOPT_NEWSID,
 		LONGOPT_CHROOT,
 		LONGOPT_UNENFORCED,
+		LONGOPT_SETUSER,
 	};
 	const struct option longopts[] = {
 		{ "newpgrp", no_argument, NULL, LONGOPT_NEWPGRP },
 		{ "newsid", no_argument, NULL, LONGOPT_NEWSID },
 		{ "chroot", required_argument, NULL, LONGOPT_CHROOT },
 		{ "unenforced", no_argument, NULL, LONGOPT_UNENFORCED },
+		{ "setuser", required_argument, NULL, LONGOPT_SETUSER },
 		{ 0 }
 	};
 	char *sh_argv[2];
@@ -395,6 +397,7 @@ main(int argc, char *argv[])
 	     pty_wrap = true,
 	     pty_wrap_partial = true,
 	     pty_wrap_filter = true,
+	     user_ctx = false,
 	     clean_env = false,
 	     new_sid = true,
 	     new_pgrp = false,
@@ -404,6 +407,7 @@ main(int argc, char *argv[])
 	bool wayland = false;
 	char *cmd_arg0 = NULL;
 	const char *chroot_path = NULL;
+	const char *setuser_name = NULL;
 	char abspath[PATH_MAX];
 	size_t abspath_len = 0;
 	struct curtain_config *cfg;
@@ -499,49 +503,54 @@ main(int argc, char *argv[])
 			break;
 		}
 		case 'T':
-			  new_sid = false;
-			  pty_wrap = false;
-			  pty_wrap_partial = false;
-			  break;
+			new_sid = false;
+			pty_wrap = false;
+			pty_wrap_partial = false;
+			break;
 		case 'R':
-			  pty_wrap_filter = false;
-			  break;
+			pty_wrap_filter = false;
+			break;
 		case 'l':
-			  login_shell = true;
-			  /* FALLTHROUGH */
+			login_shell = true;
+			/* FALLTHROUGH */
 		case 'S':
-			  clean_env = true;
-			  new_sid = true;
-			  pty_wrap = true;
-			  pty_wrap_partial = false;
-			  /* FALLTHROUGH */
+			user_ctx = true;
+			clean_env = true;
+			new_sid = true;
+			pty_wrap = true;
+			pty_wrap_partial = false;
+			/* FALLTHROUGH */
 		case 's':
-			  run_shell = true;
-			  break;
+			run_shell = true;
+			break;
 		case 'f':
-			  no_fork = true;
-			  break;
+			no_fork = true;
+			break;
 		case LONGOPT_UNENFORCED:
-			  unenforced = true;
-			  break;
+			unenforced = true;
+			break;
 		case 'X':
-			  x11_mode = X11_UNTRUSTED;
-			  break;
+			x11_mode = X11_UNTRUSTED;
+			break;
 		case 'Y':
-			  x11_mode = X11_TRUSTED;
-			  break;
+			x11_mode = X11_TRUSTED;
+			break;
 		case 'W':
-			  wayland = true;
-			  break;
+			wayland = true;
+			break;
 		case LONGOPT_NEWPGRP:
-			  new_pgrp = true;
-			  break;
+			new_pgrp = true;
+			break;
 		case LONGOPT_NEWSID:
-			  new_sid = true;
-			  break;
+			new_sid = true;
+			break;
 		case LONGOPT_CHROOT:
-			  chroot_path = optarg;
-			  break;
+			chroot_path = optarg;
+			break;
+		case LONGOPT_SETUSER:
+			user_ctx = true;
+			setuser_name = optarg;
+			break;
 		default:
 			usage();
 		}
@@ -610,7 +619,7 @@ main(int argc, char *argv[])
 
 	pw = NULL;
 
-	if (clean_env) {
+	if (user_ctx) {
 		const char *set_home = NULL, *set_shell = NULL,
 		      *set_user = NULL, *set_logname = NULL,
 		      *set_term = NULL,
@@ -619,59 +628,82 @@ main(int argc, char *argv[])
 		      *set_wdisplay = NULL;
 		static char *null_env[] = { NULL };
 		extern char **environ;
+		unsigned flags;
 
 		if (!pw) {
 			errno = 0;
-			pw = getpwuid(getuid());
-			if (!pw && errno)
-				err(EX_OSERR, "getpwuid");
+			if (setuser_name)
+				pw = getpwnam(setuser_name);
+			else
+				pw = getpwuid(getuid());
+			if (!pw) {
+				if (errno)
+					err(EX_OSERR, "getpwuid");
+				if (setuser_name)
+					errx(EX_OSERR, "user not found: %s", setuser_name);
+			}
 		}
 
-		if (login_shell) {
-			set_home = pw ? pw->pw_dir : "/";
-			set_shell = pw && pw->pw_shell && *pw->pw_shell ?
-			    pw->pw_shell : _PATH_BSHELL;
-			if (pw->pw_name)
-				set_user = set_logname = pw->pw_name;
-		} else {
-			set_home = getenv("HOME");
-			set_shell = getenv("SHELL");
-			set_user = getenv("USER");
-			set_logname = getenv("LOGNAME");
-		}
-		set_term = getenv("TERM");
-		set_tmpdir = getenv("TMPDIR");
-		if (x11_mode != X11_NONE) {
-			set_display = getenv("DISPLAY");
-			set_xauthority = getenv("XAUTHORITY");
-		}
-		if (wayland) {
-			set_wdisplay = getenv("WAYLAND_DISPLAY");
+		flags = 0;
+
+		if (clean_env) {
+			if (login_shell) {
+				set_home = pw ? pw->pw_dir : "/";
+				set_shell = pw && pw->pw_shell && *pw->pw_shell ?
+				    pw->pw_shell : _PATH_BSHELL;
+				if (pw->pw_name)
+					set_user = set_logname = pw->pw_name;
+			} else {
+				set_home = getenv("HOME");
+				set_shell = getenv("SHELL");
+				set_user = getenv("USER");
+				set_logname = getenv("LOGNAME");
+			}
+			set_term = getenv("TERM");
+			set_tmpdir = getenv("TMPDIR");
+			if (x11_mode != X11_NONE) {
+				set_display = getenv("DISPLAY");
+				set_xauthority = getenv("XAUTHORITY");
+			}
+			if (wayland) {
+				set_wdisplay = getenv("WAYLAND_DISPLAY");
+			}
+
+			environ = null_env;
+
+			flags |= LOGIN_SETENV | LOGIN_SETPATH;
 		}
 
-		environ = null_env;
-		r = setusercontext(NULL, pw, pw->pw_uid, LOGIN_SETENV | LOGIN_SETPATH);
+		if (setuser_name) {
+			flags |= LOGIN_SETUSER | LOGIN_SETGROUP;
+			if (login_shell)
+				flags |= LOGIN_SETLOGIN;
+		}
+
+		r = setusercontext(NULL, pw, pw ? pw->pw_uid : getuid(), flags);
 		if (r < 0)
 			err(EX_OSERR, "setusercontext()");
 
-		if (set_home)
-			esetenv("HOME", set_home, 1);
-		if (set_shell)
-			esetenv("SHELL", set_shell, 1);
-		if (set_user)
-			esetenv("USER", set_user, 1);
-		if (set_logname)
-			esetenv("LOGNAME", set_logname, 1);
-		if (set_term)
-			esetenv("TERM", set_term, 1);
-		if (set_tmpdir)
-			esetenv("TMPDIR", set_tmpdir, 1);
-		if (set_display)
-			esetenv("DISPLAY", set_display, 1);
-		if (set_xauthority)
-			esetenv("XAUTHORITY", set_xauthority, 1);
-		if (set_wdisplay)
-			esetenv("WAYLAND_DISPLAY", set_wdisplay, 1);
+		if (clean_env) {
+			if (set_home)
+				esetenv("HOME", set_home, 1);
+			if (set_shell)
+				esetenv("SHELL", set_shell, 1);
+			if (set_user)
+				esetenv("USER", set_user, 1);
+			if (set_logname)
+				esetenv("LOGNAME", set_logname, 1);
+			if (set_term)
+				esetenv("TERM", set_term, 1);
+			if (set_tmpdir)
+				esetenv("TMPDIR", set_tmpdir, 1);
+			if (set_display)
+				esetenv("DISPLAY", set_display, 1);
+			if (set_xauthority)
+				esetenv("XAUTHORITY", set_xauthority, 1);
+			if (set_wdisplay)
+				esetenv("WAYLAND_DISPLAY", set_wdisplay, 1);
+		}
 	}
 
 	while (argc && strchr(*argv, '=')) {

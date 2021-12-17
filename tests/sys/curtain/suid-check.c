@@ -9,7 +9,7 @@ main()
 	e = 30;
 	if (geteuid())
 		e += 1;
-	r = open("/etc", O_DIRECTORY|O_RDONLY);
+	r = open("/etc/rc", O_RDONLY);
 	if (r < 0)
 		e += 2;
 	else

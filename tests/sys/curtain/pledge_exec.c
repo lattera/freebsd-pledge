@@ -144,7 +144,7 @@ ATF_TC_BODY(suid_unveils, tc)
 	pid_t pid = atf_utils_fork();
 	if (pid == 0) {
 		ATF_REQUIRE(unveil_exec("/", "rx") >= 0);
-		ATF_REQUIRE(unveil_exec("/etc", "") >= 0);
+		ATF_REQUIRE(unveil_exec("/etc/rc", "") >= 0);
 		ATF_REQUIRE(unveil_exec(NULL, NULL) >= 0);
 		ATF_REQUIRE(execl(suid_check_path, suid_check_path, (char *)NULL) >= 0);
 		_exit(127);
@@ -159,7 +159,7 @@ ATF_TC_BODY(suid_unveils_unfinalized, tc)
 	pid_t pid = atf_utils_fork();
 	if (pid == 0) {
 		ATF_REQUIRE(unveil_exec("/", "rx") >= 0);
-		ATF_REQUIRE(unveil_exec("/etc", "") >= 0);
+		ATF_REQUIRE(unveil_exec("/etc/rc", "") >= 0);
 		ATF_REQUIRE(execl(suid_check_path, suid_check_path, (char *)NULL) >= 0);
 		_exit(127);
 	}
