@@ -371,10 +371,12 @@ main(int argc, char *argv[])
 	enum {
 		LONGOPT_NEWPGRP = CHAR_MAX + 1,
 		LONGOPT_NEWSID,
+		LONGOPT_CHROOT,
 	};
 	const struct option longopts[] = {
 		{ "newpgrp", no_argument, NULL, LONGOPT_NEWPGRP },
 		{ "newsid", no_argument, NULL, LONGOPT_NEWSID },
+		{ "chroot", required_argument, NULL, LONGOPT_CHROOT },
 		{ 0 }
 	};
 	char *sh_argv[2];
@@ -399,6 +401,7 @@ main(int argc, char *argv[])
 	enum { X11_NONE, X11_UNTRUSTED, X11_TRUSTED } x11_mode = X11_NONE;
 	bool wayland = false;
 	char *cmd_arg0 = NULL;
+	const char *chroot_path = NULL;
 	char abspath[PATH_MAX];
 	size_t abspath_len = 0;
 	struct curtain_config *cfg;
@@ -533,6 +536,9 @@ main(int argc, char *argv[])
 			  break;
 		case LONGOPT_NEWSID:
 			  new_sid = true;
+			  break;
+		case LONGOPT_CHROOT:
+			  chroot_path = optarg;
 			  break;
 		default:
 			usage();
@@ -672,7 +678,7 @@ main(int argc, char *argv[])
 	}
 
 	/*
-	 * WARNING: HOME may be untrusted past this point!
+	 * WARNING: $HOME may now point to an untrusted directory!
 	 */
 
 	if (!argc) {
@@ -711,6 +717,18 @@ main(int argc, char *argv[])
 	endpwent();
 	pw = NULL;
 
+	if (chroot_path) {
+		r = chdir(chroot_path);
+		if (r < 0)
+			err(EX_OSERR, "chdir %s", chroot_path);
+		r = chroot(".");
+		if (r < 0)
+			err(EX_OSERR, "chroot %s", chroot_path);
+	}
+
+	/*
+	 * WARNING: The root directory may be untrusted past this point!
+	 */
 
 	if (!(do_exec = no_fork)) {
 		if (pty_wrap) {
