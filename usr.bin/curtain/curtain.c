@@ -7,6 +7,7 @@
 #include <limits.h>
 #include <locale.h>
 #include <login_cap.h>
+#include <getopt.h>
 #include <paths.h>
 #include <pledge.h>
 #include <poll.h>
@@ -367,6 +368,15 @@ usage(void)
 int
 main(int argc, char *argv[])
 {
+	enum {
+		LONGOPT_NEWPGRP = CHAR_MAX + 1,
+		LONGOPT_NEWSID,
+	};
+	const struct option longopts[] = {
+		{ "newpgrp", no_argument, NULL, LONGOPT_NEWPGRP },
+		{ "newsid", no_argument, NULL, LONGOPT_NEWSID },
+		{ 0 }
+	};
 	char *sh_argv[2];
 	int ch, r;
 	unsigned unsafety = 0;
@@ -406,25 +416,13 @@ main(int argc, char *argv[])
 	curtain_enable((main_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 	curtain_enable((args_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 
-	while ((ch = getopt(argc, argv, "0123456789@:d:vfknaA!o:t:p:u:0:TRSslUXYW")) != -1)
+	while ((ch = getopt_long(argc, argv, "+0123456789@:d:vfknaA!t:p:u:0:TRSslUXYW",
+	    longopts, NULL)) != -1)
 		switch (ch) {
 		case '0' ... '9':
 			level = ch - '0';
 			has_level = true;
 			break;
-		case 'o': {
-			char *str, *tok;
-			str = optarg;
-			while ((tok = strsep(&str, ",")))
-				if (strcmp(tok, "newpgrp") == 0) {
-					new_pgrp = true;
-				} else if (strcmp(tok, "newsid") == 0) {
-					new_sid = true;
-				} else {
-					warnx("unknown option: %s", tok);
-				}
-			break;
-		}
 		case '@':
 		case 'd':
 			curtain_config_directive(cfg, args_slot, optarg);
@@ -529,6 +527,12 @@ main(int argc, char *argv[])
 			  break;
 		case 'W':
 			  wayland = true;
+			  break;
+		case LONGOPT_NEWPGRP:
+			  new_pgrp = true;
+			  break;
+		case LONGOPT_NEWSID:
+			  new_sid = true;
 			  break;
 		default:
 			usage();
