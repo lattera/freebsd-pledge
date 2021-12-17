@@ -130,8 +130,7 @@ barrier_bump(struct barrier *br)
 static void
 barrier_collapse(const struct barrier *src, struct barrier *dst)
 {
-	dst->br_mode.isolate |= src->br_mode.isolate;
-	dst->br_mode.protect |= src->br_mode.protect;
+	dst->br_mode.soft |= dst->br_mode.hard |= src->br_mode.hard;
 }
 
 static void
@@ -217,31 +216,26 @@ barrier_free(struct barrier *br)
 }
 
 static struct barrier *
-barrier_cross_locked(struct barrier *br, struct barrier_mode mode)
+barrier_cross_locked(struct barrier *br, barrier_bits bar)
 {
-	while (br && !((br->br_mode.isolate & mode.isolate) |
-	               (br->br_mode.protect & mode.protect)))
-		br = br->br_parent;
+	if (br && !(br->br_mode.soft & bar))
+		do br = br->br_parent;
+		while (br && !(br->br_mode.hard & bar));
 	return (br);
 }
 
 struct barrier *
-barrier_cross(struct barrier *br, struct barrier_mode mode)
+barrier_cross(struct barrier *br, barrier_bits bar)
 {
 	rw_rlock(&barrier_tree_lock);
-	br = barrier_cross_locked(br, mode);
+	br = barrier_cross_locked(br, bar);
 	rw_runlock(&barrier_tree_lock);
 	return (br);
 }
 
 bool
-barrier_visible(struct barrier *subject, const struct barrier *target,
-    enum barrier_type type)
+barrier_visible(struct barrier *subject, const struct barrier *target, barrier_bits bar)
 {
-	struct barrier_mode mode = {
-		.isolate = 1 << type,
-		.protect = 1 << type,
-	};
 	/*
 	 * NOTE: One or both of subject and target may be NULL (indicating
 	 * credentials with no curtain restrictions).
@@ -253,7 +247,7 @@ barrier_visible(struct barrier *subject, const struct barrier *target,
 	if (subject == target) /* fast path */
 		return (true);
 	rw_rlock(&barrier_tree_lock);
-	subject = barrier_cross_locked(subject, mode);
+	subject = barrier_cross_locked(subject, bar);
 	while (target && subject != target)
 		target = target->br_parent;
 	rw_runlock(&barrier_tree_lock);
@@ -816,16 +810,6 @@ const sysfilset_t curtain_abilities_sysfils[CURTAINABL_COUNT] = {
 	[CURTAINABL_KMOD] = SYSFIL_KMOD,
 };
 
-const barrier_bits curtain_abilities_barriers[CURTAINABL_COUNT] = {
-	[CURTAINABL_PROC]	= 1 << BARRIER_PROC_SIGNAL,
-	[CURTAINABL_PS]		= 1 << BARRIER_PROC_STATUS,
-	[CURTAINABL_SCHED]	= 1 << BARRIER_PROC_SCHED,
-	[CURTAINABL_DEBUG]	= 1 << BARRIER_PROC_DEBUG,
-	[CURTAINABL_SOCK]	= 1 << BARRIER_SOCK,
-	[CURTAINABL_POSIXIPC]	= 1 << BARRIER_POSIXIPC,
-	[CURTAINABL_SYSVIPC]	= 1 << BARRIER_SYSVIPC,
-};
-
 static struct curtain_mode
 curtain_resolve_1(const struct curtain *ct,
     enum curtainreq_type *type, union curtain_key *key)
@@ -862,7 +846,7 @@ curtain_restrictive(const struct curtain *ct)
 		if (item->type != 0 && mode_restricted(item->mode))
 			return (true);
 	br = CURTAIN_BARRIER(ct);
-	if (br->br_mode.isolate || br->br_mode.protect)
+	if (br->br_mode.soft != BARRIER_NONE || br->br_mode.hard != BARRIER_NONE)
 		return (true);
 	return (false);
 }
@@ -924,6 +908,7 @@ curtain_harden(struct curtain *ct)
 		}
 	for (enum curtain_ability abl = 0; abl <= CURTAINABL_LAST; abl++)
 		mode_harden(&ct->ct_abilities[abl]);
+	CURTAIN_BARRIER(ct)->br_mode.hard |= CURTAIN_BARRIER(ct)->br_mode.soft;
 	if (ct->ct_on_exec)
 		curtain_harden(ct->ct_on_exec);
 }

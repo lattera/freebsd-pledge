@@ -16,12 +16,10 @@ enum curtain_action {
 	CURTAINACT_TRAP = 2,
 	CURTAINACT_KILL = 3,
 #define	CURTAINACT_COUNT 4
-};
+} __packed;
 
 struct curtain_mode {
-	/* enum curtain_action */
-	uint8_t soft : 2;
-	uint8_t hard : 2;
+	enum curtain_action soft : 2, hard : 2;
 };
 
 typedef uint16_t curtain_index;
@@ -72,24 +70,23 @@ struct curtain_head {
 	struct barrier *cth_barrier;
 };
 
-enum barrier_type {
-	BARRIER_PROC_STATUS,
-	BARRIER_PROC_SIGNAL,
-	BARRIER_PROC_SCHED,
-	BARRIER_PROC_DEBUG,
-	BARRIER_SOCK,
-	BARRIER_POSIXIPC,
-	BARRIER_SYSVIPC,
-	BARRIER_DEVICE,
-#define	BARRIER_COUNT 8 /* UPDATE ME!!! */
-};
+typedef uint16_t barrier_bits;
 
-typedef uint8_t barrier_bits;
-#define	BARRIERS_ALL	((1 << BARRIER_COUNT) - 1)
+#define	BARRIER_PROC_STATUS	(1 << 0)
+#define	BARRIER_PROC_SIGNAL	(1 << 1)
+#define	BARRIER_PROC_SCHED	(1 << 2)
+#define	BARRIER_PROC_DEBUG	(1 << 3)
+#define	BARRIER_SOCK		(1 << 4)
+#define	BARRIER_POSIXIPC	(1 << 5)
+#define	BARRIER_SYSVIPC		(1 << 6)
+#define	BARRIER_DEVICE		(1 << 7)
+#define	BARRIER_POSIXIPC_RENAME	(1 << 8)
+
+#define	BARRIER_NONE	0
+#define	BARRIER_ALL	-1
 
 struct barrier_mode {
-	barrier_bits isolate : BARRIER_COUNT;
-	barrier_bits protect : BARRIER_COUNT;
+	barrier_bits soft, hard;
 };
 
 #define	CURTAIN_BARRIER(ct) ((ct)->ct_head.cth_barrier)
@@ -104,6 +101,8 @@ struct barrier {
 	uint64_t br_serial;
 	struct barrier_mode br_mode;
 };
+
+CTASSERT(sizeof(struct barrier) <= 64);
 
 struct curtain {
 	struct curtain_head ct_head;
@@ -144,7 +143,6 @@ extern bool __read_mostly curtain_log_sysctls;
 
 extern const sysfilset_t curtain_preserve_sysfils;
 extern const sysfilset_t curtain_abilities_sysfils[CURTAINABL_COUNT];
-extern const barrier_bits curtain_abilities_barriers[CURTAINABL_COUNT];
 
 extern int __read_mostly curtain_slot;
 #define	CURTAIN_CTH_IS_CT(cth) ((cth) != &(cth)->cth_barrier->br_head)
@@ -169,9 +167,9 @@ void	barrier_bump(struct barrier *);
 void	barrier_link(struct barrier *child, struct barrier *parent);
 void	barrier_unlink(struct barrier *);
 void	barrier_free(struct barrier *);
-struct barrier *barrier_cross(struct barrier *, struct barrier_mode);
+struct barrier *barrier_cross(struct barrier *, barrier_bits);
 bool	barrier_visible(struct barrier *subject, const struct barrier *target,
-	    enum barrier_type);
+	    barrier_bits);
 
 void	curtain_invariants(const struct curtain *);
 void	curtain_invariants_sync(const struct curtain *);
@@ -200,7 +198,7 @@ int	curtain_finish(struct curtain *, struct ucred *);
 
 bool	curtain_cred_restricted(const struct curtain *, const struct ucred *);
 bool	curtain_cred_visible(const struct ucred *subject, const struct ucred *target,
-	    enum barrier_type);
+	    barrier_bits);
 struct curtain *curtain_from_cred(struct ucred *);
 
 

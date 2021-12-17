@@ -42,10 +42,9 @@ typedef union curtain_key ctkey;
 #define	CRED_SLOT_BR(cr) CURTAIN_SLOT_BR((cr)->cr_label)
 
 bool
-curtain_cred_visible(const struct ucred *subject, const struct ucred *target,
-    enum barrier_type type)
+curtain_cred_visible(const struct ucred *subject, const struct ucred *target, barrier_bits bar)
 {
-	return (barrier_visible(CRED_SLOT_BR(subject), CRED_SLOT_BR(target), type));
+	return (barrier_visible(CRED_SLOT_BR(subject), CRED_SLOT_BR(target), bar));
 }
 
 struct curtain *
@@ -211,28 +210,34 @@ static const enum curtain_action lvl2act[CURTAINLVL_COUNT] = {
 	[CURTAINLVL_KILL] = CURTAINACT_KILL,
 };
 
+static const barrier_bits abl2bar[CURTAINABL_COUNT][2] = {
+	                         /* CURTAINLVL_GATE, CURTAINLVL_WALL */
+	[CURTAINABL_DEFAULT]	= { BARRIER_DEVICE, BARRIER_NONE },
+	[CURTAINABL_PROC]	= { BARRIER_PROC_SIGNAL, BARRIER_NONE },
+	[CURTAINABL_PS]		= { BARRIER_PROC_STATUS, BARRIER_NONE },
+	[CURTAINABL_SCHED]	= { BARRIER_PROC_SCHED, BARRIER_NONE },
+	[CURTAINABL_DEBUG]	= { BARRIER_PROC_DEBUG, BARRIER_NONE },
+	[CURTAINABL_SOCK]	= { BARRIER_SOCK, BARRIER_NONE },
+	[CURTAINABL_POSIXIPC]	= { BARRIER_POSIXIPC, BARRIER_POSIXIPC_RENAME },
+	[CURTAINABL_SYSVIPC]	= { BARRIER_SYSVIPC, BARRIER_NONE },
+};
+
 static void
-curtain_fill_barrier_mode(struct barrier_mode *mode, enum curtainreq_level lvl, barrier_bits barriers)
+curtain_fill_barrier_mode(struct barrier_mode *mode,
+    enum curtainreq_level lvl, enum curtain_ability abl)
 {
-	if (lvl >= CURTAINLVL_GATE)
-		mode->protect |= barriers;
-	else
-		mode->protect &= ~barriers;
-	if (lvl >= CURTAINLVL_WALL)
-		mode->isolate |= barriers;
-	else
-		mode->isolate &= ~barriers;
+	mode->soft |= lvl >= CURTAINLVL_GATE ?  abl2bar[abl][0] : BARRIER_NONE;
+	mode->soft &= lvl <  CURTAINLVL_GATE ? ~abl2bar[abl][0] : BARRIER_ALL;
+	mode->soft |= lvl >= CURTAINLVL_WALL ?  abl2bar[abl][1] : BARRIER_NONE;
+	mode->soft &= lvl <  CURTAINLVL_WALL ? ~abl2bar[abl][1] : BARRIER_ALL;
 }
 
 static void
 curtain_fill_ability(struct curtain *ct, const struct curtainreq *req,
     enum curtain_ability abl)
 {
-	struct barrier *br;
 	ct->ct_abilities[abl].soft = lvl2act[req->level];
-	br = CURTAIN_BARRIER(ct);
-	curtain_fill_barrier_mode(&br->br_mode,
-	    req->level, curtain_abilities_barriers[abl]);
+	curtain_fill_barrier_mode(&CURTAIN_BARRIER(ct)->br_mode, req->level, abl);
 }
 
 static struct curtain_item *
@@ -455,9 +460,10 @@ curtain_fill(struct curtain *ct, struct ucred *cr,
 				def = req->level;
 		}
 
-	for (enum curtain_ability abl = 0; abl <= CURTAINABL_LAST; abl++)
+	for (enum curtain_ability abl = 0; abl <= CURTAINABL_LAST; abl++) {
 		ct->ct_abilities[abl].soft = lvl2act[def];
-	curtain_fill_barrier_mode(&CURTAIN_BARRIER(ct)->br_mode, def, BARRIERS_ALL);
+		curtain_fill_barrier_mode(&CURTAIN_BARRIER(ct)->br_mode, def, abl);
+	}
 
 	for (req = reqv; req < &reqv[reqc]; req++)
 		if (req->flags & flags_filter) {

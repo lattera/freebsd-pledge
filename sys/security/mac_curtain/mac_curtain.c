@@ -1162,14 +1162,10 @@ curtain_sysvmsq_check_2(struct ucred *cr,
 static int
 curtain_generic_ipc_name_prefix(struct ucred *cr, char **prefix, char *end)
 {
-	struct barrier_mode mode = {
-		.isolate = 1 << BARRIER_POSIXIPC,
-		.protect = 0,
-	};
 	struct barrier *br;
 	size_t n, m;
 	m = end - *prefix;
-	br = barrier_cross(CRED_SLOT_BR(cr), mode);
+	br = barrier_cross(CRED_SLOT_BR(cr), BARRIER_POSIXIPC_RENAME);
 	if (br) {
 		ssize_t r;
 		r = snprintf(*prefix, m,
