@@ -394,6 +394,27 @@ append_only_body() {
 	atf_check test ! -e out
 }
 
+atf_test_case chroot cleanup
+chroot_head() {
+	atf_set require.user root
+}
+chroot_cleanup() {
+	atf_check umount d/dev
+}
+chroot_body() {
+	local jail_devfs_ruleset=4
+	atf_check mkdir d
+	atf_check mkdir d/dev
+	atf_check mkdir d/bin
+	atf_check mount -t devfs -o ruleset=$jail_devfs_ruleset devfs d/dev
+	atf_check cp /rescue/echo d/bin
+	atf_check -o inline:'test 1\n' curtain -d ability:chroot -f -p d:r -p d/bin:rx -S \
+		chroot d echo "test 1"
+	atf_check cp /rescue/sh d/bin
+	atf_check -o inline:'test 2\n' curtain -d ability:chroot -f -p d:r -p d/bin:rx -p d/dev/stdout:w -S \
+		chroot d sh -c 'echo "test 2" > /dev/stdout'
+}
+
 atf_init_test_cases() {
 	atf_add_test_case cmd_true
 	atf_add_test_case cmd_false
@@ -429,4 +450,5 @@ atf_init_test_cases() {
 	atf_add_test_case sysctl_inherit
 	atf_add_test_case tmpdir_exec
 	atf_add_test_case append_only
+	atf_add_test_case chroot
 }
