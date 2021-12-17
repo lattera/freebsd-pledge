@@ -372,11 +372,13 @@ main(int argc, char *argv[])
 		LONGOPT_NEWPGRP = CHAR_MAX + 1,
 		LONGOPT_NEWSID,
 		LONGOPT_CHROOT,
+		LONGOPT_UNENFORCED,
 	};
 	const struct option longopts[] = {
 		{ "newpgrp", no_argument, NULL, LONGOPT_NEWPGRP },
 		{ "newsid", no_argument, NULL, LONGOPT_NEWSID },
 		{ "chroot", required_argument, NULL, LONGOPT_CHROOT },
+		{ "unenforced", no_argument, NULL, LONGOPT_UNENFORCED },
 		{ 0 }
 	};
 	char *sh_argv[2];
@@ -519,7 +521,7 @@ main(int argc, char *argv[])
 		case 'f':
 			  no_fork = true;
 			  break;
-		case 'U':
+		case LONGOPT_UNENFORCED:
 			  unenforced = true;
 			  break;
 		case 'X':
