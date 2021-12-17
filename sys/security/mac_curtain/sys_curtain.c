@@ -56,7 +56,7 @@ curtain_from_cred(struct ucred *cr)
 
 
 static bool __read_mostly curtainctl_enabled = true;
-unsigned __read_mostly curtain_log_level = CURTAINLVL_TRAP;
+unsigned __read_mostly curtain_log_level = CURTAINACT_TRAP;
 bool __read_mostly curtain_log_sysctls = false;
 
 SYSCTL_NODE(_security, OID_AUTO, curtain,
