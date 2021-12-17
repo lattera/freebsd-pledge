@@ -492,14 +492,10 @@ check_fmode(struct ucred *cr, unveil_perms uperms, mode_t mode)
 }
 
 static int
-curtain_vnode_check_open(struct ucred *cr,
-    struct vnode *vp, struct label *vplabel, accmode_t accmode)
+check_accmode(struct ucred *cr, unveil_perms uperms, enum vtype type, accmode_t accmode)
 {
-	unveil_perms uperms;
 	int error;
-
-	uperms = get_vp_uperms(cr, vp);
-	switch (vp->v_type) {
+	switch (type) {
 	case VSOCK:
 		if ((error = unveil_check_uperms(uperms, UPERM_CONNECT)))
 			return (error);
@@ -531,6 +527,24 @@ curtain_vnode_check_open(struct ucred *cr,
 			return (error);
 		break;
 	}
+	return (0);
+}
+
+static int
+curtain_vnode_check_access(struct ucred *cr,
+    struct vnode *vp, struct label *vplabel, accmode_t accmode)
+{
+	return (check_accmode(cr, get_vp_uperms(cr, vp), vp->v_type, accmode));
+}
+
+static int
+curtain_vnode_check_open(struct ucred *cr,
+    struct vnode *vp, struct label *vplabel, accmode_t accmode)
+{
+	int error;
+
+	if ((error = check_accmode(cr, get_vp_uperms(cr, vp), vp->v_type, accmode)))
+		return (error);
 
 	if (vp->v_type == VSOCK) {
 		if ((error = cred_ability_check(cr, CURTAINABL_VFS_CONNECT)))
@@ -1541,7 +1555,7 @@ static struct mac_policy_ops curtain_policy_ops = {
 
 	.mpo_net_check_fibnum = curtain_net_check_fibnum,
 
-	.mpo_vnode_check_access = curtain_vnode_check_open,
+	.mpo_vnode_check_access = curtain_vnode_check_access,
 	.mpo_vnode_check_open = curtain_vnode_check_open,
 	.mpo_vnode_check_read = curtain_vnode_check_read,
 	.mpo_vnode_check_write = curtain_vnode_check_write,
