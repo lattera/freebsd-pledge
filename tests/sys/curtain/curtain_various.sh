@@ -176,7 +176,7 @@ cmd_id_body() {
 	atf_check -o file:exp curtain -t _pwddb id -p
 }
 
-atf_test_case uncurtain
+atf_test_case uncurtain # check if the curtain can be dropped altogether
 uncurtain_body() {
 	local names='security.curtain.curtained security.curtain.curtained_exec'
 	[ "$(sysctl -n security.curtain.curtained)" = 0 ] || atf_skip "already curtained"
@@ -185,11 +185,19 @@ uncurtain_body() {
 	atf_check -o inline:"1\n1\n" \
 		curtain \
 		sysctl -n $names
+	atf_check -o inline:"0\n0\n" \
+		curtain -d default-pass \
+		sysctl -n $names
 	atf_check -o inline:"1\n1\n" \
 		curtain -t curtain \
 		curtain -d default-pass \
 		sysctl -n $names
 	atf_check -o inline:"0\n0\n" \
+		curtain -t curtain -U \
+		curtain -d default-pass \
+		sysctl -n $names
+	atf_check -o inline:"1\n1\n" \
+		curtain -t curtain \
 		curtain -t curtain -U \
 		curtain -d default-pass \
 		sysctl -n $names
