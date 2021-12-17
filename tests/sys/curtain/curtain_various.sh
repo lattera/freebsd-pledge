@@ -178,26 +178,48 @@ cmd_id_body() {
 
 atf_test_case uncurtain
 uncurtain_body() {
+	local names='security.curtain.curtained security.curtain.curtained_exec'
 	[ "$(sysctl -n security.curtain.curtained)" = 0 ] || atf_skip "already curtained"
-	atf_check -o inline:"0\n" sysctl -n security.curtain.curtained
-	atf_check -o inline:"0\n" sysctl -n security.curtain.curtained_exec
-	atf_check -o inline:"1\n" curtain sysctl -n security.curtain.curtained
-	atf_check -o inline:"1\n" curtain sysctl -n security.curtain.curtained_exec
-	atf_check -o inline:"1\n" curtain -t curtain curtain -d default-pass sysctl -n security.curtain.curtained
-	atf_check -o inline:"1\n" curtain -t curtain curtain -d default-pass sysctl -n security.curtain.curtained_exec
-	atf_check -o inline:"0\n" curtain -t curtain -U curtain -d default-pass sysctl -n security.curtain.curtained
-	atf_check -o inline:"0\n" curtain -t curtain -U curtain -d default-pass sysctl -n security.curtain.curtained_exec
+	atf_check -o inline:"0\n0\n" \
+		sysctl -n $names
+	atf_check -o inline:"1\n1\n" \
+		curtain \
+		sysctl -n $names
+	atf_check -o inline:"1\n1\n" \
+		curtain -t curtain \
+		curtain -d default-pass \
+		sysctl -n $names
+	atf_check -o inline:"0\n0\n" \
+		curtain -t curtain -U \
+		curtain -d default-pass \
+		sysctl -n $names
 }
 
 atf_test_case unenforced_unveil
 unenforced_unveil_body() {
 	atf_check -o save:f echo test
-	atf_check -o file:f curtain -U -t curtain curtain -p f cat f
-	atf_check -o file:f curtain -U -t curtain curtain -p / cat f
-	atf_check -o file:f curtain -U -t curtain curtain -U -t curtain curtain -p f cat f
-	atf_check -o file:f curtain -U -t curtain curtain -U -t curtain curtain -p / cat f
-	atf_check -s not-exit:0 -o empty -e not-empty curtain -U -t curtain curtain -t curtain curtain -p f cat f
-	atf_check -s not-exit:0 -o empty -e not-empty curtain -U -t curtain curtain -t curtain curtain -p / cat f
+	atf_check -o file:f \
+		curtain -U -t curtain \
+		curtain -p f cat f
+	atf_check -o file:f \
+		curtain -U -t curtain \
+		curtain -p / cat f
+	atf_check -o file:f \
+		curtain -U -t curtain \
+		curtain -U -t curtain \
+		curtain -p f cat f
+	atf_check -o file:f \
+		curtain -U -t curtain \
+		curtain -U -t curtain \
+		curtain -p / cat f
+	atf_check -s not-exit:0 -o empty -e not-empty \
+		curtain -U -t curtain \
+		curtain -t curtain \
+		curtain -p f cat f
+	atf_check -s not-exit:0 -o empty -e not-empty \
+		curtain -U -t curtain \
+		curtain -t curtain \
+		curtain -p / cat f
 }
 
 atf_test_case extattrs
