@@ -31,6 +31,7 @@ static MALLOC_DEFINE(M_UNVEIL_CACHE, "unveil cache", "mac_curtain per-procecess 
 static MALLOC_DEFINE(M_UNVEIL_TRACK, "unveil track", "mac_curtain per-thread unveil trackers");
 
 static bool __read_mostly unveil_cover_cache_enabled = true;
+static bool __read_mostly unveil_ignore_fixup_vnode_errors = true;
 static unsigned int __read_mostly unveil_max_per_curtain = 128;
 
 SYSCTL_BOOL(_security_curtain, OID_AUTO, unveil_cover_cache,
@@ -38,6 +39,9 @@ SYSCTL_BOOL(_security_curtain, OID_AUTO, unveil_cover_cache,
 
 SYSCTL_UINT(_security_curtain, OID_AUTO, max_unveils_per_curtain,
     CTLFLAG_RW, &unveil_max_per_curtain, 0, "Maximum unveils allowed per process");
+
+SYSCTL_BOOL(_security_curtain, OID_AUTO, unveil_ignore_fixup_vnode_errors,
+    CTLFLAG_RW, &unveil_ignore_fixup_vnode_errors, 0, "");
 
 #ifdef CURTAIN_STATS
 
@@ -275,49 +279,35 @@ curtain_lookup_mount(const struct curtain *ct, struct mount *mp)
 #define UNVEIL_MAX_DEPTH 32
 
 static int
-unveil_fixup_depth(struct curtain_unveil *unv, size_t depth)
+curtain_fixup_unveil_parent(struct curtain *ct, struct ucred *cr, struct curtain_unveil *uv,
+    size_t pending_depth)
 {
 	int error;
-	if (depth > UNVEIL_MAX_DEPTH)
-		return (ELOOP);
-	if (unv->parent && unv->depth == 0) {
-		error = unveil_fixup_depth(unv->parent, depth + 1);
-		if (error)
-			return (error);
-		if (unv->parent->depth >= UNVEIL_MAX_DEPTH)
-			return (ELOOP);
-		unv->depth = unv->parent->depth + 1;
-	}
-	return (0);
-}
-
-int
-curtain_fixup_unveils_parents(struct curtain *ct, struct ucred *cr)
-{
-	struct curtain_item *item;
-	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
-		if (item->type == CURTAINTYP_UNVEIL) {
-			struct curtain_item *parent_item;
-			struct curtain_unveil uv1, *uv;
-			struct vnode *vp;
-			int error;
-			uv = item->key.unveil;
-			if (uv->parent)
-				continue;
-			vp = uv->vp;
-			if (vp->v_type != VDIR)
-				continue;
-			if (!uv->name_len) {
-				vget(vp, LK_RETRY | mount_dotdot_lkflags(vp->v_mount));
-				error = vnode_lookup_dotdot(vp, cr, &vp);
-				if (error || vp == uv->vp) {
-					vput(vp);
-					continue;
-				}
+	if (!uv->parent) {
+		/*
+		 * Fill in missing unveil parent links.  For directories, do an
+		 * actual FS lookup to find the unveil's parent vnode first.
+		 */
+		struct curtain_item *parent_item;
+		struct curtain_unveil uv1;
+		struct vnode *vp;
+		vp = uv->vp;
+		if (vp->v_type != VDIR)
+			return (ENOTDIR);
+		if (!uv->name_len) {
+			vget(vp, LK_RETRY | mount_dotdot_lkflags(vp->v_mount));
+			error = vnode_lookup_dotdot(vp, cr, &vp);
+			if (error || vp == uv->vp) {
+				vput(vp);
+				if (error && !unveil_ignore_fixup_vnode_errors)
+					return (error);
+				vp = NULL;
 			}
+		}
+		if (vp) {
 			uv1 = (struct curtain_unveil){
 				.vp = vp,
-				    .hash = vp->v_nchash,
+				.hash = vp->v_nchash,
 			};
 			parent_item = curtain_lookup(ct, CURTAINTYP_UNVEIL,
 			    (union curtain_key){ .unveil = &uv1 });
@@ -326,14 +316,38 @@ curtain_fixup_unveils_parents(struct curtain *ct, struct ucred *cr)
 			if (!uv->name_len)
 				vput(vp);
 		}
+	}
+	if (uv->parent && uv->depth == 0) {
+		/*
+		 * To avoid stack overflows in other functions, make sure there
+		 * are no unveil parent chains longer than UNVEIL_MAX_DEPTH. If
+		 * this unveil has a parent but its "depth" is still 0, then it
+		 * must not have gone through this code yet.
+		 */
+		if (pending_depth >= UNVEIL_MAX_DEPTH)
+			return (ELOOP);
+		error = curtain_fixup_unveil_parent(ct, cr, uv->parent, pending_depth + 1);
+		if (error)
+			return (error);
+		if (uv->parent->depth >= UNVEIL_MAX_DEPTH)
+			return (ELOOP);
+		uv->depth = uv->parent->depth + 1;
+	}
+	return (0);
+}
+
+int
+curtain_fixup_unveils_parents(struct curtain *ct, struct ucred *cr)
+{
+	struct curtain_item *item;
+	int error = 0;
 	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
 		if (item->type == CURTAINTYP_UNVEIL) {
-			int error;
-			error = unveil_fixup_depth(item->key.unveil, 0);
+			error = curtain_fixup_unveil_parent(ct, cr, item->key.unveil, 0);
 			if (error)
-				return (error);
+				break;
 		}
-	return (0);
+	return (error);
 }
 
 int
