@@ -674,16 +674,12 @@ openat_before_unveil(bool list)
 TEST_CASE_EXPR(openat_before_unveil_with_read, openat_before_unveil(false))
 TEST_CASE_EXPR(openat_before_unveil_with_list, openat_before_unveil(true))
 
-ATF_TC(openat_cutoff);
-ATF_TC_HEAD(openat_cutoff, tc)
-{
-	atf_tc_set_md_var(tc, "require.user", "unprivileged");
-}
+ATF_TC_WITHOUT_HEAD(openat_cutoff);
 ATF_TC_BODY(openat_cutoff, tc)
 {
 	/*
-	 * What happens if we cutoff access to parent directories such that the
-	 * covering unveils cannot be found for a pre-opened directory FD?
+	 * What happens if we (try to) cutoff access to parent directories such
+	 * that the covering unveils cannot be found for a pre-opened directory FD?
 	 */
 	int fd;
 	ATF_REQUIRE(try_mkdir("a") >= 0);
@@ -693,9 +689,11 @@ ATF_TC_BODY(openat_cutoff, tc)
 	ATF_CHECK((fd = open("a/b/c", O_RDONLY|O_DIRECTORY)) >= 0);
 	ATF_REQUIRE(unveil("a", "a") >= 0);
 	ATF_REQUIRE(chmod("a/b", 0) >= 0);
+	ATF_REQUIRE(unveil("a", "") >= 0);
 	check_accessat(fd, NULL, "dr");
-	check_accessat(fd, ".", "*");
-	check_accessat(fd, "f", "*");
+	check_accessat(fd, ".", "d");
+	check_accessat(fd, "f", "");
+	ATF_REQUIRE(unveil("a", "a") >= 0);
 	ATF_CHECK(chmod("a/b", 0755) >= 0); /* allow cleanup */
 	ATF_CHECK(close(fd) >= 0);
 }

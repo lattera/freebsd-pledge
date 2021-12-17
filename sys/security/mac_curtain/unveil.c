@@ -242,7 +242,7 @@ vnode_lookup_dotdot(struct vnode *dp, struct ucred *cr, struct vnode **vpp)
 
 	cn = (struct componentname){
 		.cn_nameiop = LOOKUP,
-		.cn_flags = ISLASTCN | ISDOTDOT,
+		.cn_flags = ISLASTCN | ISDOTDOT | NOEXECCHECK,
 		.cn_lkflags = lkflags,
 		.cn_cred = cr,
 		.cn_nameptr = "..",
