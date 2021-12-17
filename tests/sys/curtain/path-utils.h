@@ -8,6 +8,16 @@
 #include <pledge.h>
 
 static int __unused
+try_creat_nonexec(const char *path)
+{
+	int r;
+	r = creat(path, S_IRUSR|S_IWUSR | S_IRGRP|S_IWGRP | S_IROTH|S_IWOTH);
+	if (r >= 0)
+		close(r);
+	return (r);
+}
+
+static int __unused
 try_creat(const char *path)
 {
 	int r;

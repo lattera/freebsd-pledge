@@ -240,6 +240,16 @@ vnode_lookup_dotdot(struct vnode *dp, struct ucred *cr, struct vnode **vpp)
 		dp = vp;
 	} while (true);
 
+	/*
+	 * NOTE: The NOEXECCHECK flag is important for two cases:
+	 * - Finding the parent directory of directories being unveiled.  The
+	 *   user may be able to see them and open them with O_PATH but not be
+	 *   able to traverse them.
+	 * - Finding the covering unveil of the starting directory during a
+	 *   path lookup.  The user may not have the filesystem permissions on
+	 *   the directory (though it could have been pre-opened with O_SEARCH)
+	 *   or some of its parent directories.
+	 */
 	cn = (struct componentname){
 		.cn_nameiop = LOOKUP,
 		.cn_flags = ISLASTCN | ISDOTDOT | NOEXECCHECK,

@@ -698,6 +698,34 @@ ATF_TC_BODY(openat_cutoff, tc)
 	ATF_CHECK(close(fd) >= 0);
 }
 
+ATF_TC_WITHOUT_HEAD(open_o_search_1);
+ATF_TC_BODY(open_o_search_1, tc)
+{
+	int fd;
+	ATF_REQUIRE(try_mkdir("d") >= 0);
+	ATF_REQUIRE(try_creat_nonexec("d/f") >= 0);
+	ATF_REQUIRE(unveil("d", "ra") >= 0);
+	ATF_REQUIRE((fd = open("d", O_SEARCH)) >= 0);
+	ATF_CHECK(chmod("d", 0000) >= 0);
+	check_accessat(fd, "f", "r");
+	ATF_CHECK(fchmod(fd, 0755) >= 0); /* allow cleanup */
+	ATF_CHECK(close(fd) >= 0);
+}
+
+ATF_TC_WITHOUT_HEAD(open_o_search_2);
+ATF_TC_BODY(open_o_search_2, tc)
+{
+	int fd;
+	ATF_REQUIRE(unveil(".", "rwc") >= 0);
+	ATF_REQUIRE(try_mkdir("d") >= 0);
+	ATF_REQUIRE(try_creat_nonexec("d/f") >= 0);
+	ATF_REQUIRE((fd = open("d", O_SEARCH)) >= 0);
+	ATF_CHECK(chmod("d", 0000) >= 0);
+	check_accessat(fd, "f", "rw");
+	ATF_CHECK(fchmod(fd, 0755) >= 0); /* allow cleanup */
+	ATF_CHECK(close(fd) >= 0);
+}
+
 ATF_TP_ADD_TCS(tp)
 {
 	ATF_TP_ADD_TC(tp, do_nothing);
@@ -737,5 +765,7 @@ ATF_TP_ADD_TCS(tp)
 	ATF_TP_ADD_TC(tp, openat_before_unveil_with_read);
 	ATF_TP_ADD_TC(tp, openat_before_unveil_with_list);
 	ATF_TP_ADD_TC(tp, openat_cutoff);
+	ATF_TP_ADD_TC(tp, open_o_search_1);
+	ATF_TP_ADD_TC(tp, open_o_search_2);
 	return (atf_no_error());
 }
