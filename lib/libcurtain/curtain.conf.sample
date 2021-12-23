@@ -88,6 +88,12 @@ ability! any_ioctl # XXX
 merge _xdg
 # Seems like GTK-2 also will use this file.
 ~/.config/gtk-3.0/bookmarks
+[_gtk _strict]
+sysctl-deny vfs.usermount
+
+[_qt _strict]
+ability-deny prot_exec
+sysctl-deny kern.bootfile # kvm_open(3)
 
 [_memstat]
 sysctl hw.physmem
@@ -102,8 +108,11 @@ sysctl vm.stats.vm.v_free_count
 sysctl kstat.zfs.misc.arcstats.size
 
 
-[_shell]
+[_misc_shell_utils]
 merge curtain
+
+[_shell]
+merge _misc_shell_utils
 
 [sh, ksh, ksh93, mksh, oksh, dash, bash, zsh : _bourne]
 
@@ -218,6 +227,8 @@ merge _bpf
 merge _basic _gtk
 merge _bpf
 ~/.config/wireshark/			: rw +
+[wireshark _strict]
+ability-deny prot_exec
 
 [emacs : _editor]
 merge _basic
@@ -234,8 +245,10 @@ merge _crude _gtk
 ~/.config/abiword/			: rw +
 
 [gimp : _editor]
+# File previews won't work without access to ~/.cache/thumbnails.
 merge _crude _proc _cmds _gtk
 merge! _memstat
+ability ps # exiv2
 ability sysvipc
 /usr/local/etc/gimp/			: r
 ~/.config/GIMP/				: rw +
@@ -249,15 +262,16 @@ ability posixipc
 /usr/local/bin/inkscape			: i
 
 [libreoffice : _editor]
-merge _basic _acl _xdg
+merge _basic _xdg
 ability prot_exec
+ability acl # ls(1)
 merge! _pwddb
 # LibreOffice ignores $TMPDIR for some things.
 merge!! _unsafe_system_tmpdir
 ~/.config/libreoffice/			: rw +
 
 [xpdf : _viewer]
-merge _crude _xdg
+merge _crude _ps _qt _xdg
 /usr/local/etc/papersize		: r
 /usr/local/etc/xpdfrc			: r
 ~/.xpdfrc				: rw
@@ -272,7 +286,8 @@ merge _crude _gtk
 ~/.config/epdfview/			: rw +
 
 [okular : _viewer]
-merge _crude _xdg
+merge _crude _ps _qt _xdg
+merge! _memstat
 ~/.config/okularrc			: rw +
 ~/.local/share/okular/			: rw +
 
@@ -283,7 +298,7 @@ merge _crude _proc _ps _cmds _gtk
 ~/.cache/geeqie/			: rw +
 
 [shotwell : _viewer]
-merge _basic
+merge _basic _gtk
 # Has trouble saving its configs.
 ~/.shotwell/				: rw +
 ~/.local/share/shotwell/		: rw +
@@ -299,20 +314,32 @@ merge _basic
 ~/.cache/sxiv/				: rw +
 
 [hexchat]
-merge _basic
+merge _basic _gtk
+ability cred
 ~/.config/hexchat/			: rw +
+[hexchat _strict]
+sysctl-deny machdep.tsc_freq
 
 [pidgin]
-merge _basic
+merge _basic _gtk
 ~/.purple/				: rw +
 
-[firefox.base : _browser]
-# NOTE: Sometimes crash due to X11 errors with -X.  Works better under -Y/-W.
-# Run with GDK_BACKEND=wayland for -W.  When giving it DRM access, it sometimes
-# doesn't activate until the second start.
-merge _basic _fdpass _gtk
+[_gecko]
+merge _fdpass
 merge! _memstat
 ability posixipc prot_exec
+[_gecko _strict]
+sysctl-deny kern.proc.vmmap
+
+[firefox.base : _browser]
+# NOTES:
+# - Sometimes crash due to X11 errors with -X.  Works better under -Y/-W.
+# - Run with GDK_BACKEND=wayland for -W.  When giving it DRM access, it
+#   sometimes doesn't activate until the second start.
+# - For some reason the "Save Page As..." file browsing dialog won't show up
+#   unless the ~/Download (or XDG alternative) directory already exists.
+merge _basic _gtk
+merge _gecko
 ~/.mozilla/firefox/installs.ini
 ~/.mozilla/firefox/profiles.ini
 
@@ -351,8 +378,8 @@ ability posixipc prot_exec sendfile
 ~/.cache/chromium/			: rw +
 
 [thunderbird]
-merge _basic _fdpass _gtk
-ability posixipc prot_exec
+merge _basic _gtk
+merge _gecko
 ~/.thunderbird/				: rw +
 ~/.cache/thunderbird/			: rw +
 
@@ -360,6 +387,8 @@ ability posixipc prot_exec
 merge _fdpass
 merge! _memstat
 ability prot_exec
+[_webkit _strict]
+sysctl-deny kern.bootfile # kvm_open(3)
 
 [falkon : _browser]
 merge _basic _xdg
@@ -374,11 +403,13 @@ merge _webkit
 ~/.cache/Otter/				: rw +
 
 [qbittorrent : _p2p]
-merge _crude _unix _ps _network _xdg
+merge _crude _unix _ps _network _qt _xdg
 # NOTE: Best to disable the tray icon feature under -X.
 ~/.local/share/qBittorrent/		: rw +
 ~/.config/qBittorrent/			: rw +
 ~/.cache/qBittorrent/			: rw +
+[qbittorrent _strict]
+sysctl-deny hw.physmem
 
 [deluge : _p2p]
 merge _basic
@@ -386,19 +417,23 @@ merge _basic
 ~/.config/deluge/			: rw +
 
 [audacious : _player]
-merge _crude _ps _xdg
+merge _basic _qt _xdg
+ability posixipc
 ~/.config/audacious/			: rw +
 
 [mpv : _player]
 merge _basic
 ~/.config/mpv/ ~/.mpv/			: rw +
+[mpv _strict]
+ability-deny prot_exec
+ioctl-deny 0x40087603 # XXX
 
 [mplayer : _player]
 merge _basic
 ~/.mplayer/				: rw +
 
 [vlc : _player]
-merge _basic _xdg
+merge _basic _qt _xdg
 ability sysvipc
 ability prot_exec
 ~/.config/vlc/				: rw +

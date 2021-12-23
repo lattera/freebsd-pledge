@@ -111,7 +111,6 @@ ability chroot
 ability chown
 ability any_cred
 ability! sysflags
-merge _tmpdir_shellexec
 
 [_level6 : _level5]
 ability prot_exec

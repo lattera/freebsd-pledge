@@ -362,8 +362,10 @@ usage(void)
 	exit(EX_USAGE);
 }
 
-#define	DEFAULT_LEVEL 3
-#define	APP_TAG_LEVEL 1 /* usually lets the application print an error message */
+#define	DEFAULT_LEVEL 5
+/* level 1 usually lets the application at least print an error message */
+#define	STRICT_APP_LEVEL 1
+#define	LOOSE_APP_LEVEL DEFAULT_LEVEL
 
 int
 main(int argc, char *argv[])
@@ -561,7 +563,7 @@ main(int argc, char *argv[])
 	if (app_tag) {
 		unsafety = MAX(unsafety, app_tag_unsafe ? 1 : 0);
 		if (!has_level)
-			level = APP_TAG_LEVEL;
+			level = signaling ? STRICT_APP_LEVEL : LOOSE_APP_LEVEL;
 	}
 
 	curtain_config_unsafety(cfg, unsafety);
@@ -572,8 +574,11 @@ main(int argc, char *argv[])
 		name[strlen(name) - 1] = '0' + level;
 		curtain_config_tag_push(cfg, name);
 	}
-	if (!signaling)
+	if (!signaling) {
 		curtain_default(main_slot, CURTAIN_DENY);
+		curtain_config_tag_push(cfg, "_loose");
+	} else
+		curtain_config_tag_push(cfg, "_strict");
 	if (no_network)
 		curtain_config_tag_block(cfg, "_network");
 	if (new_sid)
