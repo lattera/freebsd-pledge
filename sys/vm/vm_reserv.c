@@ -59,6 +59,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/smp.h>
 
 #include <vm/vm.h>
+#include <vm/vm_extern.h>
 #include <vm/vm_param.h>
 #include <vm/vm_object.h>
 #include <vm/vm_page.h>
@@ -656,10 +657,8 @@ vm_reserv_alloc_contig(vm_object_t object, vm_pindex_t pindex, int domain,
 	 * possible size satisfy the alignment and boundary requirements?
 	 */
 	pa = VM_RESERV_INDEX(object, pindex) << PAGE_SHIFT;
-	if ((pa & (alignment - 1)) != 0)
-		return (NULL);
 	size = npages << PAGE_SHIFT;
-	if (((pa ^ (pa + size - 1)) & ~(boundary - 1)) != 0)
+	if (!vm_addr_ok(pa, size, alignment, boundary))
 		return (NULL);
 
 	/*
@@ -682,8 +681,7 @@ vm_reserv_alloc_contig(vm_object_t object, vm_pindex_t pindex, int domain,
 		m = &rv->pages[index];
 		pa = VM_PAGE_TO_PHYS(m);
 		if (pa < low || pa + size > high ||
-		    (pa & (alignment - 1)) != 0 ||
-		    ((pa ^ (pa + size - 1)) & ~(boundary - 1)) != 0)
+		    !vm_addr_ok(pa, size, alignment, boundary))
 			goto out;
 		/* Handle vm_page_rename(m, new_object, ...). */
 		for (i = 0; i < npages; i++)
@@ -1312,12 +1310,13 @@ vm_reserv_find_contig(vm_reserv_t rv, int npages, int lo,
  * contiguous physical memory.  If a satisfactory reservation is found, it is
  * broken.  Returns true if a reservation is broken and false otherwise.
  */
-bool
+vm_page_t
 vm_reserv_reclaim_contig(int domain, u_long npages, vm_paddr_t low,
     vm_paddr_t high, u_long alignment, vm_paddr_t boundary)
 {
 	struct vm_reserv_queue *queue;
 	vm_paddr_t pa, size;
+	vm_page_t m_ret;
 	vm_reserv_t marker, rv, rvn;
 	int hi, lo, posn, ppn_align, ppn_bound;
 
@@ -1332,8 +1331,8 @@ vm_reserv_reclaim_contig(int domain, u_long npages, vm_paddr_t low,
 	 * doesn't include a boundary-multiple within it.  Otherwise,
 	 * no boundary-constrained allocation is possible.
 	 */
-	if (size > boundary)
-		return (false);
+	if (!vm_addr_bound_ok(0, size, boundary))
+		return (NULL);
 	marker = &vm_rvd[domain].marker;
 	queue = &vm_rvd[domain].partpop;
 	/*
@@ -1343,7 +1342,8 @@ vm_reserv_reclaim_contig(int domain, u_long npages, vm_paddr_t low,
 	 */
 	ppn_align = (int)(ulmin(ulmax(PAGE_SIZE, alignment),
 	    VM_LEVEL_0_SIZE) >> PAGE_SHIFT);
-	ppn_bound = (int)(MIN(MAX(PAGE_SIZE, boundary),
+	ppn_bound = boundary == 0 ? VM_LEVEL_0_NPAGES :
+	    (int)(MIN(MAX(PAGE_SIZE, boundary),
             VM_LEVEL_0_SIZE) >> PAGE_SHIFT);
 
 	vm_reserv_domain_scan_lock(domain);
@@ -1358,7 +1358,7 @@ vm_reserv_reclaim_contig(int domain, u_long npages, vm_paddr_t low,
 			/* This entire reservation is too high; go to next. */
 			continue;
 		}
-		if ((pa & (alignment - 1)) != 0) {
+		if (!vm_addr_align_ok(pa, alignment)) {
 			/* This entire reservation is unaligned; go to next. */
 			continue;
 		}
@@ -1386,18 +1386,20 @@ vm_reserv_reclaim_contig(int domain, u_long npages, vm_paddr_t low,
 		posn = vm_reserv_find_contig(rv, (int)npages, lo, hi,
 		    ppn_align, ppn_bound);
 		if (posn >= 0) {
-			pa = VM_PAGE_TO_PHYS(&rv->pages[posn]);
-			KASSERT((pa & (alignment - 1)) == 0,
-			    ("%s: adjusted address does not align to %lx",
-			    __func__, alignment));
-			KASSERT(((pa ^ (pa + size - 1)) & -boundary) == 0,
-			    ("%s: adjusted address spans boundary to %jx",
-			    __func__, (uintmax_t)boundary));
-
 			vm_reserv_domain_scan_unlock(domain);
+			/* Allocate requested space */
+			rv->popcnt += npages;
+			while (npages-- > 0)
+				popmap_set(rv->popmap, posn + npages);
 			vm_reserv_reclaim(rv);
 			vm_reserv_unlock(rv);
-			return (true);
+			m_ret = &rv->pages[posn];
+			pa = VM_PAGE_TO_PHYS(m_ret);
+			KASSERT(vm_addr_ok(pa, size, alignment, boundary),
+			    ("%s: adjusted address not aligned/bounded to "
+			     "%lx/%jx",
+			     __func__, alignment, (uintmax_t)boundary));
+			return (m_ret);
 		}
 		vm_reserv_domain_lock(domain);
 		rvn = TAILQ_NEXT(rv, partpopq);
@@ -1405,7 +1407,7 @@ vm_reserv_reclaim_contig(int domain, u_long npages, vm_paddr_t low,
 	}
 	vm_reserv_domain_unlock(domain);
 	vm_reserv_domain_scan_unlock(domain);
-	return (false);
+	return (NULL);
 }
 
 /*

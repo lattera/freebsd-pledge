@@ -73,7 +73,8 @@ typedef	uint64_t	inp_gen_t;
 /*
  * PCB with AF_INET6 null bind'ed laddr can receive AF_INET input packet.
  * So, AF_INET6 null laddr is also used as AF_INET null laddr, by utilizing
- * the following structure.
+ * the following structure.  This requires padding always be zeroed out,
+ * which is done right after inpcb allocation and stays through its lifetime.
  */
 struct in_addr_4in6 {
 	u_int32_t	ia46_pad32[3];
@@ -235,19 +236,15 @@ struct inpcb {
 	 */
 #if defined(__amd64__) || defined(__i386__)
 	uint8_t inp_in_hpts; /* on output hpts (lock b) */
-	uint8_t inp_in_dropq; /* on input hpts (lock b) */
 #else
 	uint32_t inp_in_hpts; /* on output hpts (lock b) */
-	uint32_t inp_in_dropq; /* on input hpts (lock b) */
 #endif
 	volatile uint16_t  inp_hpts_cpu; /* Lock (i) */
 	volatile uint16_t  inp_irq_cpu;	/* Set by LRO in behalf of or the driver */
 	u_int	inp_refcount;		/* (i) refcount */
 	int	inp_flags;		/* (i) generic IP/datagram flags */
 	int	inp_flags2;		/* (i) generic IP/datagram flags #2*/
-	uint16_t  inp_dropq_cpu; /* Lock (i) */
 	uint8_t inp_hpts_cpu_set :1,  /* on output hpts (i) */
-			 inp_dropq_cpu_set : 1,	/* on input hpts (i) */
 			 inp_hpts_calls :1,	/* (i) from output hpts */
 			 inp_irq_cpu_set :1,	/* (i) from LRO/Driver */
 			 inp_spare_bits2 : 3;
@@ -256,8 +253,6 @@ struct inpcb {
 	struct	socket *inp_socket;	/* (i) back pointer to socket */
 	int32_t 	 inp_hptsslot;	/* Hpts wheel slot this tcb is Lock(i&b) */
 	uint32_t         inp_hpts_drop_reas;	/* reason we are dropping the PCB (lock i&b) */
-	uint32_t	inp_dropq_gencnt;
-	TAILQ_ENTRY(inpcb) inp_dropq;	/* hpts drop queue next lock(b) */
 	struct	inpcbinfo *inp_pcbinfo;	/* (c) PCB list info */
 	struct	ucred	*inp_cred;	/* (c) cache of socket cred */
 	u_int32_t inp_flow;		/* (i) IPv6 flow information */
@@ -380,8 +375,8 @@ void	in_pcbtoxinpcb(const struct inpcb *, struct xinpcb *);
 
 #ifdef _KERNEL
 /*
- * Global data structure for each high-level protocol (UDP, TCP, ...) in both
- * IPv4 and IPv6.  Holds inpcb lists and information for managing them.
+ * Per-VNET pcb database for each high-level protocol (UDP, TCP, ...) in both
+ * IPv4 and IPv6.
  *
  * The pcbs are protected with SMR section and thus all lists in inpcbinfo
  * are CK-lists.  Locking is required to insert a pcb into database. Two
@@ -451,6 +446,41 @@ struct inpcbinfo {
 };
 
 /*
+ * Global allocation storage for each high-level protocol (UDP, TCP, ...).
+ * Each corresponding per-VNET inpcbinfo points into this one.
+ */
+struct inpcbstorage {
+	uma_zone_t	ips_zone;
+	uma_zone_t	ips_portzone;
+	uma_init	ips_pcbinit;
+	const char *	ips_zone_name;
+	const char *	ips_portzone_name;
+	const char *	ips_infolock_name;
+	const char *	ips_hashlock_name;
+};
+
+#define INPCBSTORAGE_DEFINE(prot, lname, zname, iname, hname)		\
+static int								\
+prot##_inpcb_init(void *mem, int size __unused, int flags __unused)	\
+{									\
+	struct inpcb *inp = mem;					\
+									\
+	rw_init_flags(&inp->inp_lock, lname, RW_RECURSE | RW_DUPOK);	\
+	return (0);							\
+}									\
+static struct inpcbstorage prot = {					\
+	.ips_pcbinit = prot##_inpcb_init,				\
+	.ips_zone_name = zname,						\
+	.ips_portzone_name = zname " ports",				\
+	.ips_infolock_name = iname,					\
+	.ips_hashlock_name = hname,					\
+};									\
+SYSINIT(prot##_inpcbstorage_init, SI_SUB_PROTO_DOMAIN,			\
+    SI_ORDER_SECOND, in_pcbstorage_init, &prot);			\
+SYSUNINIT(prot##_inpcbstorage_uninit, SI_SUB_PROTO_DOMAIN,		\
+    SI_ORDER_SECOND, in_pcbstorage_destroy, &prot)
+
+/*
  * Load balance groups used for the SO_REUSEPORT_LB socket option. Each group
  * (or unique address:port combination) can be re-used at most
  * INPCBLBGROUP_SIZMAX (256) times. The inpcbs are stored in il_inp which
@@ -471,8 +501,6 @@ struct inpcblbgroup {
 	struct inpcb	*il_inp[];			/* (h) */
 };
 
-#define INP_LOCK_INIT(inp, d, t) \
-	rw_init_flags(&(inp)->inp_lock, (t), RW_RECURSE | RW_DUPOK)
 #define INP_LOCK_DESTROY(inp)	rw_destroy(&(inp)->inp_lock)
 #define INP_RLOCK(inp)		rw_rlock(&(inp)->inp_lock)
 #define INP_WLOCK(inp)		rw_wlock(&(inp)->inp_lock)
@@ -536,13 +564,36 @@ int	inp_so_options(const struct inpcb *inp);
 #define	INP_HASH_WLOCK_ASSERT(ipi)	mtx_assert(&(ipi)->ipi_hash_lock, \
 					MA_OWNED)
 
-#define INP_PCBHASH(faddr, lport, fport, mask) \
-	(((faddr) ^ ((faddr) >> 16) ^ ntohs((lport) ^ (fport))) & (mask))
-#define INP_PCBPORTHASH(lport, mask) \
-	(ntohs((lport)) & (mask))
-#define	INP_PCBLBGROUP_PKTHASH(faddr, lport, fport) \
-	((faddr) ^ ((faddr) >> 16) ^ ntohs((lport) ^ (fport)))
-#define	INP6_PCBHASHKEY(faddr)	((faddr)->s6_addr32[3])
+/*
+ * Wildcard matching hash is not just a microoptimisation!  The hash for
+ * wildcard IPv4 and wildcard IPv6 must be the same, otherwise AF_INET6
+ * wildcard bound pcb won't be able to receive AF_INET connections, while:
+ * jenkins_hash(&zeroes, 1, s) != jenkins_hash(&zeroes, 4, s)
+ * See also comment above struct in_addr_4in6.
+ */
+#define	IN_ADDR_JHASH32(addr)						\
+	((addr)->s_addr == INADDR_ANY ? V_in_pcbhashseed :		\
+	    jenkins_hash32((&(addr)->s_addr), 1, V_in_pcbhashseed))
+#define	IN6_ADDR_JHASH32(addr)						\
+	(memcmp((addr), &in6addr_any, sizeof(in6addr_any)) == 0 ?	\
+	    V_in_pcbhashseed :						\
+	    jenkins_hash32((addr)->__u6_addr.__u6_addr32,		\
+	    nitems((addr)->__u6_addr.__u6_addr32), V_in_pcbhashseed))
+
+#define INP_PCBHASH(faddr, lport, fport, mask)				\
+	((IN_ADDR_JHASH32(faddr) ^ ntohs((lport) ^ (fport))) & (mask))
+#define	INP6_PCBHASH(faddr, lport, fport, mask)				\
+	((IN6_ADDR_JHASH32(faddr) ^ ntohs((lport) ^ (fport))) & (mask))
+
+#define	INP_PCBHASH_WILD(lport, mask)					\
+	((V_in_pcbhashseed ^ ntohs(lport)) & (mask))
+
+#define	INP_PCBLBGROUP_PKTHASH(faddr, lport, fport)			\
+	(IN_ADDR_JHASH32(faddr) ^ ntohs((lport) ^ (fport)))
+#define	INP6_PCBLBGROUP_PKTHASH(faddr, lport, fport)			\
+	(IN6_ADDR_JHASH32(faddr) ^ ntohs((lport) ^ (fport)))
+
+#define INP_PCBPORTHASH(lport, mask)	(ntohs((lport)) & (mask))
 
 /*
  * Flags for inp_vflags -- historically version flags only
@@ -670,9 +721,11 @@ VNET_DECLARE(int, ipport_tcpallocs);
 #define	V_ipport_stoprandom	VNET(ipport_stoprandom)
 #define	V_ipport_tcpallocs	VNET(ipport_tcpallocs)
 
+void	in_pcbinfo_init(struct inpcbinfo *, struct inpcbstorage *,
+	    u_int, u_int);
 void	in_pcbinfo_destroy(struct inpcbinfo *);
-void	in_pcbinfo_init(struct inpcbinfo *, const char *, u_int, int, char *,
-	    uma_init);
+void	in_pcbstorage_init(void *);
+void	in_pcbstorage_destroy(void *);
 
 int	in_pcbbind_check_bindmulti(const struct inpcb *ni,
 	    const struct inpcb *oi);

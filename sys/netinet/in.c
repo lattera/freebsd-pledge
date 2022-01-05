@@ -35,6 +35,8 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
+#include "opt_inet.h"
+
 #define IN_HISTORICAL_NETS		/* include class masks */
 
 #include <sys/param.h>
@@ -1699,6 +1701,17 @@ in_lltattach(struct ifnet *ifp)
 	llt->llt_mark_used = llentry_mark_used;
  	lltable_link(llt);
 
+	return (llt);
+}
+
+struct lltable *
+in_lltable_get(struct ifnet *ifp)
+{
+	struct lltable *llt = NULL;
+
+	void *afdata_ptr = ifp->if_afdata[AF_INET];
+	if (afdata_ptr != NULL)
+		llt = ((struct in_ifinfo *)afdata_ptr)->ii_llt;
 	return (llt);
 }
 

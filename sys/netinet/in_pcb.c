@@ -49,7 +49,9 @@ __FBSDID("$FreeBSD$");
 #include "opt_rss.h"
 
 #include <sys/param.h>
+#include <sys/hash.h>
 #include <sys/systm.h>
+#include <sys/libkern.h>
 #include <sys/lock.h>
 #include <sys/malloc.h>
 #include <sys/mbuf.h>
@@ -245,6 +247,16 @@ SYSCTL_COUNTER_U64(_net_inet_ip_rl, OID_AUTO, chgrl, CTLFLAG_RD,
 #endif /* RATELIMIT */
 
 #endif /* INET */
+
+VNET_DEFINE(uint32_t, in_pcbhashseed);
+static void
+in_pcbhashseed_init(void)
+{
+
+	V_in_pcbhashseed = arc4random();
+}
+VNET_SYSINIT(in_pcbhashseed_init, SI_SUB_PROTO_DOMAIN, SI_ORDER_FIRST,
+    in_pcbhashseed_init, 0);
 
 /*
  * in_pcb.c: manage the Protocol Control Blocks.
@@ -506,19 +518,16 @@ abort_with_hash_wlock:
 CTASSERT(sizeof(struct inpcbhead) == sizeof(LIST_HEAD(, inpcb)));
 
 /*
- * Initialize an inpcbinfo -- we should be able to reduce the number of
- * arguments in time.
+ * Initialize an inpcbinfo - a per-VNET instance of connections db.
  */
-static void inpcb_dtor(void *, int, void *);
-static void inpcb_fini(void *, int);
 void
-in_pcbinfo_init(struct inpcbinfo *pcbinfo, const char *name,
-    u_int hash_nelements, int porthash_nelements, char *inpcbzone_name,
-    uma_init inpcbzone_init)
+in_pcbinfo_init(struct inpcbinfo *pcbinfo, struct inpcbstorage *pcbstor,
+    u_int hash_nelements, u_int porthash_nelements)
 {
 
-	mtx_init(&pcbinfo->ipi_lock, name, NULL, MTX_DEF);
-	mtx_init(&pcbinfo->ipi_hash_lock, "pcbinfohash", NULL, MTX_DEF);
+	mtx_init(&pcbinfo->ipi_lock, pcbstor->ips_infolock_name, NULL, MTX_DEF);
+	mtx_init(&pcbinfo->ipi_hash_lock, pcbstor->ips_hashlock_name,
+	    NULL, MTX_DEF);
 #ifdef VIMAGE
 	pcbinfo->ipi_vnet = curvnet;
 #endif
@@ -531,16 +540,9 @@ in_pcbinfo_init(struct inpcbinfo *pcbinfo, const char *name,
 	    &pcbinfo->ipi_porthashmask);
 	pcbinfo->ipi_lbgrouphashbase = hashinit(porthash_nelements, M_PCB,
 	    &pcbinfo->ipi_lbgrouphashmask);
-	pcbinfo->ipi_zone = uma_zcreate(inpcbzone_name, sizeof(struct inpcb),
-	    NULL, inpcb_dtor, inpcbzone_init, inpcb_fini, UMA_ALIGN_PTR,
-	    UMA_ZONE_SMR);
-	uma_zone_set_max(pcbinfo->ipi_zone, maxsockets);
-	uma_zone_set_warning(pcbinfo->ipi_zone,
-	    "kern.ipc.maxsockets limit reached");
+	pcbinfo->ipi_zone = pcbstor->ips_zone;
+	pcbinfo->ipi_portzone = pcbstor->ips_portzone;
 	pcbinfo->ipi_smr = uma_zone_get_smr(pcbinfo->ipi_zone);
-	pcbinfo->ipi_portzone = uma_zcreate(inpcbzone_name,
-	    sizeof(struct inpcbport), NULL, NULL, NULL, NULL, UMA_ALIGN_PTR, 0);
-	uma_zone_set_smr(pcbinfo->ipi_portzone, pcbinfo->ipi_smr);
 }
 
 /*
@@ -558,10 +560,39 @@ in_pcbinfo_destroy(struct inpcbinfo *pcbinfo)
 	    pcbinfo->ipi_porthashmask);
 	hashdestroy(pcbinfo->ipi_lbgrouphashbase, M_PCB,
 	    pcbinfo->ipi_lbgrouphashmask);
-	uma_zdestroy(pcbinfo->ipi_zone);
-	uma_zdestroy(pcbinfo->ipi_portzone);
 	mtx_destroy(&pcbinfo->ipi_hash_lock);
 	mtx_destroy(&pcbinfo->ipi_lock);
+}
+
+/*
+ * Initialize a pcbstorage - per protocol zones to allocate inpcbs.
+ */
+static void inpcb_dtor(void *, int, void *);
+static void inpcb_fini(void *, int);
+void
+in_pcbstorage_init(void *arg)
+{
+	struct inpcbstorage *pcbstor = arg;
+
+	pcbstor->ips_zone = uma_zcreate(pcbstor->ips_zone_name,
+	    sizeof(struct inpcb), NULL, inpcb_dtor, pcbstor->ips_pcbinit,
+	    inpcb_fini, UMA_ALIGN_PTR, UMA_ZONE_SMR);
+	pcbstor->ips_portzone = uma_zcreate(pcbstor->ips_portzone_name,
+	    sizeof(struct inpcbport), NULL, NULL, NULL, NULL, UMA_ALIGN_PTR, 0);
+	uma_zone_set_smr(pcbstor->ips_portzone,
+	    uma_zone_get_smr(pcbstor->ips_zone));
+}
+
+/*
+ * Destroy a pcbstorage - used by unloadable protocols.
+ */
+void
+in_pcbstorage_destroy(void *arg)
+{
+	struct inpcbstorage *pcbstor = arg;
+
+	uma_zdestroy(pcbstor->ips_zone);
+	uma_zdestroy(pcbstor->ips_portzone);
 }
 
 /*
@@ -620,7 +651,7 @@ in_pcballoc(struct socket *so, struct inpcbinfo *pcbinfo)
 	 * If using hpts lets drop a random number in so
 	 * not all new connections fall on the same CPU.
 	 */
-	inp->inp_hpts_cpu = inp->inp_dropq_cpu = hpts_random_cpu(inp);
+	inp->inp_hpts_cpu = hpts_random_cpu(inp);
 #endif
 	refcount_init(&inp->inp_refcount, 1);   /* Reference from socket. */
 	INP_WLOCK(inp);
@@ -1644,6 +1675,8 @@ inp_next(struct inpcb_iterator *ii)
 				smr_enter(ipi->ipi_smr);
 				MPASS(inp != II_LIST_FIRST(ipi, hash));
 				inp = II_LIST_FIRST(ipi, hash);
+				if (inp == NULL)
+					break;
 			}
 		}
 
@@ -1750,7 +1783,6 @@ in_pcbrele_rlocked(struct inpcb *inp)
 	MPASS(inp->inp_flags & INP_FREED);
 	MPASS(inp->inp_socket == NULL);
 	MPASS(inp->inp_in_hpts == 0);
-	MPASS(inp->inp_in_dropq == 0);
 	INP_RUNLOCK(inp);
 	uma_zfree_smr(inp->inp_pcbinfo->ipi_zone, inp);
 	return (true);
@@ -1768,7 +1800,6 @@ in_pcbrele_wlocked(struct inpcb *inp)
 	MPASS(inp->inp_flags & INP_FREED);
 	MPASS(inp->inp_socket == NULL);
 	MPASS(inp->inp_in_hpts == 0);
-	MPASS(inp->inp_in_dropq == 0);
 	INP_WUNLOCK(inp);
 	uma_zfree_smr(inp->inp_pcbinfo->ipi_zone, inp);
 	return (true);
@@ -2087,8 +2118,8 @@ in_pcblookup_local(struct inpcbinfo *pcbinfo, struct in_addr laddr,
 		 * Look for an unconnected (wildcard foreign addr) PCB that
 		 * matches the local address and port we're looking for.
 		 */
-		head = &pcbinfo->ipi_hashbase[INP_PCBHASH(INADDR_ANY, lport,
-		    0, pcbinfo->ipi_hashmask)];
+		head = &pcbinfo->ipi_hashbase[INP_PCBHASH_WILD(lport,
+		    pcbinfo->ipi_hashmask)];
 		CK_LIST_FOREACH(inp, head, inp_hash) {
 #ifdef INET6
 			/* XXX inp locking */
@@ -2216,7 +2247,7 @@ in_pcblookup_lbgroup(const struct inpcbinfo *pcbinfo,
 		if (grp->il_lport != lport)
 			continue;
 
-		idx = INP_PCBLBGROUP_PKTHASH(faddr->s_addr, lport, fport) %
+		idx = INP_PCBLBGROUP_PKTHASH(faddr, lport, fport) %
 		    grp->il_inpcnt;
 		if (grp->il_laddr.s_addr == laddr->s_addr) {
 			if (numa_domain == M_NODOM ||
@@ -2262,7 +2293,7 @@ in_pcblookup_hash_locked(struct inpcbinfo *pcbinfo, struct in_addr faddr,
 	 * First look for an exact match.
 	 */
 	tmpinp = NULL;
-	head = &pcbinfo->ipi_hashbase[INP_PCBHASH(faddr.s_addr, lport, fport,
+	head = &pcbinfo->ipi_hashbase[INP_PCBHASH(&faddr, lport, fport,
 	    pcbinfo->ipi_hashmask)];
 	CK_LIST_FOREACH(inp, head, inp_hash) {
 #ifdef INET6
@@ -2317,8 +2348,8 @@ in_pcblookup_hash_locked(struct inpcbinfo *pcbinfo, struct in_addr faddr,
 		 *      4. non-jailed, wild.
 		 */
 
-		head = &pcbinfo->ipi_hashbase[INP_PCBHASH(INADDR_ANY, lport,
-		    0, pcbinfo->ipi_hashmask)];
+		head = &pcbinfo->ipi_hashbase[INP_PCBHASH_WILD(lport,
+		    pcbinfo->ipi_hashmask)];
 		CK_LIST_FOREACH(inp, head, inp_hash) {
 #ifdef INET6
 			/* XXX inp locking */
@@ -2441,7 +2472,6 @@ in_pcbinshash(struct inpcb *inp)
 	struct inpcbporthead *pcbporthash;
 	struct inpcbinfo *pcbinfo = inp->inp_pcbinfo;
 	struct inpcbport *phd;
-	u_int32_t hashkey_faddr;
 	int so_options;
 
 	INP_WLOCK_ASSERT(inp);
@@ -2452,13 +2482,12 @@ in_pcbinshash(struct inpcb *inp)
 
 #ifdef INET6
 	if (inp->inp_vflag & INP_IPV6)
-		hashkey_faddr = INP6_PCBHASHKEY(&inp->in6p_faddr);
+		pcbhash = &pcbinfo->ipi_hashbase[INP6_PCBHASH(&inp->in6p_faddr,
+		    inp->inp_lport, inp->inp_fport, pcbinfo->ipi_hashmask)];
 	else
 #endif
-	hashkey_faddr = inp->inp_faddr.s_addr;
-
-	pcbhash = &pcbinfo->ipi_hashbase[INP_PCBHASH(hashkey_faddr,
-		 inp->inp_lport, inp->inp_fport, pcbinfo->ipi_hashmask)];
+		pcbhash = &pcbinfo->ipi_hashbase[INP_PCBHASH(&inp->inp_faddr,
+		    inp->inp_lport, inp->inp_fport, pcbinfo->ipi_hashmask)];
 
 	pcbporthash = &pcbinfo->ipi_porthashbase[
 	    INP_PCBPORTHASH(inp->inp_lport, pcbinfo->ipi_porthashmask)];
@@ -2518,7 +2547,6 @@ in_pcbrehash(struct inpcb *inp)
 {
 	struct inpcbinfo *pcbinfo = inp->inp_pcbinfo;
 	struct inpcbhead *head;
-	u_int32_t hashkey_faddr;
 
 	INP_WLOCK_ASSERT(inp);
 	INP_HASH_WLOCK_ASSERT(pcbinfo);
@@ -2528,13 +2556,12 @@ in_pcbrehash(struct inpcb *inp)
 
 #ifdef INET6
 	if (inp->inp_vflag & INP_IPV6)
-		hashkey_faddr = INP6_PCBHASHKEY(&inp->in6p_faddr);
+		head = &pcbinfo->ipi_hashbase[INP6_PCBHASH(&inp->in6p_faddr,
+		    inp->inp_lport, inp->inp_fport, pcbinfo->ipi_hashmask)];
 	else
 #endif
-	hashkey_faddr = inp->inp_faddr.s_addr;
-
-	head = &pcbinfo->ipi_hashbase[INP_PCBHASH(hashkey_faddr,
-		inp->inp_lport, inp->inp_fport, pcbinfo->ipi_hashmask)];
+		head = &pcbinfo->ipi_hashbase[INP_PCBHASH(&inp->inp_faddr,
+		    inp->inp_lport, inp->inp_fport, pcbinfo->ipi_hashmask)];
 
 	CK_LIST_REMOVE(inp, inp_hash);
 	CK_LIST_INSERT_HEAD(head, inp, inp_hash);

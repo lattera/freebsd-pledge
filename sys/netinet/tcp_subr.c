@@ -375,13 +375,13 @@ static void	tcp_default_fb_fini(struct tcpcb *tp, int tcb_is_purged);
 static int	tcp_default_handoff_ok(struct tcpcb *tp);
 static struct inpcb *tcp_notify(struct inpcb *, int);
 static struct inpcb *tcp_mtudisc_notify(struct inpcb *, int);
-static void tcp_mtudisc(struct inpcb *, int);
+static struct inpcb *tcp_mtudisc(struct inpcb *, int);
 static char *	tcp_log_addr(struct in_conninfo *inc, struct tcphdr *th,
 		    void *ip4hdr, const void *ip6hdr);
 
 static struct tcp_function_block tcp_def_funcblk = {
 	.tfb_tcp_block_name = "freebsd",
-	.tfb_tcp_output = tcp_output,
+	.tfb_tcp_output = tcp_default_output,
 	.tfb_tcp_do_segment = tcp_do_segment,
 	.tfb_tcp_ctloutput = tcp_default_ctloutput,
 	.tfb_tcp_handoff_ok = tcp_default_handoff_ok,
@@ -1146,26 +1146,7 @@ static struct mtx isn_mtx;
 #define	ISN_LOCK()	mtx_lock(&isn_mtx)
 #define	ISN_UNLOCK()	mtx_unlock(&isn_mtx)
 
-/*
- * TCP initialization.
- */
-static void
-tcp_zone_change(void *tag)
-{
-
-	uma_zone_set_max(V_tcbinfo.ipi_zone, maxsockets);
-	uma_zone_set_max(V_tcpcb_zone, maxsockets);
-	tcp_tw_zone_change();
-}
-
-static int
-tcp_inpcb_init(void *mem, int size, int flags)
-{
-	struct inpcb *inp = mem;
-
-	INP_LOCK_INIT(inp, "inp", "tcpinp");
-	return (0);
-}
+INPCBSTORAGE_DEFINE(tcpcbstor, "tcpinp", "tcp_inpcb", "tcp", "tcphash");
 
 /*
  * Take a value and get the next power of 2 that doesn't overflow.
@@ -1422,13 +1403,9 @@ deregister_tcp_functions(struct tcp_function_block *blk, bool quiesce,
 	return (0);
 }
 
-void
-tcp_init(void)
+static void
+tcp_vnet_init(void *arg __unused)
 {
-	const char *tcbhash_tuneable;
-	int hashsize;
-
-	tcbhash_tuneable = "net.inet.tcp.tcbhashsize";
 
 #ifdef TCP_HHOOK
 	if (hhook_head_register(HHOOK_TYPE_TCP, HHOOK_TCP_EST_IN,
@@ -1443,47 +1420,8 @@ tcp_init(void)
 		printf("%s: WARNING: unable to initialise TCP stats\n",
 		    __func__);
 #endif
-	hashsize = TCBHASHSIZE;
-	TUNABLE_INT_FETCH(tcbhash_tuneable, &hashsize);
-	if (hashsize == 0) {
-		/*
-		 * Auto tune the hash size based on maxsockets.
-		 * A perfect hash would have a 1:1 mapping
-		 * (hashsize = maxsockets) however it's been
-		 * suggested that O(2) average is better.
-		 */
-		hashsize = maketcp_hashsize(maxsockets / 4);
-		/*
-		 * Our historical default is 512,
-		 * do not autotune lower than this.
-		 */
-		if (hashsize < 512)
-			hashsize = 512;
-		if (bootverbose && IS_DEFAULT_VNET(curvnet))
-			printf("%s: %s auto tuned to %d\n", __func__,
-			    tcbhash_tuneable, hashsize);
-	}
-	/*
-	 * We require a hashsize to be a power of two.
-	 * Previously if it was not a power of two we would just reset it
-	 * back to 512, which could be a nasty surprise if you did not notice
-	 * the error message.
-	 * Instead what we do is clip it to the closest power of two lower
-	 * than the specified hash value.
-	 */
-	if (!powerof2(hashsize)) {
-		int oldhashsize = hashsize;
-
-		hashsize = maketcp_hashsize(hashsize);
-		/* prevent absurdly low value */
-		if (hashsize < 16)
-			hashsize = 16;
-		printf("%s: WARNING: TCB hash size not a power of 2, "
-		    "clipped from %d to %d.\n", __func__, oldhashsize,
-		    hashsize);
-	}
-	in_pcbinfo_init(&V_tcbinfo, "tcp", hashsize, hashsize,
-	    "tcp_inpcb", tcp_inpcb_init);
+	in_pcbinfo_init(&V_tcbinfo, &tcpcbstor, tcp_tcbhashsize,
+	    tcp_tcbhashsize);
 
 	/*
 	 * These have to be type stable for the benefit of the timers.
@@ -1506,19 +1444,25 @@ tcp_init(void)
 	COUNTER_ARRAY_ALLOC(V_tcps_states, TCP_NSTATES, M_WAITOK);
 	VNET_PCPUSTAT_ALLOC(tcpstat, M_WAITOK);
 
-	/* Skip initialization of globals for non-default instances. */
-	if (!IS_DEFAULT_VNET(curvnet))
-		return;
+	V_tcp_msl = TCPTV_MSL;
+}
+VNET_SYSINIT(tcp_vnet_init, SI_SUB_PROTO_DOMAIN, SI_ORDER_FOURTH,
+    tcp_vnet_init, NULL);
+
+static void
+tcp_init(void *arg __unused)
+{
+	const char *tcbhash_tuneable;
+	int hashsize;
 
 	tcp_reass_global_init();
 
-	/* XXX virtualize those bellow? */
+	/* XXX virtualize those below? */
 	tcp_delacktime = TCPTV_DELACK;
 	tcp_keepinit = TCPTV_KEEP_INIT;
 	tcp_keepidle = TCPTV_KEEP_IDLE;
 	tcp_keepintvl = TCPTV_KEEPINTVL;
 	tcp_maxpersistidle = TCPTV_KEEP_IDLE;
-	tcp_msl = TCPTV_MSL;
 	tcp_rexmit_initial = TCPTV_RTOBASE;
 	if (tcp_rexmit_initial < 1)
 		tcp_rexmit_initial = 1;
@@ -1529,7 +1473,6 @@ tcp_init(void)
 	tcp_persmax = TCPTV_PERSMAX;
 	tcp_rexmit_slop = TCPTV_CPU_VAR;
 	tcp_finwait2_timeout = TCPTV_FINWAIT2_TIMEOUT;
-	tcp_tcbhashsize = hashsize;
 
 	/* Setup the tcp function block list */
 	TAILQ_INIT(&t_functions);
@@ -1564,8 +1507,6 @@ tcp_init(void)
 	ISN_LOCK_INIT();
 	EVENTHANDLER_REGISTER(shutdown_pre_sync, tcp_fini, NULL,
 		SHUTDOWN_PRI_DEFAULT);
-	EVENTHANDLER_REGISTER(maxsockets_change, tcp_zone_change, NULL,
-		EVENTHANDLER_PRI_ANY);
 
 	tcp_inp_lro_direct_queue = counter_u64_alloc(M_WAITOK);
 	tcp_inp_lro_wokeup_queue = counter_u64_alloc(M_WAITOK);
@@ -1579,7 +1520,50 @@ tcp_init(void)
 #ifdef TCPPCAP
 	tcp_pcap_init();
 #endif
+
+	hashsize = TCBHASHSIZE;
+	tcbhash_tuneable = "net.inet.tcp.tcbhashsize";
+	TUNABLE_INT_FETCH(tcbhash_tuneable, &hashsize);
+	if (hashsize == 0) {
+		/*
+		 * Auto tune the hash size based on maxsockets.
+		 * A perfect hash would have a 1:1 mapping
+		 * (hashsize = maxsockets) however it's been
+		 * suggested that O(2) average is better.
+		 */
+		hashsize = maketcp_hashsize(maxsockets / 4);
+		/*
+		 * Our historical default is 512,
+		 * do not autotune lower than this.
+		 */
+		if (hashsize < 512)
+			hashsize = 512;
+		if (bootverbose)
+			printf("%s: %s auto tuned to %d\n", __func__,
+			    tcbhash_tuneable, hashsize);
+	}
+	/*
+	 * We require a hashsize to be a power of two.
+	 * Previously if it was not a power of two we would just reset it
+	 * back to 512, which could be a nasty surprise if you did not notice
+	 * the error message.
+	 * Instead what we do is clip it to the closest power of two lower
+	 * than the specified hash value.
+	 */
+	if (!powerof2(hashsize)) {
+		int oldhashsize = hashsize;
+
+		hashsize = maketcp_hashsize(hashsize);
+		/* prevent absurdly low value */
+		if (hashsize < 16)
+			hashsize = 16;
+		printf("%s: WARNING: TCB hash size not a power of 2, "
+		    "clipped from %d to %d.\n", __func__, oldhashsize,
+		    hashsize);
+	}
+	tcp_tcbhashsize = hashsize;
 }
+SYSINIT(tcp_init, SI_SUB_PROTO_DOMAIN, SI_ORDER_THIRD, tcp_init, NULL);
 
 #ifdef VIMAGE
 static void
@@ -2102,7 +2086,6 @@ tcp_respond(struct tcpcb *tp, void *ipgen, struct tcphdr *th, struct mbuf *m,
 
 			memset(&log.u_bbr, 0, sizeof(log.u_bbr));
 			log.u_bbr.inhpts = tp->t_inpcb->inp_in_hpts;
-			log.u_bbr.ininput = tp->t_inpcb->inp_in_dropq;
 			log.u_bbr.flex8 = 4;
 			log.u_bbr.pkts_out = tp->t_maxseg;
 			log.u_bbr.timeStamp = tcp_get_usecs(&tv);
@@ -2397,7 +2380,8 @@ tcp_drop(struct tcpcb *tp, int errno)
 
 	if (TCPS_HAVERCVDSYN(tp->t_state)) {
 		tcp_state_change(tp, TCPS_CLOSED);
-		(void) tp->t_fb->tfb_tcp_output(tp);
+		/* Don't use tcp_output() here due to possible recursion. */
+		(void)tcp_output_nodrop(tp);
 		TCPSTAT_INC(tcps_drops);
 	} else
 		TCPSTAT_INC(tcps_conndrops);
@@ -2594,7 +2578,7 @@ tcp_close(struct tcpcb *tp)
 		tp->t_tfo_pending = NULL;
 	}
 #ifdef TCPHPTS
-	tcp_hpts_remove(inp, HPTS_REMOVE_ALL);
+	tcp_hpts_remove(inp);
 #endif
 	in_pcbdrop(inp);
 	TCPSTAT_INC(tcps_closed);
@@ -3025,7 +3009,7 @@ tcp_ctlinput_with_port(int cmd, struct sockaddr *sa, void *vip, uint16_t port)
 						inc.inc_fibnum =
 						    inp->inp_inc.inc_fibnum;
 						tcp_hc_updatemtu(&inc, mtu);
-						tcp_mtudisc(inp, mtu);
+						inp = tcp_mtudisc(inp, mtu);
 					}
 				} else
 					inp = (*notify)(inp,
@@ -3473,11 +3457,10 @@ static struct inpcb *
 tcp_mtudisc_notify(struct inpcb *inp, int error)
 {
 
-	tcp_mtudisc(inp, -1);
-	return (inp);
+	return (tcp_mtudisc(inp, -1));
 }
 
-static void
+static struct inpcb *
 tcp_mtudisc(struct inpcb *inp, int mtuoffer)
 {
 	struct tcpcb *tp;
@@ -3486,7 +3469,7 @@ tcp_mtudisc(struct inpcb *inp, int mtuoffer)
 	INP_WLOCK_ASSERT(inp);
 	if ((inp->inp_flags & INP_TIMEWAIT) ||
 	    (inp->inp_flags & INP_DROPPED))
-		return;
+		return (inp);
 
 	tp = intotcpcb(inp);
 	KASSERT(tp != NULL, ("tcp_mtudisc: tp == NULL"));
@@ -3516,7 +3499,10 @@ tcp_mtudisc(struct inpcb *inp, int mtuoffer)
 		 */
 		tp->t_fb->tfb_tcp_mtu_chg(tp);
 	}
-	tp->t_fb->tfb_tcp_output(tp);
+	if (tcp_output(tp) < 0)
+		return (NULL);
+	else
+		return (inp);
 }
 
 #ifdef INET

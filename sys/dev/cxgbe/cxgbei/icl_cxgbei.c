@@ -1089,11 +1089,9 @@ icl_cxgbei_conn_task_setup(struct icl_conn *ic, struct icl_pdu *ip,
 	MPASS(arg != NULL);
 	MPASS(*arg == NULL);
 
-	if (ic->ic_disconnecting || ic->ic_socket == NULL)
-		return (ECONNRESET);
-
 	if ((csio->ccb_h.flags & CAM_DIR_MASK) != CAM_DIR_IN ||
-	    csio->dxfer_len < ci->ddp_threshold) {
+	    csio->dxfer_len < ci->ddp_threshold || ic->ic_disconnecting ||
+	    ic->ic_socket == NULL) {
 no_ddp:
 		/*
 		 * No DDP for this I/O.	 Allocate an ITT (based on the one
@@ -1151,7 +1149,7 @@ no_ddp:
 		mbufq_drain(&mq);
 		t4_free_page_pods(prsv);
 		free(ddp, M_CXGBEI);
-		return (ECONNRESET);
+		goto no_ddp;
 	}
 	mbufq_concat(&toep->ulp_pduq, &mq);
 	INP_WUNLOCK(inp);
@@ -1199,13 +1197,11 @@ ddp_sgl_check(struct ctl_sg_entry *sg, int entries, int xferlen)
 	return (true);
 }
 
-/* XXXNP: PDU should be passed in as parameter, like on the initiator. */
-#define io_to_request_pdu(io) ((io)->io_hdr.ctl_private[CTL_PRIV_FRONTEND].ptr)
 #define io_to_ddp_state(io) ((io)->io_hdr.ctl_private[CTL_PRIV_FRONTEND2].ptr)
 
 int
-icl_cxgbei_conn_transfer_setup(struct icl_conn *ic, union ctl_io *io,
-    uint32_t *tttp, void **arg)
+icl_cxgbei_conn_transfer_setup(struct icl_conn *ic, struct icl_pdu *ip,
+    union ctl_io *io, uint32_t *tttp, void **arg)
 {
 	struct icl_cxgbei_conn *icc = ic_to_icc(ic);
 	struct toepcb *toep = icc->toep;
@@ -1228,7 +1224,6 @@ icl_cxgbei_conn_transfer_setup(struct icl_conn *ic, union ctl_io *io,
 
 	if (ctsio->ext_data_filled == 0) {
 		int first_burst;
-		struct icl_pdu *ip = io_to_request_pdu(io);
 #ifdef INVARIANTS
 		struct icl_cxgbei_pdu *icp = ip_to_icp(ip);
 

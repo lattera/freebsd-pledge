@@ -2133,7 +2133,7 @@ pksignal(struct proc *p, int sig, ksiginfo_t *ksi)
 
 /* Utility function for finding a thread to send signal event to. */
 int
-sigev_findtd(struct proc *p ,struct sigevent *sigev, struct thread **ttd)
+sigev_findtd(struct proc *p, struct sigevent *sigev, struct thread **ttd)
 {
 	struct thread *td;
 
@@ -3560,7 +3560,7 @@ sysctl_debug_num_cores_check (SYSCTL_HANDLER_ARGS)
 	return (0);
 }
 SYSCTL_PROC(_debug, OID_AUTO, ncores,
-    CTLTYPE_INT | CTLFLAG_RW | CTLFLAG_NEEDGIANT, 0, sizeof(int),
+    CTLTYPE_INT | CTLFLAG_RW | CTLFLAG_MPSAFE, 0, sizeof(int),
     sysctl_debug_num_cores_check, "I",
     "Maximum number of generated process corefiles while using index format");
 
