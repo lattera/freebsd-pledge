@@ -476,42 +476,45 @@ ability prot_exec
 ~/.cache/fontconfig/ : r
 
 
-[_devel]
+[_build]
+/etc/make.conf
 /usr/include/
 /usr/local/include/ [_localbase]
+
+[_ccache]
+${CCACHE_DIR:/var/cache/ccache}/ : rw
 
 [_ruby_gems]
 $GEM_HOME/
 
 [_ruby_gems_manage]
-merge _devel
+merge _build
 $GEM_HOME/ : rwx +
 
 [_python_pip]
 $PYTHONUSERBASE/
 
 [_python_pip_manage]
-merge _devel
+merge _build
 ability chflags
 $PYTHONUSERBASE/ : rwx +
 #~/.cache/pip/ : rw + # sharing probably unsafe
 
 
 [_ports_build]
+merge _build
 merge _pwddb
-/etc/make.conf
 /usr/ports/
-/usr/include/
 /usr/obj/usr/ports/			: rxw
 /var/db/ports/				: rw
 /usr/local/include/ [_localbase]
 
 [_src_build]
+merge _build
 merge _pwddb
-/etc/make.conf
 /etc/src.conf
+/etc/src-env.conf
 /usr/src/
-/usr/include/
 /usr/obj/usr/src/			: rxw
 
 
