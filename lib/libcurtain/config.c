@@ -94,47 +94,36 @@ pathfmt(char *path, const char *fmt, ...)
 		err(EX_TEMPFAIL, "snprintf");
 }
 
-static int
-strmemcmp(const char *s, const char *b, size_t n)
-{
-	while (*s && n) {
-		if (*s != *b)
-			return ((unsigned)*s - (unsigned)*b);
-		s++, b++, n--;
-	}
-	return (n ? -1 : *s ? 1 : 0);
-}
-
 
 static struct config_tag *
-config_tag_make(struct curtain_config *cfg __unused, struct config_tag **link,
-    const char *name, size_t name_len)
+config_tag_make(struct curtain_config *cfg __unused, struct config_tag **link, const char *name)
 {
 	struct config_tag *tag;
-	tag = malloc(sizeof *tag + name_len + 1);
+	size_t name_size;
+	name_size = strlen(name) + 1;
+	tag = malloc(sizeof *tag + name_size);
 	if (!tag)
 		err(EX_TEMPFAIL, "malloc");
 	*tag = (struct config_tag){ .next = *link };
-	memcpy(tag->name, name, name_len);
-	tag->name[name_len] = '\0';
+	memcpy(tag->name, name, name_size);
 	*link = tag;
 	return (tag);
 }
 
 static struct config_tag *
-config_tag_merge(struct curtain_config *cfg, const char *name, size_t name_len)
+config_tag_merge(struct curtain_config *cfg, const char *name)
 {
 	for (struct config_tag *tag = cfg->tags_pending; tag; tag = tag->next)
-		if (strmemcmp(tag->name, name, name_len) == 0)
+		if (strcmp(tag->name, name) == 0)
 			return (tag);
-	return (config_tag_make(cfg, &cfg->tags_pending, name, name_len));
+	return (config_tag_make(cfg, &cfg->tags_pending, name));
 }
 
 static struct config_tag *
-config_tag_remove(struct curtain_config *cfg, const char *name, size_t name_len)
+config_tag_remove(struct curtain_config *cfg, const char *name)
 {
 	for (struct config_tag **link = &cfg->tags_pending, *tag; (tag = *link); link = &tag->next)
-		if (strmemcmp(tag->name, name, name_len) == 0) {
+		if (strcmp(tag->name, name) == 0) {
 			if (tag == cfg->tags_current)
 				cfg->tags_current = tag->next;
 			if (tag == cfg->tags_visited)
@@ -151,40 +140,40 @@ config_tag_remove(struct curtain_config *cfg, const char *name, size_t name_len)
 }
 
 static void
-config_tag_drop(struct curtain_config *cfg, const char *name, size_t name_len)
+config_tag_drop(struct curtain_config *cfg, const char *name)
 {
 	struct config_tag *tag;
-	if ((tag = config_tag_remove(cfg, name, name_len))) {
+	if ((tag = config_tag_remove(cfg, name))) {
 		free(tag);
 		cfg->tags_dropped = true;
 	}
 }
 
 static void
-config_tag_enable(struct curtain_config *cfg, const char *name, size_t name_len)
+config_tag_enable(struct curtain_config *cfg, const char *name)
 {
 	struct config_tag *tag, **link;
-	tag = config_tag_remove(cfg, name, name_len);
+	tag = config_tag_remove(cfg, name);
 	for (link = &cfg->tags_pending; *link != cfg->tags_enabled; link = &(*link)->next);
 	if (tag) {
 		tag->next = *link;
 		*link = tag;
 	} else
-		tag = config_tag_make(cfg, link, name, name_len);
+		tag = config_tag_make(cfg, link, name);
 	cfg->tags_enabled = tag;
 }
 
 static void
-config_tag_block(struct curtain_config *cfg, const char *name, size_t name_len)
+config_tag_block(struct curtain_config *cfg, const char *name)
 {
 	struct config_tag *tag, **link;
-	tag = config_tag_remove(cfg, name, name_len);
+	tag = config_tag_remove(cfg, name);
 	for (link = &cfg->tags_pending; *link != cfg->tags_blocked; link = &(*link)->next);
 	if (tag) {
 		tag->next = *link;
 		*link = tag;
 	} else
-		tag = config_tag_make(cfg, link, name, name_len);
+		tag = config_tag_make(cfg, link, name);
 	cfg->tags_blocked = tag;
 	cfg->tags_dropped = true;
 }
@@ -265,14 +254,29 @@ skip_word(char *p, const char *brk)
 	return (p);
 }
 
+static char *
+unescape(char *p)
+{
+	char *q = p;
+	while (*p) {
+		if (*p == '\\') {
+			p++;
+			if (!*p)
+				break;
+		}
+		*q++ = *p++;
+	}
+	*q = '\0';
+	return (q);
+}
+
 
 static int process_file(struct curtain_config *, const char *path);
 static void process_dir(struct curtain_config *, const char *path);
 
 struct word {
 	struct word *next;
-	char *ptr;
-	size_t len;
+	char *str;
 };
 
 static void
@@ -286,8 +290,7 @@ parse_words_1(struct parser *par, char *p,
 		q = skip_word(p, "");
 		if (q == p)
 			return (parse_error(par, "invalid word"));
-		w.ptr = p;
-		w.len = q - p;
+		w.str = p;
 		if (*q)
 			*q++ = '\0';
 		*link = &w;
@@ -329,7 +332,7 @@ parse_include(struct parser *par, struct word *w)
 			char path[PATH_MAX];
 			const char *error;
 			int r;
-			r = pathexp(w->ptr, path, sizeof path,
+			r = pathexp(w->str, path, sizeof path,
 			    &error, do_include_callback, par);
 			if (r < 0)
 				parse_error(par, error);
@@ -342,8 +345,10 @@ static void
 parse_merge(struct parser *par, struct word *w)
 {
 	while (w) {
-		if (par->apply)
-			config_tag_merge(par->cfg, w->ptr, w->len);
+		if (par->apply) {
+			unescape(w->str);
+			config_tag_merge(par->cfg, w->str);
+		}
 		w = w->next;
 	}
 }
@@ -468,13 +473,13 @@ parse_unveil(struct parser *par, struct word *w)
 	par->unveil_setmode = NULL;
 	*par->unveil_pending = '\0';
 	par->uperms = UPERM_READ;
-	while (w && !(w->len == 1 && w->ptr[0] == ':'))
+	while (w && !(w->str[0] == ':' && !w->str[1]))
 		w = w->next;
 	patterns_end = w;
 	if (w) {
 		par->uperms = UPERM_NONE;
 		if ((w = w->next)) {
-			r = curtain_parse_unveil_perms(&par->uperms, w->ptr);
+			r = curtain_parse_unveil_perms(&par->uperms, w->str);
 			if (r < 0)
 				return (parse_error(par, "invalid unveil permissions"));
 			w = w->next;
@@ -482,7 +487,7 @@ parse_unveil(struct parser *par, struct word *w)
 	}
 	if (w) {
 		par->unveil_create = true;
-		par->unveil_setmode = setmode(w->ptr);
+		par->unveil_setmode = setmode(w->str);
 		if (!par->unveil_setmode) {
 			if (errno == EINVAL || errno == ERANGE)
 				return (parse_error(par, "invalid creation mode"));
@@ -497,7 +502,7 @@ parse_unveil(struct parser *par, struct word *w)
 	}
 	if (par->apply) {
 		while (patterns != patterns_end) {
-			do_unveils(par, patterns->ptr);
+			do_unveils(par, patterns->str);
 			patterns = patterns->next;
 		}
 		if (*par->unveil_pending)
@@ -512,7 +517,7 @@ parse_ability(struct parser *par, struct word *w)
 	while (w) {
 		const struct abilityent *e;
 		for (e = curtain_abilitytab; e->name; e++)
-			if (strmemcmp(e->name, w->ptr, w->len) == 0)
+			if (strcmp(e->name, w->str) == 0)
 				break;
 		if (!e->name)
 			parse_error(par, "unknown ability");
@@ -527,7 +532,7 @@ parse_sysctl(struct parser *par, struct word *w)
 {
 	while (w) {
 		if (par->apply)
-			curtain_sysctl(par->slot, w->ptr, par->directive_flags);
+			curtain_sysctl(par->slot, w->str, par->directive_flags);
 		w = w->next;
 	}
 }
@@ -538,7 +543,7 @@ parse_priv(struct parser *par, struct word *w)
 	while (w) {
 		const struct privent *e;
 		for (e = curtain_privtab; e->name; e++)
-			if (strmemcmp(e->name, w->ptr, w->len) == 0)
+			if (strcmp(e->name, w->str) == 0)
 				break;
 		if (!e->name)
 			parse_error(par, "unknown privilege");
@@ -565,11 +570,11 @@ static void
 parse_ioctls(struct parser *par, struct word *w)
 {
 	while (w) {
-		if (w->ptr[0] >= '0' && w->ptr[0] <= '9') {
+		if (w->str[0] >= '0' && w->str[0] <= '9') {
 			unsigned long n;
 			char *end;
 			errno = 0;
-			n = strtoul(w->ptr, &end, 0);
+			n = strtoul(w->str, &end, 0);
 			if (errno || *end)
 				parse_error(par, "invalid ioctl");
 			else if (par->apply)
@@ -578,7 +583,7 @@ parse_ioctls(struct parser *par, struct word *w)
 			const unsigned long *bundle;
 			bundle = NULL;
 			for (size_t i = 0; i < nitems(ioctls_bundles); i++)
-				if (strmemcmp(ioctls_bundles[i].name, w->ptr, w->len) == 0) {
+				if (strcmp(ioctls_bundles[i].name, w->str) == 0) {
 					bundle = ioctls_bundles[i].ioctls;
 					break;
 				}
@@ -597,7 +602,7 @@ parse_sockaf(struct parser *par, struct word *w)
 	while (w) {
 		const struct sockafent *e;
 		for (e = curtain_sockaftab; e->name; e++)
-			if (strmemcmp(e->name, w->ptr, w->len) == 0)
+			if (strcmp(e->name, w->str) == 0)
 				break;
 		if (!e->name)
 			parse_error(par, "unknown address family");
@@ -613,7 +618,7 @@ parse_socklvl(struct parser *par, struct word *w)
 	while (w) {
 		const struct socklvlent *e;
 		for (e = curtain_socklvltab; e->name; e++)
-			if (strmemcmp(e->name, w->ptr, w->len) == 0)
+			if (strcmp(e->name, w->str) == 0)
 				break;
 		if (!e->name)
 			parse_error(par, "unknown socket level");
@@ -630,7 +635,7 @@ parse_fibnum(struct parser *par, struct word *w)
 		long n;
 		char *end;
 		errno = 0;
-		n = strtol(w->ptr, &end, 0);
+		n = strtol(w->str, &end, 0);
 		if (errno || *end)
 			parse_error(par, "invalid fibnum");
 		else if (par->apply)
@@ -688,7 +693,7 @@ static const struct {
 static void
 parse_directive(struct parser *par, char *p)
 {
-	char *dir, *dir_end;
+	char *dir, *dir_end, c;
 	int unsafety;
 
 	dir = p = skip_spaces(p);
@@ -700,9 +705,10 @@ parse_directive(struct parser *par, char *p)
 		char *q;
 		bool found;
 		q = skip_word(++p, "-!:");
+		c = *q, *q = '\0';
 		found = false;
 		for (size_t i = 0; i < nitems(directive_flags); i++)
-			if (strmemcmp(directive_flags[i].name, p, q - p) == 0) {
+			if (strcmp(directive_flags[i].name, p) == 0) {
 				found = true;
 				par->explicit_flags = true;
 				par->directive_flags |= directive_flags[i].flags;
@@ -712,6 +718,7 @@ parse_directive(struct parser *par, char *p)
 			parse_error(par, "unknown directive flag");
 			return;
 		}
+		*q = c;
 		p = q;
 	}
 
@@ -724,13 +731,16 @@ parse_directive(struct parser *par, char *p)
 	if (*p == ':') /* intended for argv directives */
 		p++;
 
-	if (strmemcmp("include", dir, dir_end - dir) == 0) {
+	c = *dir_end, *dir_end = '\0';
+
+	if (strcmp("include", dir) == 0) {
 		/*
 		 * Always process included files (when the include directive is
 		 * in a matched section) even if they already have been
 		 * processed before because the file could contain sections for
 		 * newly enabled tags that haven't been applied yet.
 		 */
+		*dir_end = c;
 		if (par->matched)
 			parse_words(par, p, parse_include);
 		return;
@@ -739,31 +749,14 @@ parse_directive(struct parser *par, char *p)
 	if (par->skip)
 		return;
 	for (size_t i = 0; i < nitems(directives); i++)
-		if (strmemcmp(directives[i].name, dir, dir_end - dir) == 0) {
+		if (strcmp(directives[i].name, dir) == 0) {
+			*dir_end = c;
 			par->directive_flags |= directives[i].flags;
 			need_slot(par);
 			parse_words(par, p, directives[i].func);
 			return;
 		}
 	parse_error(par, "unknown directive");
-}
-
-static void
-match_section_pred_tag(struct parser *par,
-    bool *matched, bool *visited,
-    char *name, char *name_end)
-{
-	*matched = *visited = false;
-	for (const struct config_tag *tag = par->cfg->tags_current;
-	    tag != par->cfg->tags_blocked;
-	    tag = tag->next) {
-		if (tag == par->cfg->tags_visited)
-			*visited = true;
-		if (strmemcmp(tag->name, name, name_end - name) == 0) {
-			*matched = true;
-			break;
-		}
-	}
 }
 
 static char *
@@ -775,19 +768,17 @@ parse_section_pred(struct parser *par, char *p)
 	or_matched = or_visited = false;
 	and_matched = and_visited = true;
 	do {
-		/*
-		 * XXX The same tag names escaped differently will not match.
-		 *
-		 * XXX Negations are dodgy because a section won't be unapplied
-		 * if it matched due to a negated tag that later gets set.
-		 */
 		bool branched, finished, negated, matched, visited;
-		char *name, *name_end;
+		char *name, *name_end, c;
 
 		branched = false;
 		while (*(p = skip_spaces(p)) == ',')
 			p++, branched = true;
 
+		/*
+		 * XXX Negations are dodgy because a section won't be unapplied
+		 * if it matched due to a negated tag that later gets set.
+		 */
 		negated = false;
 		while (*(p = skip_spaces(p)) == '!')
 			p++, negated = !negated;
@@ -814,11 +805,26 @@ parse_section_pred(struct parser *par, char *p)
 		}
 		empty = false;
 
-		match_section_pred_tag(par, &matched, &visited, name, name_end);
+		c = *name_end, *name_end = '\0';
+		unescape(name);
+
+		matched = visited = false;
+		for (const struct config_tag *tag = par->cfg->tags_current;
+		    tag != par->cfg->tags_blocked;
+		    tag = tag->next) {
+			if (tag == par->cfg->tags_visited)
+				visited = true;
+			if (strcmp(tag->name, name) == 0) {
+				matched = true;
+				break;
+			}
+		}
 		if (!matched != negated)
 			and_matched = false;
-		if (!visited)
+		if (!visited != negated)
 			and_visited = false;
+
+		*name_end = c;
 	} while (true);
 
 	par->matched = or_matched;
@@ -843,8 +849,13 @@ parse_section(struct parser *par, char *p)
 			p = skip_word((w = p), ":]");
 			if (w == p)
 				break;
-			if (par->matched)
-				config_tag_merge(par->cfg, w, p - w);
+			if (par->matched) {
+				char *q = &w[p - w], c = *q;
+				*q = '\0';
+				unescape(w);
+				config_tag_merge(par->cfg, w);
+				*q = c;
+			}
 		}
 	}
 	if (*p++ != ']')
@@ -1191,7 +1202,7 @@ curtain_config_free(struct curtain_config *cfg)
 void
 curtain_config_tags_from_env(struct curtain_config *cfg, const char *name)
 {
-	char *p, *q;
+	char *p, *q, c;
 	if (!name)
 		name = "CURTAIN_TAGS";
 	if (issetugid() || !(p = getenv(name)))
@@ -1199,8 +1210,11 @@ curtain_config_tags_from_env(struct curtain_config *cfg, const char *name)
 	q = p;
 	do {
 		if (!*q || is_space(*q)) {
-			if (p != q)
-				config_tag_enable(cfg, p, q - p);
+			if (p != q) {
+				c = *q, *q = '\0';
+				config_tag_enable(cfg, p);
+				*q = c;
+			}
 			if (!*q)
 				break;
 			p = ++q;
@@ -1212,18 +1226,18 @@ curtain_config_tags_from_env(struct curtain_config *cfg, const char *name)
 void
 curtain_config_tag_push(struct curtain_config *cfg, const char *name)
 {
-	config_tag_enable(cfg, name, strlen(name));
+	config_tag_enable(cfg, name);
 }
 
 void
 curtain_config_tag_drop(struct curtain_config *cfg, const char *name)
 {
-	config_tag_drop(cfg, name, strlen(name));
+	config_tag_drop(cfg, name);
 }
 
 void
 curtain_config_tag_block(struct curtain_config *cfg, const char *name)
 {
-	config_tag_block(cfg, name, strlen(name));
+	config_tag_block(cfg, name);
 }
 
