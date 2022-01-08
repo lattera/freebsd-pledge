@@ -368,6 +368,7 @@ merge _gecko
 merge _basic _fdpassdir _gtk
 merge! _memstat
 ability posixipc prot_exec sendfile
+sysctl-deny kern.bootfile [_strict] # kvm_open(3)
 ~/.config/chromium/			: rw +
 ~/.cache/chromium/			: rw +
 
