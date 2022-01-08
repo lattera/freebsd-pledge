@@ -518,8 +518,17 @@ merge _pwddb
 /usr/obj/usr/src/			: rxw
 
 
-# XXX It may not be enough just to run the daemons under curtain, the suid
-# binaries and periodic scripts also should be run under curtain or disabled.
+# NOTES:
+#
+# Daemons that background themselves probably should be run under `curtain -f`.
+#
+# XXX Just running the daemon's main process under curtain might not be enough.
+# - setuid binaries probably should be disabled (or be made to run under
+#   curtain somehow).
+# - The daemon should not ever be run unsandboxed using the same files
+#   as the sandboxed daemon.
+# - Daemon control/monitoring commands may be unsafe to run unsandboxed.
+# - rc.d and periodic scripts should be audited for safety.
 
 [sendmail : _daemon]
 merge _basic
@@ -584,3 +593,19 @@ sysctl kern.corefile
 /var/log/samba4/ : rw 0755
 #/stuff/ : rw
 #~user/ : rw
+
+[ntpd]
+merge _basic
+merge _syslog
+merge _pwddb
+ability settime
+sockaf-deny route [_strict]
+/etc/ntp.conf
+/etc/ntp/
+/var/db/ntp/ : rw
+/var/db/ntpd.leap-seconds.list : rw
+[ntpd_unpriv : ntpd]
+merge su
+merge _setcred
+ability chroot
+
