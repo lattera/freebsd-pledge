@@ -4,7 +4,7 @@ PACKAGE=	runtime
 LIB=		curtain
 MAN=
 
-SRCS=		slot.c pledge.c ioctls.c config.c pathexp.c utils.c auto.c tmpdir.c gui.c
+SRCS=		slot.c pledge.c ioctls.c config.c pathexp.c auto.c tmpdir.c gui.c
 INCS=		curtain.h pledge.h
 CFLAGS+=	-I${.CURDIR}
 

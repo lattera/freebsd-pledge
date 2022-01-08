@@ -17,8 +17,6 @@ struct curtain_config {
 	bool tags_dropped;
 };
 
-int curtain_cwd_is_within(const char *path);
-
 
 extern const struct privent {
 	const char *name;

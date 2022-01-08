@@ -33,12 +33,10 @@ struct parser {
 	bool visited;
 	bool error;
 	struct curtain_slot *slot;
-	char *last_matched_section_path;
-	size_t section_path_offset;
 	int directive_flags;
 	bool explicit_flags;
-	unveil_perms uperms;
 	bool unveil_create;
+	unveil_perms uperms;
 	void *unveil_setmode;
 	char unveil_pending[PATH_MAX];
 };
@@ -394,8 +392,6 @@ static int
 do_unveil_callback(void *ctx, char *path)
 {
 	struct parser *par = ctx;
-	if (path[0] && path[0] != '/' && par->last_matched_section_path)
-		path -= par->section_path_offset;
 	do_unveil(par, path);
 	return (0);
 }
@@ -403,21 +399,10 @@ do_unveil_callback(void *ctx, char *path)
 static void
 do_unveils(struct parser *par, const char *pattern)
 {
-	char buf[PATH_MAX*2];
-	size_t n;
+	char path[PATH_MAX];
 	int r;
 	const char *error;
-	if (par->last_matched_section_path) {
-		n = strlen(par->last_matched_section_path);
-		if (n >= PATH_MAX)
-			abort();
-		memcpy(buf, par->last_matched_section_path, n);
-		if (!n || buf[n - 1] != '/')
-			buf[n++] = '/';
-		par->section_path_offset = n;
-	} else
-		n = 0;
-	r = pathexp(pattern, buf + n, PATH_MAX, &error, do_unveil_callback, par);
+	r = pathexp(pattern, path, PATH_MAX, &error, do_unveil_callback, par);
 	if (r < 0)
 		parse_error(par, error);
 }
@@ -763,44 +748,6 @@ parse_directive(struct parser *par, char *p)
 	parse_error(par, "unknown directive");
 }
 
-static int
-match_section_pred_cwd_cb(void *ctx, char *path)
-{
-	struct parser *par = ctx;
-	int r;
-	r = curtain_cwd_is_within(path);
-	if (r < 0) {
-		if (errno != ENOENT && errno != EACCES)
-			warn("%s", path);
-	} else if (r > 0) {
-		par->last_matched_section_path = strdup(path);
-		if (!par->last_matched_section_path)
-			err(EX_TEMPFAIL, "strdup");
-		return (-1); /* stop searching */
-	}
-	return (0);
-}
-
-static void
-match_section_pred_cwd(struct parser *par,
-    bool *matched, bool *visited,
-    char *name, char *name_end)
-{
-	char buf[PATH_MAX], c;
-	const char *error;
-	*matched = *visited = false;
-	c = *name_end;
-	*name_end = '\0';
-	par->last_matched_section_path = NULL;
-	error = NULL;
-	pathexp(name, buf, sizeof buf, &error, match_section_pred_cwd_cb, par);
-	*name_end = c;
-	if (error)
-		parse_error(par, error);
-	else if (par->last_matched_section_path)
-		*matched = true;
-}
-
 static void
 match_section_pred_tag(struct parser *par,
     bool *matched, bool *visited,
@@ -867,10 +814,7 @@ parse_section_pred(struct parser *par, char *p)
 		}
 		empty = false;
 
-		if (strchr(name, '/'))
-			match_section_pred_cwd(par, &matched, &visited, name, name_end);
-		else
-			match_section_pred_tag(par, &matched, &visited, name, name_end);
+		match_section_pred_tag(par, &matched, &visited, name, name_end);
 		if (!matched != negated)
 			and_matched = false;
 		if (!visited)
@@ -887,7 +831,6 @@ parse_section(struct parser *par, char *p)
 {
 	struct config_section *sec;
 	par->slot = NULL;
-	par->last_matched_section_path = NULL;
 	p = parse_section_pred(par, p + 1);
 	if (par->cfg->verbosity >= 2 && par->matched)
 		fprintf(stderr, "%s: %s:%ju: matched section%s\n",
