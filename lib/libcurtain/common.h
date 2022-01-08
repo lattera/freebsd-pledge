@@ -8,17 +8,13 @@
 #include <sys/curtain_ability.h>
 
 struct curtain_config {
-	struct curtain_config_tag *tags_pending, *tags_current, *tags_visited;
+	struct config_tag *tags_pending, *tags_current, *tags_visited, *tags_enabled, *tags_blocked;
+	struct config_section *sections;
 	const char *old_tmpdir;
 	int unsafety;
 	int verbosity;
 	bool on_exec_only;
-};
-
-struct curtain_config_tag {
-	struct curtain_config_tag *chain;
-	bool blocked;
-	char name[];
+	bool tags_dropped;
 };
 
 int curtain_cwd_is_within(const char *path);

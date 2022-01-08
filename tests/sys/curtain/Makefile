@@ -39,6 +39,7 @@ ATF_TESTS_C+=	unveil_emptypath
 ATF_TESTS_C+=	prot_exec
 
 ATF_TESTS_C+=	curtain_levels
+ATF_TESTS_C+=	curtain_config
 ATF_TESTS_C+=	curtainctl_overflow
 
 PLAIN_TESTS_C+=	openbsd-unveil-syscalls

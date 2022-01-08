@@ -43,17 +43,14 @@ struct parser {
 	char unveil_pending[PATH_MAX];
 };
 
-static const struct {
-	const char name[16];
-	const unsigned long *ioctls;
-} ioctls_bundles[] = {
-	{ "tty_basic", curtain_ioctls_tty_basic },
-	{ "tty_pts", curtain_ioctls_tty_pts },
-	{ "net_basic", curtain_ioctls_net_basic },
-	{ "net_route", curtain_ioctls_net_route },
-	{ "oss", curtain_ioctls_oss },
-	{ "cryptodev", curtain_ioctls_cryptodev },
-	{ "bpf", curtain_ioctls_bpf_all },
+struct config_tag {
+	struct config_tag *next;
+	char name[];
+};
+
+struct config_section {
+	struct config_section *next;
+	struct curtain_slot *slot;
 };
 
 
@@ -111,43 +108,87 @@ strmemcmp(const char *s, const char *b, size_t n)
 }
 
 
-static struct curtain_config_tag *
-curtain_config_tag_find_mem(struct curtain_config *cfg, const char *buf, size_t len)
+static struct config_tag *
+config_tag_make(struct curtain_config *cfg __unused, struct config_tag **link,
+    const char *name, size_t name_len)
 {
-	struct curtain_config_tag *tag;
-	for (tag = cfg->tags_pending; tag; tag = tag->chain)
-		if (strmemcmp(tag->name, buf, len) == 0)
-			break;
-	return (tag);
-}
-
-struct curtain_config_tag *
-curtain_config_tag_push_mem(struct curtain_config *cfg, const char *buf, size_t len)
-{
-	struct curtain_config_tag *tag;
-	tag = curtain_config_tag_find_mem(cfg, buf, len);
-	if (tag)
-		return (tag);
-	tag = malloc(sizeof *tag + len + 1);
+	struct config_tag *tag;
+	tag = malloc(sizeof *tag + name_len + 1);
 	if (!tag)
 		err(EX_TEMPFAIL, "malloc");
-	*tag = (struct curtain_config_tag){
-		.chain = cfg->tags_pending,
-	};
-	memcpy(tag->name, buf, len);
-	tag->name[len] = '\0';
-	cfg->tags_pending = tag;
+	*tag = (struct config_tag){ .next = *link };
+	memcpy(tag->name, name, name_len);
+	tag->name[name_len] = '\0';
+	*link = tag;
 	return (tag);
 }
 
-struct curtain_config_tag *
-curtain_config_tag_block_mem(struct curtain_config *cfg, const char *buf, size_t len)
+static struct config_tag *
+config_tag_merge(struct curtain_config *cfg, const char *name, size_t name_len)
 {
-	struct curtain_config_tag *tag;
-	tag = curtain_config_tag_push_mem(cfg, buf, len);
-	if (tag)
-		tag->blocked = true;
-	return (tag);
+	for (struct config_tag *tag = cfg->tags_pending; tag; tag = tag->next)
+		if (strmemcmp(tag->name, name, name_len) == 0)
+			return (tag);
+	return (config_tag_make(cfg, &cfg->tags_pending, name, name_len));
+}
+
+static struct config_tag *
+config_tag_remove(struct curtain_config *cfg, const char *name, size_t name_len)
+{
+	for (struct config_tag **link = &cfg->tags_pending, *tag; (tag = *link); link = &tag->next)
+		if (strmemcmp(tag->name, name, name_len) == 0) {
+			if (tag == cfg->tags_current)
+				cfg->tags_current = tag->next;
+			if (tag == cfg->tags_visited)
+				cfg->tags_visited = tag->next;
+			if (tag == cfg->tags_enabled)
+				cfg->tags_enabled = tag->next;
+			if (tag == cfg->tags_blocked)
+				cfg->tags_blocked = tag->next;
+			*link = tag->next;
+			tag->next = NULL;
+			return (tag);
+		}
+	return (NULL);
+}
+
+static void
+config_tag_drop(struct curtain_config *cfg, const char *name, size_t name_len)
+{
+	struct config_tag *tag;
+	if ((tag = config_tag_remove(cfg, name, name_len))) {
+		free(tag);
+		cfg->tags_dropped = true;
+	}
+}
+
+static void
+config_tag_enable(struct curtain_config *cfg, const char *name, size_t name_len)
+{
+	struct config_tag *tag, **link;
+	tag = config_tag_remove(cfg, name, name_len);
+	for (link = &cfg->tags_pending; *link != cfg->tags_enabled; link = &(*link)->next);
+	if (tag) {
+		tag->next = *link;
+		*link = tag;
+	} else
+		tag = config_tag_make(cfg, link, name, name_len);
+	cfg->tags_enabled = tag;
+}
+
+static void
+config_tag_block(struct curtain_config *cfg, const char *name, size_t name_len)
+{
+	struct config_tag *tag, **link;
+	tag = config_tag_remove(cfg, name, name_len);
+	for (link = &cfg->tags_pending; *link != cfg->tags_blocked; link = &(*link)->next);
+	if (tag) {
+		tag->next = *link;
+		*link = tag;
+	} else
+		tag = config_tag_make(cfg, link, name, name_len);
+	cfg->tags_blocked = tag;
+	cfg->tags_dropped = true;
 }
 
 
@@ -159,6 +200,11 @@ need_slot(struct parser *par)
 			curtain_enable((par->slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 		else
 			par->slot = curtain_slot();
+		if (par->cfg->sections) {
+			if (par->cfg->sections->slot)
+				curtain_drop(par->cfg->sections->slot);
+			par->cfg->sections->slot = par->slot;
+		}
 	}
 }
 
@@ -295,11 +341,11 @@ parse_include(struct parser *par, struct word *w)
 }
 
 static void
-parse_push(struct parser *par, struct word *w)
+parse_merge(struct parser *par, struct word *w)
 {
 	while (w) {
 		if (par->apply)
-			curtain_config_tag_push_mem(par->cfg, w->ptr, w->len);
+			config_tag_merge(par->cfg, w->ptr, w->len);
 		w = w->next;
 	}
 }
@@ -517,6 +563,19 @@ parse_priv(struct parser *par, struct word *w)
 	}
 }
 
+static const struct {
+	const char name[16];
+	const unsigned long *ioctls;
+} ioctls_bundles[] = {
+	{ "tty_basic", curtain_ioctls_tty_basic },
+	{ "tty_pts", curtain_ioctls_tty_pts },
+	{ "net_basic", curtain_ioctls_net_basic },
+	{ "net_route", curtain_ioctls_net_route },
+	{ "oss", curtain_ioctls_oss },
+	{ "cryptodev", curtain_ioctls_cryptodev },
+	{ "bpf", curtain_ioctls_bpf_all },
+};
+
 static void
 parse_ioctls(struct parser *par, struct word *w)
 {
@@ -612,8 +671,8 @@ static const struct {
 	void (*func)(struct parser *, struct word *);
 	int flags;
 } directives[] = {
-	{ "merge",	parse_push,	0 },
-	{ "push",	parse_push,	0 },
+	{ "merge",	parse_merge,	0 },
+	{ "push",	parse_merge,	0 },
 	{ "unveil",	parse_unveil,	0 },
 	{ "path",	parse_unveil,	path_flags },
 	{ "ability",	parse_ability,	0 },
@@ -748,11 +807,12 @@ match_section_pred_tag(struct parser *par,
     char *name, char *name_end)
 {
 	*matched = *visited = false;
-	for (const struct curtain_config_tag *tag = par->cfg->tags_current; tag; tag = tag->chain) {
+	for (const struct config_tag *tag = par->cfg->tags_current;
+	    tag != par->cfg->tags_blocked;
+	    tag = tag->next) {
 		if (tag == par->cfg->tags_visited)
 			*visited = true;
-		if (!tag->blocked &&
-		    strmemcmp(tag->name, name, name_end - name) == 0) {
+		if (strmemcmp(tag->name, name, name_end - name) == 0) {
 			*matched = true;
 			break;
 		}
@@ -825,6 +885,7 @@ parse_section_pred(struct parser *par, char *p)
 static void
 parse_section(struct parser *par, char *p)
 {
+	struct config_section *sec;
 	par->slot = NULL;
 	par->last_matched_section_path = NULL;
 	p = parse_section_pred(par, p + 1);
@@ -840,13 +901,17 @@ parse_section(struct parser *par, char *p)
 			if (w == p)
 				break;
 			if (par->matched)
-				curtain_config_tag_push_mem(par->cfg, w, p - w);
+				config_tag_merge(par->cfg, w, p - w);
 		}
 	}
 	if (*p++ != ']')
 		return (parse_error(par, "expected closing bracket"));
 	if (*(p = skip_spaces(p)))
 		return (parse_error(par, "unexpected characters at end of line"));
+
+	sec = malloc(sizeof *sec);
+	*sec = (struct config_section){ .next = par->cfg->sections };
+	par->cfg->sections = sec;
 }
 
 static void
@@ -890,12 +955,20 @@ next:	switch (*p) {
 static void
 parse_config(struct parser *par)
 {
-	while (getline(&par->line, &par->line_size, par->file) >= 0) {
+	while ((par->line = fgetln(par->file, &par->line_size))) {
+		if (!par->line_size || par->line[par->line_size - 1] != '\n') {
+			parse_error(par, "unterminated line");
+			break;
+		}
+		par->line[par->line_size - 1] = '\0';
 		par->line_no++;
 		parse_line(par);
 	}
+	if (ferror(par->file))
+		parse_error(par, strerror(errno));
 }
 
+
 static int
 process_file_at(struct curtain_config *cfg,
     const char *base_path, int base_fd, const char *sub_path)
@@ -925,9 +998,12 @@ process_file_at(struct curtain_config *cfg,
 		err(EX_OSERR, "fopen");
 	if (cfg->verbosity >= 1) {
 		fprintf(stderr, "%s: %s: processing with tags [", getprogname(), par.file_name);
-		for (const struct curtain_config_tag *tag = cfg->tags_current; tag; tag = tag->chain)
+		for (const struct config_tag *tag = cfg->tags_current;
+		    tag != cfg->tags_blocked;
+		    tag = tag->next)
 			fprintf(stderr, "%s%s", tag->name,
-			    !tag->chain ? "" : tag->chain == cfg->tags_visited ? "; " : ", ");
+			    tag->next == cfg->tags_blocked ? "" :
+			    tag->next == cfg->tags_visited ? "; " : ", ");
 		fprintf(stderr, "]\n");
 	}
 	parse_config(&par);
@@ -963,9 +1039,8 @@ curtain_config_directive(struct curtain_config *cfg, struct curtain_slot *slot,
 	return (par.error ? -1 : 0);
 }
 
-
 static void
-process_dir_tag(struct curtain_config *cfg, struct curtain_config_tag *tag,
+process_dir_tag(struct curtain_config *cfg, struct config_tag *tag,
     const char *base_path, int base_fd)
 {
 	char path[PATH_MAX];
@@ -1014,8 +1089,10 @@ process_dir(struct curtain_config *cfg, const char *base)
 	}
 
 	visited = false;
-	for (struct curtain_config_tag *tag = cfg->tags_current; tag; tag = tag->chain) {
-		struct curtain_config_tag *saved_tags_visited = cfg->tags_visited;
+	for (struct config_tag *tag = cfg->tags_current;
+	    tag != cfg->tags_blocked;
+	    tag = tag->next) {
+		struct config_tag *saved_tags_visited = cfg->tags_visited;
 		if (tag == cfg->tags_visited)
 			visited = true;
 		/* Don't skip anything in files that haven't been visited yet. */
@@ -1039,19 +1116,43 @@ curtain_config_load(struct curtain_config *cfg)
 	home = issetugid() ? NULL : getenv("HOME");
 
 	/*
-	 * The tags list contains all of the section names that must be applied
-	 * when parsing the configuration files.
+	 * Tags are organized in a queue headed by tags_pending with 4 extra
+	 * "hands" pointing into it.  The configuration files are processed in
+	 * multiple passes, each pass handling newly merged tags.
 	 *
-	 * The are 3 pointers into the list.  The sublist beginning at
-	 * tags_visited is for tags for which the corresponding curtain.d
-	 * configuration files have already been processed.  The sublist at
-	 * tags_current is for the tags currently being processed by an
-	 * iteration of this loop.  Newly enabled tags are inserted at
-	 * tags_pending and aren't processed until the next iteration.
-	 *
-	 * This is used to skip over sections that have already been applied
-	 * when reparsing the same files to apply newly enabled tags.
+	 * Newly merged tags are added at the tags_pending head.  The
+	 * tags_current hand delimits tags currently being processed in the
+	 * current iteration of the loop.  The tags_visited hand delimits tags
+	 * that have already been processed by a previous iteration of the
+	 * loop.  This allows to skip over sections that have already been
+	 * applied.  The tags_enabled hand delimits the "root set" of tags
+	 * explicitly enabled by the caller (as opposed to merged by the
+	 * configuration files).  The tags_blocked hand is for tags that are
+	 * not enabled and cannot be merged.
 	 */
+
+	if (cfg->tags_dropped) {
+		/* Restart merging tags starting from tags_enabled. */
+		if (cfg->verbosity >= 2)
+			warnx("resetting tags and slots");
+		for (struct config_section *sec = cfg->sections, *next; sec; sec = next) {
+			if (sec->slot)
+				curtain_drop(sec->slot);
+			next = sec->next;
+			free(sec);
+		}
+		cfg->sections = NULL;
+		for (struct config_tag *tag = cfg->tags_pending, *next;
+		    tag != cfg->tags_enabled;
+		    tag = next) {
+			next = tag->next;
+			free(tag);
+		}
+		cfg->tags_pending = cfg->tags_current = cfg->tags_enabled;
+		cfg->tags_visited = cfg->tags_blocked;
+		cfg->tags_dropped = false;
+	}
+
 	do {
 		cfg->tags_current = cfg->tags_pending;
 
@@ -1069,19 +1170,28 @@ curtain_config_load(struct curtain_config *cfg)
 
 		cfg->tags_visited = cfg->tags_current;
 
+		/* Keep going as long as new tags are being merged. */
 	} while (cfg->tags_current != cfg->tags_pending);
+}
+
+int
+curtain_config_apply(struct curtain_config *cfg)
+{
+	curtain_config_load(cfg);
+	return (curtain_apply());
 }
 
 void
 curtain_config_tags_clear(struct curtain_config *cfg)
 {
-	struct curtain_config_tag *tag, *tag_next;
+	struct config_tag *tag, *tag_next;
 	tag_next = cfg->tags_pending;
 	while ((tag = tag_next)) {
-		tag_next = tag->chain;
+		tag_next = tag->next;
 		free(tag);
 	}
-	cfg->tags_pending = cfg->tags_current = cfg->tags_visited = NULL;
+	cfg->tags_pending = cfg->tags_current = cfg->tags_visited =
+	    cfg->tags_enabled = cfg->tags_blocked = NULL;
 }
 
 static void
@@ -1124,7 +1234,13 @@ curtain_config_unsafety(struct curtain_config *cfg, int new)
 void
 curtain_config_free(struct curtain_config *cfg)
 {
-	/* XXX: there should be some way to free the slots eventually */
+	for (struct config_section *sec = cfg->sections, *next; sec; sec = next) {
+		if (sec->slot)
+			curtain_drop(sec->slot);
+		next = sec->next;
+		free(sec);
+	}
+	cfg->sections = NULL;
 	curtain_config_tags_clear(cfg);
 	free(cfg);
 }
@@ -1141,12 +1257,30 @@ curtain_config_tags_from_env(struct curtain_config *cfg, const char *name)
 	do {
 		if (!*q || is_space(*q)) {
 			if (p != q)
-				curtain_config_tag_push_mem(cfg, p, q - p);
+				config_tag_enable(cfg, p, q - p);
 			if (!*q)
 				break;
 			p = ++q;
 		} else
 			q++;
 	} while (true);
+}
+
+void
+curtain_config_tag_push(struct curtain_config *cfg, const char *name)
+{
+	config_tag_enable(cfg, name, strlen(name));
+}
+
+void
+curtain_config_tag_drop(struct curtain_config *cfg, const char *name)
+{
+	config_tag_drop(cfg, name, strlen(name));
+}
+
+void
+curtain_config_tag_block(struct curtain_config *cfg, const char *name)
+{
+	config_tag_block(cfg, name, strlen(name));
 }
 

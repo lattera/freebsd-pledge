@@ -87,21 +87,9 @@ void curtain_config_free(struct curtain_config *);
 int curtain_config_verbosity(struct curtain_config *, int);
 int curtain_config_unsafety(struct curtain_config *, int);
 
-struct curtain_config_tag *curtain_config_tag_push_mem(struct curtain_config *, const char *buf, size_t len);
-
-static inline struct curtain_config_tag *
-curtain_config_tag_push(struct curtain_config *cfg, const char *name)
-{
-	return (curtain_config_tag_push_mem(cfg, name, strlen(name)));
-}
-
-struct curtain_config_tag *curtain_config_tag_block_mem(struct curtain_config *, const char *buf, size_t len);
-
-static inline struct curtain_config_tag *
-curtain_config_tag_block(struct curtain_config *cfg, const char *name)
-{
-	return (curtain_config_tag_block_mem(cfg, name, strlen(name)));
-}
+void curtain_config_tag_push(struct curtain_config *, const char *name);
+void curtain_config_tag_drop(struct curtain_config *, const char *name);
+void curtain_config_tag_block(struct curtain_config *, const char *name);
 
 void curtain_config_load(struct curtain_config *);
 void curtain_config_tags_from_env(struct curtain_config *, const char *name);
@@ -109,6 +97,8 @@ void curtain_config_tags_clear(struct curtain_config *);
 
 int curtain_config_directive(struct curtain_config *, struct curtain_slot *,
     const char *directive);
+
+int curtain_config_apply(struct curtain_config *);
 
 int curtain_config_setup_x11(struct curtain_config *, bool trusted);
 int curtain_config_setup_wayland(struct curtain_config *);
