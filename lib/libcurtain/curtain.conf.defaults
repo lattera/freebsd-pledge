@@ -151,10 +151,8 @@ sysctl user.localbase
 /etc/libmap.conf			: r
 /var/run/ld-elf.so.hints		: r
 /libexec/ld-elf.so.1			: rx
-[_rtld _compat32]
-/etc/libmap32.conf			: r
-[_rtld _localbase]
-/usr/local/etc/libmap.d/		: r
+/etc/libmap32.conf			: r	[_compat32]
+/usr/local/etc/libmap.d/		: r 	[_localbase]
 
 [_exec : _libs]
 ability exec
@@ -162,32 +160,27 @@ ability exec
 [_libs : _rtld]
 /usr/libdata/				: r
 {,/usr}/lib/				: rx
-[_libs _compat32]
-/usr/lib32/				: rx
+/usr/lib32/				: rx	[_compat32]
 [_libs _localbase]
 /usr/local/libdata/			: r
 /usr/local/lib/				: rx
 /usr/local/llvm{9,10,11,12,13,14}/lib/	: rx
-[_libs _compat32 _localbase]
-/usr/local/lib32/			: rx
+/usr/local/lib32/			: rx	[_compat32]
 
 [_cmds : _exec]
 {,/usr}/libexec/			: rx
 {,/usr}/{bin,sbin}/			: rx
-[_cmds _compat32]
-/usr/bin32/				: rx
+/usr/bin32/				: rx	[_compat32]
 [_cmds _localbase]
 /usr/local/libexec/			: rx
 /usr/local/{bin,sbin}/			: rx
-[_cmds _compat32 _localbase]
-/usr/local/bin32/			: rx
+/usr/local/bin32/			: rx	[_compat32]
 
 [_share]
 /usr/share/				: r
-[_share _localbase]
-/usr/local/man/				: r
+/usr/local/man/				: r	[_localbase]
 # NOTE: Some packages install executables in /usr/local/share.
-/usr/local/share/			: rx
+/usr/local/share/			: rx	[_localbase]
 
 [_sock]
 ability sock
@@ -226,17 +219,14 @@ ioctls cryptodev
 /etc/defaults/curtain.conf		: r
 /etc/curtain.{conf,d/}			: r
 ~/.curtain.{conf,d/}			: r
-[curtain _localbase]
-/usr/local/etc/curtain.{conf,d/}	: r
-[curtain _tty]
-merge _pty
+/usr/local/etc/curtain.{conf,d/}	: r	[_localbase]
+merge _pty					[_tty]
 
 [_separate_tmpdir]
 ${TMPDIR}/				: rwu
-[_tmpdir_exec _separate_tmpdir]
-${TMPDIR}/				: x
-[_tmpdir_shellexec _separate_tmpdir]
-${TMPDIR}/				: s
+[_separate_tmpdir]
+${TMPDIR}/				: s	[_tmpdir_shellexec]
+${TMPDIR}/				: x	[_tmpdir_exec]
 
 [_shared_tmpdir]
 ${TMPDIR:-/tmp}/			: t
@@ -284,9 +274,8 @@ sysctl net.routetable
 sysctl net.inet6.ip6.addrctlpolicy
 ioctls net_basic
 ioctls net_route
-[_network_base _localbase]
-/usr/local/etc/ssl/			: r
-/usr/local/etc/ssl/private/		:
+/usr/local/etc/ssl/			: r	[_localbase]
+/usr/local/etc/ssl/private/		:	[_localbase]
 
 [_syslog]
 /var/run/log : v

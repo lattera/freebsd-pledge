@@ -88,8 +88,7 @@ ability! any_ioctl # XXX
 merge _xdg
 # Seems like GTK-2 also will use this file.
 ~/.config/gtk-3.0/bookmarks
-[_gtk _strict]
-sysctl-deny vfs.usermount
+sysctl-deny vfs.usermount [_strict]
 
 [_qt _strict]
 ability-deny prot_exec
@@ -184,8 +183,7 @@ merge _basic
 merge _setcred
 ability! rsugid_exec
 merge _syslog
-[doas _localbase]
-/usr/local/etc/doas.conf
+/usr/local/etc/doas.conf [_localbase]
 
 
 [vi : _editor]
@@ -227,8 +225,7 @@ merge _bpf
 merge _basic _gtk
 merge _bpf
 ~/.config/wireshark/			: rw +
-[wireshark _strict]
-ability-deny prot_exec
+ability-deny prot_exec [_strict]
 
 [emacs : _editor]
 merge _basic
@@ -237,8 +234,7 @@ merge! _pwddb
 ~/.emacs.el				: rw
 ~/.emacs				: rw
 ~/.emacs.d/ ~/.config/emacs/		: rw +
-[emacs _gui]
-merge _gtk
+merge _gtk [_gui]
 
 [abiword : _editor]
 merge _crude _gtk
@@ -317,8 +313,7 @@ merge _basic
 merge _basic _gtk
 ability cred
 ~/.config/hexchat/			: rw +
-[hexchat _strict]
-sysctl-deny machdep.tsc_freq
+sysctl-deny machdep.tsc_freq [_strict]
 
 [pidgin]
 merge _basic _gtk
@@ -328,8 +323,7 @@ merge _basic _gtk
 merge _fdpass
 merge! _memstat
 ability posixipc prot_exec
-[_gecko _strict]
-sysctl-deny kern.proc.vmmap
+sysctl-deny kern.proc.vmmap [_strict]
 
 [firefox.base : _browser]
 # NOTES:
@@ -387,8 +381,7 @@ merge _gecko
 merge _fdpass
 merge! _memstat
 ability prot_exec
-[_webkit _strict]
-sysctl-deny kern.bootfile # kvm_open(3)
+sysctl-deny kern.bootfile [_strict] # kvm_open(3)
 
 [falkon : _browser]
 merge _basic _xdg
@@ -408,8 +401,7 @@ merge _crude _unix _ps _network _qt _xdg
 ~/.local/share/qBittorrent/		: rw +
 ~/.config/qBittorrent/			: rw +
 ~/.cache/qBittorrent/			: rw +
-[qbittorrent _strict]
-sysctl-deny hw.physmem
+sysctl-deny hw.physmem [_strict]
 
 [deluge : _p2p]
 merge _basic
@@ -424,9 +416,8 @@ ability posixipc
 [mpv : _player]
 merge _basic
 ~/.config/mpv/ ~/.mpv/			: rw +
-[mpv _strict]
-ability-deny prot_exec
-ioctl-deny 0x40087603 # XXX
+ability-deny prot_exec [_strict]
+ioctl-deny 0x40087603 [_strict] # XXX
 
 [mplayer : _player]
 merge _basic
@@ -486,8 +477,7 @@ ability prot_exec
 
 [_devel]
 /usr/include/
-[_devel _localbase]
-/usr/local/include/
+/usr/local/include/ [_localbase]
 
 [_ruby_gems]
 $GEM_HOME/
@@ -513,8 +503,7 @@ merge _pwddb
 /usr/include/
 /usr/obj/usr/ports/			: rxw
 /var/db/ports/				: rw
-[_ports_build _localbase]
-/usr/local/include/
+/usr/local/include/ [_localbase]
 
 [_src_build]
 merge _pwddb
