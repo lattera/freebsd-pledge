@@ -28,7 +28,6 @@ struct parser {
 	char *line;
 	size_t line_size;
 	bool apply;
-	bool skip;
 	bool matched;
 	bool visited;
 	bool error;
@@ -279,12 +278,23 @@ struct word {
 	char *str;
 };
 
+static char *parse_section_pred(struct parser *, char *);
+
 static void
 parse_words_1(struct parser *par, char *p,
     struct word **head, struct word **link,
     void (*fin)(struct parser *, struct word *))
 {
-	if (*(p = skip_spaces(p))) {
+	while (*(p = skip_spaces(p)) == '[') {
+		bool saved_matched = par->matched, saved_apply = par->apply;
+		p = parse_section_pred(par, ++p); /* sets par->apply/matched. */
+		par->matched = saved_matched && par->matched;
+		par->apply = saved_apply && par->matched;
+		if (*p++ != ']')
+			return (parse_error(par, "expected closing bracket"));
+	}
+
+	if (*p) {
 		char *q;
 		struct word w;
 		q = skip_word(p, "");
@@ -296,6 +306,7 @@ parse_words_1(struct parser *par, char *p,
 		*link = &w;
 		return (parse_words_1(par, q, head, &w.next, fin));
 	}
+
 	*link = NULL;
 	return (fin(par, *head));
 }
@@ -305,7 +316,20 @@ parse_words(struct parser *par, char *p,
     void (*fin)(struct parser *, struct word *))
 {
 	struct word *list;
-	return (parse_words_1(par, p, &list, &list, fin));
+	bool saved_matched = par->matched, saved_apply = par->apply;
+	parse_words_1(par, p, &list, &list, fin);
+	par->matched = saved_matched, par->apply = saved_apply;
+}
+
+static void
+parse_diag(struct parser *par, struct word *w)
+{
+	if (par->apply) {
+		fprintf(stderr, "%s:%ju:", par->file_name, (uintmax_t)par->line_no);
+		for (; w; w = w->next)
+			fprintf(stderr, " %s", w->str);
+		fprintf(stderr, "\n");
+	}
 }
 
 static int
@@ -328,15 +352,13 @@ static void
 parse_include(struct parser *par, struct word *w)
 {
 	while (w) {
-		if (par->apply) {
-			char path[PATH_MAX];
-			const char *error;
-			int r;
-			r = pathexp(w->str, path, sizeof path,
-			    &error, do_include_callback, par);
-			if (r < 0)
-				parse_error(par, error);
-		}
+		char path[PATH_MAX];
+		const char *error;
+		int r;
+		r = pathexp(w->str, path, sizeof path,
+		    &error, do_include_callback, par);
+		if (r < 0)
+			parse_error(par, error);
 		w = w->next;
 	}
 }
@@ -661,6 +683,7 @@ static const struct {
 	void (*func)(struct parser *, struct word *);
 	int flags;
 } directives[] = {
+	{ "diag",	parse_diag,	0 },
 	{ "merge",	parse_merge,	0 },
 	{ "push",	parse_merge,	0 },
 	{ "unveil",	parse_unveil,	0 },
@@ -746,7 +769,7 @@ parse_directive(struct parser *par, char *p)
 		return;
 	}
 
-	if (par->skip)
+	if (!par->apply)
 		return;
 	for (size_t i = 0; i < nitems(directives); i++)
 		if (strcmp(directives[i].name, dir) == 0) {
@@ -827,8 +850,7 @@ parse_section_pred(struct parser *par, char *p)
 		*name_end = c;
 	} while (true);
 
-	par->matched = or_matched;
-	par->skip = !or_matched || or_visited;
+	par->apply = (par->matched = or_matched) && !or_visited;
 	return (p);
 }
 
@@ -841,7 +863,7 @@ parse_section(struct parser *par, char *p)
 	if (par->cfg->verbosity >= 2 && par->matched)
 		fprintf(stderr, "%s: %s:%ju: matched section%s\n",
 		    getprogname(), par->file_name, (uintmax_t)par->line_no,
-		    par->skip ? ", already applied" : "");
+		    par->apply ? "" : ", not applying");
 	if (*(p = skip_spaces(p)) == ':') {
 		p++;
 		while (*(p = skip_spaces(p))) {
@@ -890,7 +912,7 @@ next:	switch (*p) {
 	case '$':
 	case '~':
 	case '%':
-		if (!par->skip) {
+		if (par->apply) {
 			par->directive_flags = path_flags;
 			need_slot(par);
 			parse_words(par, p, parse_unveil);
@@ -931,8 +953,7 @@ process_file_at(struct curtain_config *cfg,
 	struct parser par = {
 		.cfg = cfg,
 		.matched = true,
-		.apply = true,
-		.skip = cfg->tags_visited,
+		.apply = !cfg->tags_visited,
 		.visited = cfg->tags_visited,
 	};
 	int fd, saved_errno;
