@@ -482,7 +482,7 @@ ability prot_exec
 /usr/local/include/ [_localbase]
 
 [_ccache]
-${CCACHE_DIR:/var/cache/ccache}/ : rw
+${CCACHE_DIR-/var/cache/ccache}/ : rw
 
 [_ruby_gems]
 $GEM_HOME/
