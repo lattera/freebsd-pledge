@@ -227,6 +227,11 @@ merge _bpf
 ~/.config/wireshark/			: rw +
 ability-deny prot_exec [_strict]
 
+[mdconfig]
+merge _basic
+ability kmod
+ioctls mdctl
+
 [emacs : _editor]
 merge _basic
 # NOTE: Sometimes crashes with untrusted X11.

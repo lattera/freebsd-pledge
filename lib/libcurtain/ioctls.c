@@ -19,6 +19,8 @@
 
 #include <net/bpf.h>
 
+#include <sys/mdioctl.h>
+
 const unsigned long curtain_ioctls_tty_basic[] = {
 	TIOCSBRK,
 	TIOCCBRK,
@@ -368,5 +370,13 @@ const unsigned long curtain_ioctls_bpf_all[] = {
 	BIOCSETFNR,
 	BIOCGTSTAMP,
 	BIOCSTSTAMP,
+	-1
+};
+
+const unsigned long curtain_ioctls_mdctl[] = {
+	MDIOCATTACH,
+	MDIOCDETACH,
+	MDIOCQUERY,
+	MDIOCRESIZE,
 	-1
 };

@@ -71,6 +71,7 @@ extern const unsigned long curtain_ioctls_net_route[];
 extern const unsigned long curtain_ioctls_oss[];
 extern const unsigned long curtain_ioctls_cryptodev[];
 extern const unsigned long curtain_ioctls_bpf_all[];
+extern const unsigned long curtain_ioctls_mdctl[];
 
 
 struct curtain_config;
