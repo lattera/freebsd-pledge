@@ -988,7 +988,8 @@ curtain_mount_check_stat(struct ucred *cr,
 {
 	unveil_perms uperms;
 	int error;
-	if (CRED_IN_VFS_VEILED_MODE(cr)) {
+	if (CRED_IN_VFS_VEILED_MODE(cr) &&
+	    cred_ability_action(cr, CURTAINABL_MOUNT_SEE_ALL) != CURTAINACT_ALLOW) {
 		struct curtain *ct;
 		if (mtx_owned(&mountlist_mtx)) { /* getfsstat(2)? */
 			if ((ct = CRED_SLOT(cr)))
@@ -1392,6 +1393,15 @@ curtain_priv_check(struct ucred *cr, int priv)
 #endif
 		abl = CURTAINABL_SYSFLAGS;
 		break;
+	case PRIV_VFS_MOUNT:
+	case PRIV_VFS_UNMOUNT:
+	case PRIV_VFS_MOUNT_OWNER:
+		abl = CURTAINABL_MOUNT;
+		break;
+	case PRIV_VFS_MOUNT_NONUSER:
+		abl = CURTAINABL_MOUNT_NONUSER;
+		break;
+
 	case PRIV_VFS_READ_DIR:
 		/* Let other policies handle this (like is done for jails). */
 		abl = CURTAINABL_VFS_MISC;

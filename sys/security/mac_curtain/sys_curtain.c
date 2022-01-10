@@ -147,7 +147,7 @@ SYSCTL_PROC(_debug, OID_AUTO, show_curtain,
 
 
 /* Some abilities don't make much sense without some others. */
-static const int abilities_expand[][2] = {
+static const enum curtain_ability abilities_expand[][2] = {
 	{ CURTAINABL_VFS_READ,		CURTAINABL_VFS_MISC		},
 	{ CURTAINABL_VFS_WRITE,		CURTAINABL_VFS_MISC		},
 	{ CURTAINABL_VFS_CREATE,	CURTAINABL_VFS_MISC		},
@@ -155,6 +155,7 @@ static const int abilities_expand[][2] = {
 	{ CURTAINABL_FATTR,		CURTAINABL_VFS_MISC		},
 	{ CURTAINABL_PROT_EXEC,		CURTAINABL_PROT_EXEC_LOOSER	},
 	{ CURTAINABL_PROT_EXEC_LOOSER,	CURTAINABL_PROT_EXEC_LOOSE	},
+	{ CURTAINABL_MOUNT_NONUSER,	CURTAINABL_MOUNT		},
 	{ CURTAINABL_VFS_SOCK,		CURTAINABL_VFS_BIND		},
 	{ CURTAINABL_VFS_SOCK,		CURTAINABL_VFS_CONNECT		},
 	{ CURTAINABL_VFS_BIND,		CURTAINABL_SOCK			},
