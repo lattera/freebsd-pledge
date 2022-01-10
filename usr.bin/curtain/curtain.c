@@ -376,6 +376,7 @@ main(int argc, char *argv[])
 		LONGOPT_CHROOT,
 		LONGOPT_UNENFORCED,
 		LONGOPT_SETUSER,
+		LONGOPT_NO_TTY,
 	};
 	const struct option longopts[] = {
 		{ "newpgrp", no_argument, NULL, LONGOPT_NEWPGRP },
@@ -383,6 +384,7 @@ main(int argc, char *argv[])
 		{ "chroot", required_argument, NULL, LONGOPT_CHROOT },
 		{ "unenforced", no_argument, NULL, LONGOPT_UNENFORCED },
 		{ "setuser", required_argument, NULL, LONGOPT_SETUSER },
+		{ "no-tty", no_argument, NULL, LONGOPT_NO_TTY },
 		{ 0 }
 	};
 	char *sh_argv[2];
@@ -504,6 +506,9 @@ main(int argc, char *argv[])
 				warn("%s", path);
 			break;
 		}
+		case LONGOPT_NO_TTY:
+			new_sid = true;
+			/* FALLTHROUGH */
 		case 'T':
 			pty_wrap = false;
 			pty_wrap_partial = false;
