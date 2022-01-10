@@ -56,7 +56,7 @@ curtain_from_cred(struct ucred *cr)
 
 static bool __read_mostly curtainctl_enabled = true;
 unsigned __read_mostly curtain_log_level = CURTAINACT_TRAP;
-bool __read_mostly curtain_log_sysctls = false;
+unsigned __read_mostly curtain_sysctls_log_level = CURTAINACT_TRAP;
 
 SYSCTL_NODE(_security, OID_AUTO, curtain,
     CTLFLAG_RW | CTLFLAG_MPSAFE, 0,
@@ -77,8 +77,8 @@ SYSCTL_UINT(_security_curtain, OID_AUTO, log_level,
     CTLFLAG_RW, &curtain_log_level, 0,
     "");
 
-SYSCTL_BOOL(_security_curtain, OID_AUTO, log_sysctls,
-    CTLFLAG_RW, &curtain_log_sysctls, 0,
+SYSCTL_UINT(_security_curtain, OID_AUTO, sysctls_log_level,
+    CTLFLAG_RW, &curtain_sysctls_log_level, 0,
     "");
 
 static int

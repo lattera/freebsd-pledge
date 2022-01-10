@@ -139,7 +139,7 @@ SYSCTL_DECL(_security_curtain_stats);
 #endif
 
 extern unsigned __read_mostly curtain_log_level;
-extern bool __read_mostly curtain_log_sysctls;
+extern unsigned __read_mostly curtain_sysctls_log_level;
 
 extern const sysfilset_t curtain_preserve_sysfils;
 extern const sysfilset_t curtain_abilities_sysfils[CURTAINABL_COUNT];

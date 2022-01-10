@@ -1313,7 +1313,7 @@ curtain_system_check_sysctl(struct ucred *cr,
 		act = cred_ability_action(cr, curtain_type_fallback[CURTAINTYP_SYSCTL]);
 	if (__predict_true(act == CURTAINACT_ALLOW))
 		return (0);
-	if (curtain_log_sysctls) {
+	if (act >= curtain_sysctls_log_level) {
 		char buf[256], *name;
 		if ((name = sysctl_name_str(oidp, buf, sizeof buf)))
 			CURTAIN_CRED_LOG_ACTION(cr, act, "sysctl %s", name);
