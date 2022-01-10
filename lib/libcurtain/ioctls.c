@@ -19,6 +19,8 @@
 
 #include <net/bpf.h>
 
+#include <sys/disk.h>
+
 #include <sys/mdioctl.h>
 
 const unsigned long curtain_ioctls_tty_basic[] = {
@@ -371,6 +373,16 @@ const unsigned long curtain_ioctls_bpf_all[] = {
 	BIOCGTSTAMP,
 	BIOCSTSTAMP,
 	-1
+};
+
+const unsigned long curtain_ioctls_disk_basic[] = {
+	DIOCGMEDIASIZE,
+	DIOCGSECTORSIZE,
+	DIOCGFWSECTORS,
+	DIOCGFWHEADS,
+	DIOCGSTRIPESIZE,
+	DIOCGSTRIPEOFFSET,
+	-1,
 };
 
 const unsigned long curtain_ioctls_mdctl[] = {

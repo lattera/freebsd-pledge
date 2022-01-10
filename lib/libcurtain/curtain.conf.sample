@@ -232,6 +232,10 @@ merge _basic
 ability kmod
 ioctls mdctl
 
+[newfs]
+merge _basic
+ioctls disk_basic
+
 [emacs : _editor]
 merge _basic
 # NOTE: Sometimes crashes with untrusted X11.

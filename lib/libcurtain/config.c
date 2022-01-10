@@ -586,6 +586,7 @@ static const struct {
 	{ "oss", curtain_ioctls_oss },
 	{ "cryptodev", curtain_ioctls_cryptodev },
 	{ "bpf", curtain_ioctls_bpf_all },
+	{ "disk_basic", curtain_ioctls_disk_basic },
 	{ "mdctl", curtain_ioctls_mdctl },
 };
 
