@@ -401,7 +401,7 @@ main(int argc, char *argv[])
 	     pty_wrap_filter = true,
 	     user_ctx = false,
 	     clean_env = false,
-	     new_sid = true,
+	     new_sid = false,
 	     new_pgrp = false,
 	     no_network = false,
 	     unenforced = false;
@@ -505,7 +505,6 @@ main(int argc, char *argv[])
 			break;
 		}
 		case 'T':
-			new_sid = false;
 			pty_wrap = false;
 			pty_wrap_partial = false;
 			break;
@@ -581,14 +580,10 @@ main(int argc, char *argv[])
 		curtain_config_tag_push(cfg, "_strict");
 	if (no_network)
 		curtain_config_tag_block(cfg, "_network");
-	if (new_sid)
-		curtain_config_tag_push(cfg, "_newsid");
 	if (run_shell)
 		curtain_config_tag_push(cfg, "_shell");
 	if (login_shell)
 		curtain_config_tag_push(cfg, "_login_shell");
-	if (new_pgrp)
-		curtain_config_tag_push(cfg, "_newpgrp");
 
 	if (app_tag && argc) {
 		char *p;
@@ -772,28 +767,28 @@ main(int argc, char *argv[])
 	if (!(do_exec = no_fork)) {
 		if (pty_wrap) {
 			pty_wrap = pty_wrap_setup(pty_wrap_partial);
-			if (!pty_wrap) { /* NOTE: new_sid might still be set */
-				unsetenv("TERM");
-			} else if (pty_wrap_filter) {
-				esetenv("TERM", "dumb", 1);
-			}
+			if (!pty_wrap)
+				new_sid = true;
 		}
 		child_pid = 0;
 		signal(SIGHUP, forward_signal);
 		signal(SIGINT, forward_signal);
 		signal(SIGQUIT, forward_signal);
 		signal(SIGTERM, forward_signal);
-		child_pid = pty_wrap ? fork() : vfork();
+		child_pid = pty_wrap || new_sid ? fork() : vfork();
 		if (child_pid < 0)
 			err(EX_TEMPFAIL, "fork");
 		if ((do_exec = child_pid == 0)) {
 			err_set_exit(_exit);
 			if (pty_wrap) {
 				pty_wrap_child(pty_wrap_partial);
+				if (pty_wrap_filter)
+					esetenv("TERM", "dumb", 1);
 			} else if (new_sid) {
 				r = setsid();
 				if (r < 0)
 					err(EX_OSERR, "setsid");
+				unsetenv("TERM");
 			} else if (new_pgrp && getpgid(0) != getpid()) {
 				r = setpgid(0, 0);
 				if (r < 0)
