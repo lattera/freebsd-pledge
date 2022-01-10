@@ -194,9 +194,49 @@ merge _crude _tty
 merge! _pwddb
 path! /var/tmp/vi.recover/		: rw
 
+
 [git]
 merge _basic
 ~/.gitconfig				: r
+
+
+[top]
+merge _basic
+sysctl kern.bootfile
+sysctl kern.boottime
+sysctl kern.ccpu
+sysctl kern.cp_time
+sysctl kern.cp_times
+sysctl kern.lastpid
+sysctl kern.smp.active
+sysctl kstat.zfs
+sysctl vfs.bufspace
+sysctl vm.dmmax
+sysctl vm.loadavg
+sysctl vm.nswapdev
+sysctl vm.stats.vm
+sysctl vm.swap_info
+sysctl vm.swap_maxpages
+sysctl hw.acpi.battery
+
+[vmstat]
+merge _basic
+sysctl kern.devstat
+sysctl kern.clockrate
+sysctl kern.cp_time kern.cp_times
+sysctl vm.stats
+sysctl vm.vmtotal
+sysctl hw.intrnames hw.intrcnt
+sysctl kern.malloc_count vm.malloc kern.malloc_stats
+sysctl vm.objects
+sysctl vfs.cache.nchstats
+sysctl vm.zone_count vm.zone_stats
+
+[swapinfo]
+merge _basic
+sysctl kern.devname
+sysctl vm.swap_info
+
 
 [ping, ping6]
 merge _basic _fdpass
