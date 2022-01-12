@@ -179,18 +179,27 @@ config_tag_block(struct curtain_config *cfg, const char *name)
 
 
 static void
+new_section(struct parser *par)
+{
+	struct config_section *sec;
+	sec = malloc(sizeof *sec);
+	if (!sec)
+		err(EX_TEMPFAIL, "malloc");
+	*sec = (struct config_section){ .next = par->cfg->sections };
+	par->cfg->sections = sec;
+	par->slot = NULL;
+}
+
+static void
 need_slot(struct parser *par)
 {
 	if (!par->slot) {
+		new_section(par);
 		if (par->cfg->on_exec_only)
 			curtain_enable((par->slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 		else
 			par->slot = curtain_slot();
-		if (par->cfg->sections) {
-			if (par->cfg->sections->slot)
-				curtain_drop(par->cfg->sections->slot);
-			par->cfg->sections->slot = par->slot;
-		}
+		par->cfg->sections->slot = par->slot;
 	}
 }
 
@@ -859,8 +868,6 @@ parse_section_pred(struct parser *par, char *p)
 static void
 parse_section(struct parser *par, char *p)
 {
-	struct config_section *sec;
-	par->slot = NULL;
 	p = parse_section_pred(par, p + 1);
 	if (par->cfg->verbosity >= 2 && par->matched)
 		fprintf(stderr, "%s: %s:%ju: matched section%s\n",
@@ -886,10 +893,7 @@ parse_section(struct parser *par, char *p)
 		return (parse_error(par, "expected closing bracket"));
 	if (*(p = skip_spaces(p)))
 		return (parse_error(par, "unexpected characters at end of line"));
-
-	sec = malloc(sizeof *sec);
-	*sec = (struct config_section){ .next = par->cfg->sections };
-	par->cfg->sections = sec;
+	new_section(par);
 }
 
 static void
