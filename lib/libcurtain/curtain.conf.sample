@@ -84,6 +84,18 @@ ability! any_ioctl # XXX
 [_xdg]
 ~/.config/user-dirs.{dirs,locale}
 
+[_fontconfig]
+~/.config/fontconfig/			: r
+~/.fontconfig/				: r
+~/.fonts.conf				: r
+~/.fonts.conf.d/			: r
+~/.local/share/fonts/			: r
+~/.fonts/				: r
+/usr/local/etc/fonts/			: r
+/var/db/fontconfig/			: r
+
+[_gui : _fontconfig]
+
 [_gtk]
 merge _xdg
 # Seems like GTK-2 also will use this file.

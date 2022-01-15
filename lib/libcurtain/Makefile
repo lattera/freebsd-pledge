@@ -8,15 +8,13 @@ SRCS=		slot.c pledge.c ioctls.c config.c pathexp.c auto.c tmpdir.c gui.c
 INCS=		curtain.h pledge.h
 CFLAGS+=	-I${.CURDIR}
 
-CONFGROUPS=	DEFCONF LOCCONF GUICONF
+CONFGROUPS=	DEFCONF LOCCONF
 DEFCONF=	curtain.conf.defaults
 DEFCONFDIR=	/etc/defaults
 DEFCONFNAME=	curtain.conf
 LOCCONF=	curtain.conf.local
 LOCCONFDIR=	/etc
 LOCCONFNAME=	curtain.conf
-GUICONF=	fontconfig.conf
-GUICONFDIR=	/etc/curtain.d/_gui.d
 .if ${MK_EXAMPLES} != "no"
 FILESDIR=	${SHAREDIR}/examples/curtain
 FILES=		curtain.conf.sample make-drm-render-conf.c firefox-profile1.desktop
