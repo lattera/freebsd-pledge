@@ -54,6 +54,8 @@ merge _pty
 merge _sock
 ability vfs_connect
 sockaf unix
+${CURTAIN_X11_SOCKET}			: vi
+${CURTAIN_X11_XAUTHORITY}		: rd
 
 [_x11_trusted]
 ability-gate sysvipc # MIT-SHM
@@ -65,6 +67,7 @@ ${XAUTHORITY-~/.Xauthority}
 
 [_wayland : _gui]
 merge _drm_render
+${CURTAIN_WAYLAND_SOCKET}		: vi
 
 [dbus-daemon]
 merge _basic

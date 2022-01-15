@@ -11,18 +11,6 @@
 
 #include "common.h"
 
-static struct curtain_slot *
-get_slot(struct curtain_config *cfg)
-{
-	struct curtain_slot *slot;
-	if (cfg->on_exec_only)
-		curtain_enable((slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
-	else
-		slot = curtain_slot();
-	return (slot);
-}
-
-
 static char *tmp_xauth_file = NULL;
 static char *display_unix_socket = NULL;
 
@@ -46,7 +34,6 @@ cleanup_x11(void)
 int
 curtain_config_setup_x11(struct curtain_config *cfg, bool trusted)
 {
-	struct curtain_slot *slot;
 	int r;
 	char *p, *display;
 	pid_t pid;
@@ -123,27 +110,26 @@ curtain_config_setup_x11(struct curtain_config *cfg, bool trusted)
 	if (r < 0)
 		err(EX_TEMPFAIL, "setenv");
 
-	slot = get_slot(cfg);
-
-	if (display_unix_socket)
-		curtain_unveil(slot, display_unix_socket,
-		    CURTAIN_UNVEIL_INSPECT, UPERM_CONNECT|UPERM_INSPECT);
-	if (tmp_xauth_file)
-		curtain_unveil(slot, tmp_xauth_file,
-		    CURTAIN_UNVEIL_INSPECT,
-		    UPERM_READ | (cfg->on_exec_only ? UPERM_NONE : UPERM_DELETE));
+	if (display_unix_socket) {
+		r = setenv("CURTAIN_X11_SOCKET", display_unix_socket, 1);
+		if (r < 0)
+			err(EX_TEMPFAIL, "setenv");
+	}
+	if (tmp_xauth_file) {
+		r = setenv("CURTAIN_X11_XAUTHORITY", tmp_xauth_file, 1);
+		if (r < 0)
+			err(EX_TEMPFAIL, "setenv");
+	}
 	return (0);
 }
 
 
 int
-curtain_config_setup_wayland(struct curtain_config *cfg)
+curtain_config_setup_wayland(struct curtain_config *cfg __unused)
 {
-	struct curtain_slot *slot;
 	const char *display;
 	char *socket;
 	int r;
-	slot = get_slot(cfg);
 	display = getenv("WAYLAND_DISPLAY");
 	if (!display)
 		display = "wayland-0";
@@ -162,8 +148,9 @@ curtain_config_setup_wayland(struct curtain_config *cfg)
 		if (r < 0)
 			err(EX_TEMPFAIL, "asprintf");
 	}
-	curtain_unveil(slot, socket,
-	    CURTAIN_UNVEIL_INSPECT, UPERM_CONNECT|UPERM_INSPECT);
+	r = setenv("CURTAIN_WAYLAND_SOCKET", socket, 1);
+	if (r < 0)
+		err(EX_TEMPFAIL, "setenv");
 	free(socket);
 	return (0);
 }
