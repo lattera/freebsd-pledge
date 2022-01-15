@@ -409,6 +409,7 @@ main(int argc, char *argv[])
 	     unenforced = false;
 	enum { X11_NONE, X11_UNTRUSTED, X11_TRUSTED } x11_mode = X11_NONE;
 	bool wayland = false;
+	bool dbus = false;
 	char *cmd_arg0 = NULL;
 	const char *chroot_path = NULL;
 	const char *setuser_name = NULL;
@@ -429,7 +430,7 @@ main(int argc, char *argv[])
 	curtain_enable((main_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 	curtain_enable((args_slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 
-	while ((ch = getopt_long(argc, argv, "+0123456789@:d:vfknaA!t:p:u:0:TRSslUXYW",
+	while ((ch = getopt_long(argc, argv, "+0123456789@:d:vfknaA!t:p:u:0:TRSslUXYWD",
 	    longopts, NULL)) != -1)
 		switch (ch) {
 		case '0' ... '9':
@@ -544,6 +545,9 @@ main(int argc, char *argv[])
 		case 'W':
 			wayland = true;
 			break;
+		case 'D':
+			dbus = true;
+			break;
 		case LONGOPT_NEWPGRP:
 			new_pgrp = true;
 			break;
@@ -602,22 +606,45 @@ main(int argc, char *argv[])
 	curtain_config_setup_tmpdir(cfg, !no_fork);
 	if (x11_mode != X11_NONE) {
 		if (no_fork)
-			errx(EX_USAGE, "X11 mode incompatible with -f");
-		curtain_config_tag_push(cfg, "_x11");
-		curtain_config_tag_push(cfg,
-		    x11_mode == X11_TRUSTED ? "_x11_trusted" : "_x11_untrusted");
-		curtain_config_setup_x11(cfg, x11_mode == X11_TRUSTED);
+			errx(EX_USAGE, "option -X/-Y incompatible with -f");
+		r = curtain_config_setup_x11(cfg, x11_mode == X11_TRUSTED);
+		if (r >= 0) {
+			curtain_config_tag_push(cfg, "_x11");
+			curtain_config_tag_push(cfg,
+			    x11_mode == X11_TRUSTED ? "_x11_trusted" : "_x11_untrusted");
+		} else
+			x11_mode = X11_NONE;
 	};
 	if (wayland) {
-		curtain_config_tag_push(cfg, "_wayland");
-		curtain_config_setup_wayland(cfg);
+		r = curtain_config_setup_wayland(cfg);
+		if (r >= 0) {
+			curtain_config_tag_push(cfg, "_wayland");
+		} else
+			wayland = false;
+	}
+	if (dbus) {
+		if (no_fork)
+			errx(EX_USAGE, "option -D incompatible with -f");
+		r = curtain_config_setup_dbus(cfg);
+		if (r >= 0) {
+			curtain_config_tag_push(cfg, "dbus-daemon");
+			curtain_config_tag_push(cfg, "_dbus");
+		} else
+			dbus = false;
 	}
 
+
 	curtain_config_load(cfg);
+
 	r = unenforced ? curtain_apply_soft() : curtain_apply();
 	if (r < 0)
 		err(EX_NOPERM, "curtain_apply");
+
+	if (dbus)
+		curtain_config_spawn_dbus(cfg);
+
 	curtain_config_free(cfg);
+
 
 	pw = NULL;
 
@@ -627,7 +654,8 @@ main(int argc, char *argv[])
 		      *set_term = NULL,
 		      *set_tmpdir = NULL,
 		      *set_display = NULL, *set_xauthority = NULL,
-		      *set_wdisplay = NULL;
+		      *set_wdisplay = NULL,
+		      *set_dbus_addr = NULL;
 		static char *null_env[] = { NULL };
 		extern char **environ;
 		unsigned flags;
@@ -667,9 +695,10 @@ main(int argc, char *argv[])
 				set_display = getenv("DISPLAY");
 				set_xauthority = getenv("XAUTHORITY");
 			}
-			if (wayland) {
+			if (wayland)
 				set_wdisplay = getenv("WAYLAND_DISPLAY");
-			}
+			if (dbus)
+				set_dbus_addr = getenv("DBUS_SESSION_BUS_ADDRESS");
 
 			environ = null_env;
 
@@ -705,6 +734,8 @@ main(int argc, char *argv[])
 				esetenv("XAUTHORITY", set_xauthority, 1);
 			if (set_wdisplay)
 				esetenv("WAYLAND_DISPLAY", set_wdisplay, 1);
+			if (set_dbus_addr)
+				esetenv("DBUS_SESSION_BUS_ADDRESS", set_dbus_addr, 1);
 		}
 	}
 

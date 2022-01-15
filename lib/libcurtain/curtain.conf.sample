@@ -66,6 +66,14 @@ ${XAUTHORITY-~/.Xauthority}
 [_wayland : _gui]
 merge _drm_render
 
+[dbus-daemon]
+merge _basic
+merge _pwddb
+${CURTAIN_DBUS_SOCKET}			: uai
+
+[_dbus]
+${DBUS_SESSION_BUS_ADDRESS}		: u
+
 [_drm_base]
 /dev/drm/				: rm
 /dev/dri/				: rm
