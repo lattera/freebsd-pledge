@@ -606,12 +606,10 @@ main(int argc, char *argv[])
 		curtain_config_tag_push(cfg, "_x11");
 		curtain_config_tag_push(cfg,
 		    x11_mode == X11_TRUSTED ? "_x11_trusted" : "_x11_untrusted");
-		curtain_config_tag_push(cfg, "_gui");
 		curtain_config_setup_x11(cfg, x11_mode == X11_TRUSTED);
 	};
 	if (wayland) {
 		curtain_config_tag_push(cfg, "_wayland");
-		curtain_config_tag_push(cfg, "_gui");
 		curtain_config_setup_wayland(cfg);
 	}
 

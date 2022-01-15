@@ -50,7 +50,7 @@ merge _audio
 merge _pty
 
 
-[_x11]
+[_x11 : _gui]
 merge _sock
 ability vfs_connect
 sockaf unix
@@ -63,7 +63,7 @@ merge _drm_render
 ${XAUTHORITY-~/.Xauthority}
 /tmp/.X11-unix/ : u
 
-[_wayland]
+[_wayland : _gui]
 merge _drm_render
 
 [_drm_base]

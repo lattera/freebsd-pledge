@@ -35,12 +35,10 @@ auto_curtain_setup_1(const char *name, char *buf)
 		bool trusted = strcmp(p, "trusted") == 0;
 		curtain_config_tag_push(cfg, "_x11");
 		curtain_config_tag_push(cfg, trusted ? "_x11_trusted" : "_x11_untrusted");
-		curtain_config_tag_push(cfg, "_gui");
 		curtain_config_setup_x11(cfg, trusted);
 	}
 	if (getenv("CURTAIN_AUTO_WAYLAND")) {
 		curtain_config_tag_push(cfg, "_wayland");
-		curtain_config_tag_push(cfg, "_gui");
 		curtain_config_setup_wayland(cfg);
 	}
 	curtain_config_load(cfg);
