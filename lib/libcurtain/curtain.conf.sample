@@ -114,9 +114,10 @@ merge _xdg
 ~/.config/gtk-3.0/bookmarks
 sysctl-deny vfs.usermount [_strict]
 
-[_qt _strict]
-ability-deny prot_exec
-sysctl-deny kern.bootfile # kvm_open(3)
+[_qt]
+merge _xdg
+ability-deny prot_exec [_strict]
+sysctl-deny kern.bootfile [_strict] # kvm_open(3)
 
 [_memstat]
 sysctl hw.physmem
@@ -234,6 +235,7 @@ sysctl kern.cp_times
 sysctl kern.lastpid
 sysctl kern.smp.active
 sysctl kstat.zfs
+sysctl vfs.zfs
 sysctl vfs.bufspace
 sysctl vm.dmmax
 sysctl vm.loadavg
@@ -309,6 +311,14 @@ merge! _pwddb
 ~/.emacs.d/ ~/.config/emacs/		: rw +
 merge _gtk [_gui]
 
+[vscode : _editor]
+# NOTE: Must be started with -w (--wait) or vscode will exit early and make
+# curtain(1) delete its temporary files (including X11 cookie file).
+merge _basic _xdg
+ability prot_exec
+~/.vscode-oss/ : rw +
+~/.config/Code\ -\ OSS/ : rwu +
+
 [abiword : _editor]
 merge _crude _gtk
 ~/.config/abiword/			: rw +
@@ -340,7 +350,7 @@ merge!! _unsafe_system_tmpdir
 ~/.config/libreoffice/			: rw +
 
 [xpdf : _viewer]
-merge _crude _ps _qt _xdg
+merge _crude _ps _qt
 /usr/local/etc/papersize		: r
 /usr/local/etc/xpdfrc			: r
 ~/.xpdfrc				: rw
@@ -355,7 +365,7 @@ merge _crude _gtk
 ~/.config/epdfview/			: rw +
 
 [okular : _viewer]
-merge _crude _ps _qt _xdg
+merge _crude _ps _qt
 merge! _memstat
 ~/.config/okularrc			: rw +
 ~/.local/share/okular/			: rw +
@@ -458,19 +468,53 @@ ability prot_exec
 sysctl-deny kern.bootfile [_strict] # kvm_open(3)
 
 [falkon : _browser]
-merge _basic _xdg
+merge _basic _qt
 merge _webkit
 ~/.config/falkon/			: rw +
 ~/.cache/falkon/			: rw +
 
 [otter-browser : _browser]
-merge _basic _xdg
+merge _basic _qt
 merge _webkit
 ~/.config/otter/			: rw +
 ~/.cache/Otter/				: rw +
 
+[midori : _browser]
+merge _basic _gtk
+merge _webkit
+./.cache/midori/ : rw +
+./.config/midori/ : rw +
+
+[evolution : _mua]
+merge _basic _gtk
+~/.cache/evolution/ : rw +
+~/.config/evolution/ : rw +
+~/.local/share/evolution/ : rw +
+
+[sylpheed : _mua]
+merge _basic _gtk
+~/.sylpheed-2.0/ : rw +
+
+[claws-mail : _mua]
+merge _basic _gtk
+~/.claws-mail/ : rw +
+~/.cache/claws-mail/ : rwu +
+#~/Mail/ : rw +
+
+[rssguard]
+merge _basic _qt
+~/.cache/RSS\ Guard/ : rw +
+~/.config/RSS\ Guard\ 4/ : rw +
+~/.local/share/RSS\ Guard/ + rw +
+
+[irssi : _irc]
+# NOTE: Irssi supports Capsicum, can be enabled with "/capsicum".
+merge _basic
+~/.irssi/ : rw +
+~/irclogs/ : rcp +
+
 [qbittorrent : _p2p]
-merge _crude _unix _ps _network _qt _xdg
+merge _crude _unix _ps _network _qt
 # NOTE: Best to disable the tray icon feature under -X.
 ~/.local/share/qBittorrent/		: rw +
 ~/.config/qBittorrent/			: rw +
@@ -478,14 +522,28 @@ merge _crude _unix _ps _network _qt _xdg
 sysctl-deny hw.physmem [_strict]
 
 [deluge : _p2p]
+merge _basic _gtk
+ability prot_exec
+~/.config/deluge/			: rwu +
+
+[transmission-gui : _p2p]
 merge _basic
-# XXX needs dbus
-~/.config/deluge/			: rw +
+~/.config/transmission/ : rw +
+[transmission-gtk : transmission-gui]
+merge _gtk
+[transmission-qt : transmission-gui]
+merge _qt
 
 [audacious : _player]
-merge _basic _qt _xdg
+merge _basic _qt
 ability posixipc
 ~/.config/audacious/			: rw +
+
+[quodlibet : _player]
+merge _basic
+ability prot_exec
+~/.quodlibet/ : rw +
+~/.cache/quodlibet/ : rw +
 
 [mpv : _player]
 merge _basic
@@ -498,7 +556,7 @@ merge _basic
 ~/.mplayer/				: rw +
 
 [vlc : _player]
-merge _basic _qt _xdg
+merge _basic _qt
 ability sysvipc
 ability prot_exec
 ~/.config/vlc/				: rw +
@@ -515,6 +573,12 @@ merge _crude _proc _cmds
 [st : _terminal]
 merge _crude _proc _cmds
 merge! _pwddb
+
+[arx : _games]
+merge _basic _xdg
+ability prot_exec
+~/.config/arx/ : rw +
+~/.local/share/arx/ : rw +
 
 [wine, winecfg]
 # NOTES:
