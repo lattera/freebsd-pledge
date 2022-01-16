@@ -32,7 +32,7 @@ static MALLOC_DEFINE(M_UNVEIL_TRACK, "unveil track", "mac_curtain per-thread unv
 
 static bool __read_mostly unveil_cover_cache_enabled = true;
 static bool __read_mostly unveil_ignore_fixup_vnode_errors = true;
-static unsigned int __read_mostly unveil_max_per_curtain = 128;
+static unsigned int __read_mostly unveil_max_per_curtain = 256;
 
 SYSCTL_BOOL(_security_curtain, OID_AUTO, unveil_cover_cache,
     CTLFLAG_RW, &unveil_cover_cache_enabled, 0, "");

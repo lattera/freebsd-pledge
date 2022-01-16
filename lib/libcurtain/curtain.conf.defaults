@@ -130,6 +130,7 @@ ability debug
 [_level9 : _level8]
 merge _pwddb
 merge _syslog
+merge _fdpassdir
 ability any_ioctl
 ability any_sysctl
 
