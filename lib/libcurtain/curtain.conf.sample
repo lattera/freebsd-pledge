@@ -51,9 +51,7 @@ merge _pty
 
 
 [_x11 : _gui]
-merge _sock
-ability vfs_connect
-sockaf unix
+merge _unix_client
 ${CURTAIN_X11_SOCKET}			: v
 ${CURTAIN_X11_XAUTHORITY}		: rd
 

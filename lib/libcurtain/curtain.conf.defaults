@@ -188,9 +188,14 @@ ability sock
 # XXX Socket options should be more restricted.
 socklvl socket
 
-[_unix : _sock]
-ability vfs_sock
+[_unix_base]
+merge _sock
 sockaf unix
+[_unix_client : _unix_base]
+ability vfs_connect
+[_unix_server : _unix_base]
+ability vfs_bind
+[_unix : _unix_client _unix_server]
 
 [_fdpass : _unix]
 ability sendfd recvfd
@@ -253,30 +258,44 @@ ${TMPDIR:-/tmp}/krb5cc_%u		:
 [_spwddb : _pwddb]
 /etc/spwd.db				: r
 
-[_network : _network_client _network_server]
-[_network_client : _network_base]
-ability net_client
-[_network_server : _network_base]
-ability net_server
-[_network_base : _sock]
+[_ssl]
+/etc/ssl/				: r
+/etc/ssl/private/			:
+/usr/local/etc/ssl/			: r	[_localbase]
+/usr/local/etc/ssl/private/		:	[_localbase]
+
+[_net_base]
+merge _sock
+ioctls net_basic
+
+[_net_inet : _net_base]
+sockaf inet inet6
+# XXX Socket options should be more restricted.
+socklvl ip ipv6
+socklvl tcp udp
+sysctl net.inet6.ip6.addrctlpolicy
+
+[_net_route]
+sysctl net.routetable
+ioctls net_route
+
+[_net_resolv]
 /etc/nsswitch.conf			: r
 /etc/resolv.conf			: r
 /etc/hosts				: r
 /etc/services				: r
 /etc/protocols				: r
 /var/db/services.db			: r
-/etc/ssl/				: r
-/etc/ssl/private/			:
-sockaf inet inet6
-# XXX Socket options should be more restricted.
-socklvl ip ipv6
-socklvl tcp udp
-sysctl net.routetable
-sysctl net.inet6.ip6.addrctlpolicy
-ioctls net_basic
-ioctls net_route
-/usr/local/etc/ssl/			: r	[_localbase]
-/usr/local/etc/ssl/private/		:	[_localbase]
+
+[_network : _net_client _net_server]
+[_net_client : _net_misc]
+ability net_client
+[_net_server : _net_misc]
+ability net_server
+[_net_misc : _net_base]
+merge _net_inet
+merge _net_route
+merge _net_resolv
 
 [_syslog]
 /var/run/log : v
