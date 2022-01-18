@@ -477,7 +477,6 @@ main(int argc, char *argv[])
 		case 'u':
 		case 'p': {
 			char *path, *perms;
-			unveil_perms uperms;
 			path = optarg;
 			if ((perms = strrchr(path, ':')))
 				*perms++ = '\0';
@@ -497,12 +496,9 @@ main(int argc, char *argv[])
 					errc(EX_OSFILE, ENAMETOOLONG, "%s", path);
 				path = abspath;
 			}
-			r = curtain_parse_unveil_perms(&uperms, perms);
-			if (r < 0)
-				errx(EX_USAGE, "invalid unveil permissions: %s", perms);
-			r = curtain_unveil(args_slot, path,
-			    ch == 'p' ? CURTAIN_UNVEIL_INSPECT | CURTAIN_UNVEIL_LIST : 0,
-			    uperms);
+			r = curtain_path_str(args_slot, path,
+			    ch == 'u' ? CURTAIN_PATH_NOSTAT | CURTAIN_PATH_NOLIST : 0,
+			    perms);
 			if (r < 0 && errno != ENOENT)
 				warn("%s", path);
 			break;

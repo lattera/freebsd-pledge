@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <sys/curtain_ability.h>
-#include <sys/unveil.h>
+#include <sys/_unveil.h>
 
 struct curtain_slot;
 
@@ -30,10 +30,9 @@ enum curtain_state {
 #define CURTAIN_TRAP		(5 << CURTAIN_LEVEL_SHIFT)
 #define CURTAIN_KILL		(6 << CURTAIN_LEVEL_SHIFT)
 #define CURTAIN_INHERIT		(1 << 16)
-#define CURTAIN_UNVEIL_INHERIT	(CURTAIN_INHERIT)
-#define CURTAIN_UNVEIL_INSPECT	(1 << 1)
-#define CURTAIN_UNVEIL_NOFOLLOW	(1 << 2)
-#define CURTAIN_UNVEIL_LIST	(1 << 3)
+#define CURTAIN_PATH_NOFOLLOW	(1 << 8)
+#define CURTAIN_PATH_NOSTAT	(1 << 9)
+#define CURTAIN_PATH_NOLIST	(1 << 10)
 
 struct curtain_slot *curtain_slot(void);
 struct curtain_slot *curtain_slot_on(enum curtain_on);
@@ -56,11 +55,13 @@ int curtain_sockopts(struct curtain_slot *, const int (*sockopts)[2], int flags)
 int curtain_priv(struct curtain_slot *, int priv, int flags);
 int curtain_sysctl(struct curtain_slot *, const char *sysctl, int flags);
 int curtain_fibnum(struct curtain_slot *, int fibnum, int flags);
-int curtain_unveil(struct curtain_slot *,
+int curtain_path(struct curtain_slot *,
     const char *path, unsigned flags, unveil_perms uperms);
-int curtain_unveil_multi(struct curtain_slot **, size_t nslots,
+int curtain_path_multi(struct curtain_slot **, size_t nslots,
     const char *path, unsigned flags,
     unveil_perms *interm_uperms, unveil_perms *final_uperms);
+int curtain_path_str(struct curtain_slot *,
+    const char *path, unsigned flags, const char *perms);
 int curtain_unveils_limit(struct curtain_slot *, unveil_perms final_uperms);
 
 

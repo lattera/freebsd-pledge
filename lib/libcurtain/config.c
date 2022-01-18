@@ -51,36 +51,6 @@ struct config_section {
 };
 
 
-int
-curtain_parse_unveil_perms(unveil_perms *uperms, const char *s)
-{
-	*uperms = UPERM_NONE;
-	while (*s)
-		switch (*s++) {
-		case 'l': *uperms |= UPERM_LIST; break;
-		case 'b': *uperms |= UPERM_BROWSE; break;
-		case 'r': *uperms |= UPERM_READ; break;
-		case 'p': *uperms |= UPERM_APPEND; break;
-		case 'm': *uperms |= UPERM_WRITE; break;
-		case 'w': *uperms |= UPERM_WRITE | UPERM_SETATTR |
-		                     UPERM_CREATE | UPERM_DELETE; break;
-		case 'a': *uperms |= UPERM_SETATTR; break;
-		case 'c': *uperms |= UPERM_CREATE; break;
-		case 'd': *uperms |= UPERM_DELETE; break;
-		case 's': *uperms |= UPERM_SHELL; break;
-		case 'x': *uperms |= UPERM_EXECUTE; break;
-		case 'i': *uperms |= UPERM_INSPECT; break;
-		case 't': *uperms |= UPERM_TMPDIR; break;
-		case 'u': *uperms |= UPERM_UNIX; break;
-		case 'v': *uperms |= UPERM_CONNECT; break;
-		case 'D': *uperms |= UPERM_DEVFS; break;
-		default:
-			return (-1);
-		}
-	return (0);
-}
-
-
 static void
 pathfmt(char *path, const char *fmt, ...)
 {
@@ -405,9 +375,9 @@ do_unveil(struct parser *par, const char *path)
 	 */
 	is_dir = len && path[len - 1] == '/';
 	if (par->uperms & UPERM_CREATE && !is_dir)
-		flags |= CURTAIN_UNVEIL_NOFOLLOW;
+		flags |= CURTAIN_PATH_NOFOLLOW;
 
-	r = curtain_unveil(par->slot, path, flags, par->uperms);
+	r = curtain_path(par->slot, path, flags, par->uperms);
 	if (par->unveil_create) {
 		if (!is_dir) {
 			struct stat st;
@@ -687,8 +657,6 @@ parse_default(struct parser *par, struct word *w)
 	curtain_default(par->slot, par->directive_flags);
 }
 
-static const int path_flags = CURTAIN_UNVEIL_INSPECT | CURTAIN_UNVEIL_LIST;
-
 static const struct {
 	const char name[8];
 	void (*func)(struct parser *, struct word *);
@@ -697,8 +665,8 @@ static const struct {
 	{ "diag",	parse_diag,	0 },
 	{ "merge",	parse_merge,	0 },
 	{ "push",	parse_merge,	0 },
-	{ "unveil",	parse_unveil,	0 },
-	{ "path",	parse_unveil,	path_flags },
+	{ "unveil",	parse_unveil,	CURTAIN_PATH_NOSTAT | CURTAIN_PATH_NOLIST },
+	{ "path",	parse_unveil,	0 },
 	{ "ability",	parse_ability,	0 },
 	{ "sysctl",	parse_sysctl,	0 },
 	{ "priv",	parse_priv,	0 },
@@ -722,7 +690,17 @@ static const struct {
 	{ "trap",	CURTAIN_TRAP },
 	{ "kill",	CURTAIN_KILL },
 	{ "inherit",	CURTAIN_INHERIT },
+	{ "nofollow",	CURTAIN_PATH_NOFOLLOW },
+	{ "nostat",	CURTAIN_PATH_NOSTAT },
+	{ "nolist",	CURTAIN_PATH_NOLIST },
 };
+
+static void
+directive_reset(struct parser *par)
+{
+	par->directive_flags = 0;
+	par->explicit_flags = false;
+}
 
 static void
 parse_directive(struct parser *par, char *p)
@@ -730,11 +708,11 @@ parse_directive(struct parser *par, char *p)
 	char *dir, *dir_end, c;
 	int unsafety;
 
+	directive_reset(par);
+
 	dir = p = skip_spaces(p);
 	dir_end = p = skip_word(p, "-!:");
 
-	par->directive_flags = 0;
-	par->explicit_flags = false;
 	while (*p == '-') {
 		char *q;
 		bool found;
@@ -919,7 +897,7 @@ next:	switch (*p) {
 	case '~':
 	case '%':
 		if (par->apply) {
-			par->directive_flags = path_flags;
+			directive_reset(par);
 			need_slot(par);
 			parse_words(par, p, parse_unveil);
 		}

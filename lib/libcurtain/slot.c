@@ -831,6 +831,37 @@ static struct curtain_type unveils_type = {
 };
 
 
+int
+curtain_parse_unveil_perms(unveil_perms *uperms_ret, const char *s)
+{
+	unveil_perms uperms = UPERM_NONE;
+	int r = 0;
+	while (*s)
+		switch (*s++) {
+		case 'l': uperms |= UPERM_LIST; break;
+		case 'b': uperms |= UPERM_BROWSE; break;
+		case 'r': uperms |= UPERM_READ; break;
+		case 'p': uperms |= UPERM_APPEND; break;
+		case 'm': uperms |= UPERM_WRITE; break;
+		case 'w': uperms |= UPERM_WRITE | UPERM_SETATTR |
+		                    UPERM_CREATE | UPERM_DELETE; break;
+		case 'a': uperms |= UPERM_SETATTR; break;
+		case 'c': uperms |= UPERM_CREATE; break;
+		case 'd': uperms |= UPERM_DELETE; break;
+		case 's': uperms |= UPERM_SHELL; break;
+		case 'x': uperms |= UPERM_EXECUTE; break;
+		case 'i': uperms |= UPERM_INSPECT; break;
+		case 't': uperms |= UPERM_TMPDIR; break;
+		case 'u': uperms |= UPERM_UNIX; break;
+		case 'v': uperms |= UPERM_CONNECT; break;
+		case 'D': uperms |= UPERM_DEVFS; break;
+		default: r = -1; break;
+		}
+	*uperms_ret = uperms_expand(uperms);
+	return (r);
+}
+
+
 static struct curtain_node *unveil_root_node;
 
 static char *
@@ -981,7 +1012,7 @@ unveil_path_1(struct curtain_node **trail, bool nofollow, bool last,
 				path = next;
 				/*
 				 * Move parent to the head of the chain so that
-				 * curtain_unveil_multi() gives it the final
+				 * curtain_path_multi() gives it the final
 				 * uperms if it is the last path component.
 				 */
 				unveil_node_chain(trail, parent_node);
@@ -1036,7 +1067,7 @@ unveil_path_1(struct curtain_node **trail, bool nofollow, bool last,
 static const unveil_perms curtain_preserve_uperms = UPERM_TRAVERSE;
 
 int
-curtain_unveil_multi(struct curtain_slot **slots, size_t nslots,
+curtain_path_multi(struct curtain_slot **slots, size_t nslots,
     const char *path, unsigned flags,
     unveil_perms *interm_upermsv, unveil_perms *final_upermsv)
 {
@@ -1065,10 +1096,10 @@ curtain_unveil_multi(struct curtain_slot **slots, size_t nslots,
 			return (r);
 	}
 
-	r = unveil_path_1(&trail, flags & CURTAIN_UNVEIL_NOFOLLOW, true, path, &node);
+	r = unveil_path_1(&trail, flags & CURTAIN_PATH_NOFOLLOW, true, path, &node);
 	if (r < 0) {
 		if (errno != ENOENT && errno != EACCES)
-			warn("%s: %s", "curtain_unveil", path);
+			warn("%s: %s", "curtain_path", path);
 		return (r);
 	}
 
@@ -1091,8 +1122,8 @@ curtain_unveil_multi(struct curtain_slot **slots, size_t nslots,
 				uperms = uperms_expand(
 				    interm_upermsv[i] |
 				    UPERM_TRAVERSE |
-				    (flags & CURTAIN_UNVEIL_INSPECT ? UPERM_INSPECT : UPERM_NONE) |
-				    (flags & CURTAIN_UNVEIL_LIST    ? UPERM_LIST    : UPERM_NONE));
+				    (flags & CURTAIN_PATH_NOSTAT ? UPERM_NONE : UPERM_INSPECT) |
+				    (flags & CURTAIN_PATH_NOLIST ? UPERM_NONE : UPERM_LIST));
 				item = item_get(trail, slots[i], true);
 				if (!item)
 					return (-1);
@@ -1105,11 +1136,26 @@ curtain_unveil_multi(struct curtain_slot **slots, size_t nslots,
 }
 
 int
-curtain_unveil(struct curtain_slot *slot,
+curtain_path(struct curtain_slot *slot,
     const char *path, unsigned flags, unveil_perms final_uperms)
 {
 	unveil_perms interm_uperms = UPERM_NONE;
-	return (curtain_unveil_multi(&slot, 1, path, flags, &interm_uperms, &final_uperms));
+	return (curtain_path_multi(&slot, 1, path, flags, &interm_uperms, &final_uperms));
+}
+
+int
+curtain_path_str(struct curtain_slot *slot,
+    const char *path, unsigned flags, const char *perms)
+{
+	unveil_perms uperms;
+	int r;
+	r = curtain_parse_unveil_perms(&uperms, perms);
+	if (r < 0) {
+		warnx("%s: invalid unveil permissions: %s", __func__, perms);
+		errno = EINVAL;
+		return (r);
+	}
+	return (curtain_path(slot, path, flags, uperms));
 }
 
 int

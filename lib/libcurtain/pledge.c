@@ -400,6 +400,8 @@ static const struct promise_unveil {
 #undef	N
 };
 
+static const int path_flags = CURTAIN_PATH_NOSTAT | CURTAIN_PATH_NOLIST;
+
 
 struct promise_mode {
 	enum curtain_state state, unveil_state;
@@ -570,8 +572,7 @@ do_promises_slots(enum curtain_on on, struct promise_mode modes[])
 				if ((tmpdir = getenv("TMPDIR")))
 					path = tmpdir;
 			}
-			curtain_unveil(promise_unveil_slots[e->promise], path,
-			    CURTAIN_UNVEIL_INHERIT, e->uperms);
+			curtain_path(promise_unveil_slots[e->promise], path, path_flags, e->uperms);
 		}
 		if (fill[e->promise])
 			abilities_for_uperms(promise_slots[e->promise], e->uperms, flags);
@@ -660,7 +661,7 @@ do_pledge(struct promise_mode *modes_on[CURTAIN_ON_COUNT])
 			    has_customs_on[on] ? CURTAIN_RESERVED : CURTAIN_ENABLED);
 		}
 		if (root_slot_on[on])
-			curtain_unveil(root_slot_on[on], root_path, 0, wanted_uperms);
+			curtain_path(root_slot_on[on], root_path, path_flags, wanted_uperms);
 	}
 	return (curtain_apply());
 }
@@ -708,7 +709,7 @@ do_unveil_init_on(enum curtain_on on)
 {
 	if (!unveil_traverse_slot) {
 		unveil_traverse_slot = curtain_slot_neutral();
-		curtain_unveil(unveil_traverse_slot, "/", 0, UPERM_BROWSE);
+		curtain_path(unveil_traverse_slot, "/", path_flags, UPERM_BROWSE);
 	}
 	if (!custom_slot_on[on])
 		custom_slot_on[on] = curtain_slot_neutral();
@@ -752,7 +753,7 @@ do_unveil(bool *do_on, const char *path, unveil_perms uperms)
 
 	/*
 	 * Temporarily enable hard permissions to search directories so that
-	 * curtain_unveil() can traverse the path.
+	 * curtain_path() can traverse the path.
 	 */
 	if ((unveil_traverse = has_customs_on[CURTAIN_ON_SELF])) {
 		curtain_state(unveil_traverse_slot, CURTAIN_ON_SELF, CURTAIN_ENABLED);
@@ -766,7 +767,7 @@ do_unveil(bool *do_on, const char *path, unveil_perms uperms)
 		slotv[nslot++] = custom_slot_on[on];
 	}
 
-	r = curtain_unveil_multi(slotv, nslot, path, 0, interm_upermsv, final_upermsv);
+	r = curtain_path_multi(slotv, nslot, path, path_flags, interm_upermsv, final_upermsv);
 
 	/* Drop temporary soft permissions to search paths. */
 	if (unveil_traverse)
