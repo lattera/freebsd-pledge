@@ -1064,6 +1064,25 @@ unveil_path_1(struct curtain_node **trail, bool nofollow, bool last,
 	return (0);
 }
 
+static unveil_perms
+expand_interm_uperms(int flags, unveil_perms uperms)
+{
+	uperms |= UPERM_TRAVERSE;
+	if (!(flags & CURTAIN_PATH_NOSTAT))
+		uperms |= UPERM_INSPECT;
+	if (!(flags & CURTAIN_PATH_NOLIST))
+		uperms |= UPERM_LIST;
+	return (uperms_expand(uperms));
+}
+
+static unveil_perms
+expand_final_uperms(int flags, unveil_perms uperms)
+{
+	if (!(flags & CURTAIN_PATH_NOSTAT) && uperms & ~UPERM_TRAVERSE)
+		uperms |= UPERM_INSPECT;
+	return (uperms_expand(uperms));
+}
+
 static const unveil_perms curtain_preserve_uperms = UPERM_TRAVERSE;
 
 int
@@ -1106,28 +1125,20 @@ curtain_path_multi(struct curtain_slot **slots, size_t nslots,
 	if (trail) {
 		for (size_t i = 0; i < nslots; i++) {
 			struct curtain_item *item;
-			unveil_perms uperms;
-			uperms = uperms_expand(final_upermsv[i]);
 			item = item_get(trail, slots[i], true);
 			if (!item)
 				return (-1);
 			item_set_flags(item, flags);
 			item->mode.uperms &= curtain_preserve_uperms;
-			item->mode.uperms |= uperms;
+			item->mode.uperms |= expand_final_uperms(flags, final_upermsv[i]);
 		}
 		while ((trail = trail->key.unveil.chain)) {
 			for (size_t i = 0; i < nslots; i++) {
 				struct curtain_item *item;
-				unveil_perms uperms;
-				uperms = uperms_expand(
-				    interm_upermsv[i] |
-				    UPERM_TRAVERSE |
-				    (flags & CURTAIN_PATH_NOSTAT ? UPERM_NONE : UPERM_INSPECT) |
-				    (flags & CURTAIN_PATH_NOLIST ? UPERM_NONE : UPERM_LIST));
 				item = item_get(trail, slots[i], true);
 				if (!item)
 					return (-1);
-				item->mode.uperms |= uperms;
+				item->mode.uperms |= expand_interm_uperms(flags, interm_upermsv[i]);
 			}
 		}
 	}

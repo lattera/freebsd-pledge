@@ -54,7 +54,7 @@ merge _pty
 merge _sock
 ability vfs_connect
 sockaf unix
-${CURTAIN_X11_SOCKET}			: vi
+${CURTAIN_X11_SOCKET}			: v
 ${CURTAIN_X11_XAUTHORITY}		: rd
 
 [_x11_trusted]
@@ -67,16 +67,16 @@ ${XAUTHORITY-~/.Xauthority}
 
 [_wayland : _gui]
 merge _drm_render
-${CURTAIN_WAYLAND_SOCKET}		: vi
+${CURTAIN_WAYLAND_SOCKET}		: v
 
 [dbus-daemon]
 merge _basic
 merge _pwddb
-${CURTAIN_DBUS_SOCKET}			: uai
+${CURTAIN_DBUS_SOCKET}			: ua
 /usr/local/etc/dbus-1/			: r
 
 [_dbus]
-${CURTAIN_DBUS_SOCKET}			: vi
+${CURTAIN_DBUS_SOCKET}			: v
 
 [_drm_base]
 /dev/drm/				: rm
