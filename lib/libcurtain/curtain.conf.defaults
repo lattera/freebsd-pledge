@@ -70,7 +70,6 @@ merge _tty
 merge _proc
 merge _ps
 merge _unix
-merge _network
 merge _exec
 merge _cmds
 
@@ -85,6 +84,7 @@ merge _crude
 
 [_level2 : _level1]
 merge _basic
+merge _network
 
 [_level3 : _level2] # curtain(1)'s default
 ability acl

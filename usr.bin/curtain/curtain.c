@@ -583,8 +583,11 @@ main(int argc, char *argv[])
 		curtain_config_tag_push(cfg, "_loose");
 	} else
 		curtain_config_tag_push(cfg, "_strict");
-	if (no_network)
+	if (no_network) {
 		curtain_config_tag_block(cfg, "_network");
+		curtain_config_tag_block(cfg, "_net_client");
+		curtain_config_tag_block(cfg, "_net_server");
+	}
 	if (run_shell)
 		curtain_config_tag_push(cfg, "_shell");
 	if (login_shell)

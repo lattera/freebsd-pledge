@@ -104,7 +104,8 @@ ability! any_ioctl # XXX
 /usr/local/etc/fonts/			: r
 /var/db/fontconfig/			: r
 
-[_gui : _fontconfig]
+[_gui]
+merge _fontconfig
 
 [_gtk]
 merge _xdg
@@ -210,7 +211,7 @@ merge _syslog
 
 
 [vi : _editor]
-merge _crude _tty
+merge _basic
 ~/.{n,}exrc				: r
 /etc/vi.exrc				: r
 # recovery handling needs to be able to read the user database
@@ -219,7 +220,7 @@ path! /var/tmp/vi.recover/		: rw
 
 
 [git]
-merge _basic
+merge _basic _network
 ~/.gitconfig				: r
 
 
@@ -263,30 +264,30 @@ sysctl vm.swap_info
 
 
 [ping, ping6]
-merge _basic _fdpass
+merge _basic _network _fdpass
 ability cred
 priv net_raw netinet_raw
 socklvl icmpv6
 
 [traceroute, traceroute6]
-merge _basic _fdpass
+merge _basic _network _fdpass
 ability cred
 priv net_raw netinet_raw
 sysctl net.inet.ip.ttl
 sysctl net.inet6.ip6.hlim
 
 [mtr]
-merge _basic
+merge _basic _network
 ability cred
 priv net_raw netinet_raw
 
 [tcpdump]
-merge _basic
+merge _basic _network
 ability cred
 merge _bpf
 
 [wireshark]
-merge _basic _gtk
+merge _basic _network _gtk
 merge _bpf
 ~/.config/wireshark/			: rw +
 ability-deny prot_exec [_strict]
@@ -301,7 +302,7 @@ merge _basic
 ioctls disk_basic
 
 [emacs : _editor]
-merge _basic
+merge _basic _network
 # NOTE: Sometimes crashes with untrusted X11.
 merge! _pwddb
 ~/.emacs.el				: rw
@@ -312,18 +313,18 @@ merge _gtk [_gui]
 [vscode : _editor]
 # NOTE: Must be started with -w (--wait) or vscode will exit early and make
 # curtain(1) delete its temporary files (including X11 cookie file).
-merge _basic _xdg
-ability prot_exec
+merge _basic _network _fdpass _xdg
+ability posixipc prot_exec
 ~/.vscode-oss/ : rw +
 ~/.config/Code\ -\ OSS/ : rwu +
 
 [abiword : _editor]
-merge _crude _gtk
+merge _basic _gtk
 ~/.config/abiword/			: rw +
 
 [gimp : _editor]
 # File previews won't work without access to ~/.cache/thumbnails.
-merge _crude _proc _cmds _gtk
+merge _basic _gtk
 merge! _memstat
 ability ps # exiv2
 ability sysvipc
@@ -332,7 +333,7 @@ ability sysvipc
 ~/.cache/gimp/				: rw +
 
 [inkscape : _editor]
-merge _crude _gtk
+merge _basic _gtk
 ability posixipc
 ~/.cache/inkscape/			: rw +
 ~/.config/inkscape/			: rw +
@@ -348,28 +349,28 @@ merge!! _unsafe_system_tmpdir
 ~/.config/libreoffice/			: rw +
 
 [xpdf : _viewer]
-merge _crude _ps _qt
+merge _basic _qt
 /usr/local/etc/papersize		: r
 /usr/local/etc/xpdfrc			: r
 ~/.xpdfrc				: rw
 
 [gv : _viewer]
-merge _crude _proc _cmds
+merge _basic
 merge! _shared_system_tmpdir
 ~/.gv					: r
 
 [epdfview : _viewer]
-merge _crude _gtk
+merge _basic _gtk
 ~/.config/epdfview/			: rw +
 
 [okular : _viewer]
-merge _crude _ps _qt
+merge _basic _qt
 merge! _memstat
 ~/.config/okularrc			: rw +
 ~/.local/share/okular/			: rw +
 
 [geeqie : _viewer]
-merge _crude _proc _ps _cmds _gtk
+merge _basic _gtk
 ~/.config/geeqie/			: rw +
 ~/.local/share/geeqie/			: rw +
 ~/.cache/geeqie/			: rw +
@@ -391,13 +392,13 @@ merge _basic
 ~/.cache/sxiv/				: rw +
 
 [hexchat]
-merge _basic _gtk
+merge _basic _network _gtk
 ability cred
 ~/.config/hexchat/			: rw +
 sysctl-deny machdep.tsc_freq [_strict]
 
 [pidgin]
-merge _basic _gtk
+merge _basic _network _gtk
 ~/.purple/				: rw +
 
 [_gecko]
@@ -413,7 +414,7 @@ sysctl-deny kern.proc.vmmap [_strict]
 #   sometimes doesn't activate until the second start.
 # - For some reason the "Save Page As..." file browsing dialog won't show up
 #   unless the ~/Download (or XDG alternative) directory already exists.
-merge _basic _gtk
+merge _basic _network _gtk
 merge _gecko
 ~/.mozilla/firefox/installs.ini
 ~/.mozilla/firefox/profiles.ini
@@ -441,20 +442,20 @@ merge _gecko
 #~/.mozilla/firefox/XXXXXXXX.profile1/		: rw +
 #~/.cache/mozilla/firefox/XXXXXXXX.profile1/	: rw +
 
-
 [chrome : _browser]
 # NOTE: When running chromium as an "untrusted" X11 client (curtain -X), the
 # setting "Use system title bar and borders" in the "Appearance" section must
 # be enabled.
-merge _basic _fdpassdir _gtk
+merge _basic _network _fdpassdir _gtk
 merge! _memstat
 ability posixipc prot_exec sendfile
 sysctl-deny kern.bootfile [_strict] # kvm_open(3)
+sysctl kern.ipc.shm_allow_removed
 ~/.config/chromium/			: rw +
 ~/.cache/chromium/			: rw +
 
 [thunderbird]
-merge _basic _gtk
+merge _basic _network _gtk
 merge _gecko
 ~/.thunderbird/				: rw +
 ~/.cache/thunderbird/			: rw +
@@ -466,53 +467,55 @@ ability prot_exec
 sysctl-deny kern.bootfile [_strict] # kvm_open(3)
 
 [falkon : _browser]
-merge _basic _qt
+merge _basic _network _qt
 merge _webkit
 ~/.config/falkon/			: rw +
 ~/.cache/falkon/			: rw +
 
 [otter-browser : _browser]
-merge _basic _qt
+merge _basic _network _qt
 merge _webkit
 ~/.config/otter/			: rw +
 ~/.cache/Otter/				: rw +
 
 [midori : _browser]
-merge _basic _gtk
+merge _basic _network _gtk
 merge _webkit
+ability posixipc mlock
 ./.cache/midori/ : rw +
 ./.config/midori/ : rw +
 
 [evolution : _mua]
-merge _basic _gtk
+merge _basic _network _gtk
 ~/.cache/evolution/ : rw +
 ~/.config/evolution/ : rw +
 ~/.local/share/evolution/ : rw +
 
 [sylpheed : _mua]
-merge _basic _gtk
+merge _basic _network _gtk
 ~/.sylpheed-2.0/ : rw +
 
 [claws-mail : _mua]
-merge _basic _gtk
+merge _basic _network _gtk
 ~/.claws-mail/ : rw +
 ~/.cache/claws-mail/ : rwu +
 #~/Mail/ : rw +
 
 [rssguard]
-merge _basic _qt
+merge _basic _network _fdpass _qt
+merge _webkit
 ~/.cache/RSS\ Guard/ : rw +
 ~/.config/RSS\ Guard\ 4/ : rw +
 ~/.local/share/RSS\ Guard/ + rw +
 
 [irssi : _irc]
 # NOTE: Irssi supports Capsicum, can be enabled with "/capsicum".
-merge _basic
+merge _basic _network
 ~/.irssi/ : rw +
 ~/irclogs/ : rcp +
 
 [qbittorrent : _p2p]
-merge _crude _unix _ps _network _qt
+merge _basic _network _qt
 # NOTE: Best to disable the tray icon feature under -X.
 ~/.local/share/qBittorrent/		: rw +
 ~/.config/qBittorrent/			: rw +
@@ -520,12 +523,12 @@ merge _crude _unix _ps _network _qt
 sysctl-deny hw.physmem [_strict]
 
 [deluge : _p2p]
-merge _basic _gtk
+merge _basic _network _gtk
 ability prot_exec
 ~/.config/deluge/			: rwu +
 
 [transmission-gui : _p2p]
-merge _basic
+merge _basic _network
 ~/.config/transmission/ : rw +
 [transmission-gtk : transmission-gui]
 merge _gtk
@@ -562,19 +565,20 @@ ability prot_exec
 
 [xterm : _terminal]
 # Dies with an X11 error when trying to select text under -X.
-merge _crude _proc _cmds
+merge _basic
 ability cred
 
 [urxvt : _terminal]
-merge _crude _proc _cmds
+merge _basic
 
 [st : _terminal]
-merge _crude _proc _cmds
+merge _basic
 merge! _pwddb
 
 [arx : _games]
 merge _basic _xdg
 ability prot_exec
+merge _audio
 ~/.config/arx/ : rw +
 ~/.local/share/arx/ : rw +
 
@@ -599,7 +603,7 @@ ability prot_exec
 # 4) wine needs procfs(5) mounted.
 #
 # 5) Games most likely will need "trusted" X11 access and DRM access.
-merge _basic
+merge _basic _network
 merge _fdpassdir
 merge _compat32
 merge _audio
@@ -666,7 +670,7 @@ merge _pwddb
 # - rc.d and periodic scripts should be audited for safety.
 
 [sendmail : _daemon]
-merge _basic
+merge _basic _network
 merge _login
 merge _syslog
 merge _shared_tmpdir # mail.local(8) uses /tmp directly
@@ -680,7 +684,7 @@ sysctl vm.loadavg
 #~user/.forward
 
 [exim : _daemon]
-merge _basic
+merge _basic _network
 merge _login
 merge _syslog
 merge _fdpass
@@ -696,7 +700,7 @@ ability chown
 #~user/.forward
 
 [ftpd : _daemon]
-merge _basic
+merge _basic _network
 merge _login
 merge _syslog
 merge _setcred
@@ -713,7 +717,7 @@ ability chown
 #~user/ : rw
 
 [samba : _daemon]
-merge _basic
+merge _basic _network
 # NOTE: Needs `curtain -f`, will access the TMPDIR under different UIDs.
 merge _login
 merge _syslog
@@ -730,7 +734,7 @@ sysctl kern.corefile
 #~user/ : rw
 
 [ntpd]
-merge _basic
+merge _basic _network
 merge _syslog
 merge _pwddb
 ability settime
