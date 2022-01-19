@@ -143,6 +143,8 @@ config_tag_block(struct curtain_config *cfg, const char *name)
 		*link = tag;
 	} else
 		tag = config_tag_make(cfg, link, name);
+	if (cfg->tags_enabled == cfg->tags_blocked)
+		cfg->tags_enabled = tag;
 	cfg->tags_blocked = tag;
 	cfg->tags_dropped = true;
 }
