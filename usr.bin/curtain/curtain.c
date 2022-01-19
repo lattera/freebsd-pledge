@@ -852,8 +852,12 @@ main(int argc, char *argv[])
 	}
 	do {
 		pid_t pid;
-		if (pty_wrap)
-			pty_wrap = pty_wrap_relay(pty_wrap_filter);
+		if (pty_wrap) {
+			if (!pty_wrap_relay(pty_wrap_filter)) {
+				restore_tty();
+				pty_wrap = false;
+			}
+		}
 		pid = waitpid(child_pid, &status,
 		    pty_wrap ? (tty_made_raw ? WSTOPPED : 0) | WNOHANG : 0);
 		if (pid <= 0) {
@@ -874,6 +878,10 @@ main(int argc, char *argv[])
 		}
 	} while (true);
 
-	/* shell-like exit status */
-	exit(WIFSIGNALED(status) ? 128 + WTERMSIG(status) : WEXITSTATUS(status));
+	if (WIFSIGNALED(status)) {
+		warnx("child process terminated with signal %d (%s)",
+		    WTERMSIG(status), strsignal(WTERMSIG(status)));
+		exit(128 + WTERMSIG(status)); /* shell-like exit status */
+	}
+	exit(WEXITSTATUS(status));
 }
