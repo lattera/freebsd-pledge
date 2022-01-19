@@ -190,7 +190,7 @@ struct sysent sysent[] = {
 	{ compat(AS(orecvfrom_args),recvfrom), .sy_auevent = AUE_RECVFROM, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 125 = old recvfrom */
 	{ .sy_narg = AS(setreuid_args), .sy_call = (sy_call_t *)sys_setreuid, .sy_auevent = AUE_SETREUID, .sy_flags = SYF_SYSFILS(SYSFIL_CRED), .sy_thrcnt = SY_THR_STATIC },	/* 126 = setreuid */
 	{ .sy_narg = AS(setregid_args), .sy_call = (sy_call_t *)sys_setregid, .sy_auevent = AUE_SETREGID, .sy_flags = SYF_SYSFILS(SYSFIL_CRED), .sy_thrcnt = SY_THR_STATIC },	/* 127 = setregid */
-	{ .sy_narg = AS(rename_args), .sy_call = (sy_call_t *)sys_rename, .sy_auevent = AUE_RENAME, .sy_flags = SYF_SYSFILS(SYSFIL_VFS_CREATE | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 128 = rename */
+	{ .sy_narg = AS(rename_args), .sy_call = (sy_call_t *)sys_rename, .sy_auevent = AUE_RENAME, .sy_flags = SYF_SYSFILS(SYSFIL_VFS_CREATE | SYSFIL_VFS_DELETE | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 128 = rename */
 	{ compat(AS(otruncate_args),truncate), .sy_auevent = AUE_TRUNCATE, .sy_flags = SYF_SYSFILS(SYSFIL_VFS_WRITE | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 129 = old truncate */
 	{ compat(AS(oftruncate_args),ftruncate), .sy_auevent = AUE_FTRUNCATE, .sy_flags = SYF_SYSFILS(SYSFIL_STDIO), .sy_thrcnt = SY_THR_STATIC },	/* 130 = old ftruncate */
 	{ .sy_narg = AS(flock_args), .sy_call = (sy_call_t *)sys_flock, .sy_auevent = AUE_FLOCK, .sy_flags = SYF_SYSFILS(SYSFIL_FLOCK), .sy_thrcnt = SY_THR_STATIC },	/* 131 = flock */
@@ -563,7 +563,7 @@ struct sysent sysent[] = {
 	{ compat11(AS(freebsd11_mknodat_args),mknodat), .sy_auevent = AUE_MKNODAT, .sy_flags = SYF_SYSFILS(SYSFIL_VFS_CREATE), .sy_thrcnt = SY_THR_STATIC },	/* 498 = freebsd11 mknodat */
 	{ .sy_narg = AS(openat_args), .sy_call = (sy_call_t *)sys_openat, .sy_auevent = AUE_OPENAT_RWTC, .sy_flags = SYF_SYSFILS(SYSFIL_VFS_MISC), .sy_thrcnt = SY_THR_STATIC },	/* 499 = openat */
 	{ .sy_narg = AS(readlinkat_args), .sy_call = (sy_call_t *)sys_readlinkat, .sy_auevent = AUE_READLINKAT, .sy_flags = SYF_SYSFILS(SYSFIL_VFS_READ), .sy_thrcnt = SY_THR_STATIC },	/* 500 = readlinkat */
-	{ .sy_narg = AS(renameat_args), .sy_call = (sy_call_t *)sys_renameat, .sy_auevent = AUE_RENAMEAT, .sy_flags = SYF_SYSFILS(SYSFIL_VFS_CREATE), .sy_thrcnt = SY_THR_STATIC },	/* 501 = renameat */
+	{ .sy_narg = AS(renameat_args), .sy_call = (sy_call_t *)sys_renameat, .sy_auevent = AUE_RENAMEAT, .sy_flags = SYF_SYSFILS(SYSFIL_VFS_CREATE | SYSFIL_VFS_DELETE), .sy_thrcnt = SY_THR_STATIC },	/* 501 = renameat */
 	{ .sy_narg = AS(symlinkat_args), .sy_call = (sy_call_t *)sys_symlinkat, .sy_auevent = AUE_SYMLINKAT, .sy_flags = SYF_SYSFILS(SYSFIL_VFS_CREATE), .sy_thrcnt = SY_THR_STATIC },	/* 502 = symlinkat */
 	{ .sy_narg = AS(unlinkat_args), .sy_call = (sy_call_t *)sys_unlinkat, .sy_auevent = AUE_UNLINKAT, .sy_flags = SYF_SYSFILS(SYSFIL_VFS_DELETE), .sy_thrcnt = SY_THR_STATIC },	/* 503 = unlinkat */
 	{ .sy_narg = AS(posix_openpt_args), .sy_call = (sy_call_t *)sys_posix_openpt, .sy_auevent = AUE_POSIX_OPENPT, .sy_flags = SYF_SYSFILS(SYSFIL_TTY | SYSFIL_UNCAPSICUM), .sy_thrcnt = SY_THR_STATIC },	/* 504 = posix_openpt */

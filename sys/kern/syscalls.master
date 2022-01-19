@@ -845,7 +845,7 @@
 		    int egid
 		);
 	}
-128	AUE_RENAME	STD|SYSFIL_VFS_CREATE {
+128	AUE_RENAME	STD|SYSFIL_VFS_CREATE|SYSFIL_VFS_DELETE {
 		int rename(
 		    _In_z_ const char *from,
 		    _In_z_ const char *to
@@ -2762,7 +2762,7 @@
 		    size_t bufsize
 		);
 	}
-501	AUE_RENAMEAT	STD|SYSFIL_VFS_CREATE|CAPENABLED {
+501	AUE_RENAMEAT	STD|SYSFIL_VFS_CREATE|SYSFIL_VFS_DELETE|CAPENABLED {
 		int renameat(
 		    int oldfd,
 		    _In_z_ const char *old,
