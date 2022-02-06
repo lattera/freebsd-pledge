@@ -242,16 +242,13 @@ ${TMPDIR}/				: x	[_tmpdir_exec]
 # with known names will probably be insecure.
 ${TMPDIR:-/tmp}/			: t
 # Block access to some known file names that might allow privilege escalation,
-# but this probably cannot be a complete list...
+# but this cannot be a complete list...
 ${TMPDIR:-/tmp}/krb5cc_%u		:
 
-[_shared_system_tmpdir]
-/tmp/					: t
-/tmp/krb5cc_%u				:
-
-[_unsafe_system_tmpdir]
-/tmp/					: rwxu
-# Do our best to prevent easy escapes, but this is extremely risky nontheless!
+[_shared_system_tmpdir, _unsafe_system_tmpdir]
+/tmp/					: t [_shared_system_tmpdir]
+/tmp/					: rwxu [_unsafe_system_tmpdir]
+# Do our best to prevent easy escapes, but this is extremely risky nonetheless!
 /tmp/tmux-%#u				:
 /tmp/krb5cc_%u				:
 
