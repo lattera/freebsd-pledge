@@ -459,6 +459,34 @@ exec_rsugid_body() {
 	fi
 }
 
+atf_test_case system_tmpdir
+system_tmpdir_body() {
+	local r
+	r=$(openssl rand -hex 12) || atf_fail "!"
+	atf_check -s not-exit:0 -e not-empty curtain \
+		ln -s /dev/null /tmp/curtain.test.$r
+	atf_check -s not-exit:0 -e not-empty curtain \
+		mkdir /tmp/curtain.test.$r
+	atf_check -s not-exit:0 -e not-empty curtain \
+		cp /dev/null /tmp/curtain.test.$r
+
+	r=$(openssl rand -hex 12) || atf_fail "!"
+	atf_check -s not-exit:0 -e not-empty curtain -t _shared_system_tmpdir \
+		ln -s /dev/null /tmp/curtain.test.$r
+	atf_check -s not-exit:0 -e not-empty curtain -t _shared_system_tmpdir \
+		mkdir /tmp/curtain.test.$r
+	atf_check curtain -t _shared_system_tmpdir \
+		cp /dev/null /tmp/curtain.test.$r
+	atf_check curtain -t _shared_system_tmpdir \
+		unlink /tmp/curtain.test.$r
+
+	r=$(openssl rand -hex 12) || atf_fail "!"
+	atf_check curtain -t _unsafe_system_tmpdir \
+		mkdir /tmp/curtain.test.$r
+	atf_check curtain -t _unsafe_system_tmpdir \
+		rmdir /tmp/curtain.test.$r
+}
+
 atf_init_test_cases() {
 	atf_add_test_case cmd_true
 	atf_add_test_case cmd_false
@@ -496,4 +524,5 @@ atf_init_test_cases() {
 	atf_add_test_case append_only
 	atf_add_test_case chroot
 	atf_add_test_case exec_rsugid
+	atf_add_test_case system_tmpdir
 }
