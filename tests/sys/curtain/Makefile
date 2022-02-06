@@ -9,7 +9,6 @@ PROGS+=			suid-check
 BINMODE.suid-check=	4555
 
 ATF_TESTS_SH+=		execpledge_various
-ATF_TESTS_SH+=		execpledge_hard_link
 ATF_TESTS_SH+=		curtain_various
 
 LIBADD=		curtain
