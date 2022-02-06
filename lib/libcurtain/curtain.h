@@ -105,7 +105,7 @@ int curtain_config_apply(struct curtain_config *);
 
 int curtain_config_setup_x11(struct curtain_config *, bool trusted);
 int curtain_config_setup_wayland(struct curtain_config *);
-int curtain_config_setup_tmpdir(struct curtain_config *, bool separate);
+int curtain_config_setup_tmpdir(struct curtain_config *);
 
 int curtain_config_setup_dbus(struct curtain_config *);
 int curtain_config_spawn_dbus(struct curtain_config *);

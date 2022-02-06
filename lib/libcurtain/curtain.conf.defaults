@@ -235,9 +235,14 @@ ${TMPDIR}/				: s	[_tmpdir_shellexec]
 ${TMPDIR}/				: x	[_tmpdir_exec]
 
 [_shared_tmpdir]
+# Sharing $TMPDIR is risky even with just the "t" permission (which disallows
+# many operations like listing files (which should protect files with
+# unpredictable names), accessing subdirectories, creating/connecting to local
+# domain sockets, creating hard/soft links, etc), but any use of regular files
+# with known names will probably be insecure.
 ${TMPDIR:-/tmp}/			: t
-# Sharing TMPDIR is risky even with the "t" permission.  Block access to known
-# file names that might allow privilege escalation.
+# Block access to some known file names that might allow privilege escalation,
+# but this probably cannot be a complete list...
 ${TMPDIR:-/tmp}/krb5cc_%u		:
 
 [_shared_system_tmpdir]

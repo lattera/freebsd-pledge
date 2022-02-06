@@ -377,6 +377,8 @@ main(int argc, char *argv[])
 		LONGOPT_UNENFORCED,
 		LONGOPT_SETUSER,
 		LONGOPT_NO_TTY,
+		LONGOPT_SAME_TMPDIR,
+		LONGOPT_PUBLIC_TMPDIR,
 	};
 	const struct option longopts[] = {
 		{ "newpgrp", no_argument, NULL, LONGOPT_NEWPGRP },
@@ -385,6 +387,8 @@ main(int argc, char *argv[])
 		{ "unenforced", no_argument, NULL, LONGOPT_UNENFORCED },
 		{ "setuser", required_argument, NULL, LONGOPT_SETUSER },
 		{ "no-tty", no_argument, NULL, LONGOPT_NO_TTY },
+		{ "same-tmpdir", no_argument, NULL, LONGOPT_SAME_TMPDIR },
+		{ "public-tmpdir", no_argument, NULL, LONGOPT_PUBLIC_TMPDIR },
 		{ 0 }
 	};
 	char *sh_argv[2];
@@ -406,6 +410,8 @@ main(int argc, char *argv[])
 	     new_sid = false,
 	     new_pgrp = false,
 	     no_network = false,
+	     same_tmpdir = false,
+	     public_tmpdir = false,
 	     unenforced = false;
 	enum { X11_NONE, X11_UNTRUSTED, X11_TRUSTED } x11_mode = X11_NONE;
 	bool wayland = false;
@@ -557,6 +563,12 @@ main(int argc, char *argv[])
 			user_ctx = true;
 			setuser_name = optarg;
 			break;
+		case LONGOPT_SAME_TMPDIR:
+			same_tmpdir = true;
+			break;
+		case LONGOPT_PUBLIC_TMPDIR:
+			public_tmpdir = true;
+			break;
 		default:
 			usage();
 		}
@@ -602,7 +614,15 @@ main(int argc, char *argv[])
 		curtain_config_tag_push(cfg, p);
 	}
 
-	curtain_config_setup_tmpdir(cfg, !no_fork);
+	if (!no_fork && !same_tmpdir) {
+		r = curtain_config_setup_tmpdir(cfg);
+		if (r >= 0 && public_tmpdir) {
+			r = chmod(getenv("TMPDIR"), S_ISTXT | ACCESSPERMS);
+			if (r < 0)
+				warn("chmod %s", getenv("TMPDIR"));
+		}
+	} else
+		curtain_config_tag_push(cfg, "_shared_tmpdir"); /* XXX not very safe... */
 	if (x11_mode != X11_NONE) {
 		if (no_fork)
 			errx(EX_USAGE, "option -X/-Y incompatible with -f");

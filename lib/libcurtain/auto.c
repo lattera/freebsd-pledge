@@ -30,7 +30,7 @@ auto_curtain_setup_1(const char *name, char *buf)
 	curtain_config_tag_push(cfg, buf);
 	if (name)
 		curtain_config_tag_push(cfg, name);
-	curtain_config_setup_tmpdir(cfg, true);
+	curtain_config_setup_tmpdir(cfg);
 	if ((p = getenv("CURTAIN_AUTO_X11"))) {
 		bool trusted = strcmp(p, "trusted") == 0;
 		curtain_config_tag_push(cfg, "_x11");
