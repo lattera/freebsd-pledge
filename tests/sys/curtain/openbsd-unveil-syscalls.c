@@ -695,17 +695,27 @@ test_statfs(int do_uv)
 	struct statfs sb;
 
 
+#ifndef __FreeBSD__
 	UV_SHOULD_SUCCEED((statfs("/home", &sb) == -1), "statfs");
 	UV_SHOULD_SUCCEED((statfs("/", &sb) == -1), "statfs");
+#endif
 	UV_SHOULD_SUCCEED((statfs(uv_file1, &sb) == -1), "statfs");
+#ifndef __FreeBSD__
 	UV_SHOULD_SUCCEED((statfs(uv_file2, &sb) == -1), "statfs");
+#endif
 	UV_SHOULD_SUCCEED((statfs(uv_dir1, &sb) == -1), "statfs");
+#ifndef __FreeBSD__
 	UV_SHOULD_SUCCEED((statfs(uv_dir2, &sb) == -1), "statfs");
+#endif
 	UV_SHOULD_SUCCEED((pledge("stdio fattr rpath", NULL) == -1), "pledge");
 	UV_SHOULD_SUCCEED((statfs(uv_file1, &sb) == -1), "statfs");
+#ifndef __FreeBSD__
 	UV_SHOULD_SUCCEED((statfs(uv_file2, &sb) == -1), "statfs");
+#endif
 	UV_SHOULD_SUCCEED((statfs(uv_dir1, &sb) == -1), "statfs");
+#ifndef __FreeBSD__
 	UV_SHOULD_SUCCEED((statfs(uv_dir2, &sb) == -1), "statfs");
+#endif
 
 	return 0;
 }
@@ -873,7 +883,7 @@ test_bypassunveil(int do_uv)
 		printf("testing BYPASSUNVEIL\n");
 		do_unveil2();
 	}
-#ifdef	__FreeBSD__
+#ifdef __FreeBSD__
 	/* The pledge() makes /tmp unaccessible if $TMPDIR is set. */
 	char filename3[PATH_MAX] = "";
 	char *tmpdir;
@@ -984,12 +994,7 @@ test_fork_locked(int do_uv)
 
 	pid = fork();
 	if (pid == 0) {
-#ifdef	__FreeBSD__
-		/* This implementation allows it. */
-		UV_SHOULD_SUCCEED((unveil("/", "rwx") == -1), "unveil");
-#else
 		UV_SHOULD_EPERM((unveil("/", "rwx") == -1), "unveil");
-#endif
 		exit(0);
 	}
 
@@ -1044,7 +1049,7 @@ main (int argc, char *argv[])
 	int fd1, fd2, failures = 0;
 	char filename[256];
 
-#ifdef	__FreeBSD__
+#ifdef __FreeBSD__
 	fflush(stdout);
 	setlinebuf(stdout);
 	dup2(fileno(stderr), fileno(stdout));
@@ -1078,9 +1083,7 @@ main (int argc, char *argv[])
 	failures += runcompare(test_chflags);
 	failures += runcompare(test_stat);
 	failures += runcompare(test_stat2);
-#ifndef __FreeBSD__
 	failures += runcompare(test_statfs);
-#endif
 	failures += runcompare(test_symlink);
 	failures += runcompare(test_chmod);
 	failures += runcompare(test_exec);
@@ -1095,7 +1098,9 @@ main (int argc, char *argv[])
 	failures += runcompare(test_kn);
 	failures += runcompare(test_pathdiscover);
 	failures += runcompare(test_fchdir);
+#ifndef __FreeBSD__
 	failures += runcompare(test_fork_locked);
+#endif
 	failures += runcompare(test_intermediate_node);
 	failures += runcompare(test_noaccess_node);
 	exit(failures);
