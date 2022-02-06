@@ -1302,9 +1302,13 @@ vtnet_ioctl_ifflags(struct vtnet_softc *sc)
 
 	if ((ifp->if_flags ^ sc->vtnet_if_flags) &
 	    (IFF_PROMISC | IFF_ALLMULTI)) {
-		if ((sc->vtnet_flags & VTNET_FLAG_CTRL_RX) == 0)
-			return (ENOTSUP);
-		vtnet_rx_filter(sc);
+		if (sc->vtnet_flags & VTNET_FLAG_CTRL_RX)
+			vtnet_rx_filter(sc);
+		else {
+			if ((ifp->if_flags ^ sc->vtnet_if_flags) & IFF_ALLMULTI)
+				return (ENOTSUP);
+			ifp->if_flags |= IFF_PROMISC;
+		}
 	}
 
 out:
@@ -2084,6 +2088,7 @@ vtnet_rxq_eof(struct vtnet_rxq *rxq)
 		if (sc->vtnet_flags & VTNET_FLAG_MRG_RXBUFS) {
 			struct virtio_net_hdr_mrg_rxbuf *mhdr =
 			    mtod(m, struct virtio_net_hdr_mrg_rxbuf *);
+			kmsan_mark(mhdr, sizeof(*mhdr), KMSAN_STATE_INITED);
 			nbufs = vtnet_htog16(sc, mhdr->num_buffers);
 			adjsz = sizeof(struct virtio_net_hdr_mrg_rxbuf);
 		} else if (vtnet_modern(sc)) {

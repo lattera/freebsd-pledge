@@ -1195,12 +1195,6 @@ ktls_enable_rx(struct socket *so, struct tls_enable *en)
 		return (error);
 	}
 
-#ifdef TCP_OFFLOAD
-	error = ktls_try_toe(so, tls, KTLS_RX);
-	if (error)
-#endif
-		ktls_use_sw(tls);
-
 	/* Mark the socket as using TLS offload. */
 	SOCKBUF_LOCK(&so->so_rcv);
 	so->so_rcv.sb_tls_seqno = be64dec(en->rec_seq);
@@ -1208,11 +1202,15 @@ ktls_enable_rx(struct socket *so, struct tls_enable *en)
 	so->so_rcv.sb_flags |= SB_TLS_RX;
 
 	/* Mark existing data as not ready until it can be decrypted. */
-	if (tls->mode != TCP_TLS_MODE_TOE) {
-		sb_mark_notready(&so->so_rcv);
-		ktls_check_rx(&so->so_rcv);
-	}
+	sb_mark_notready(&so->so_rcv);
+	ktls_check_rx(&so->so_rcv);
 	SOCKBUF_UNLOCK(&so->so_rcv);
+
+#ifdef TCP_OFFLOAD
+	error = ktls_try_toe(so, tls, KTLS_RX);
+	if (error)
+#endif
+		ktls_use_sw(tls);
 
 	counter_u64_add(ktls_offload_total, 1);
 
@@ -1316,6 +1314,49 @@ ktls_get_rx_mode(struct socket *so, int *modep)
 	else
 		*modep = tls->mode;
 	SOCK_RECVBUF_UNLOCK(so);
+	return (0);
+}
+
+/*
+ * ktls_get_rx_sequence - get the next TCP- and TLS- sequence number.
+ *
+ * This function gets information about the next TCP- and TLS-
+ * sequence number to be processed by the TLS receive worker
+ * thread. The information is extracted from the given "inpcb"
+ * structure. The values are stored in host endian format at the two
+ * given output pointer locations. The TCP sequence number points to
+ * the beginning of the TLS header.
+ *
+ * This function returns zero on success, else a non-zero error code
+ * is returned.
+ */
+int
+ktls_get_rx_sequence(struct inpcb *inp, uint32_t *tcpseq, uint64_t *tlsseq)
+{
+	struct socket *so;
+	struct tcpcb *tp;
+
+	INP_RLOCK(inp);
+	so = inp->inp_socket;
+	if (__predict_false(so == NULL)) {
+		INP_RUNLOCK(inp);
+		return (EINVAL);
+	}
+	if (inp->inp_flags & (INP_TIMEWAIT | INP_DROPPED)) {
+		INP_RUNLOCK(inp);
+		return (ECONNRESET);
+	}
+
+	tp = intotcpcb(inp);
+	MPASS(tp != NULL);
+
+	SOCKBUF_LOCK(&so->so_rcv);
+	*tcpseq = tp->rcv_nxt - so->so_rcv.sb_tlscc;
+	*tlsseq = so->so_rcv.sb_tls_seqno;
+	SOCKBUF_UNLOCK(&so->so_rcv);
+
+	INP_RUNLOCK(inp);
+
 	return (0);
 }
 
@@ -2066,6 +2107,7 @@ ktls_decrypt(struct socket *so)
 		}
 
 		/* Allocate the control mbuf. */
+		memset(&tgr, 0, sizeof(tgr));
 		tgr.tls_type = record_type;
 		tgr.tls_vmajor = hdr->tls_vmajor;
 		tgr.tls_vminor = hdr->tls_vminor;

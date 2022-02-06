@@ -484,6 +484,7 @@ objmap(int argc, char **argv __unused)
 			memset(&e_desc, 0, sizeof(e_desc));
 			e_desc.elm_idx = e_ptr[j].elm_idx;
 			e_desc.elm_desc_len = UINT16_MAX;
+			/* XXX memory leak! */
 			e_desc.elm_desc_str = calloc(UINT16_MAX, sizeof(char));
 			if (e_desc.elm_desc_str == NULL) {
 				close(fd);
@@ -505,7 +506,7 @@ objmap(int argc, char **argv __unused)
 			}
 			if (ioctl(fd, ENCIOC_GETELMDEVNAMES,
 			    (caddr_t) &e_devname) <0) {
-				/* We don't care if this fails */
+				/* Continue even if we can't look up devnames */
 				e_devname.elm_devnames[0] = '\0';
 			}
 			xo_open_instance("elements");
