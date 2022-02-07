@@ -78,9 +78,8 @@ extern const unsigned long curtain_ioctls_mdctl[];
 
 struct curtain_config;
 
-enum curtain_config_flags {
-	CURTAIN_CONFIG_ON_EXEC_ONLY = 1 << 0,
-};
+#define CURTAIN_CONFIG_ON_EXEC_ONLY	(1 << 0)
+#define CURTAIN_CONFIG_NO_STD_INCS	(1 << 1)
 
 int curtain_parse_unveil_perms(unveil_perms *, const char *);
 
