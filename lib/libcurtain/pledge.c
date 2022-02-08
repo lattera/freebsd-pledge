@@ -10,6 +10,7 @@ __FBSDID("$FreeBSD$");
 #include <paths.h>
 #include <pwd.h>
 #include <grp.h>
+#include <sys/un.h>
 #include <nsswitch.h>
 #include <netdb.h>
 #include <sys/socket.h>
@@ -261,6 +262,11 @@ static const struct promise_sockopt {
 	bool set;
 	int level, optname;
 } sockopts_table[] = {
+	/*
+	 * XXX SOL_LOCAL and IPPROTO_IP have the same value and option names
+	 * have collisions.  Enabling socket options for one may incorrectly
+	 * enable some other option for the other.
+	 */
 	{ PROMISE_STDIO,	true,	SOL_SOCKET, SO_ERROR },
 	{ PROMISE_STDIO,	true,	SOL_SOCKET, SO_NOSIGPIPE },
 	{ PROMISE_NET,		true,	SOL_SOCKET, SO_REUSEADDR },
@@ -281,6 +287,7 @@ static const struct promise_sockopt {
 	{ PROMISE_NET,		true,	SOL_SOCKET, SO_TYPE },
 	{ PROMISE_NET,		true,	SOL_SOCKET, SO_PROTOCOL },
 	{ PROMISE_NET,		true,	SOL_SOCKET, SO_PROTOTYPE },
+	{ PROMISE_UNIX,		false,	SOL_LOCAL, LOCAL_PEERCRED },
 #ifdef AF_INET
 	{ PROMISE_INET,		true,	IPPROTO_IP, IP_RECVDSTADDR },
 	{ PROMISE_INET,		false,	IPPROTO_IP, IP_OPTIONS },
