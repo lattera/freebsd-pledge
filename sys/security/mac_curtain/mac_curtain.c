@@ -164,8 +164,12 @@ cred_key_failed(const struct ucred *cr, enum curtain_type type, union curtain_ke
 	case CURTAIN_SOCKLVL:
 		CURTAIN_CRED_LOG_ACTION(cr, act, "socklvl %d", key.socklvl);
 		break;
+	case CURTAIN_GETSOCKOPT:
+	case CURTAIN_SETSOCKOPT:
 	case CURTAIN_SOCKOPT:
-		CURTAIN_CRED_LOG_ACTION(cr, act, "sockopt %d:%d",
+		CURTAIN_CRED_LOG_ACTION(cr, act, "%ssockopt %d:%d",
+		    type == CURTAIN_GETSOCKOPT ? "get" :
+		    type == CURTAIN_SETSOCKOPT ? "set" : "",
 		    key.sockopt.level, key.sockopt.optname);
 		break;
 	case CURTAIN_PRIV:
@@ -401,7 +405,8 @@ static int
 curtain_socket_check_sockopt(struct ucred *cr, struct socket *so, struct label *solabel,
     struct sockopt *sopt)
 {
-	return (cred_key_check(cr, CURTAIN_SOCKOPT,
+	return (cred_key_check(cr,
+	    sopt->sopt_dir == SOPT_GET ? CURTAIN_GETSOCKOPT : CURTAIN_SETSOCKOPT,
 	    (ctkey){ .sockopt = { sopt->sopt_level, sopt->sopt_name } }));
 }
 

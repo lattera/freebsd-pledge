@@ -52,6 +52,8 @@ int curtain_sockaf(struct curtain_slot *, int af, int flags);
 int curtain_socklvl(struct curtain_slot *, int level, int flags);
 int curtain_sockopt(struct curtain_slot *, int level, int optname, int flags);
 int curtain_sockopts(struct curtain_slot *, const int (*sockopts)[2], int flags);
+int curtain_getsockopt(struct curtain_slot *, int level, int optname, int flags);
+int curtain_setsockopt(struct curtain_slot *, int level, int optname, int flags);
 int curtain_priv(struct curtain_slot *, int priv, int flags);
 int curtain_sysctl(struct curtain_slot *, const char *sysctl, int flags);
 int curtain_fibnum(struct curtain_slot *, int fibnum, int flags);

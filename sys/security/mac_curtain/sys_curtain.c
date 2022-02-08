@@ -395,11 +395,16 @@ curtain_fill_req(struct curtain *ct, const struct curtainreq *req)
 		break;
 	}
 
+	case CURTAINTYP_GETSOCKOPT:
+	case CURTAINTYP_SETSOCKOPT:
 	case CURTAINTYP_SOCKOPT: {
+		enum curtain_type type = req->type == CURTAINTYP_GETSOCKOPT ? CURTAIN_GETSOCKOPT :
+		                         req->type == CURTAINTYP_SETSOCKOPT ? CURTAIN_SETSOCKOPT :
+		                                                              CURTAIN_SOCKOPT;
 		int (*p)[2] = req->data;
 		size_t c = req->size / sizeof *p;
 		while (c--) {
-			curtain_fill_item(ct, CURTAIN_SOCKOPT,
+			curtain_fill_item(ct, type,
 			    (ctkey){ .sockopt = { (*p)[0], (*p)[1] } }, req->level);
 			p++;
 		}
@@ -722,8 +727,12 @@ db_print_curtain(struct curtain *ct)
 			case CURTAIN_SOCKLVL:
 				db_printf(" socklvl: %d\n", key.socklvl);
 				break;
+			case CURTAIN_GETSOCKOPT:
+			case CURTAIN_SETSOCKOPT:
 			case CURTAIN_SOCKOPT:
-				db_printf(" sockopt: %d:%d\n",
+				db_printf(" %ssockopt: %d:%d\n",
+				    item->type == CURTAIN_GETSOCKOPT ? "get" :
+				    item->type == CURTAIN_SETSOCKOPT ? "set" : "",
 				    key.sockopt.level, key.sockopt.optname);
 				break;
 			case CURTAIN_PRIV:

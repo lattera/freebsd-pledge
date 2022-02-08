@@ -416,6 +416,8 @@ curtain_key_hash(enum curtain_type type, union curtain_key key)
 		return (key.sockaf);
 	case CURTAIN_SOCKLVL:
 		return (key.socklvl);
+	case CURTAIN_GETSOCKOPT:
+	case CURTAIN_SETSOCKOPT:
 	case CURTAIN_SOCKOPT:
 		return (key.sockopt.level ^ key.sockopt.optname);
 	case CURTAIN_PRIV:
@@ -444,6 +446,8 @@ curtain_key_same(enum curtain_type type,
 		return (key0.sockaf == key1.sockaf);
 	case CURTAIN_SOCKLVL:
 		return (key0.socklvl == key1.socklvl);
+	case CURTAIN_GETSOCKOPT:
+	case CURTAIN_SETSOCKOPT:
 	case CURTAIN_SOCKOPT:
 		return (key0.sockopt.level == key1.sockopt.level &&
 		        key0.sockopt.optname == key1.sockopt.optname);
@@ -545,7 +549,9 @@ curtain_type_fallback(enum curtain_type type)
 	switch (type) {
 	case CURTAIN_IOCTL: return (CURTAINABL_ANY_IOCTL);
 	case CURTAIN_SOCKAF: return (CURTAINABL_ANY_SOCKAF);
-	case CURTAIN_SOCKLVL: return (CURTAINABL_ANY_SOCKOPT);
+	case CURTAIN_SOCKLVL:
+	case CURTAIN_GETSOCKOPT:
+	case CURTAIN_SETSOCKOPT:
 	case CURTAIN_SOCKOPT: return (CURTAINABL_ANY_SOCKOPT);
 	case CURTAIN_PRIV: return (CURTAINABL_ANY_PRIV);
 	case CURTAIN_SYSCTL: return (CURTAINABL_ANY_SYSCTL);
@@ -558,6 +564,10 @@ static inline void
 curtain_key_fallback(enum curtain_type *type, union curtain_key *key)
 {
 	switch (*type) {
+	case CURTAIN_GETSOCKOPT:
+	case CURTAIN_SETSOCKOPT:
+		*type = CURTAIN_SOCKOPT;
+		return;
 	case CURTAIN_SOCKOPT:
 		*key = (union curtain_key){ .socklvl = key->sockopt.level };
 		*type = CURTAIN_SOCKLVL;

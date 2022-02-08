@@ -600,15 +600,28 @@ static struct curtain_type sockopts_type = {
 	.mode = &level_mode_type,
 };
 
-int
-curtain_sockopt(struct curtain_slot *slot, int level, int optname, int flags)
+static struct curtain_node *
+sockopt_fallback_helper(struct curtain_node *node)
+{
+	return (node_get(&sockopts_type, node->key, true));
+}
+
+static int
+curtain_sockopt_1(struct curtain_type *type, struct curtain_slot *slot,
+    int level, int optname, int flags)
 {
 	struct curtain_item *item;
-	item = node_item_get(&sockopts_type, slot, KEY(.sockopt, { level, optname }), true);
+	item = node_item_get(type, slot, KEY(.sockopt, { level, optname }), true);
 	if (!item)
 		return (-1);
 	item_set_flags_level(item, flags);
 	return (0);
+}
+
+int
+curtain_sockopt(struct curtain_slot *slot, int level, int optname, int flags)
+{
+	return (curtain_sockopt_1(&sockopts_type, slot, level, optname, flags));
 }
 
 int
@@ -617,6 +630,36 @@ curtain_sockopts(struct curtain_slot *slot, const int (*sockopts)[2], int flags)
 	for (const int (*p)[2] = sockopts; (*p)[0] != -1 && (*p)[1] != -1; p++)
 		curtain_sockopt(slot, (*p)[0], (*p)[1], flags);
 	return (0);
+}
+
+static struct curtain_type getsockopts_type = {
+	.req_type = CURTAINTYP_GETSOCKOPT,
+	.fallback = sockopt_fallback_helper,
+	.key_cmp = sockopt_key_cmp,
+	.ent_size = sockopt_ent_size,
+	.ent_fill = sockopt_ent_fill,
+	.mode = &level_mode_type,
+};
+
+int
+curtain_getsockopt(struct curtain_slot *slot, int level, int optname, int flags)
+{
+	return (curtain_sockopt_1(&getsockopts_type, slot, level, optname, flags));
+}
+
+static struct curtain_type setsockopts_type = {
+	.req_type = CURTAINTYP_SETSOCKOPT,
+	.fallback = sockopt_fallback_helper,
+	.key_cmp = sockopt_key_cmp,
+	.ent_size = sockopt_ent_size,
+	.ent_fill = sockopt_ent_fill,
+	.mode = &level_mode_type,
+};
+
+int
+curtain_setsockopt(struct curtain_slot *slot, int level, int optname, int flags)
+{
+	return (curtain_sockopt_1(&setsockopts_type, slot, level, optname, flags));
 }
 
 
@@ -1358,6 +1401,8 @@ static struct curtain_type *const types[] = {
 	&sockafs_type,
 	&socklvls_type,
 	&sockopts_type,
+	&getsockopts_type,
+	&setsockopts_type,
 	&privs_type,
 	&sysctls_type,
 	&fibnums_type,
