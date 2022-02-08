@@ -191,6 +191,7 @@ socklvl socket
 [_unix_base]
 merge _sock
 sockaf unix
+socklvl local
 [_unix_client : _unix_base]
 ability vfs_connect
 [_unix_server : _unix_base]
