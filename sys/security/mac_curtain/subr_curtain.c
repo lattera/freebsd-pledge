@@ -58,7 +58,7 @@ mode_equivalent(struct curtain_mode m0, struct curtain_mode m1)
 static inline bool
 mode_restricted(struct curtain_mode mode)
 {
-	return (mode.soft != CURTAINACT_ALLOW || mode.hard != CURTAINACT_ALLOW);
+	return (mode.soft != CURTAIN_ALLOW || mode.hard != CURTAIN_ALLOW);
 }
 
 
@@ -363,7 +363,7 @@ curtain_hold(struct curtain *ct)
 	return (ct);
 }
 
-static void curtain_key_free(enum curtainreq_type, union curtain_key);
+static void curtain_key_free(enum curtain_type, union curtain_key);
 
 static void
 curtain_free_1(struct curtain *ct)
@@ -402,31 +402,29 @@ curtain_dirty(struct curtain *ct)
 
 
 #define CURTAIN_KEY_INVALID_TYPE_CASES	\
-	case CURTAINTYP_DEFAULT:	\
-	case CURTAINTYP_ABILITY:	\
-	case CURTAINTYP_OLD_UNVEIL:
+	case CURTAIN_ABILITY:
 
 static unsigned
-curtain_key_hash(enum curtainreq_type type, union curtain_key key)
+curtain_key_hash(enum curtain_type type, union curtain_key key)
 {
 	switch (type) {
 	CURTAIN_KEY_INVALID_TYPE_CASES
 		break;
-	case CURTAINTYP_IOCTL:
+	case CURTAIN_IOCTL:
 		return (key.ioctl ^ key.ioctl >> 5);
-	case CURTAINTYP_SOCKAF:
+	case CURTAIN_SOCKAF:
 		return (key.sockaf);
-	case CURTAINTYP_SOCKLVL:
+	case CURTAIN_SOCKLVL:
 		return (key.socklvl);
-	case CURTAINTYP_SOCKOPT:
+	case CURTAIN_SOCKOPT:
 		return (key.sockopt.level ^ key.sockopt.optname);
-	case CURTAINTYP_PRIV:
+	case CURTAIN_PRIV:
 		return (key.priv);
-	case CURTAINTYP_SYSCTL:
+	case CURTAIN_SYSCTL:
 		return ((uintptr_t)key.sysctl >> 5);
-	case CURTAINTYP_FIBNUM:
+	case CURTAIN_FIBNUM:
 		return (key.fibnum);
-	case CURTAINTYP_UNVEIL:
+	case CURTAIN_UNVEIL:
 		return (key.unveil->hash);
 	}
 	MPASS(0);
@@ -434,28 +432,28 @@ curtain_key_hash(enum curtainreq_type type, union curtain_key key)
 }
 
 static bool
-curtain_key_same(enum curtainreq_type type,
+curtain_key_same(enum curtain_type type,
     union curtain_key key0, union curtain_key key1)
 {
 	switch (type) {
 	CURTAIN_KEY_INVALID_TYPE_CASES
 		break;
-	case CURTAINTYP_IOCTL:
+	case CURTAIN_IOCTL:
 		return (key0.ioctl == key1.ioctl);
-	case CURTAINTYP_SOCKAF:
+	case CURTAIN_SOCKAF:
 		return (key0.sockaf == key1.sockaf);
-	case CURTAINTYP_SOCKLVL:
+	case CURTAIN_SOCKLVL:
 		return (key0.socklvl == key1.socklvl);
-	case CURTAINTYP_SOCKOPT:
+	case CURTAIN_SOCKOPT:
 		return (key0.sockopt.level == key1.sockopt.level &&
 		        key0.sockopt.optname == key1.sockopt.optname);
-	case CURTAINTYP_PRIV:
+	case CURTAIN_PRIV:
 		return (key0.priv == key1.priv);
-	case CURTAINTYP_SYSCTL:
+	case CURTAIN_SYSCTL:
 		return (key0.sysctl == key1.sysctl);
-	case CURTAINTYP_FIBNUM:
+	case CURTAIN_FIBNUM:
 		return (key0.fibnum == key1.fibnum);
-	case CURTAINTYP_UNVEIL: {
+	case CURTAIN_UNVEIL: {
 		char *name0, *name1;
 		size_t name_len;
 		if (key0.unveil->hash != key1.unveil->hash)
@@ -475,13 +473,13 @@ curtain_key_same(enum curtainreq_type type,
 }
 
 static void
-curtain_key_free(enum curtainreq_type type, union curtain_key key)
+curtain_key_free(enum curtain_type type, union curtain_key key)
 {
 	switch (type) {
-	case CURTAINTYP_SYSCTL:
+	case CURTAIN_SYSCTL:
 		sysctl_shadow_free(key.sysctl);
 		break;
-	case CURTAINTYP_UNVEIL:
+	case CURTAIN_UNVEIL:
 		vrele(key.unveil->vp);
 		free(key.unveil, M_CURTAIN_UNVEIL);
 		break;
@@ -491,14 +489,14 @@ curtain_key_free(enum curtainreq_type type, union curtain_key key)
 }
 
 static void
-curtain_key_dup(enum curtainreq_type type, union curtain_key *dst, union curtain_key src)
+curtain_key_dup(enum curtain_type type, union curtain_key *dst, union curtain_key src)
 {
 	*dst = src;
 	switch (type) {
-	case CURTAINTYP_SYSCTL:
+	case CURTAIN_SYSCTL:
 		sysctl_shadow_hold(dst->sysctl);
 		break;
-	case CURTAINTYP_UNVEIL: {
+	case CURTAIN_UNVEIL: {
 		size_t name_size;
 		name_size = src.unveil->name_len + (src.unveil->name_len != 0);
 		dst->unveil = malloc(sizeof *dst->unveil + name_size, M_CURTAIN_UNVEIL, M_WAITOK);
@@ -512,10 +510,10 @@ curtain_key_dup(enum curtainreq_type type, union curtain_key *dst, union curtain
 }
 
 static void
-curtain_key_dup_fixup(const struct curtain *ct, enum curtainreq_type type, union curtain_key *key)
+curtain_key_dup_fixup(const struct curtain *ct, enum curtain_type type, union curtain_key *key)
 {
 	switch (type) {
-	case CURTAINTYP_UNVEIL:
+	case CURTAIN_UNVEIL:
 		if (key->unveil->parent) {
 			struct curtain_item *item;
 			item = curtain_lookup(ct, type,
@@ -530,10 +528,10 @@ curtain_key_dup_fixup(const struct curtain *ct, enum curtainreq_type type, union
 }
 
 static void
-curtain_key_harden(enum curtainreq_type type, union curtain_key *key)
+curtain_key_harden(enum curtain_type type, union curtain_key *key)
 {
 	switch (type) {
-	case CURTAINTYP_UNVEIL:
+	case CURTAIN_UNVEIL:
 		key->unveil->hard_uperms &= key->unveil->soft_uperms;
 		break;
 	default:
@@ -541,21 +539,36 @@ curtain_key_harden(enum curtainreq_type type, union curtain_key *key)
 	}
 }
 
+enum curtain_ability
+curtain_type_fallback(enum curtain_type type)
+{
+	switch (type) {
+	case CURTAIN_IOCTL: return (CURTAINABL_ANY_IOCTL);
+	case CURTAIN_SOCKAF: return (CURTAINABL_ANY_SOCKAF);
+	case CURTAIN_SOCKLVL: return (CURTAINABL_ANY_SOCKOPT);
+	case CURTAIN_SOCKOPT: return (CURTAINABL_ANY_SOCKOPT);
+	case CURTAIN_PRIV: return (CURTAINABL_ANY_PRIV);
+	case CURTAIN_SYSCTL: return (CURTAINABL_ANY_SYSCTL);
+	case CURTAIN_FIBNUM: return (CURTAINABL_ANY_FIBNUM);
+	default: return (CURTAINABL_DEFAULT);
+	}
+}
+
 static inline void
-curtain_key_fallback(enum curtainreq_type *type, union curtain_key *key)
+curtain_key_fallback(enum curtain_type *type, union curtain_key *key)
 {
 	switch (*type) {
-	case CURTAINTYP_SOCKOPT:
+	case CURTAIN_SOCKOPT:
 		*key = (union curtain_key){ .socklvl = key->sockopt.level };
-		*type = CURTAINTYP_SOCKLVL;
+		*type = CURTAIN_SOCKLVL;
 		return;
-	case CURTAINTYP_SYSCTL:
+	case CURTAIN_SYSCTL:
 		if (key->sysctl->parent) {
 			*key = (union curtain_key){ .sysctl = key->sysctl->parent };
 			return;
 		}
 		break;
-	case CURTAINTYP_UNVEIL:
+	case CURTAIN_UNVEIL:
 		if (key->unveil->parent) {
 			*key = (union curtain_key){ .unveil = key->unveil->parent };
 			return;
@@ -564,23 +577,23 @@ curtain_key_fallback(enum curtainreq_type *type, union curtain_key *key)
 	default:
 		break;
 	}
-	*key = (union curtain_key){ .ability = curtain_type_fallback[*type] };
-	*type = CURTAINTYP_ABILITY;
+	*key = (union curtain_key){ .ability = curtain_type_fallback(*type) };
+	*type = CURTAIN_ABILITY;
 }
 
 static void
-curtain_key_extend(enum curtainreq_type dst_type, union curtain_key *dst_key,
-    enum curtainreq_type src_type, union curtain_key src_key, struct curtain_mode src_mode)
+curtain_key_extend(enum curtain_type dst_type, union curtain_key *dst_key,
+    enum curtain_type src_type, union curtain_key src_key, struct curtain_mode src_mode)
 {
 	switch (dst_type) {
-	case CURTAINTYP_UNVEIL: {
+	case CURTAIN_UNVEIL: {
 		unveil_perms soft_uperms, hard_uperms;
 		if (src_type == dst_type) {
 			soft_uperms = src_key.unveil->soft_uperms;
 			hard_uperms = src_key.unveil->hard_uperms;
 		} else {
-			soft_uperms = src_mode.soft == CURTAINACT_ALLOW ? UPERM_ALL : UPERM_NONE;
-			hard_uperms = src_mode.hard == CURTAINACT_ALLOW ? UPERM_ALL : UPERM_NONE;
+			soft_uperms = src_mode.soft == CURTAIN_ALLOW ? UPERM_ALL : UPERM_NONE;
+			hard_uperms = src_mode.hard == CURTAIN_ALLOW ? UPERM_ALL : UPERM_NONE;
 		}
 		dst_key->unveil->soft_uperms = uperms_inherit(soft_uperms);
 		dst_key->unveil->hard_uperms = uperms_inherit(hard_uperms);
@@ -592,18 +605,18 @@ curtain_key_extend(enum curtainreq_type dst_type, union curtain_key *dst_key,
 }
 
 static void
-curtain_key_mask(enum curtainreq_type dst_type, union curtain_key *dst_key,
-    enum curtainreq_type src_type, union curtain_key src_key, struct curtain_mode src_mode)
+curtain_key_mask(enum curtain_type dst_type, union curtain_key *dst_key,
+    enum curtain_type src_type, union curtain_key src_key, struct curtain_mode src_mode)
 {
 	switch (dst_type) {
-	case CURTAINTYP_UNVEIL: {
+	case CURTAIN_UNVEIL: {
 		unveil_perms mask_uperms;
 		if (src_type == dst_type) {
 			mask_uperms = src_key.unveil->hard_uperms;
 			if (!curtain_key_same(dst_type, *dst_key, src_key))
 				mask_uperms = uperms_inherit(mask_uperms);
 		} else
-			mask_uperms = src_mode.hard == CURTAINACT_ALLOW ? UPERM_ALL : UPERM_NONE;
+			mask_uperms = src_mode.hard == CURTAIN_ALLOW ? UPERM_ALL : UPERM_NONE;
 		dst_key->unveil->soft_uperms &= mask_uperms;
 		dst_key->unveil->hard_uperms &= mask_uperms;
 		break;
@@ -651,7 +664,7 @@ curtain_hash_link(struct curtain *ct,
 }
 
 struct curtain_item *
-curtain_lookup(const struct curtain *ctc, enum curtainreq_type type, union curtain_key key)
+curtain_lookup(const struct curtain *ctc, enum curtain_type type, union curtain_key key)
 {
 	struct curtain *ct = __DECONST(struct curtain *, ctc);
 	struct curtain_item *item;
@@ -679,7 +692,7 @@ curtain_lookup(const struct curtain *ctc, enum curtainreq_type type, union curta
 }
 
 struct curtain_item *
-curtain_search(struct curtain *ct, enum curtainreq_type type, union curtain_key key,
+curtain_search(struct curtain *ct, enum curtain_type type, union curtain_key key,
     bool *inserted)
 {
 	struct curtain_item *item, *prev;
@@ -714,7 +727,7 @@ curtain_search(struct curtain *ct, enum curtainreq_type type, union curtain_key 
 		curtain_hash_init(ct, item);
 		if (prev)
 			curtain_hash_link(ct, prev, item);
-		mode_set(&item->mode, CURTAINACT_KILL);
+		mode_set(&item->mode, CURTAIN_KILL);
 	} else if (inserted)
 		*inserted = false;
 	return (item);
@@ -812,11 +825,11 @@ const sysfilset_t curtain_abilities_sysfils[CURTAINABL_COUNT] = {
 
 static struct curtain_mode
 curtain_resolve_1(const struct curtain *ct,
-    enum curtainreq_type *type, union curtain_key *key)
+    enum curtain_type *type, union curtain_key *key)
 {
 	const struct curtain_item *item;
 	do {
-		if (*type == CURTAINTYP_ABILITY)
+		if (*type == CURTAIN_ABILITY)
 			return (ct->ct_abilities[key->ability]);
 		item = curtain_lookup(ct, *type, *key);
 		if (item) {
@@ -829,7 +842,7 @@ curtain_resolve_1(const struct curtain *ct,
 
 struct curtain_mode
 curtain_resolve(const struct curtain *ct,
-    enum curtainreq_type type, union curtain_key key)
+    enum curtain_type type, union curtain_key key)
 {
 	return (curtain_resolve_1(ct, &type, &key));
 }
@@ -873,7 +886,7 @@ curtain_cache_update(struct curtain *ct)
 			unsigned i = ffsll(sfs) - 1;
 			ct->ct_cached.sysfilacts[i] = MIN(
 			    handled_sfs & SYSFIL_INDEX(i) ? ct->ct_cached.sysfilacts[i]
-			                                  : CURTAINACT_KILL,
+			                                  : CURTAIN_KILL,
 			    ct->ct_abilities[abl].soft);
 			handled_sfs |= SYSFIL_INDEX(i);
 			sfs ^= SYSFIL_INDEX(i);
@@ -882,7 +895,7 @@ curtain_cache_update(struct curtain *ct)
 	if (ct->ct_cached.restrictive) {
 		ct->ct_cached.sysfilset = SYSFIL_NONE;
 		for (unsigned i = 0; i < SYSFILSET_BITS; i++)
-			if (ct->ct_cached.sysfilacts[i] == CURTAINACT_ALLOW)
+			if (ct->ct_cached.sysfilacts[i] == CURTAIN_ALLOW)
 				ct->ct_cached.sysfilset |= SYSFIL_INDEX(i);
 	} else {
 		/* NOTE: Unrestricted processes must have their whole sysfilset
@@ -917,7 +930,7 @@ void
 curtain_mask_sysfils(struct curtain *ct, sysfilset_t sfs)
 {
 	struct curtain_mode deny;
-	mode_set(&deny, CURTAINACT_DENY);
+	mode_set(&deny, CURTAIN_DENY);
 	KASSERT(ct->ct_ref == 1, ("modifying shared curtain"));
 	for (enum curtain_ability abl = 0; abl < nitems(curtain_abilities_sysfils); abl++)
 		if (curtain_abilities_sysfils[abl] & ~sfs)
@@ -928,7 +941,7 @@ curtain_mask_sysfils(struct curtain *ct, sysfilset_t sfs)
 }
 
 struct curtain_item *
-curtain_extend(struct curtain *ct, enum curtainreq_type type, union curtain_key key)
+curtain_extend(struct curtain *ct, enum curtain_type type, union curtain_key key)
 {
 	struct curtain_item *item, *fallback_item;
 	bool inserted;
@@ -938,7 +951,7 @@ curtain_extend(struct curtain *ct, enum curtainreq_type type, union curtain_key 
 	if (inserted) {
 		curtain_key_dup(type, &item->key, key);
 		curtain_key_fallback(&type, &key);
-		if (type == CURTAINTYP_ABILITY) {
+		if (type == CURTAIN_ABILITY) {
 			item->mode = ct->ct_abilities[key.ability];
 		} else {
 			fallback_item = curtain_extend(ct, type, key);
@@ -956,7 +969,7 @@ curtain_extend(struct curtain *ct, enum curtainreq_type type, union curtain_key 
 static void
 curtain_item_mask(struct curtain_item *item, const struct curtain *src)
 {
-	enum curtainreq_type type = item->type;
+	enum curtain_type type = item->type;
 	union curtain_key key = item->key;
 	struct curtain_mode mode;
 	mode = curtain_resolve_1(src, &type, &key);

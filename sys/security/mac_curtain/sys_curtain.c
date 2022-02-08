@@ -55,8 +55,8 @@ curtain_from_cred(struct ucred *cr)
 
 
 static bool __read_mostly curtainctl_enabled = true;
-unsigned __read_mostly curtain_log_level = CURTAINACT_TRAP;
-unsigned __read_mostly curtain_sysctls_log_level = CURTAINACT_TRAP;
+unsigned __read_mostly curtain_log_level = CURTAIN_TRAP;
+unsigned __read_mostly curtain_sysctls_log_level = CURTAIN_TRAP;
 
 SYSCTL_NODE(_security, OID_AUTO, curtain,
     CTLFLAG_RW | CTLFLAG_MPSAFE, 0,
@@ -191,24 +191,24 @@ curtain_fill_restrict(struct curtain *ct, struct ucred *cr)
 {
 	struct curtain *ct1;
 	if (curtain_restrictive(ct))
-		if (ct->ct_abilities[CURTAINABL_DEFAULT].soft < CURTAINACT_DENY)
-			ct->ct_abilities[CURTAINABL_DEFAULT].soft = CURTAINACT_DENY;
+		if (ct->ct_abilities[CURTAINABL_DEFAULT].soft < CURTAIN_DENY)
+			ct->ct_abilities[CURTAINABL_DEFAULT].soft = CURTAIN_DENY;
 	if (ct->ct_on_exec)
 		curtain_fill_restrict(ct->ct_on_exec, cr);
 	ct1 = ct->ct_on_exec ? ct->ct_on_exec : ct;
 	if (curtain_restrictive(ct1) &&
-	    ct1->ct_abilities[CURTAINABL_EXEC_RSUGID].soft < CURTAINACT_DENY &&
+	    ct1->ct_abilities[CURTAINABL_EXEC_RSUGID].soft < CURTAIN_DENY &&
 	    priv_check_cred(cr, PRIV_VFS_CHROOT) != 0)
-		ct1->ct_abilities[CURTAINABL_EXEC_RSUGID].soft = CURTAINACT_DENY;
+		ct1->ct_abilities[CURTAINABL_EXEC_RSUGID].soft = CURTAIN_DENY;
 }
 
 static const enum curtain_action lvl2act[CURTAINLVL_COUNT] = {
-	[CURTAINLVL_PASS] = CURTAINACT_ALLOW,
-	[CURTAINLVL_GATE] = CURTAINACT_ALLOW,
-	[CURTAINLVL_WALL] = CURTAINACT_ALLOW,
-	[CURTAINLVL_DENY] = CURTAINACT_DENY,
-	[CURTAINLVL_TRAP] = CURTAINACT_TRAP,
-	[CURTAINLVL_KILL] = CURTAINACT_KILL,
+	[CURTAINLVL_PASS] = CURTAIN_ALLOW,
+	[CURTAINLVL_GATE] = CURTAIN_ALLOW,
+	[CURTAINLVL_WALL] = CURTAIN_ALLOW,
+	[CURTAINLVL_DENY] = CURTAIN_DENY,
+	[CURTAINLVL_TRAP] = CURTAIN_TRAP,
+	[CURTAINLVL_KILL] = CURTAIN_KILL,
 };
 
 static const barrier_bits abl2bar[CURTAINABL_COUNT][2] = {
@@ -234,21 +234,22 @@ curtain_fill_barrier_mode(struct barrier_mode *mode,
 }
 
 static void
-curtain_fill_ability(struct curtain *ct, const struct curtainreq *req,
+curtain_fill_ability(struct curtain *ct, enum curtainreq_level lvl,
     enum curtain_ability abl)
 {
-	ct->ct_abilities[abl].soft = lvl2act[req->level];
-	curtain_fill_barrier_mode(&CURTAIN_BARRIER(ct)->br_mode, req->level, abl);
+	ct->ct_abilities[abl].soft = lvl2act[lvl];
+	curtain_fill_barrier_mode(&CURTAIN_BARRIER(ct)->br_mode, lvl, abl);
 }
 
 static struct curtain_item *
-curtain_fill_item(struct curtain *ct, const struct curtainreq *req, union curtain_key key)
+curtain_fill_item(struct curtain *ct, enum curtain_type type, union curtain_key key,
+    enum curtainreq_level lvl)
 {
 	struct curtain_item *item;
-	item = curtain_search(ct, req->type, key, NULL);
+	item = curtain_search(ct, type, key, NULL);
 	if (item) {
-		item->mode.soft = lvl2act[req->level];
-		item->mode.hard = CURTAINACT_ALLOW;
+		item->mode.soft = lvl2act[lvl];
+		item->mode.hard = CURTAIN_ALLOW;
 	}
 	return (item);
 }
@@ -256,8 +257,7 @@ curtain_fill_item(struct curtain *ct, const struct curtainreq *req, union curtai
 MALLOC_DECLARE(M_CURTAIN_UNVEIL);
 
 static int
-curtain_fill_unveil(struct curtain *ct, const struct curtainreq *req,
-    struct curtainent_unveil **ent_ret, char *end)
+curtain_fill_unveil(struct curtain *ct, struct curtainent_unveil **ent_ret, char *end)
 {
 	struct curtainent_unveil *ent;
 	struct file *fp;
@@ -293,7 +293,7 @@ curtain_fill_unveil(struct curtain *ct, const struct curtainreq *req,
 			.vp = vp,
 			.hash = vp->v_nchash,
 		};
-		item = curtain_lookup(ct, CURTAINTYP_UNVEIL, (ctkey){ .unveil = &uv });
+		item = curtain_lookup(ct, CURTAIN_UNVEIL, (ctkey){ .unveil = &uv });
 	}
 
 	if (!item) {
@@ -308,9 +308,9 @@ curtain_fill_unveil(struct curtain *ct, const struct curtainreq *req,
 			memcpy(uv->name, ent->name, name_size);
 			uv->hash = fnv_32_buf(uv->name, uv->name_len, uv->hash);
 		}
-		item = curtain_search(ct, CURTAINTYP_UNVEIL, (ctkey){ .unveil = uv }, &inserted);
+		item = curtain_search(ct, CURTAIN_UNVEIL, (ctkey){ .unveil = uv }, &inserted);
 		if (item && inserted) {
-			item->mode.hard = item->mode.soft = CURTAINACT_ALLOW;
+			item->mode.hard = item->mode.soft = CURTAIN_ALLOW;
 			vref(uv->vp);
 		} else
 			free(uv, M_CURTAIN_UNVEIL);
@@ -346,7 +346,7 @@ curtain_fill_req(struct curtain *ct, const struct curtainreq *req)
 			enum curtain_ability abl = *ablp++;
 			if (!CURTAINABL_USER_VALID(abl))
 				return (EINVAL);
-			curtain_fill_ability(ct, req, abl);
+			curtain_fill_ability(ct, req->level, abl);
 		}
 		break;
 	}
@@ -354,21 +354,24 @@ curtain_fill_req(struct curtain *ct, const struct curtainreq *req)
 		unsigned long *p = req->data;
 		size_t c = req->size / sizeof *p;
 		while (c--)
-			curtain_fill_item(ct, req, (ctkey){ .ioctl = *p++ });
+			curtain_fill_item(ct, CURTAIN_IOCTL,
+			    (ctkey){ .ioctl = *p++ }, req->level);
 		break;
 	}
 	case CURTAINTYP_SOCKAF: {
 		int *p = req->data;
 		size_t c = req->size / sizeof *p;
 		while (c--)
-			curtain_fill_item(ct, req, (ctkey){ .sockaf = *p++ });
+			curtain_fill_item(ct, CURTAIN_SOCKAF,
+			    (ctkey){ .sockaf = *p++ }, req->level);
 		break;
 	}
 	case CURTAINTYP_SOCKLVL: {
 		int *p = req->data;
 		size_t c = req->size / sizeof *p;
 		while (c--)
-			curtain_fill_item(ct, req, (ctkey){ .socklvl = *p++ });
+			curtain_fill_item(ct, CURTAIN_SOCKLVL,
+			    (ctkey){ .socklvl = *p++ }, req->level);
 		break;
 	}
 
@@ -376,8 +379,8 @@ curtain_fill_req(struct curtain *ct, const struct curtainreq *req)
 		int (*p)[2] = req->data;
 		size_t c = req->size / sizeof *p;
 		while (c--) {
-			curtain_fill_item(ct, req,
-			    (ctkey){ .sockopt = { (*p)[0], (*p)[1] } });
+			curtain_fill_item(ct, CURTAIN_SOCKOPT,
+			    (ctkey){ .sockopt = { (*p)[0], (*p)[1] } }, req->level);
 			p++;
 		}
 		break;
@@ -387,7 +390,8 @@ curtain_fill_req(struct curtain *ct, const struct curtainreq *req)
 		int *p = req->data;
 		size_t c = req->size / sizeof *p;
 		while (c--)
-			curtain_fill_item(ct, req, (ctkey){ .priv = *p++ });
+			curtain_fill_item(ct, CURTAIN_PRIV,
+			    (ctkey){ .priv = *p++ }, req->level);
 		break;
 	}
 
@@ -403,7 +407,8 @@ curtain_fill_req(struct curtain *ct, const struct curtainreq *req)
 				return (EINVAL);
 			error = sysctl_shadow_find(p, l, &sdw, NULL, NULL);
 			if (!error)
-				curtain_fill_item(ct, req, (ctkey){ .sysctl = sdw });
+				curtain_fill_item(ct, CURTAIN_SYSCTL,
+				    (ctkey){ .sysctl = sdw }, req->level);
 			else if (error != ENOENT)
 				return (error);
 			p += l;
@@ -416,7 +421,8 @@ curtain_fill_req(struct curtain *ct, const struct curtainreq *req)
 		int *p = req->data;
 		size_t c = req->size / sizeof *p;
 		while (c--)
-			curtain_fill_item(ct, req, (ctkey){ .fibnum = *p++ });
+			curtain_fill_item(ct, CURTAIN_FIBNUM,
+			    (ctkey){ .fibnum = *p++ }, req->level);
 		break;
 	}
 
@@ -427,7 +433,7 @@ curtain_fill_req(struct curtain *ct, const struct curtainreq *req)
 		while ((char *)entp < endp) {
 			if (endp - (char *)entp < sizeof *entp)
 				return (EINVAL);
-			error = curtain_fill_unveil(ct, req, &entp, endp);
+			error = curtain_fill_unveil(ct, &entp, endp);
 			if (error)
 				return (error);
 		}
@@ -687,29 +693,29 @@ db_print_curtain(struct curtain *ct)
 			    (size_t)(item - ct->ct_slots), (size_t)item->chain,
 			    item->type, item->mode.soft, item->mode.hard);
 			switch (item->type) {
-			case CURTAINTYP_IOCTL:
+			case CURTAIN_IOCTL:
 				db_printf(" ioctl: %#jx\n", (uintmax_t)key.ioctl);
 				break;
-			case CURTAINTYP_SOCKAF:
+			case CURTAIN_SOCKAF:
 				db_printf(" sockaf: %d\n", key.sockaf);
 				break;
-			case CURTAINTYP_SOCKLVL:
+			case CURTAIN_SOCKLVL:
 				db_printf(" socklvl: %d\n", key.socklvl);
 				break;
-			case CURTAINTYP_SOCKOPT:
+			case CURTAIN_SOCKOPT:
 				db_printf(" sockopt: %d:%d\n",
 				    key.sockopt.level, key.sockopt.optname);
 				break;
-			case CURTAINTYP_PRIV:
+			case CURTAIN_PRIV:
 				db_printf(" priv: %d\n", key.priv);
 				break;
-			case CURTAINTYP_SYSCTL:
+			case CURTAIN_SYSCTL:
 				db_printf(" sysctl: %p\n", key.sysctl);
 				break;
-			case CURTAINTYP_FIBNUM:
+			case CURTAIN_FIBNUM:
 				db_printf(" fibnum: %d\n", key.fibnum);
 				break;
-			case CURTAINTYP_UNVEIL:
+			case CURTAIN_UNVEIL:
 				db_printf(" unveil: %p parent: %p\n",
 				    key.unveil, key.unveil->parent);
 				db_printf("\t\tvp: %p", key.unveil->vp);

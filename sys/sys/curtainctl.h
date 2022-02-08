@@ -56,19 +56,6 @@ int curtainctl(int flags, size_t reqc, struct curtainreq *reqv);
 #define	CURTAINREQ_ON_EXEC	(1 << 17)
 #define	CURTAINREQ_ON_BOTH	(CURTAINREQ_ON_SELF | CURTAINREQ_ON_EXEC)
 
-static const enum curtain_ability curtain_type_fallback[CURTAINTYP_LAST + 1] = {
-	[CURTAINTYP_IOCTL] = CURTAINABL_ANY_IOCTL,
-	[CURTAINTYP_SOCKAF] = CURTAINABL_ANY_SOCKAF,
-	[CURTAINTYP_SOCKLVL] = CURTAINABL_ANY_SOCKOPT,
-	[CURTAINTYP_SOCKOPT] = CURTAINABL_ANY_SOCKOPT,
-	[CURTAINTYP_PRIV] = CURTAINABL_ANY_PRIV,
-	[CURTAINTYP_SYSCTL] = CURTAINABL_ANY_SYSCTL,
-	[CURTAINTYP_FIBNUM] = CURTAINABL_ANY_FIBNUM,
-};
-#ifdef _KERNEL
-CTASSERT(CURTAINABL_DEFAULT == 0);
-#endif
-
 struct curtainent_unveil {
 	int dir_fd;
 	unveil_perms uperms;

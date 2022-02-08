@@ -37,9 +37,9 @@
 #include <sys/tty.h>
 
 SDT_PROBE_DEFINE3(curtain,, cred_key_check, check,
-    "struct ucred *", "enum curtainreq_type", "union curtain_key *");
+    "struct ucred *", "enum curtain_type", "union curtain_key *");
 SDT_PROBE_DEFINE5(curtain,, cred_key_check, failed,
-    "struct ucred *", "enum curtainreq_type", "union curtain_key *",
+    "struct ucred *", "enum curtain_type", "union curtain_key *",
     "enum curtain_action", "bool");
 SDT_PROBE_DEFINE3(curtain,, cred_sysfil_check, failed,
     "struct ucred *", "sysfilset_t", "enum curtain_action");
@@ -70,17 +70,17 @@ typedef union curtain_key ctkey;
 int __read_mostly curtain_slot;
 
 static const char act2str[][6] = {
-	[CURTAINACT_ALLOW] = "allow",
-	[CURTAINACT_DENY] = "deny",
-	[CURTAINACT_TRAP] = "trap",
-	[CURTAINACT_KILL] = "kill",
+	[CURTAIN_ALLOW] = "allow",
+	[CURTAIN_DENY] = "deny",
+	[CURTAIN_TRAP] = "trap",
+	[CURTAIN_KILL] = "kill",
 };
 
 static const int act2err[] = {
-	[CURTAINACT_ALLOW] = 0,
-	[CURTAINACT_DENY] = SYSFIL_FAILED_ERRNO,
-	[CURTAINACT_TRAP] = ESYSFILTRAP,
-	[CURTAINACT_KILL] = ESYSFILKILL,
+	[CURTAIN_ALLOW] = 0,
+	[CURTAIN_DENY] = SYSFIL_FAILED_ERRNO,
+	[CURTAIN_TRAP] = ESYSFILTRAP,
+	[CURTAIN_KILL] = ESYSFILKILL,
 };
 
 #define	CURTAIN_LOG(td, cat, fmt, ...) do { \
@@ -111,15 +111,15 @@ cred_action_failed(const struct ucred *cr, enum curtain_action act, bool noise)
 #ifdef CURTAIN_STATS
 	if (!noise)
 		switch (act) {
-		case CURTAINACT_ALLOW:
+		case CURTAIN_ALLOW:
 			break;
-		case CURTAINACT_DENY:
+		case CURTAIN_DENY:
 			counter_u64_add(curtain_stats_check_denies, 1);
 			break;
-		case CURTAINACT_TRAP:
+		case CURTAIN_TRAP:
 			counter_u64_add(curtain_stats_check_traps, 1);
 			break;
-		case CURTAINACT_KILL:
+		case CURTAIN_KILL:
 			counter_u64_add(curtain_stats_check_kills, 1);
 			break;
 		}
@@ -127,52 +127,48 @@ cred_action_failed(const struct ucred *cr, enum curtain_action act, bool noise)
 }
 
 static inline enum curtain_action
-cred_key_action(const struct ucred *cr, enum curtainreq_type type, union curtain_key key)
+cred_key_action(const struct ucred *cr, enum curtain_type type, union curtain_key key)
 {
 	const struct curtain *ct;
 	if ((ct = CRED_SLOT(cr)))
 		return (curtain_resolve(ct, type, key).soft);
 	else
-		return (CURTAINACT_ALLOW);
+		return (CURTAIN_ALLOW);
 }
 
 static inline enum curtain_action
 cred_ability_action(const struct ucred *cr, enum curtain_ability abl)
 {
-	return (cred_key_action(cr, CURTAINTYP_ABILITY, (ctkey){ .ability = abl }));
+	return (cred_key_action(cr, CURTAIN_ABILITY, (ctkey){ .ability = abl }));
 }
 
 static void
-cred_key_failed(const struct ucred *cr, enum curtainreq_type type, union curtain_key key,
+cred_key_failed(const struct ucred *cr, enum curtain_type type, union curtain_key key,
     enum curtain_action act)
 {
 	bool noise = false;
 	switch (type) {
-	case CURTAINTYP_DEFAULT:
-		CURTAIN_CRED_LOG_ACTION(cr, act, "default%s", "");
-		break;
-	case CURTAINTYP_OLD_UNVEIL:
-	case CURTAINTYP_UNVEIL:
-	case CURTAINTYP_SYSCTL:
+	case CURTAIN_UNVEIL:
+	case CURTAIN_SYSCTL:
 		noise = true;
 		break;
-	case CURTAINTYP_ABILITY:
+	case CURTAIN_ABILITY:
 		CURTAIN_CRED_LOG_ACTION(cr, act, "ability %d", key.ability);
 		break;
-	case CURTAINTYP_IOCTL:
+	case CURTAIN_IOCTL:
 		CURTAIN_CRED_LOG_ACTION(cr, act, "ioctl %#jx", (uintmax_t)key.ioctl);
 		break;
-	case CURTAINTYP_SOCKAF:
+	case CURTAIN_SOCKAF:
 		CURTAIN_CRED_LOG_ACTION(cr, act, "sockaf %d", key.sockaf);
 		break;
-	case CURTAINTYP_SOCKLVL:
+	case CURTAIN_SOCKLVL:
 		CURTAIN_CRED_LOG_ACTION(cr, act, "socklvl %d", key.socklvl);
 		break;
-	case CURTAINTYP_SOCKOPT:
+	case CURTAIN_SOCKOPT:
 		CURTAIN_CRED_LOG_ACTION(cr, act, "sockopt %d:%d",
 		    key.sockopt.level, key.sockopt.optname);
 		break;
-	case CURTAINTYP_PRIV:
+	case CURTAIN_PRIV:
 		/*
 		 * Some priv_check()/priv_check_cred() callers just compare the
 		 * error value against 0 without returning it.  Some privileges
@@ -190,7 +186,7 @@ cred_key_failed(const struct ucred *cr, enum curtainreq_type type, union curtain
 			break;
 		}
 		break;
-	case CURTAINTYP_FIBNUM:
+	case CURTAIN_FIBNUM:
 		CURTAIN_CRED_LOG_ACTION(cr, act, "fibnum %d", key.fibnum);
 		break;
 	}
@@ -199,12 +195,12 @@ cred_key_failed(const struct ucred *cr, enum curtainreq_type type, union curtain
 }
 
 static inline int
-cred_key_check(const struct ucred *cr, enum curtainreq_type type, union curtain_key key)
+cred_key_check(const struct ucred *cr, enum curtain_type type, union curtain_key key)
 {
 	enum curtain_action act;
 	SDT_PROBE3(curtain,, cred_key_check, check, cr, type, &key);
 	act = cred_key_action(cr, type, key);
-	if (__predict_true(act == CURTAINACT_ALLOW))
+	if (__predict_true(act == CURTAIN_ALLOW))
 		return (0);
 	cred_key_failed(cr, type, key, act);
 	return (act2err[act]);
@@ -213,7 +209,7 @@ cred_key_check(const struct ucred *cr, enum curtainreq_type type, union curtain_
 static inline int
 cred_ability_check(const struct ucred *cr, enum curtain_ability abl)
 {
-	return (cred_key_check(cr, CURTAINTYP_ABILITY, (ctkey){ .ability = abl }));
+	return (cred_key_check(cr, CURTAIN_ABILITY, (ctkey){ .ability = abl }));
 }
 
 
@@ -376,7 +372,7 @@ curtain_socket_check_create(struct ucred *cr, int domain, int type, int protocol
 	int error;
 	if ((error = cred_ability_check(cr, CURTAINABL_SOCK)))
 		return (error);
-	return (cred_key_check(cr, CURTAINTYP_SOCKAF, (ctkey){ .sockaf = domain }));
+	return (cred_key_check(cr, CURTAIN_SOCKAF, (ctkey){ .sockaf = domain }));
 }
 
 static int
@@ -387,7 +383,7 @@ curtain_socket_check_bind(struct ucred *cr, struct socket *so, struct label *sol
 	sockaf = sa->sa_family == AF_UNSPEC ? so->so_proto->pr_domain->dom_family : sa->sa_family;
 	if (sockaf != AF_LOCAL && (error = cred_ability_check(cr, CURTAINABL_NET_SERVER)))
 		return (error);
-	return (cred_key_check(cr, CURTAINTYP_SOCKAF, (ctkey){ .sockaf = sockaf }));
+	return (cred_key_check(cr, CURTAIN_SOCKAF, (ctkey){ .sockaf = sockaf }));
 }
 
 static int
@@ -398,14 +394,14 @@ curtain_socket_check_connect(struct ucred *cr, struct socket *so, struct label *
 	sockaf = sa->sa_family;
 	if (sockaf != AF_LOCAL && (error = cred_ability_check(cr, CURTAINABL_NET_CLIENT)))
 		return (error);
-	return (cred_key_check(cr, CURTAINTYP_SOCKAF, (ctkey){ .sockaf = sockaf }));
+	return (cred_key_check(cr, CURTAIN_SOCKAF, (ctkey){ .sockaf = sockaf }));
 }
 
 static int
 curtain_socket_check_sockopt(struct ucred *cr, struct socket *so, struct label *solabel,
     struct sockopt *sopt)
 {
-	return (cred_key_check(cr, CURTAINTYP_SOCKOPT,
+	return (cred_key_check(cr, CURTAIN_SOCKOPT,
 	    (ctkey){ .sockopt = { sopt->sopt_level, sopt->sopt_name } }));
 }
 
@@ -439,7 +435,7 @@ curtain_inpcb_check_visible(struct ucred *cr, struct inpcb *inp, struct label *i
 static int
 curtain_net_check_fibnum(struct ucred *cr, int fibnum)
 {
-	return (cred_key_check(cr, CURTAINTYP_FIBNUM, (ctkey){ .fibnum = fibnum }));
+	return (cred_key_check(cr, CURTAIN_FIBNUM, (ctkey){ .fibnum = fibnum }));
 }
 
 
@@ -989,7 +985,7 @@ curtain_mount_check_stat(struct ucred *cr,
 	unveil_perms uperms;
 	int error;
 	if (CRED_IN_VFS_VEILED_MODE(cr) &&
-	    cred_ability_action(cr, CURTAINABL_MOUNT_SEE_ALL) != CURTAINACT_ALLOW) {
+	    cred_ability_action(cr, CURTAINABL_MOUNT_SEE_ALL) != CURTAIN_ALLOW) {
 		struct curtain *ct;
 		if (mtx_owned(&mountlist_mtx)) { /* getfsstat(2)? */
 			if ((ct = CRED_SLOT(cr)))
@@ -1249,9 +1245,9 @@ curtain_generic_check_ioctl(struct ucred *cr, struct file *fp, u_long com, void 
 		break;
 	}
 	if (abl != CURTAINABL_ANY_IOCTL &&
-	    cred_ability_action(cr, abl) == CURTAINACT_ALLOW)
+	    cred_ability_action(cr, abl) == CURTAIN_ALLOW)
 		return (0);
-	error = cred_key_check(cr, CURTAINTYP_IOCTL, (ctkey){ .ioctl = com });
+	error = cred_key_check(cr, CURTAIN_IOCTL, (ctkey){ .ioctl = com });
 	return (error ? error : dangerous ? EPERM : 0);
 }
 
@@ -1307,11 +1303,11 @@ curtain_system_check_sysctl(struct ucred *cr,
 		return (0);
 	for (p = oidp; p && !p->oid_shadow; p = SYSCTL_PARENT(p));
 	if (p)
-		act = cred_key_action(cr, CURTAINTYP_SYSCTL,
+		act = cred_key_action(cr, CURTAIN_SYSCTL,
 		    (ctkey){ .sysctl = p->oid_shadow });
 	else
-		act = cred_ability_action(cr, curtain_type_fallback[CURTAINTYP_SYSCTL]);
-	if (__predict_true(act == CURTAINACT_ALLOW))
+		act = cred_ability_action(cr, curtain_type_fallback(CURTAIN_SYSCTL));
+	if (__predict_true(act == CURTAIN_ALLOW))
 		return (0);
 	if (act >= curtain_sysctls_log_level) {
 		char buf[256], *name;
@@ -1445,9 +1441,9 @@ curtain_priv_check(struct ucred *cr, int priv)
 		break;
 	}
 	if (abl != CURTAINABL_ANY_PRIV &&
-	    cred_ability_action(cr, abl) == CURTAINACT_ALLOW)
+	    cred_ability_action(cr, abl) == CURTAIN_ALLOW)
 		return (0);
-	return (cred_key_check(cr, CURTAINTYP_PRIV, (ctkey){ .priv = priv }));
+	return (cred_key_check(cr, CURTAIN_PRIV, (ctkey){ .priv = priv }));
 }
 
 
@@ -1459,7 +1455,7 @@ curtain_sysfil_check(struct ucred *cr, sysfilset_t sfs)
 	enum curtain_action act;
 	if (!(ct = CRED_SLOT(cr)))
 		return (sysfil_probe_cred(cr, sfs));
-	act = CURTAINACT_ALLOW;
+	act = CURTAIN_ALLOW;
 	sfs &= ~curtain_preserve_sysfils;
 	while (sfs) {
 		unsigned i = ffsll(sfs) - 1;
@@ -1467,7 +1463,7 @@ curtain_sysfil_check(struct ucred *cr, sysfilset_t sfs)
 		sfs ^= SYSFIL_INDEX(i);
 	}
 	sfs = orig_sfs;
-	if (act == CURTAINACT_ALLOW)
+	if (act == CURTAIN_ALLOW)
 		return (0);
 	CURTAIN_CRED_LOG_ACTION(cr, act, "sysfil %#jx", (uintmax_t)sfs);
 	SDT_PROBE3(curtain,, cred_sysfil_check, failed, cr, sfs, act);
@@ -1487,11 +1483,11 @@ curtain_proc_check_exec_sugid(struct ucred *cr, struct proc *p)
 		if (curtain_cred_restricted(ct1, cr))
 			act = ct1->ct_abilities[CURTAINABL_EXEC_RSUGID].soft;
 		else
-			act = CURTAINACT_ALLOW;
+			act = CURTAIN_ALLOW;
 	} else if (CRED_IN_RESTRICTED_MODE(cr))
-		act = CURTAINACT_DENY;
+		act = CURTAIN_DENY;
 	else
-		act = CURTAINACT_ALLOW;
+		act = CURTAIN_ALLOW;
 	return (act2err[act]);
 }
 

@@ -100,6 +100,7 @@ struct mode_type {
 
 struct curtain_type {
 	enum curtainreq_type req_type;
+	enum curtain_ability fallback_ability;
 	size_t nodes_count, items_count;
 	struct curtain_node *nodes;
 	void (*cleanup)(struct curtain_node *);
@@ -427,6 +428,12 @@ static struct curtain_type default_type = {
 	.mode = &level_mode_type,
 };
 
+static struct curtain_node *
+default_fallback_helper(struct curtain_node *node __unused)
+{
+	return (node_get(&default_type, (union curtain_key){ 0 }, true));
+}
+
 int
 curtain_default(struct curtain_slot *slot, unsigned flags)
 {
@@ -442,15 +449,9 @@ curtain_default(struct curtain_slot *slot, unsigned flags)
 DEF_SIMPLE_KEY_FUNCS(ability, ability);
 DEF_SIMPLE_ENT_FUNCS(ability, ability, enum curtain_ability);
 
-static struct curtain_node *
-ability_fallback(struct curtain_node *node __unused)
-{
-	return (node_get(&default_type, (union curtain_key){ 0 }, true));
-}
-
 static struct curtain_type abilities_type = {
 	.req_type = CURTAINTYP_ABILITY,
-	.fallback = ability_fallback,
+	.fallback = default_fallback_helper,
 	.key_cmp = ability_key_cmp,
 	.ent_size = ability_ent_size,
 	.ent_fill = ability_ent_fill,
@@ -460,9 +461,8 @@ static struct curtain_type abilities_type = {
 static struct curtain_node *
 ability_fallback_helper(struct curtain_node *node)
 {
-	enum curtain_ability ability = curtain_type_fallback[node->type->req_type];
-	if (!ability)
-		return (node_get(&default_type, (union curtain_key){ 0 }, true));
+	enum curtain_ability ability = node->type->fallback_ability;
+	assert(ability);
 	return (node_get(&abilities_type, KEY(.ability, ability), true));
 }
 
@@ -483,6 +483,7 @@ DEF_SIMPLE_ENT_FUNCS(ioctl, ioctl, unsigned long);
 
 static struct curtain_type ioctls_type = {
 	.req_type = CURTAINTYP_IOCTL,
+	.fallback_ability = CURTAINABL_ANY_IOCTL,
 	.fallback = ability_fallback_helper,
 	.key_cmp = ioctl_key_cmp,
 	.ent_size = ioctl_ent_size,
@@ -515,6 +516,7 @@ DEF_SIMPLE_ENT_FUNCS(sockaf, sockaf, int);
 
 static struct curtain_type sockafs_type = {
 	.req_type = CURTAINTYP_SOCKAF,
+	.fallback_ability = CURTAINABL_ANY_SOCKAF,
 	.fallback = ability_fallback_helper,
 	.key_cmp = sockaf_key_cmp,
 	.ent_size = sockaf_ent_size,
@@ -539,6 +541,7 @@ DEF_SIMPLE_ENT_FUNCS(socklvl, socklvl, int);
 
 static struct curtain_type socklvls_type = {
 	.req_type = CURTAINTYP_SOCKLVL,
+	.fallback_ability = CURTAINABL_ANY_SOCKOPT,
 	.fallback = ability_fallback_helper,
 	.key_cmp = socklvl_key_cmp,
 	.ent_size = socklvl_ent_size,
@@ -622,6 +625,7 @@ DEF_SIMPLE_ENT_FUNCS(priv, priv, int);
 
 static struct curtain_type privs_type = {
 	.req_type = CURTAINTYP_PRIV,
+	.fallback_ability = CURTAINABL_ANY_PRIV,
 	.fallback = ability_fallback_helper,
 	.key_cmp = priv_key_cmp,
 	.ent_size = priv_ent_size,
@@ -676,6 +680,7 @@ sysctl_ent_fill(void *dest,
 
 static struct curtain_type sysctls_type = {
 	.req_type = CURTAINTYP_SYSCTL,
+	.fallback_ability = CURTAINABL_ANY_SYSCTL,
 	.fallback = ability_fallback_helper,
 	.key_cmp = sysctl_key_cmp,
 	.ent_size = sysctl_ent_size,
@@ -726,6 +731,7 @@ DEF_SIMPLE_ENT_FUNCS(fibnum, fibnum, int);
 
 static struct curtain_type fibnums_type = {
 	.req_type = CURTAINTYP_FIBNUM,
+	.fallback_ability = CURTAINABL_ANY_FIBNUM,
 	.fallback = ability_fallback_helper,
 	.key_cmp = fibnum_key_cmp,
 	.ent_size = fibnum_ent_size,
@@ -823,7 +829,7 @@ unveil_node_cleanup(struct curtain_node *node)
 static struct curtain_type unveils_type = {
 	.req_type = CURTAINTYP_UNVEIL,
 	.cleanup = unveil_node_cleanup,
-	.fallback = ability_fallback_helper,
+	.fallback = default_fallback_helper,
 	.key_cmp = unveil_key_cmp,
 	.ent_size = unveil_ent_size,
 	.ent_fill = unveil_ent_fill,

@@ -280,7 +280,7 @@ curtain_lookup_mount(const struct curtain *ct, struct mount *mp)
 	unveil_perms uperms;
 	uperms = UPERM_NONE;
 	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
-		if (item->type == CURTAINTYP_UNVEIL)
+		if (item->type == CURTAIN_UNVEIL)
 			if (item->key.unveil->vp->v_mount == mp)
 				uperms |= item->key.unveil->soft_uperms;
 	return (uperms_expand(uperms));
@@ -319,7 +319,7 @@ curtain_fixup_unveil_parent(struct curtain *ct, struct ucred *cr, struct curtain
 				.vp = vp,
 				.hash = vp->v_nchash,
 			};
-			parent_item = curtain_lookup(ct, CURTAINTYP_UNVEIL,
+			parent_item = curtain_lookup(ct, CURTAIN_UNVEIL,
 			    (union curtain_key){ .unveil = &uv1 });
 			if (parent_item)
 				uv->parent = parent_item->key.unveil;
@@ -352,7 +352,7 @@ curtain_fixup_unveils_parents(struct curtain *ct, struct ucred *cr)
 	struct curtain_item *item;
 	int error = 0;
 	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
-		if (item->type == CURTAINTYP_UNVEIL) {
+		if (item->type == CURTAIN_UNVEIL) {
 			error = curtain_fixup_unveil_parent(ct, cr, item->key.unveil, 0);
 			if (error)
 				break;
@@ -366,7 +366,7 @@ curtain_finish_unveils(struct curtain *ct, struct ucred *cr __unused)
 	struct curtain_item *item;
 	size_t count;
 	for (item = ct->ct_slots, count = 0; item < &ct->ct_slots[ct->ct_nslots]; item++)
-		if (item->type == CURTAINTYP_UNVEIL) {
+		if (item->type == CURTAIN_UNVEIL) {
 			struct curtain_unveil *uv;
 			count++;
 			uv = item->key.unveil;
@@ -392,7 +392,7 @@ curtain_lookup_unveil(struct curtain *ct, struct vnode *vp, const char *name, si
 		*(const char **)(uv + 1) = name;
 		uv->hash = fnv_32_buf(name, name_len, uv->hash);
 	}
-	item = curtain_lookup(ct, CURTAINTYP_UNVEIL, (union curtain_key){ .unveil = uv });
+	item = curtain_lookup(ct, CURTAIN_UNVEIL, (union curtain_key){ .unveil = uv });
 	return (item ? item->key.unveil : NULL);
 }
 
@@ -403,9 +403,9 @@ default_uperms(struct unveil_tracker *track)
 	struct curtain_mode mode;
 	if (!(ct = track->ct))
 		return (UPERM_ALL);
-	mode = curtain_resolve(ct, CURTAINTYP_ABILITY,
-	    (union curtain_key){ .ability = curtain_type_fallback[CURTAINTYP_UNVEIL] });
-	return (mode.soft == CURTAINACT_ALLOW ? UPERM_ALL : UPERM_NONE);
+	mode = curtain_resolve(ct, CURTAIN_ABILITY,
+	    (union curtain_key){ .ability = curtain_type_fallback(CURTAIN_UNVEIL) });
+	return (mode.soft == CURTAIN_ALLOW ? UPERM_ALL : UPERM_NONE);
 }
 
 static int

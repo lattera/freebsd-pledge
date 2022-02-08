@@ -10,12 +10,23 @@
 #include <sys/curtain_ability.h>
 #include <sys/unveil.h>
 
+enum curtain_type {
+	CURTAIN_ABILITY,
+	CURTAIN_UNVEIL,
+	CURTAIN_IOCTL,
+	CURTAIN_SYSCTL,
+	CURTAIN_PRIV,
+	CURTAIN_SOCKAF,
+	CURTAIN_SOCKLVL,
+	CURTAIN_SOCKOPT,
+	CURTAIN_FIBNUM,
+} __packed;
+
 enum curtain_action {
-	CURTAINACT_ALLOW = 0,
-	CURTAINACT_DENY = 1,
-	CURTAINACT_TRAP = 2,
-	CURTAINACT_KILL = 3,
-#define	CURTAINACT_COUNT 4
+	CURTAIN_ALLOW = 0,
+	CURTAIN_DENY = 1,
+	CURTAIN_TRAP = 2,
+	CURTAIN_KILL = 3,
 } __packed;
 
 struct curtain_mode {
@@ -42,7 +53,7 @@ CTASSERT(NAME_MAX <= UINT8_MAX);
 CTASSERT(sizeof(struct curtain_unveil) <= 32);
 
 struct curtain_item {
-	uint8_t type;
+	enum curtain_type type;
 	struct curtain_mode mode;
 	curtain_index chain;
 	union curtain_key {
@@ -171,6 +182,8 @@ struct barrier *barrier_cross(struct barrier *, barrier_bits);
 bool	barrier_visible(struct barrier *subject, const struct barrier *target,
 	    barrier_bits);
 
+enum curtain_ability curtain_type_fallback(enum curtain_type);
+
 void	curtain_invariants(const struct curtain *);
 void	curtain_invariants_sync(const struct curtain *);
 struct curtain *curtain_make(size_t nitems);
@@ -179,11 +192,11 @@ void	curtain_free(struct curtain *);
 struct curtain *curtain_dup(const struct curtain *);
 struct curtain *curtain_dup_compact(const struct curtain *);
 uint64_t curtain_serial(const struct curtain *);
-struct curtain_item *curtain_lookup(const struct curtain *, enum curtainreq_type, union curtain_key);
-struct curtain_item *curtain_search(struct curtain *, enum curtainreq_type, union curtain_key,
+struct curtain_item *curtain_lookup(const struct curtain *, enum curtain_type, union curtain_key);
+struct curtain_item *curtain_search(struct curtain *, enum curtain_type, union curtain_key,
 	    bool *inserted);
 struct curtain_mode curtain_resolve(const struct curtain *,
-	    enum curtainreq_type, union curtain_key );
+	    enum curtain_type, union curtain_key );
 bool	curtain_need_exec_switch(const struct curtain *);
 bool	curtain_restrictive(const struct curtain *);
 bool	curtain_equivalent(const struct curtain *, const struct curtain *);
@@ -192,7 +205,7 @@ void	curtain_cred_update(const struct curtain *ct, struct ucred *cr);
 void	curtain_exec_switch(struct curtain *);
 void	curtain_harden(struct curtain *);
 void	curtain_mask_sysfils(struct curtain *, sysfilset_t);
-struct curtain_item *curtain_extend(struct curtain *, enum curtainreq_type, union curtain_key);
+struct curtain_item *curtain_extend(struct curtain *, enum curtain_type, union curtain_key);
 void	curtain_mask(struct curtain *dst, const struct curtain *src);
 int	curtain_finish(struct curtain *, struct ucred *);
 
