@@ -283,6 +283,7 @@ static const struct promise_sockopt {
 	{ PROMISE_NET,		true,	SOL_SOCKET, SO_PROTOTYPE },
 #ifdef AF_INET
 	{ PROMISE_INET,		true,	IPPROTO_IP, IP_RECVDSTADDR },
+	{ PROMISE_INET,		false,	IPPROTO_IP, IP_OPTIONS },
 	{ PROMISE_INET,		true,	IPPROTO_IP, IP_TOS },
 	{ PROMISE_INET,		true,	IPPROTO_IP, IP_TTL },
 	{ PROMISE_INET,		true,	IPPROTO_IP, IP_MINTTL },

@@ -121,6 +121,22 @@ ATF_TC_BODY(net_sockopts_deny, tc)
 }
 
 
+ATF_TC_WITHOUT_HEAD(ip_options_sockopt);
+ATF_TC_BODY(ip_options_sockopt, tc)
+{
+	int fd;
+	char buf[64];
+	socklen_t len;
+	ATF_REQUIRE((fd = socket(AF_INET, SOCK_STREAM, 0)) >= 0);
+	ATF_CHECK(setsockopt(fd, IPPROTO_IP, IP_OPTIONS, NULL, 0) >= 0);
+	ATF_CHECK(getsockopt(fd, IPPROTO_IP, IP_OPTIONS, buf, (len = sizeof buf, &len)) >= 0);
+	ATF_REQUIRE(pledge("error stdio inet", "") >= 0);
+	ATF_CHECK_ERRNO(EPERM, setsockopt(fd, IPPROTO_IP, IP_OPTIONS, NULL, 0) < 0);
+	ATF_CHECK(getsockopt(fd, IPPROTO_IP, IP_OPTIONS, buf, (len = sizeof buf, &len)) >= 0);
+	ATF_CHECK(close(fd) >= 0);
+}
+
+
 static int
 fd_cmp(int fd0, int fd1)
 {
@@ -324,6 +340,7 @@ ATF_TP_ADD_TCS(tp)
 	ATF_TP_ADD_TC(tp, basic_sockopts_allow);
 	ATF_TP_ADD_TC(tp, net_sockopts_allow);
 	ATF_TP_ADD_TC(tp, net_sockopts_deny);
+	ATF_TP_ADD_TC(tp, ip_options_sockopt);
 	ATF_TP_ADD_TC(tp, pass_fd_same_proc);
 	ATF_TP_ADD_TC(tp, pass_fd_dir_deny);
 	ATF_TP_ADD_TC(tp, pass_fd_both_allow);
