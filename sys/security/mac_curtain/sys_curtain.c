@@ -55,6 +55,7 @@ curtain_from_cred(struct ucred *cr)
 
 
 static bool __read_mostly curtainctl_enabled = true;
+static curtain_index curtain_max_items_per_curtain = CURTAINCTL_MAX_ITEMS;
 unsigned __read_mostly curtain_log_level = CURTAIN_TRAP;
 unsigned __read_mostly curtain_sysctls_log_level = CURTAIN_TRAP;
 
@@ -80,6 +81,25 @@ SYSCTL_UINT(_security_curtain, OID_AUTO, log_level,
 SYSCTL_UINT(_security_curtain, OID_AUTO, sysctls_log_level,
     CTLFLAG_RW, &curtain_sysctls_log_level, 0,
     "");
+
+static int
+sysctl_curtain_max_items(SYSCTL_HANDLER_ARGS)
+{
+	int error, val;
+	val = curtain_max_items_per_curtain;
+	error = sysctl_handle_int(oidp, &val, 0, req);
+	if (!error && req->newptr) {
+		if (val >= 0 && val <= (curtain_index)-1) {
+			curtain_max_items_per_curtain = val;
+		} else
+			error = EINVAL;
+	}
+	return (error);
+}
+
+SYSCTL_PROC(_security_curtain, OID_AUTO, max_items_per_curtain,
+    CTLTYPE_INT | CTLFLAG_RW | CTLFLAG_RESTRICT | CTLFLAG_MPSAFE, NULL, 0,
+    sysctl_curtain_max_items, "I", "");
 
 static int
 sysctl_curtain_curtained(SYSCTL_HANDLER_ARGS)
@@ -479,7 +499,7 @@ curtain_fill(struct curtain *ct, struct ucred *cr,
 				goto fail;
 		}
 
-	if (ct->ct_overflowed || ct->ct_nitems > CURTAINCTL_MAX_ITEMS) {
+	if (ct->ct_overflowed || ct->ct_nitems > curtain_max_items_per_curtain) {
 		error = E2BIG;
 		goto fail;
 	}
@@ -553,12 +573,12 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 	if (!curtainctl_enabled)
 		return (ENOSYS);
 
-	ct = curtain_make(CURTAINCTL_MAX_ITEMS);
+	ct = curtain_make(curtain_max_items_per_curtain);
 	/*
 	 * TODO: Could skip filling a second curtain when all requests have the
 	 * same flags, but libcurtain doesn't generate requests like that yet.
 	 */
-	ct->ct_on_exec = curtain_make(CURTAINCTL_MAX_ITEMS);
+	ct->ct_on_exec = curtain_make(curtain_max_items_per_curtain);
 
 	error = curtain_fill(ct, td->td_ucred, CURTAINREQ_ON_SELF, reqc, reqv);
 	if (error) {
