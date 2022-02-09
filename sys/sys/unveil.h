@@ -3,6 +3,9 @@
 
 #include <sys/types.h>
 #include <sys/_unveil.h>
+#ifndef _KERNEL
+#include <stdbool.h>
+#endif
 
 #define	UPERM_NONE		(0)
 #define	UPERM_EXPOSE		(1 <<  0)
