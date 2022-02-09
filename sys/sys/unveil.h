@@ -70,4 +70,13 @@ uperms_inherit(unveil_perms uperms)
 	return (uperms_expand(uperms_inherit_1(uperms)));
 }
 
+static inline bool
+uperms_restrictive(unveil_perms uperms)
+{
+	static const unveil_perms full =
+	    UPERM_READ | UPERM_WRITE | UPERM_CREATE | UPERM_DELETE |
+	    UPERM_EXECUTE | UPERM_SETATTR | UPERM_BIND | UPERM_CONNECT;
+	return ((uperms & full) != full);
+}
+
 #endif

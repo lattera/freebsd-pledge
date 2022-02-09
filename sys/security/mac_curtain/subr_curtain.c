@@ -492,6 +492,18 @@ curtain_key_free(enum curtain_type type, union curtain_key key)
 	}
 }
 
+static bool
+curtain_key_restrictive(enum curtain_type type, union curtain_key key)
+{
+	switch (type) {
+	case CURTAIN_UNVEIL:
+		return (uperms_restrictive(key.unveil->soft_uperms) ||
+		        uperms_restrictive(key.unveil->hard_uperms));
+	default:
+		return (false);
+	}
+}
+
 static void
 curtain_key_dup(enum curtain_type type, union curtain_key *dst, union curtain_key src)
 {
@@ -866,7 +878,8 @@ curtain_restrictive(const struct curtain *ct)
 		if (mode_restricted(ct->ct_abilities[abl]))
 			return (true);
 	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
-		if (item->type != 0 && mode_restricted(item->mode))
+		if (item->type != 0 && (mode_restricted(item->mode) ||
+		    curtain_key_restrictive(item->type, item->key)))
 			return (true);
 	br = CURTAIN_BARRIER(ct);
 	if (br->br_mode.soft != BARRIER_NONE || br->br_mode.hard != BARRIER_NONE)
