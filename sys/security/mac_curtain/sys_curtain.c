@@ -207,19 +207,14 @@ curtain_fill_expand(struct curtain *ct)
 }
 
 static void
-curtain_fill_restrict(struct curtain *ct, struct ucred *cr)
+curtain_fill_restrict_exec(struct curtain *ct, struct ucred *cr)
 {
-	struct curtain *ct1;
-	if (curtain_restrictive(ct))
-		if (ct->ct_abilities[CURTAINABL_DEFAULT].soft < CURTAIN_DENY)
-			ct->ct_abilities[CURTAINABL_DEFAULT].soft = CURTAIN_DENY;
-	if (ct->ct_on_exec)
-		curtain_fill_restrict(ct->ct_on_exec, cr);
-	ct1 = ct->ct_on_exec ? ct->ct_on_exec : ct;
-	if (curtain_restrictive(ct1) &&
-	    ct1->ct_abilities[CURTAINABL_EXEC_RSUGID].soft < CURTAIN_DENY &&
+	if (curtain_restrictive(ct) &&
+	    ct->ct_abilities[CURTAINABL_EXEC_RSUGID].soft < CURTAIN_DENY &&
 	    priv_check_cred(cr, PRIV_VFS_CHROOT) != 0)
-		ct1->ct_abilities[CURTAINABL_EXEC_RSUGID].soft = CURTAIN_DENY;
+		ct->ct_abilities[CURTAINABL_EXEC_RSUGID].soft = CURTAIN_DENY;
+	if (ct->ct_on_exec)
+		curtain_fill_restrict_exec(ct->ct_on_exec, cr);
 }
 
 static const enum curtain_action lvl2act[CURTAINLVL_COUNT] = {
@@ -597,7 +592,7 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 	}
 
 	curtain_fill_expand(ct);
-	curtain_fill_restrict(ct, td->td_ucred);
+	curtain_fill_restrict_exec(ct->ct_on_exec ? ct->ct_on_exec : ct, td->td_ucred);
 
 	/*
 	 * Mask the requested curtain against the curtain (or sysfilset) of the

@@ -880,13 +880,10 @@ curtain_equivalent(const struct curtain *ct0, const struct curtain *ct1)
 	return (false); /* XXX */
 }
 
-void
-curtain_cache_update(struct curtain *ct)
+static void
+curtain_cache_update_sysfils(struct curtain *ct)
 {
 	sysfilset_t handled_sfs;
-
-	ct->ct_cached.restrictive = curtain_restrictive(ct);
-
 	for (unsigned i = 0; i < SYSFILSET_BITS; i++)
 		ct->ct_cached.sysfilacts[i] = ct->ct_abilities[CURTAINABL_DEFAULT].soft;
 	handled_sfs = SYSFIL_NONE;
@@ -913,11 +910,6 @@ curtain_cache_update(struct curtain *ct)
 		ct->ct_cached.sysfilset = SYSFIL_FULL;
 	}
 	MPASS(SYSFILSET_IS_RESTRICTED(ct->ct_cached.sysfilset) == ct->ct_cached.restrictive);
-
-	if (ct->ct_on_exec)
-		curtain_cache_update(ct->ct_on_exec);
-
-	ct->ct_cached.valid = true;
 }
 
 void
@@ -1012,25 +1004,27 @@ curtain_mask(struct curtain *dst, const struct curtain *src)
 }
 
 
-static int
-curtain_finish_1(struct curtain *ct, struct ucred *cr)
-{
-	return (curtain_finish_unveils(ct, cr));
-}
-
 int
 curtain_finish(struct curtain *ct, struct ucred *cr)
 {
 	int error;
-	error = curtain_finish_1(ct, cr);
+	error = curtain_finish_unveils(ct, cr);
 	if (error)
 		return (error);
+
+	ct->ct_cached.restrictive = curtain_restrictive(ct);
+	if (ct->ct_cached.restrictive && ct->ct_abilities[CURTAINABL_DEFAULT].soft < CURTAIN_DENY)
+		ct->ct_abilities[CURTAINABL_DEFAULT].soft = CURTAIN_DENY;
+
+	curtain_cache_update_sysfils(ct);
+
+	ct->ct_cached.valid = true;
+
 	if (ct->ct_on_exec) {
-		error = curtain_finish_1(ct->ct_on_exec, cr);
+		error = curtain_finish(ct->ct_on_exec, cr);
 		if (error)
 			return (error);
 	}
-	curtain_cache_update(ct);
 	return (0);
 }
 
