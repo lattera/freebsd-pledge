@@ -102,6 +102,7 @@ void curtain_config_tags_clear(struct curtain_config *);
 int curtain_config_directive(struct curtain_config *, struct curtain_slot *,
     const char *directive);
 
+void curtain_config_setups(struct curtain_config *);
 int curtain_config_apply(struct curtain_config *);
 
 int curtain_config_setup_x11(struct curtain_config *, bool trusted);
@@ -110,5 +111,7 @@ int curtain_config_setup_tmpdir(struct curtain_config *);
 
 int curtain_config_setup_dbus(struct curtain_config *);
 int curtain_config_spawn_dbus(struct curtain_config *);
+
+int curtain_simple_sandbox(const char *tag);
 
 #endif

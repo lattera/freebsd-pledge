@@ -901,15 +901,13 @@ main(int argc, char *argv[])
 				pty_suspend(SIGTSTP);
 				signal(SIGTSTP, forward_signal);
 			}
-		} else if (!WIFCONTINUED(status)) {
-			child_pid = 0;
+		} else if (!WIFCONTINUED(status))
 			break;
-		}
 	} while (true);
 
 	if (WIFSIGNALED(status)) {
-		warnx("child process terminated with signal %d (%s)",
-		    WTERMSIG(status), strsignal(WTERMSIG(status)));
+		warnx("child process %d terminated with signal %d (%s)",
+		    child_pid, WTERMSIG(status), strsignal(WTERMSIG(status)));
 		exit(128 + WTERMSIG(status)); /* shell-like exit status */
 	}
 	exit(WEXITSTATUS(status));

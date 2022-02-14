@@ -58,6 +58,7 @@ SRCS+=	__getosreldate.c \
 	fmtmsg.c \
 	fnmatch.c \
 	fpclassify.c \
+	freebsd_simple_sandbox.c \
 	frexp.c \
 	fstab.c \
 	ftok.c \

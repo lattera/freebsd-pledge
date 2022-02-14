@@ -499,6 +499,17 @@ perform_diag(struct config_section *sec, struct config_command *cmd)
 }
 
 static void
+perform_tmpdir(struct config_section *sec, struct config_command *cmd)
+{
+	if (cmd->words_count) {
+		COMMAND_ERROR(sec, cmd, "unexpected word");
+		return;
+	}
+	if (sec->cfg->setup_separate_tmpdir == CONFIG_SETUP_NO)
+		sec->cfg->setup_separate_tmpdir = CONFIG_SETUP_WANT;
+}
+
+static void
 perform_default(struct config_section *sec, struct config_command *cmd)
 {
 	if (cmd->words_count) {
@@ -978,6 +989,7 @@ parse_include(struct config_parser *par, struct directive_ctx *ctx)
 
 static const struct config_directive directives[] = {
 	{ .name = "diag", .perform = perform_diag },
+	{ .name = "tmpdir", .perform = perform_tmpdir },
 	{ .name = "merge", .parse = parse_merge },
 	{ .name = "push", .parse = parse_merge },
 	{ .name = "include", .parse = parse_include, .raw_words = true },
@@ -1548,10 +1560,22 @@ curtain_config_directive(struct curtain_config *cfg, struct curtain_slot *slot,
 	return (par.errors ? -1 : 0);
 }
 
+void
+curtain_config_setups(struct curtain_config *cfg)
+{
+	int r;
+	if (cfg->setup_separate_tmpdir == CONFIG_SETUP_WANT) {
+		r = curtain_config_setup_tmpdir(cfg);
+		if (r == 0)
+			cfg->setup_separate_tmpdir = CONFIG_SETUP_DONE;
+	}
+}
+
 int
 curtain_config_apply(struct curtain_config *cfg)
 {
 	curtain_config_load(cfg);
+	curtain_config_setups(cfg);
 	CONFIG_DIAG(2, cfg, "applying slots");
 	return (curtain_apply());
 }

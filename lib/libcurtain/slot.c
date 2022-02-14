@@ -1487,7 +1487,7 @@ curtain_submit(bool soft)
 
 	has_reserve = false;
 	for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++)
-		neutral_on[on] = true;
+		neutral_on[on] = curtain_slots != NULL;
 	for (struct curtain_slot *slot = curtain_slots; slot; slot = slot->next) {
 		bool has_neutral = false;
 		for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++) {

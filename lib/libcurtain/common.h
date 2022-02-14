@@ -17,6 +17,7 @@ struct curtain_config {
 	bool on_exec_only;
 	bool tags_dropped;
 	bool errors;
+	enum { CONFIG_SETUP_NO = 0, CONFIG_SETUP_WANT, CONFIG_SETUP_DONE } setup_separate_tmpdir;
 };
 
 

@@ -83,6 +83,7 @@ ${CURTAIN_DBUS_SOCKET}			: v
 sysctl kern.devname
 sysctl dev.drm
 sysctl hw.dri
+priv-deny driver [_strict]
 merge _fdpass
 ~/.drirc
 [_drm_full : _drm_base]
@@ -404,8 +405,11 @@ merge _basic _network _gtk
 [_gecko]
 merge _fdpass
 merge! _memstat
+merge _fontconfig
 ability posixipc prot_exec
 sysctl-deny kern.proc.vmmap [_strict]
+
+[firefox.common]
 
 [firefox.base : _browser]
 # NOTES:
@@ -415,6 +419,7 @@ sysctl-deny kern.proc.vmmap [_strict]
 # - For some reason the "Save Page As..." file browsing dialog won't show up
 #   unless the ~/Download (or XDG alternative) directory already exists.
 merge _basic _network _gtk
+merge firefox.common
 merge _gecko
 ~/.mozilla/firefox/installs.ini
 ~/.mozilla/firefox/profiles.ini
@@ -423,6 +428,34 @@ merge _gecko
 # Gives access to ALL profiles.
 ~/.mozilla/firefox/			: rw +
 ~/.cache/mozilla/firefox/		: rw +
+
+# Isolated processes sandboxing with freebsd_simple_sandbox().
+
+[firefox.simple : firefox.common]
+ability-deny any_sysctl # XXX
+merge _strict
+
+[firefox.default : firefox.simple]
+merge firefox
+merge curtain
+merge _x11_trusted
+
+[firefox.content : firefox.simple]
+# XXX The separate GPU process doesn't seem to be used on FreeBSD.  Even if
+# giving DRM access to the content processes, WebGL won't work because they
+# attempt to reconnect to the X server for some reason.
+merge _basic _net_client
+merge _gecko
+
+[firefox.socket : firefox.simple]
+merge _basic _net_client
+
+[firefox.gpu : firefox.simple]
+merge _basic
+merge _drm_render
+
+[firefox.rdd : firefox.simple]
+merge _basic
 
 # If you have multiple profiles, you can run them in separate sandboxes.  See
 # the sample firefox-profile1.desktop file in /usr/share/examples/curtain/.
