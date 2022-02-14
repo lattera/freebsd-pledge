@@ -1412,7 +1412,7 @@ selrescan(struct thread *td, fd_mask **ibits, fd_mask **obits)
 		if (only_user)
 			error = fget_only_user(fdp, fd, &cap_event_rights, &fp);
 		else
-			error = fget_unlocked(fdp, fd, &cap_event_rights, &fp);
+			error = fget_unlocked(td, fd, &cap_event_rights, &fp);
 		if (__predict_false(error != 0))
 			return (error);
 		idx = fd / NFDBITS;
@@ -1458,7 +1458,7 @@ selscan(struct thread *td, fd_mask **ibits, fd_mask **obits, int nfd)
 			if (only_user)
 				error = fget_only_user(fdp, fd, &cap_event_rights, &fp);
 			else
-				error = fget_unlocked(fdp, fd, &cap_event_rights, &fp);
+				error = fget_unlocked(td, fd, &cap_event_rights, &fp);
 			if (__predict_false(error != 0))
 				return (error);
 			selfdalloc(td, (void *)(uintptr_t)fd);
@@ -1665,7 +1665,7 @@ pollrescan(struct thread *td)
 		if (only_user)
 			error = fget_only_user(fdp, fd->fd, &cap_event_rights, &fp);
 		else
-			error = fget_unlocked(fdp, fd->fd, &cap_event_rights, &fp);
+			error = fget_unlocked(td, fd->fd, &cap_event_rights, &fp);
 		if (__predict_false(error != 0)) {
 			fd->revents = POLLNVAL;
 			n++;
@@ -1728,7 +1728,7 @@ pollscan(struct thread *td, struct pollfd *fds, u_int nfd)
 		if (only_user)
 			error = fget_only_user(fdp, fds->fd, &cap_event_rights, &fp);
 		else
-			error = fget_unlocked(fdp, fds->fd, &cap_event_rights, &fp);
+			error = fget_unlocked(td, fds->fd, &cap_event_rights, &fp);
 		if (__predict_false(error != 0)) {
 			fds->revents = POLLNVAL;
 			n++;
