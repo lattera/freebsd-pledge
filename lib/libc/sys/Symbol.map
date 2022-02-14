@@ -414,13 +414,13 @@ FBSD_1.6 {
 	memfd_create;
 	shm_create_largepage;
 	shm_rename;
-	curtainctl;
 };
 
 FBSD_1.7 {
 	_Fork;
 	fspacectl;
 	swapoff;
+	curtainctl;
 	freebsd_simple_sandbox;
 };
 
