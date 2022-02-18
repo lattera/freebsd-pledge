@@ -649,10 +649,13 @@ unveil_vnode_walk_replace(struct ucred *cr,
     struct vnode *from_vp, struct vnode *to_vp)
 {
 	struct unveil_tracker *track;
+	struct unveil_tracker_entry *entry;
 	if (!(track = unveil_track_get(cr, false)))
 		return;
-	if (unveil_track_peek(track)->vp == from_vp)
-		unveil_track_fill(track, to_vp)->uperms = track->uperms;
+	if ((entry = unveil_track_peek(track))->vp == from_vp) {
+		unveil_perms uperms = entry->uperms;
+		unveil_track_fill(track, to_vp)->uperms = uperms;
+	}
 }
 
 void
