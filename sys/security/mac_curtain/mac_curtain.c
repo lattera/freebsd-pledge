@@ -447,6 +447,10 @@ curtain_net_check_fibnum(struct ucred *cr, int fibnum)
 static inline int
 check_uperms(unveil_perms uhave, unveil_perms uneed)
 {
+	/*
+	 * NOTE: The errno can also come from unveil_vnode_walk_finish() when
+	 * it makes namei() fail early.
+	 */
 	if (uperms_contains(uhave, uneed))
 		return (0);
 	return (uhave & UPERM_EXPOSE ? EACCES : ENOENT);
@@ -467,7 +471,7 @@ get_vp_uperms(struct ucred *cr, struct vnode *vp)
 
 /* To be used for file creation when the target might not already exist. */
 static unveil_perms
-get_vp_pending_uperms(struct ucred *cr, struct vnode *dvp, struct vnode *vp)
+get_vp_create_uperms(struct ucred *cr, struct vnode *dvp, struct vnode *vp)
 {
 	struct unveil_tracker *track;
 	struct unveil_tracker_entry *entry;
@@ -476,10 +480,12 @@ get_vp_pending_uperms(struct ucred *cr, struct vnode *dvp, struct vnode *vp)
 	if ((track = unveil_track_get(cr, false))) {
 		if (vp) {
 			if ((entry = unveil_track_find(track, vp)))
-				return (entry->uperms);
+				return (entry->uperms |
+				    (entry->exposed_create ? UPERM_EXPOSE : UPERM_NONE));
 		} else {
 			if ((entry = unveil_track_find(track, dvp)))
-				return (entry->pending_uperms);
+				return (entry->pending_uperms |
+				    (entry->exposed_create ? UPERM_EXPOSE : UPERM_NONE));
 		}
 	}
 	return (UPERM_NONE);
@@ -614,7 +620,7 @@ curtain_vnode_check_create(struct ucred *cr,
 	    (error = check_fmode(cr, vap->va_mode)))
 		return (error);
 
-	uperms = get_vp_pending_uperms(cr, dvp, NULL);
+	uperms = get_vp_create_uperms(cr, dvp, NULL);
 
 	if (vap->va_type == VSOCK) {
 		if ((error = check_uperms(uperms, UPERM_BIND)))
@@ -665,7 +671,7 @@ curtain_vnode_check_link(struct ucred *cr,
 	if ((error = check_uperms(get_vp_uperms(cr, from_vp),
 	    UPERM_READ | UPERM_WRITE | UPERM_SETATTR | UPERM_CREATE | UPERM_DELETE)))
 		return (error);
-	if ((error = check_uperms(get_vp_pending_uperms(cr, to_dvp, NULL), UPERM_CREATE)))
+	if ((error = check_uperms(get_vp_create_uperms(cr, to_dvp, NULL), UPERM_CREATE)))
 		return (error);
 	if ((error = cred_ability_check(cr, CURTAINABL_VFS_CREATE)))
 		return (error);
@@ -731,7 +737,7 @@ curtain_vnode_check_rename_to(struct ucred *cr,
 	int error;
 	if (vp && (error = check_uperms(get_vp_uperms(cr, vp), UPERM_DELETE)))
 		return (error);
-	if ((error = check_uperms(get_vp_pending_uperms(cr, dvp, vp), UPERM_CREATE)))
+	if ((error = check_uperms(get_vp_create_uperms(cr, dvp, vp), UPERM_CREATE)))
 		return (error);
 	if (vp && (error = cred_ability_check(cr, CURTAINABL_VFS_DELETE)))
 		return (error);

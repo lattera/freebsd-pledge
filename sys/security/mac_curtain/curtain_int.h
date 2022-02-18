@@ -239,8 +239,9 @@ struct unveil_tracker {
 		unsigned vp_nchash, vp_hash;
 		int mp_gen;
 		unveil_perms uperms, pending_uperms;
-		bool create_pending;
 		bool uncharted;
+		bool create_pending;
+		bool exposed_create;
 	} entries[UNVEIL_TRACKER_ENTRIES_COUNT];
 };
 

@@ -623,7 +623,7 @@ unveil_vnode_walk_component(struct ucred *cr,
 	struct unveil_tracker_entry *entry;
 	struct curtain_unveil *uv;
 	unveil_perms uperms;
-	bool uncharted;
+	bool uncharted, parent_exposed;
 	if (!(track = unveil_track_get(cr, false)))
 		return;
 	/*
@@ -638,6 +638,7 @@ unveil_vnode_walk_component(struct ucred *cr,
 		entry = unveil_track_peek(track);
 	else if (!(entry = unveil_track_pick(track, dvp)))
 		return;
+	parent_exposed = entry->uperms & UPERM_EXPOSE;
 
 	uv = NULL;
 	if (track->ct) {
@@ -670,6 +671,8 @@ unveil_vnode_walk_component(struct ucred *cr,
 		entry->create_pending = true;
 		entry->pending_uperms = uperms;
 	}
+	if (parent_exposed && cnp->cn_flags & ISLASTCN && cnp->cn_nameiop == CREATE)
+		entry->exposed_create = true;
 }
 
 void
@@ -736,9 +739,9 @@ unveil_vnode_walk_finish(struct ucred *cr, struct vnode *dvp, struct vnode *vp)
 	 *
 	 * - __realpathat(2) lacks MAC checks, and this protects it.
 	 */
-	if (!(uperms & ~UPERM_TRAVERSE))
-		return (ENOENT);
-	return (0);
+	if (uperms & ~UPERM_TRAVERSE)
+		return (0);
+	return (entry->exposed_create ? EACCES : ENOENT);
 }
 
 int
@@ -752,14 +755,18 @@ unveil_vnode_walk_fixup_errno(struct ucred *cr, int error)
 	entry = unveil_track_peek(track);
 	uperms = entry->create_pending ? entry->pending_uperms : entry->uperms;
 	/*
-	 * Prevent using errnos (like EISDIR/ENOTDIR/etc) to infer the
-	 * existence and type of path components after a lookup.  Note
-	 * that UPERM_DEVFS gives an inheritable UPERM_TRAVERSE on a
-	 * whole directory hierarchy.
+	 * Try to prevent using errnos (like EISDIR/ENOTDIR/etc) to detect the
+	 * existence (and type) of files in unexposed traversable directories.
+	 *
+	 * XXX It is still possible to infer the existence of directories by
+	 * testing if ".." components allow to escape to an exposed directory.
+	 *
+	 * Note that UPERM_DEVFS gives an inheritable UPERM_TRAVERSE on a whole
+	 * directory hierarchy.
 	 */
-	if (!(uperms & UPERM_EXPOSE))
-		error = ENOENT;
-	return (error);
+	if (uperms & UPERM_EXPOSE)
+		return (error);
+	return (entry->exposed_create ? EACCES : ENOENT);
 }
 
 bool
