@@ -660,12 +660,11 @@ unveil_vnode_walk_created(struct ucred *cr, struct vnode *dvp, struct vnode *vp)
 {
 	struct unveil_tracker *track;
 	struct unveil_tracker_entry *entry;
-	if ((track = unveil_track_get(cr, false)) &&
-	    (entry = unveil_track_peek(track))) {
-		if (entry->vp == dvp) {
-			unveil_perms uperms = entry->pending_uperms;
-			unveil_track_fill(track, vp)->uperms = uperms;
-		}
+	if (!(track = unveil_track_get(cr, false)))
+		return;
+	if ((entry = unveil_track_peek(track))->vp == dvp) {
+		unveil_perms uperms = entry->pending_uperms;
+		unveil_track_fill(track, vp)->uperms = uperms;
 	}
 }
 
