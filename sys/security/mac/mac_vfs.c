@@ -1258,7 +1258,7 @@ mac_vnode_walk_created(struct ucred *cred,
     struct vnode *dvp, struct vnode *vp)
 {
 
-	MAC_POLICY_PERFORM(vnode_walk_replace, cred, dvp, vp);
+	MAC_POLICY_PERFORM(vnode_walk_created, cred, dvp, vp);
 }
 
 int
