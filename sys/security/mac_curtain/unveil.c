@@ -166,6 +166,16 @@ unveil_track_peek(struct unveil_tracker *track)
 }
 
 static struct unveil_tracker_entry *
+unveil_track_pick(struct unveil_tracker *track, struct vnode *vp)
+{
+	struct unveil_tracker_entry *entry;
+	entry = unveil_track_peek(track);
+	if (entry->vp != vp)
+		return (NULL);
+	return (entry);
+}
+
+static struct unveil_tracker_entry *
 unveil_track_fill(struct unveil_tracker *track, struct vnode *vp)
 {
 	track->entries[track->fill] = (struct unveil_tracker_entry){
@@ -582,7 +592,7 @@ unveil_vnode_walk_backtrack(struct ucred *cr, struct vnode *from_vp, struct vnod
 	unveil_perms uperms;
 	if (!(track = unveil_track_get(cr, false)))
 		return;
-	if ((entry = unveil_track_peek(track))->vp != from_vp)
+	if (!(entry = unveil_track_pick(track, from_vp)))
 		return;
 	if (track->ct && (uv = curtain_lookup_unveil(track->ct, to_vp, NULL, 0))) {
 		track->uncharted = false;
@@ -610,7 +620,6 @@ unveil_vnode_walk_component(struct ucred *cr,
 	unveil_perms uperms;
 	if (!(track = unveil_track_get(cr, false)))
 		return;
-	entry = unveil_track_peek(track);
 	/*
 	 * vfs_lookup.c's lookup() will sometimes call this function with a
 	 * fake intermediate vnode (vp_crossmp) as dvp.  Conveniently, it only
@@ -619,7 +628,9 @@ unveil_vnode_walk_component(struct ucred *cr,
 	 * The check that dvp is the current tracker entry's vnode is mostly
 	 * intended for bug catching and can just be skipped when dvp is fake.
 	 */
-	if (dvp->v_type != VNON && entry->vp != dvp)
+	if (dvp->v_type == VNON)
+		entry = unveil_track_peek(track);
+	else if (!(entry = unveil_track_pick(track, dvp)))
 		return;
 
 	uv = NULL;
@@ -665,10 +676,10 @@ unveil_vnode_walk_replace(struct ucred *cr,
 	struct unveil_tracker_entry *entry;
 	if (!(track = unveil_track_get(cr, false)))
 		return;
-	if ((entry = unveil_track_peek(track))->vp == from_vp) {
-		unveil_perms uperms = entry->uperms;
-		unveil_track_fill(track, to_vp)->uperms = uperms;
-	}
+	if (!(entry = unveil_track_pick(track, from_vp)))
+		return;
+	unveil_perms uperms = entry->uperms;
+	unveil_track_fill(track, to_vp)->uperms = uperms;
 }
 
 void
@@ -678,11 +689,10 @@ unveil_vnode_walk_created(struct ucred *cr, struct vnode *dvp, struct vnode *vp)
 	struct unveil_tracker_entry *entry;
 	if (!(track = unveil_track_get(cr, false)))
 		return;
-	entry = unveil_track_peek(track);
-	if (entry->vp == dvp && entry->create_pending) {
-		unveil_perms uperms = entry->pending_uperms;
-		unveil_track_fill(track, vp)->uperms = uperms;
-	}
+	if (!(entry = unveil_track_pick(track, dvp)) || !entry->create_pending)
+		return;
+	unveil_perms uperms = entry->pending_uperms;
+	unveil_track_fill(track, vp)->uperms = uperms;
 }
 
 int
