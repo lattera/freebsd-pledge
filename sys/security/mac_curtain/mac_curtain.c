@@ -468,7 +468,7 @@ get_vp_uperms(struct ucred *cr, struct vnode *vp)
 
 /* To be used for file creation when the target might not already exist. */
 static unveil_perms
-get_vp_pending_uperms(struct ucred *cr, struct vnode *dvp, struct componentname *cnp, struct vnode *vp)
+get_vp_pending_uperms(struct ucred *cr, struct vnode *dvp, struct vnode *vp)
 {
 	struct unveil_tracker *track;
 	struct unveil_tracker_entry *entry;
@@ -485,7 +485,7 @@ get_vp_pending_uperms(struct ucred *cr, struct vnode *dvp, struct componentname 
 }
 
 static int
-check_fmode(struct ucred *cr, unveil_perms uperms, mode_t mode)
+check_fmode(struct ucred *cr, mode_t mode)
 {
 	if (mode & (S_ISUID|S_ISGID))
 		return (cred_ability_check(cr, CURTAINABL_FSUGID));
@@ -610,10 +610,10 @@ curtain_vnode_check_create(struct ucred *cr,
 	unveil_perms uperms;
 	int error;
 
-	uperms = get_vp_pending_uperms(cr, dvp, cnp, NULL);
+	uperms = get_vp_pending_uperms(cr, dvp, NULL);
 
 	if (vap->va_mode != (mode_t)VNOVAL &&
-	    (error = check_fmode(cr, uperms, vap->va_mode)))
+	    (error = check_fmode(cr, vap->va_mode)))
 		return (error);
 
 	if (vap->va_type == VSOCK) {
@@ -665,7 +665,7 @@ curtain_vnode_check_link(struct ucred *cr,
 	if ((error = unveil_check_uperms(get_vp_uperms(cr, from_vp),
 	    UPERM_READ | UPERM_WRITE | UPERM_SETATTR | UPERM_CREATE | UPERM_DELETE)))
 		return (error);
-	if ((error = unveil_check_uperms(get_vp_pending_uperms(cr, to_dvp, to_cnp, NULL), UPERM_CREATE)))
+	if ((error = unveil_check_uperms(get_vp_pending_uperms(cr, to_dvp, NULL), UPERM_CREATE)))
 		return (error);
 	if ((error = cred_ability_check(cr, CURTAINABL_VFS_CREATE)))
 		return (error);
@@ -731,7 +731,7 @@ curtain_vnode_check_rename_to(struct ucred *cr,
 	int error;
 	if (vp && (error = unveil_check_uperms(get_vp_uperms(cr, vp), UPERM_DELETE)))
 		return (error);
-	if ((error = unveil_check_uperms(get_vp_pending_uperms(cr, dvp, cnp, vp), UPERM_CREATE)))
+	if ((error = unveil_check_uperms(get_vp_pending_uperms(cr, dvp, vp), UPERM_CREATE)))
 		return (error);
 	if (vp && (error = cred_ability_check(cr, CURTAINABL_VFS_DELETE)))
 		return (error);
@@ -812,7 +812,7 @@ curtain_vnode_check_setmode(struct ucred *cr,
 	unveil_perms uperms;
 	int error;
 	uperms = get_vp_uperms(cr, vp);
-	if ((error = check_fmode(cr, uperms, mode)))
+	if ((error = check_fmode(cr, mode)))
 		return (error);
 	if ((error = unveil_check_uperms(uperms, UPERM_SETATTR)))
 		return (error);
@@ -1047,7 +1047,7 @@ curtain_posixshm_check_setmode(struct ucred *cr,
     mode_t mode)
 {
 	int error;
-	if ((error = check_fmode(cr, UPERM_ALL, mode)))
+	if ((error = check_fmode(cr, mode)))
 		return (error);
 	return (cred_ability_check(cr, CURTAINABL_FATTR));
 }
@@ -1081,7 +1081,7 @@ curtain_posixsem_check_setmode(struct ucred *cr,
     mode_t mode)
 {
 	int error;
-	if ((error = check_fmode(cr, UPERM_ALL, mode)))
+	if ((error = check_fmode(cr, mode)))
 		return (error);
 	return (cred_ability_check(cr, CURTAINABL_FATTR));
 }
