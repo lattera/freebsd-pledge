@@ -703,9 +703,15 @@ unveil_vnode_walk_finish(struct ucred *cr, struct vnode *dvp, struct vnode *vp)
 	unveil_perms uperms;
 	if (!(track = unveil_track_get(cr, false)))
 		return (0);
-	if (!(entry = unveil_track_pick(track, vp ? vp : dvp)))
-		return (ENOENT);
-	uperms = entry->create_pending ? entry->pending_uperms : entry->uperms;
+	if (vp) {
+		if (!(entry = unveil_track_pick(track, vp)))
+			return (ENOENT);
+		uperms = entry->uperms;
+	} else {
+		if (!(entry = unveil_track_pick(track, dvp)))
+			return (ENOENT);
+		uperms = entry->pending_uperms;
+	}
 	/*
 	 * Many syscalls inspect the target vnodes before calling the
 	 * MAC check functions (which would then return ENOENT when
