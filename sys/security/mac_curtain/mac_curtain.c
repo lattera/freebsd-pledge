@@ -457,13 +457,12 @@ get_vp_uperms(struct ucred *cr, struct vnode *vp)
 {
 	struct unveil_tracker *track;
 	struct unveil_tracker_entry *entry;
-	if (CRED_IN_VFS_VEILED_MODE(cr)) {
-		if ((track = unveil_track_get(cr, false)) &&
-		    (entry = unveil_track_find(track, vp)))
-			return (entry->uperms);
-		return (UPERM_NONE);
-	}
-	return (UPERM_ALL);
+	if (!CRED_IN_VFS_VEILED_MODE(cr))
+		return (UPERM_ALL);
+	if ((track = unveil_track_get(cr, false)) &&
+	    (entry = unveil_track_find(track, vp)))
+		return (entry->uperms);
+	return (UPERM_NONE);
 }
 
 /* To be used for file creation when the target might not already exist. */
@@ -472,19 +471,18 @@ get_vp_pending_uperms(struct ucred *cr, struct vnode *dvp, struct vnode *vp)
 {
 	struct unveil_tracker *track;
 	struct unveil_tracker_entry *entry;
-	if (CRED_IN_VFS_VEILED_MODE(cr)) {
-		if ((track = unveil_track_get(cr, false))) {
-			if (vp) {
-				if ((entry = unveil_track_find(track, vp)))
-					return (entry->uperms);
-			} else {
-				if ((entry = unveil_track_find(track, dvp)))
-					return (entry->pending_uperms);
-			}
+	if (!CRED_IN_VFS_VEILED_MODE(cr))
+		return (UPERM_ALL);
+	if ((track = unveil_track_get(cr, false))) {
+		if (vp) {
+			if ((entry = unveil_track_find(track, vp)))
+				return (entry->uperms);
+		} else {
+			if ((entry = unveil_track_find(track, dvp)))
+				return (entry->pending_uperms);
 		}
-		return (UPERM_NONE);
 	}
-	return (UPERM_ALL);
+	return (UPERM_NONE);
 }
 
 static int
