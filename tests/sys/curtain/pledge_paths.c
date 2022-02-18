@@ -176,7 +176,7 @@ ATF_TC_BODY(tmppath_allow, tc)
 	tmpdir = getenv("TMPDIR");
 	if (!tmpdir || !*tmpdir)
 		tmpdir = _PATH_TMP;
-	check_access(tmpdir, "de");
+	check_access(tmpdir, "ds");
 
 	char *path;
 	ATF_REQUIRE(asprintf(&path, "%s/%s.XXXXXXXXXX", tmpdir, getprogname()) > 0);
@@ -218,7 +218,7 @@ ATF_TC_BODY(tmppath_deny, tc)
 
 	ATF_REQUIRE(pledge("stdio error tmppath", "") >= 0);
 
-	check_access(tmpdir, "de");
+	check_access(tmpdir, "ds");
 	check_access(subdir, "d");
 	check_access(subfile1, "");
 	check_access(subfile2, "");

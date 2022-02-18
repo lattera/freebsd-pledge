@@ -609,11 +609,11 @@ curtain_vnode_check_create(struct ucred *cr,
 	unveil_perms uperms;
 	int error;
 
-	uperms = get_vp_pending_uperms(cr, dvp, NULL);
-
 	if (vap->va_mode != (mode_t)VNOVAL &&
 	    (error = check_fmode(cr, vap->va_mode)))
 		return (error);
+
+	uperms = get_vp_pending_uperms(cr, dvp, NULL);
 
 	if (vap->va_type == VSOCK) {
 		if ((error = check_uperms(uperms, UPERM_BIND)))

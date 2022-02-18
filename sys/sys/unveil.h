@@ -37,7 +37,7 @@ static const unveil_perms uperms_inheritable =
     UPERM_SHELL | UPERM_DEVFS;
 
 static const unveil_perms uperms_searchable = uperms_inheritable | UPERM_TMPDIR;
-static const unveil_perms uperms_exposable = uperms_searchable & ~UPERM_DEVFS;
+static const unveil_perms uperms_exposable = uperms_inheritable & ~UPERM_DEVFS;
 
 static inline unveil_perms
 uperms_expand(unveil_perms uperms)
