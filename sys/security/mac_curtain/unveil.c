@@ -605,9 +605,21 @@ unveil_vnode_walk_component(struct ucred *cr,
     struct vnode *dvp, struct componentname *cnp, struct vnode *vp)
 {
 	struct unveil_tracker *track;
+	struct unveil_tracker_entry *entry;
 	struct curtain_unveil *uv;
 	unveil_perms uperms;
 	if (!(track = unveil_track_get(cr, false)))
+		return;
+	entry = unveil_track_peek(track);
+	/*
+	 * vfs_lookup.c's lookup() will sometimes call this function with a
+	 * fake intermediate vnode (vp_crossmp) as dvp.  Conveniently, it only
+	 * does so when vp is a directory and we won't need dvp in this case.
+	 *
+	 * The check that dvp is the current tracker entry's vnode is mostly
+	 * intended for bug catching and can just be skipped when dvp is fake.
+	 */
+	if (dvp->v_type != VNON && entry->vp != dvp)
 		return;
 
 	uv = NULL;
@@ -625,12 +637,12 @@ unveil_vnode_walk_component(struct ucred *cr,
 	} else {
 		if (cnp->cn_flags & ISDOTDOT) {
 			if (track->uncharted)
-				uperms = unveil_track_peek(track)->uperms;
+				uperms = entry->uperms;
 			else
 				uperms = UPERM_NONE;
 		} else {
 			track->uncharted = true;
-			uperms = uperms_inherit(unveil_track_peek(track)->uperms);
+			uperms = uperms_inherit(entry->uperms);
 		}
 	}
 
@@ -638,7 +650,6 @@ unveil_vnode_walk_component(struct ucred *cr,
 		uperms = unveil_special_exemptions(cr, vp, uperms);
 		unveil_track_fill(track, vp)->uperms = uperms;
 	} else {
-		struct unveil_tracker_entry *entry;
 		if ((entry = unveil_track_find(track, dvp))) {
 			entry->create_pending = true;
 			entry->pending_uperms = uperms;
