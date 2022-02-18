@@ -700,11 +700,10 @@ unveil_vnode_walk_fixup_errno(struct ucred *cr, int error)
 {
 	struct unveil_tracker *track;
 	struct unveil_tracker_entry *entry;
-	unveil_perms uperms;
+	unveil_perms uhave, uneed;
 	if (!(track = unveil_track_get(cr, false)))
 		return (error);
 	entry = unveil_track_peek(track);
-	uperms = entry->create_pending ? entry->pending_uperms : entry->uperms;
 	if (error) {
 		/*
 		 * Prevent using errnos (like EISDIR/ENOTDIR/etc) to infer the
@@ -712,8 +711,7 @@ unveil_vnode_walk_fixup_errno(struct ucred *cr, int error)
 		 * that UPERM_DEVFS gives an inheritable UPERM_TRAVERSE on a
 		 * whole directory hierarchy.
 		 */
-		if (!(uperms & UPERM_EXPOSE))
-			error = ENOENT;
+		uneed = UPERM_EXPOSE;
 	} else {
 		/*
 		 * Many syscalls inspect the target vnodes before calling the
@@ -735,9 +733,11 @@ unveil_vnode_walk_fixup_errno(struct ucred *cr, int error)
 		 *
 		 * - __realpathat(2) lacks MAC checks, and this protects it.
 		 */
-		if (!(uperms & ~UPERM_TRAVERSE))
-			error = ENOENT;
+		uneed = ~UPERM_TRAVERSE;
 	}
+	uhave = entry->create_pending ? entry->pending_uperms : entry->uperms;
+	if (!(uhave & uneed))
+		error = ENOENT;
 	return (error);
 }
 
