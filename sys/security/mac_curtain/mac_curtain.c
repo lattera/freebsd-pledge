@@ -474,10 +474,13 @@ get_vp_pending_uperms(struct ucred *cr, struct vnode *dvp, struct vnode *vp)
 	struct unveil_tracker_entry *entry;
 	if (CRED_IN_VFS_VEILED_MODE(cr)) {
 		if ((track = unveil_track_get(cr, false))) {
-			if (vp && (entry = unveil_track_find(track, vp)))
-				return (entry->uperms);
-			if ((entry = unveil_track_find(track, dvp)))
-				return (entry->pending_uperms);
+			if (vp) {
+				if ((entry = unveil_track_find(track, vp)))
+					return (entry->uperms);
+			} else {
+				if ((entry = unveil_track_find(track, dvp)))
+					return (entry->pending_uperms);
+			}
 		}
 		return (UPERM_NONE);
 	}
