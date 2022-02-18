@@ -741,11 +741,8 @@ curtain_sysctl(struct curtain_slot *slot, const char *sysctl, int flags)
 
 	mibn = nitems(mibv);
 	r = sysctlnametomib(sysctl, mibv, &mibn);
-	if (r < 0) {
-		if (!(flags & CURTAIN_QUIET) && errno != ENOENT)
-			warn("%s", sysctl);
+	if (r < 0)
 		return (-1);
-	}
 	mibp = malloc(mibn * sizeof *mibp);
 	memcpy(mibp, mibv, mibn * sizeof *mibp);
 
@@ -1165,11 +1162,8 @@ curtain_path_multi(struct curtain_slot **slots, size_t nslots,
 	}
 
 	r = unveil_path_1(&trail, flags & CURTAIN_PATH_NOFOLLOW, true, path, &node);
-	if (r < 0) {
-		if (!(flags & CURTAIN_QUIET) && errno != ENOENT && errno != EACCES)
-			warn("%s: %s", "curtain_path", path);
+	if (r < 0)
 		return (r);
-	}
 
 	if (trail) {
 		for (size_t i = 0; i < nslots; i++) {

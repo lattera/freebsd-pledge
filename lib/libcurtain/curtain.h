@@ -20,7 +20,6 @@ enum curtain_state {
 	CURTAIN_ENABLED = 2,
 };
 
-#define CURTAIN_QUIET		(1 << 0)
 #define CURTAIN_LEVEL_SHIFT	(24)
 #define CURTAIN_LEVEL_MASK	(0x7 << CURTAIN_LEVEL_SHIFT)
 #define CURTAIN_ALLOW		(0 << CURTAIN_LEVEL_SHIFT)

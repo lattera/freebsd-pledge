@@ -690,6 +690,8 @@ do_unveil(struct unveil_ctx *ctx, const char *path)
 		flags |= CURTAIN_PATH_NOFOLLOW;
 
 	r = curtain_path(section_slot(ctx->sec), path, flags, ctx->uperms);
+	if (r < 0 && errno != ENOENT && errno != EACCES)
+		COMMAND_ERROR(ctx->sec, ctx->cmd, "path %s: %m", path);
 	if (ctx->create) {
 		if (!is_dir) {
 			struct stat st;

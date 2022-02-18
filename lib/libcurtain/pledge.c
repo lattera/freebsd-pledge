@@ -6,6 +6,7 @@ __FBSDID("$FreeBSD$");
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <err.h>
 
 #include <paths.h>
 #include <pwd.h>
@@ -427,6 +428,9 @@ static bool promise_slots_needed_on[PROMISE_COUNT][CURTAIN_ON_COUNT];
 static bool promise_unveil_slots_needed_on[PROMISE_COUNT][CURTAIN_ON_COUNT];
 static struct curtain_slot *custom_slot_on[CURTAIN_ON_COUNT];
 
+extern bool pledge_quiet, unveil_quiet;
+bool pledge_quiet = false, unveil_quiet = false;
+
 
 static int
 parse_promises(struct promise_mode modes[], const char *promises_str)
@@ -536,7 +540,7 @@ do_promises_slots(enum curtain_on on, struct promise_mode modes[])
 {
 	bool fill[PROMISE_COUNT], fill_unveils[PROMISE_COUNT];
 	bool tainted, changed;
-	unsigned flags;
+	int flags, r;
 
 #define	FOREACH_ARRAY(ent, tab) \
 	for (__typeof(&(tab)[0]) (ent) = (tab); (ent) < &(tab)[nitems(tab)]; (ent)++)
@@ -581,7 +585,9 @@ do_promises_slots(enum curtain_on on, struct promise_mode modes[])
 				if ((tmpdir = getenv("TMPDIR")))
 					path = tmpdir;
 			}
-			curtain_path(promise_unveil_slots[e->promise], path, path_flags, e->uperms);
+			r = curtain_path(promise_unveil_slots[e->promise], path, path_flags, e->uperms);
+			if (r < 0 && !pledge_quiet && errno != ENOENT && errno != EACCES)
+				warn("pledge unveil %s", path);
 		}
 		if (fill[e->promise])
 			abilities_for_uperms(promise_slots[e->promise], e->uperms, flags);
@@ -610,8 +616,11 @@ do_promises_slots(enum curtain_on on, struct promise_mode modes[])
 		}
 
 	FOREACH_ARRAY(e, sysctls_table)
-		if (fill[e->promise])
-			curtain_sysctl(promise_slots[e->promise], e->sysctl, flags);
+		if (fill[e->promise]) {
+			r = curtain_sysctl(promise_slots[e->promise], e->sysctl, flags);
+			if (r < 0 && !pledge_quiet && errno != ENOENT)
+				warn("pledge sysctl %s", e->sysctl);
+		}
 
 	if (fill[PROMISE_ERROR])
 		curtain_default(promise_slots[PROMISE_ERROR], CURTAIN_DENY);
@@ -788,6 +797,8 @@ do_unveil(bool *do_on, const char *path, unveil_perms uperms)
 	if (unveil_traverse)
 		curtain_state(unveil_traverse_slot, CURTAIN_ON_SELF, CURTAIN_NEUTRAL);
 	if (r < 0) {
+		if (!unveil_quiet && errno != ENOENT && errno != EACCES)
+			warn("unveil %s", path);
 		if (unveil_traverse)
 			curtain_apply_soft();
 		return (r);
