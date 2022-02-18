@@ -574,21 +574,24 @@ unveil_vnode_walk_start(struct ucred *cr, struct vnode *dvp)
 }
 
 void
-unveil_vnode_walk_backtrack(struct ucred *cr, struct vnode *dvp)
+unveil_vnode_walk_backtrack(struct ucred *cr, struct vnode *from_vp, struct vnode *to_vp)
 {
 	struct unveil_tracker *track;
+	struct unveil_tracker_entry *entry;
 	struct curtain_unveil *uv;
 	unveil_perms uperms;
 	if (!(track = unveil_track_get(cr, false)))
 		return;
-	if (track->ct && (uv = curtain_lookup_unveil(track->ct, dvp, NULL, 0))) {
+	if ((entry = unveil_track_peek(track))->vp != from_vp)
+		return;
+	if (track->ct && (uv = curtain_lookup_unveil(track->ct, to_vp, NULL, 0))) {
 		track->uncharted = false;
 		uperms = uv->soft_uperms;
 	} else if (track->uncharted)
-		uperms = unveil_track_peek(track)->uperms;
+		uperms = entry->uperms;
 	else
 		uperms = UPERM_NONE;
-	unveil_track_fill(track, dvp)->uperms = uperms;
+	unveil_track_fill(track, to_vp)->uperms = uperms;
 }
 
 /*

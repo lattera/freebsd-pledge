@@ -253,7 +253,7 @@ int	unveil_vnode_walk_start_file(struct ucred *, struct file *);
 int	unveil_vnode_walk_start(struct ucred *, struct vnode *);
 void	unveil_vnode_walk_component(struct ucred *,
 	    struct vnode *dvp, struct componentname *cnp, struct vnode *vp);
-void	unveil_vnode_walk_backtrack(struct ucred *, struct vnode *dvp);
+void	unveil_vnode_walk_backtrack(struct ucred *, struct vnode *from_vp, struct vnode *to_vp);
 void	unveil_vnode_walk_replace(struct ucred *, struct vnode *from_vp, struct vnode *to_vp);
 void	unveil_vnode_walk_created(struct ucred *, struct vnode *dvp, struct vnode *vp);
 int	unveil_vnode_walk_fixup_errno(struct ucred *, int error);

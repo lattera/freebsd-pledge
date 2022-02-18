@@ -1239,10 +1239,11 @@ mac_vnode_walk_component(struct ucred *cred,
 }
 
 void
-mac_vnode_walk_backtrack(struct ucred *cred, struct vnode *dvp)
+mac_vnode_walk_backtrack(struct ucred *cred,
+    struct vnode *from_vp, struct vnode *to_vp)
 {
 
-	MAC_POLICY_PERFORM(vnode_walk_backtrack, cred, dvp);
+	MAC_POLICY_PERFORM(vnode_walk_backtrack, cred, from_vp, to_vp);
 }
 
 void

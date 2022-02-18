@@ -683,11 +683,14 @@ typedef int	(*mpo_vnode_setlabel_extattr_t)(struct ucred *cred,
 typedef void	(*mpo_vnode_walk_roll_t)(struct ucred *cred, int offset);
 typedef void	(*mpo_vnode_walk_annotate_file_t)(struct ucred *cred,
 		    struct file *fp, struct vnode *vp);
-typedef int	(*mpo_vnode_walk_start_file_t)(struct ucred *cred, struct file *fp);
+typedef int	(*mpo_vnode_walk_start_file_t)(struct ucred *cred,
+		    struct file *fp);
 typedef int	(*mpo_vnode_walk_start_t)(struct ucred *cred, struct vnode *vp);
 typedef void	(*mpo_vnode_walk_component_t)(struct ucred *cred,
-		    struct vnode *dvp, struct componentname *cnp, struct vnode *vp);
-typedef void	(*mpo_vnode_walk_backtrack_t)(struct ucred *cred, struct vnode *dvp);
+		    struct vnode *dvp, struct componentname *cnp,
+		    struct vnode *vp);
+typedef void	(*mpo_vnode_walk_backtrack_t)(struct ucred *cred,
+		    struct vnode *from_vp, struct vnode *to_vp);
 typedef void	(*mpo_vnode_walk_replace_t)(struct ucred *cred,
 		    struct vnode *from_vp, struct vnode *to_vp);
 typedef void	(*mpo_vnode_walk_created_t)(struct ucred *cred,

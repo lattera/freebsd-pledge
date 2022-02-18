@@ -763,13 +763,13 @@ namei(struct nameidata *ndp)
 		} else
 			cnp->cn_pnbuf[linklen] = '\0';
 		ndp->ni_pathlen += linklen;
-		vput(ndp->ni_vp);
-		dp = ndp->ni_dvp;
+		cnp->cn_nameptr = cnp->cn_pnbuf;
 		/*
 		 * Check if root directory should replace current directory.
 		 */
-		cnp->cn_nameptr = cnp->cn_pnbuf;
+		dp = ndp->ni_dvp;
 		if (*(cnp->cn_nameptr) == '/') {
+			vput(ndp->ni_vp);
 			vrele(dp);
 			error = namei_handle_root(ndp, &dp);
 			if (error != 0)
@@ -786,8 +786,10 @@ namei(struct nameidata *ndp)
 #ifdef MAC
 			/* Resume walk from containing directory. */
 			if (ndp->ni_lcf & NI_LCF_MACWALK_ACTIVE)
-				mac_vnode_walk_backtrack(cnp->cn_cred, dp);
+				mac_vnode_walk_backtrack(cnp->cn_cred,
+				    ndp->ni_vp, dp);
 #endif
+			vput(ndp->ni_vp);
 		}
 	}
 	vput(ndp->ni_vp);
