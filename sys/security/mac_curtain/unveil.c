@@ -511,8 +511,8 @@ unveil_vnode_walk_start(struct ucred *cr, struct vnode *dvp)
 {
 	struct curtain_unveil *cover;
 	struct unveil_tracker *track;
+	struct unveil_tracker_entry *entry;
 	struct unveil_cache *cache;
-	unveil_perms uperms;
 	unsigned depth;
 	int error;
 	MPASS(dvp);
@@ -570,16 +570,17 @@ unveil_vnode_walk_start(struct ucred *cr, struct vnode *dvp)
 		}
 	}
 
-	track->uncharted = true;
+	entry = unveil_track_fill(track, dvp);
 	if (cover) {
-		uperms = cover->soft_uperms;
-		if (depth)
-			uperms = uperms_inherit(uperms);
-		else
-			track->uncharted = false;
-	} else
-		uperms = default_uperms(track);
-	unveil_track_fill(track, dvp)->uperms = uperms;
+		if (depth) {
+			entry->uncharted = true;
+			entry->uperms = uperms_inherit(cover->soft_uperms);
+		} else
+			entry->uperms = cover->soft_uperms;
+	} else {
+		entry->uncharted = true;
+		entry->uperms = default_uperms(track);
+	}
 	return (0);
 }
 
@@ -590,18 +591,22 @@ unveil_vnode_walk_backtrack(struct ucred *cr, struct vnode *from_vp, struct vnod
 	struct unveil_tracker_entry *entry;
 	struct curtain_unveil *uv;
 	unveil_perms uperms;
+	bool uncharted;
 	if (!(track = unveil_track_get(cr, false)))
 		return;
 	if (!(entry = unveil_track_pick(track, from_vp)))
 		return;
-	if (track->ct && (uv = curtain_lookup_unveil(track->ct, to_vp, NULL, 0))) {
-		track->uncharted = false;
+
+	uncharted = false;
+	uperms = UPERM_NONE;
+	if (track->ct && (uv = curtain_lookup_unveil(track->ct, to_vp, NULL, 0)))
 		uperms = uv->soft_uperms;
-	} else if (track->uncharted)
+	else if ((uncharted = entry->uncharted))
 		uperms = entry->uperms;
-	else
-		uperms = UPERM_NONE;
-	unveil_track_fill(track, to_vp)->uperms = uperms;
+
+	entry = unveil_track_fill(track, to_vp);
+	entry->uperms = uperms;
+	entry->uncharted = uncharted;
 }
 
 /*
@@ -618,6 +623,7 @@ unveil_vnode_walk_component(struct ucred *cr,
 	struct unveil_tracker_entry *entry;
 	struct curtain_unveil *uv;
 	unveil_perms uperms;
+	bool uncharted;
 	if (!(track = unveil_track_get(cr, false)))
 		return;
 	/*
@@ -642,24 +648,23 @@ unveil_vnode_walk_component(struct ucred *cr,
 			    cnp->cn_nameptr, cnp->cn_namelen);
 	}
 
+	uncharted = false;
+	uperms = UPERM_NONE;
 	if (uv) {
-		track->uncharted = false;
 		uperms = uv->soft_uperms;
+	} else if (cnp->cn_flags & ISDOTDOT) {
+		if ((uncharted = entry->uncharted))
+			uperms = entry->uperms;
 	} else {
-		if (cnp->cn_flags & ISDOTDOT) {
-			if (track->uncharted)
-				uperms = entry->uperms;
-			else
-				uperms = UPERM_NONE;
-		} else {
-			track->uncharted = true;
-			uperms = uperms_inherit(entry->uperms);
-		}
+		uncharted = true;
+		uperms = uperms_inherit(entry->uperms);
 	}
 
 	if (vp) {
 		uperms = unveil_special_exemptions(cr, vp, uperms);
-		unveil_track_fill(track, vp)->uperms = uperms;
+		entry = unveil_track_fill(track, vp);
+		entry->uperms = uperms;
+		entry->uncharted = uncharted;
 	} else {
 		if ((entry = unveil_track_find(track, dvp))) {
 			entry->create_pending = true;

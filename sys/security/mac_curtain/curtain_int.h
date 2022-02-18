@@ -233,7 +233,6 @@ struct unveil_tracker {
 	struct curtain *ct;
 #define	UNVEIL_TRACKER_ENTRIES_COUNT 2
 	unsigned fill;
-	bool uncharted;
 	struct unveil_tracker_entry {
 		struct vnode *vp;
 		struct mount *mp;
@@ -241,6 +240,7 @@ struct unveil_tracker {
 		int mp_gen;
 		unveil_perms uperms, pending_uperms;
 		bool create_pending;
+		bool uncharted;
 	} entries[UNVEIL_TRACKER_ENTRIES_COUNT];
 };
 
