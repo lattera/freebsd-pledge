@@ -447,7 +447,7 @@ curtain_net_check_fibnum(struct ucred *cr, int fibnum)
 static inline int
 unveil_check_uperms(unveil_perms uhave, unveil_perms uneed)
 {
-	if (!(uneed & ~uhave))
+	if (uperms_contains(uhave, uneed))
 		return (0);
 	return (uhave & UPERM_EXPOSE ? EACCES : ENOENT);
 }
