@@ -666,10 +666,9 @@ unveil_vnode_walk_component(struct ucred *cr,
 		entry->uperms = uperms;
 		entry->uncharted = uncharted;
 	} else {
-		if ((entry = unveil_track_find(track, dvp))) {
-			entry->create_pending = true;
-			entry->pending_uperms = uperms;
-		}
+		MPASS(entry->vp == dvp);
+		entry->create_pending = true;
+		entry->pending_uperms = uperms;
 	}
 }
 
