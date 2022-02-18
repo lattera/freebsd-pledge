@@ -445,7 +445,7 @@ curtain_net_check_fibnum(struct ucred *cr, int fibnum)
 
 
 static inline int
-unveil_check_uperms(unveil_perms uhave, unveil_perms uneed)
+check_uperms(unveil_perms uhave, unveil_perms uneed)
 {
 	if (uperms_contains(uhave, uneed))
 		return (0);
@@ -498,33 +498,32 @@ check_accmode(struct ucred *cr, unveil_perms uperms, enum vtype type, accmode_t 
 	int error;
 	switch (type) {
 	case VSOCK:
-		if ((error = unveil_check_uperms(uperms, UPERM_CONNECT)))
+		if ((error = check_uperms(uperms, UPERM_CONNECT)))
 			return (error);
 		break;
 	case VDIR:
 		if (accmode & VREAD &&
-		    (error = unveil_check_uperms(uperms, UPERM_LIST)))
+		    (error = check_uperms(uperms, UPERM_LIST)))
 			return (error);
 		if (accmode & VWRITE &&
-		    (error = unveil_check_uperms(uperms,
+		    (error = check_uperms(uperms,
 		    accmode & VAPPEND ? UPERM_APPEND : UPERM_WRITE)))
 			return (error);
-		if (accmode & VEXEC &&
-		    (error = unveil_check_uperms(uperms, UPERM_SEARCH)))
+		if (accmode & VEXEC && (error = check_uperms(uperms, UPERM_SEARCH)))
 			return (error);
 		break;
 	case VREG:
 		if (!(uperms & UPERM_TMPDIR_CHILD)) {
 	default:	if (accmode & VREAD &&
-			    (error = unveil_check_uperms(uperms, UPERM_READ)))
+			    (error = check_uperms(uperms, UPERM_READ)))
 				return (error);
 			if (accmode & VWRITE &&
-			    (error = unveil_check_uperms(uperms,
+			    (error = check_uperms(uperms,
 			    accmode & VAPPEND ? UPERM_APPEND : UPERM_WRITE)))
 				return (error);
 		}
 		if (accmode & VEXEC &&
-		    (error = unveil_check_uperms(uperms, UPERM_EXECUTE)))
+		    (error = check_uperms(uperms, UPERM_EXECUTE)))
 			return (error);
 		break;
 	}
@@ -578,7 +577,7 @@ curtain_vnode_check_read(struct ucred *cr, struct ucred *file_cr,
 		return (0);
 	uperms = get_vp_uperms(cr, vp);
 	if (!(uperms & UPERM_TMPDIR_CHILD && vp->v_type == VREG) &&
-	    (error = unveil_check_uperms(uperms, UPERM_READ)))
+	    (error = check_uperms(uperms, UPERM_READ)))
 		return (error);
 	if ((error = cred_ability_check(cr, CURTAINABL_VFS_READ)))
 		return (error);
@@ -595,7 +594,7 @@ curtain_vnode_check_write(struct ucred *cr, struct ucred *file_cr,
 		return (0);
 	uperms = get_vp_uperms(cr, vp);
 	if (!(uperms & UPERM_TMPDIR_CHILD && vp->v_type == VREG) &&
-	    (error = unveil_check_uperms(uperms, UPERM_WRITE)))
+	    (error = check_uperms(uperms, UPERM_WRITE)))
 		return (error);
 	if ((error = cred_ability_check(cr, CURTAINABL_VFS_WRITE)))
 		return (error);
@@ -617,11 +616,11 @@ curtain_vnode_check_create(struct ucred *cr,
 		return (error);
 
 	if (vap->va_type == VSOCK) {
-		if ((error = unveil_check_uperms(uperms, UPERM_BIND)))
+		if ((error = check_uperms(uperms, UPERM_BIND)))
 			return (error);
 	} else {
 		if (!(uperms & UPERM_TMPDIR_CHILD && vap->va_type == VREG) &&
-		    (error = unveil_check_uperms(uperms, UPERM_CREATE)))
+		    (error = check_uperms(uperms, UPERM_CREATE)))
 			return (error);
 	}
 
@@ -662,10 +661,10 @@ curtain_vnode_check_link(struct ucred *cr,
 	 * just because hard-links could be dangerous if they are not expected
 	 * by programs outside of the sandbox.
 	 */
-	if ((error = unveil_check_uperms(get_vp_uperms(cr, from_vp),
+	if ((error = check_uperms(get_vp_uperms(cr, from_vp),
 	    UPERM_READ | UPERM_WRITE | UPERM_SETATTR | UPERM_CREATE | UPERM_DELETE)))
 		return (error);
-	if ((error = unveil_check_uperms(get_vp_pending_uperms(cr, to_dvp, NULL), UPERM_CREATE)))
+	if ((error = check_uperms(get_vp_pending_uperms(cr, to_dvp, NULL), UPERM_CREATE)))
 		return (error);
 	if ((error = cred_ability_check(cr, CURTAINABL_VFS_CREATE)))
 		return (error);
@@ -684,11 +683,11 @@ curtain_vnode_check_unlink(struct ucred *cr,
 	uperms = get_vp_uperms(cr, vp);
 
 	if (vp->v_type == VSOCK) {
-		if ((error = unveil_check_uperms(uperms, UPERM_BIND)))
+		if ((error = check_uperms(uperms, UPERM_BIND)))
 			return (error);
 	} else {
 		if (!(uperms & UPERM_TMPDIR_CHILD && vp->v_type == VREG) &&
-		    (error = unveil_check_uperms(uperms, UPERM_DELETE)))
+		    (error = check_uperms(uperms, UPERM_DELETE)))
 			return (error);
 	}
 
@@ -715,7 +714,7 @@ curtain_vnode_check_rename_from(struct ucred *cr,
 	 * directory that allows reading, only allow renaming files that
 	 * already have read permissions.
 	 */
-	if ((error = unveil_check_uperms(get_vp_uperms(cr, vp), UPERM_DELETE | UPERM_READ)))
+	if ((error = check_uperms(get_vp_uperms(cr, vp), UPERM_DELETE | UPERM_READ)))
 		return (error);
 	if ((error = cred_ability_check(cr, CURTAINABL_VFS_DELETE)))
 		return (error);
@@ -729,9 +728,9 @@ curtain_vnode_check_rename_to(struct ucred *cr,
     int samedir, struct componentname *cnp)
 {
 	int error;
-	if (vp && (error = unveil_check_uperms(get_vp_uperms(cr, vp), UPERM_DELETE)))
+	if (vp && (error = check_uperms(get_vp_uperms(cr, vp), UPERM_DELETE)))
 		return (error);
-	if ((error = unveil_check_uperms(get_vp_pending_uperms(cr, dvp, vp), UPERM_CREATE)))
+	if ((error = check_uperms(get_vp_pending_uperms(cr, dvp, vp), UPERM_CREATE)))
 		return (error);
 	if (vp && (error = cred_ability_check(cr, CURTAINABL_VFS_DELETE)))
 		return (error);
@@ -744,7 +743,7 @@ static int
 curtain_vnode_check_chdir(struct ucred *cr, struct vnode *dvp, struct label *dvplabel)
 {
 	int error;
-	if ((error = unveil_check_uperms(get_vp_uperms(cr, dvp), UPERM_SEARCH)))
+	if ((error = check_uperms(get_vp_uperms(cr, dvp), UPERM_SEARCH)))
 		return (error);
 	if ((error = cred_ability_check(cr, CURTAINABL_VFS_READ)))
 		return (error);
@@ -761,7 +760,7 @@ curtain_vnode_check_stat(struct ucred *cr, struct ucred *file_cr,
 		return (0);
 	uperms = get_vp_uperms(cr, vp);
 	if (!(uperms & UPERM_TMPDIR_CHILD && vp->v_type == VREG) &&
-	    (error = unveil_check_uperms(uperms, UPERM_STATUS)))
+	    (error = check_uperms(uperms, UPERM_STATUS)))
 		return (error);
 	if ((error = cred_ability_check(cr, CURTAINABL_VFS_READ)))
 		return (error);
@@ -773,7 +772,7 @@ curtain_vnode_check_lookup(struct ucred *cr,
     struct vnode *dvp, struct label *dvplabel, struct componentname *cnp)
 {
 	int error;
-	if ((error = unveil_check_uperms(get_vp_uperms(cr, dvp), UPERM_TRAVERSE)))
+	if ((error = check_uperms(get_vp_uperms(cr, dvp), UPERM_TRAVERSE)))
 		return (error);
 	if ((error = cred_ability_check(cr, CURTAINABL_VFS_MISC)))
 		return (error);
@@ -784,7 +783,7 @@ static int
 curtain_vnode_check_readlink(struct ucred *cr, struct vnode *vp, struct label *vplabel)
 {
 	int error;
-	if ((error = unveil_check_uperms(get_vp_uperms(cr, vp), UPERM_TRAVERSE)))
+	if ((error = check_uperms(get_vp_uperms(cr, vp), UPERM_TRAVERSE)))
 		return (error);
 	if ((error = cred_ability_check(cr, CURTAINABL_VFS_MISC)))
 		return (error);
@@ -796,7 +795,7 @@ curtain_vnode_check_setflags(struct ucred *cr,
     struct vnode *vp, struct label *vplabel, u_long flags)
 {
 	int error;
-	if ((error = unveil_check_uperms(get_vp_uperms(cr, vp), UPERM_SETATTR)))
+	if ((error = check_uperms(get_vp_uperms(cr, vp), UPERM_SETATTR)))
 		return (error);
 	if ((error = cred_ability_check(cr, CURTAINABL_FATTR)))
 		return (error);
@@ -814,7 +813,7 @@ curtain_vnode_check_setmode(struct ucred *cr,
 	uperms = get_vp_uperms(cr, vp);
 	if ((error = check_fmode(cr, mode)))
 		return (error);
-	if ((error = unveil_check_uperms(uperms, UPERM_SETATTR)))
+	if ((error = check_uperms(uperms, UPERM_SETATTR)))
 		return (error);
 	if ((error = cred_ability_check(cr, CURTAINABL_FATTR)))
 		return (error);
@@ -826,7 +825,7 @@ curtain_vnode_check_setowner(struct ucred *cr,
     struct vnode *vp, struct label *vplabel, uid_t uid, gid_t gid)
 {
 	int error;
-	if ((error = unveil_check_uperms(get_vp_uperms(cr, vp), UPERM_SETATTR)))
+	if ((error = check_uperms(get_vp_uperms(cr, vp), UPERM_SETATTR)))
 		return (error);
 	if ((error = cred_ability_check(cr, CURTAINABL_FATTR)))
 		return (error);
@@ -839,7 +838,7 @@ curtain_vnode_check_setutimes(struct ucred *cr,
     struct timespec atime, struct timespec mtime)
 {
 	int error;
-	if ((error = unveil_check_uperms(get_vp_uperms(cr, vp), UPERM_SETATTR)))
+	if ((error = check_uperms(get_vp_uperms(cr, vp), UPERM_SETATTR)))
 		return (error);
 	if ((error = cred_ability_check(cr, CURTAINABL_FATTR)))
 		return (error);
@@ -851,7 +850,7 @@ curtain_vnode_check_listextattr(struct ucred *cr,
     struct vnode *vp, struct label *vplabel, int attrnamespace)
 {
 	int error;
-	if ((error = unveil_check_uperms(get_vp_uperms(cr, vp), UPERM_READ)))
+	if ((error = check_uperms(get_vp_uperms(cr, vp), UPERM_READ)))
 		return (error);
 	if ((error = cred_ability_check(cr, CURTAINABL_EXTATTR)))
 		return (error);
@@ -865,7 +864,7 @@ curtain_vnode_check_getextattr(struct ucred *cr,
     struct vnode *vp, struct label *vplabel, int attrnamespace, const char *name)
 {
 	int error;
-	if ((error = unveil_check_uperms(get_vp_uperms(cr, vp), UPERM_READ)))
+	if ((error = check_uperms(get_vp_uperms(cr, vp), UPERM_READ)))
 		return (error);
 	if ((error = cred_ability_check(cr, CURTAINABL_EXTATTR)))
 		return (error);
@@ -879,7 +878,7 @@ curtain_vnode_check_setextattr(struct ucred *cr,
     struct vnode *vp, struct label *vplabel, int attrnamespace, const char *name)
 {
 	int error;
-	if ((error = unveil_check_uperms(get_vp_uperms(cr, vp), UPERM_SETATTR)))
+	if ((error = check_uperms(get_vp_uperms(cr, vp), UPERM_SETATTR)))
 		return (error);
 	if ((error = cred_ability_check(cr, CURTAINABL_EXTATTR)))
 		return (error);
@@ -893,7 +892,7 @@ curtain_vnode_check_deleteextattr(struct ucred *cr,
     struct vnode *vp, struct label *vplabel, int attrnamespace, const char *name)
 {
 	int error;
-	if ((error = unveil_check_uperms(get_vp_uperms(cr, vp), UPERM_SETATTR)))
+	if ((error = check_uperms(get_vp_uperms(cr, vp), UPERM_SETATTR)))
 		return (error);
 	if ((error = cred_ability_check(cr, CURTAINABL_EXTATTR)))
 		return (error);
@@ -907,7 +906,7 @@ curtain_vnode_check_getacl(struct ucred *cr,
     struct vnode *vp, struct label *vplabel, acl_type_t type)
 {
 	int error;
-	if ((error = unveil_check_uperms(get_vp_uperms(cr, vp), UPERM_STATUS)))
+	if ((error = check_uperms(get_vp_uperms(cr, vp), UPERM_STATUS)))
 		return (error);
 	if ((error = cred_ability_check(cr, CURTAINABL_ACL)))
 		return (error);
@@ -921,7 +920,7 @@ curtain_vnode_check_setacl(struct ucred *cr,
     struct vnode *vp, struct label *vplabel, acl_type_t type, struct acl *acl)
 {
 	int error;
-	if ((error = unveil_check_uperms(get_vp_uperms(cr, vp), UPERM_SETATTR)))
+	if ((error = check_uperms(get_vp_uperms(cr, vp), UPERM_SETATTR)))
 		return (error);
 	if ((error = cred_ability_check(cr, CURTAINABL_ACL)))
 		return (error);
@@ -935,7 +934,7 @@ curtain_vnode_check_deleteacl(struct ucred *cr,
     struct vnode *vp, struct label *vplabel, acl_type_t type)
 {
 	int error;
-	if ((error = unveil_check_uperms(get_vp_uperms(cr, vp), UPERM_SETATTR)))
+	if ((error = check_uperms(get_vp_uperms(cr, vp), UPERM_SETATTR)))
 		return (error);
 	if ((error = cred_ability_check(cr, CURTAINABL_ACL)))
 		return (error);
@@ -949,7 +948,7 @@ curtain_vnode_check_relabel(struct ucred *cr,
     struct vnode *vp, struct label *vplabel, struct label *newlabel)
 {
 	int error;
-	if ((error = unveil_check_uperms(get_vp_uperms(cr, vp), UPERM_SETATTR)))
+	if ((error = check_uperms(get_vp_uperms(cr, vp), UPERM_SETATTR)))
 		return (error);
 	if ((error = cred_ability_check(cr, CURTAINABL_MAC)))
 		return (error);
@@ -962,7 +961,7 @@ static int
 curtain_vnode_check_revoke(struct ucred *cr, struct vnode *vp, struct label *vplabel)
 {
 	int error;
-	if ((error = unveil_check_uperms(get_vp_uperms(cr, vp), UPERM_SETATTR)))
+	if ((error = check_uperms(get_vp_uperms(cr, vp), UPERM_SETATTR)))
 		return (error);
 	if ((error = cred_ability_check(cr, CURTAINABL_TTY)))
 		return (error);
@@ -975,7 +974,7 @@ curtain_vnode_check_exec(struct ucred *cr,
     struct image_params *imgp, struct label *execlabel)
 {
 	int error;
-	if ((error = unveil_check_uperms(get_vp_uperms(cr, vp), UPERM_SHELL)))
+	if ((error = check_uperms(get_vp_uperms(cr, vp), UPERM_SHELL)))
 		return (error);
 	if ((error = cred_ability_check(cr, CURTAINABL_EXEC)))
 		return (error);
@@ -1008,7 +1007,7 @@ curtain_mount_check_stat(struct ucred *cr,
 		}
 	} else
 		uperms = UPERM_ALL;
-	if ((error = unveil_check_uperms(uperms, UPERM_STATUS)))
+	if ((error = check_uperms(uperms, UPERM_STATUS)))
 		return (error);
 	if ((error = cred_ability_check(cr, CURTAINABL_VFS_MISC)))
 		return (error);
@@ -1262,7 +1261,7 @@ curtain_generic_check_vm_prot(struct ucred *cr, struct file *fp, vm_prot_t prot)
 	if (prot & VM_PROT_EXECUTE) {
 		enum curtain_ability abl;
 		if (!(prot & VM_PROT_WRITE) && fp && fp->f_vnode) {
-			if (unveil_check_uperms(get_vp_uperms(cr, fp->f_vnode), UPERM_EXECUTE) == 0)
+			if (check_uperms(get_vp_uperms(cr, fp->f_vnode), UPERM_EXECUTE) == 0)
 				abl = CURTAINABL_PROT_EXEC_LOOSE;
 			else
 				abl = CURTAINABL_PROT_EXEC_LOOSER;
@@ -1502,7 +1501,7 @@ curtain_proc_exec_check(struct image_params *imgp)
 	struct ucred *cr = imgp->proc->p_ucred;
 	struct vnode *vp = imgp->vp;
 	int error;
-	if ((error = unveil_check_uperms(get_vp_uperms(cr, vp),
+	if ((error = check_uperms(get_vp_uperms(cr, vp),
 	    imgp->interpreted == IMGACT_SHELL ? UPERM_SHELL : UPERM_EXECUTE)))
 		return (error);
 	if ((error = cred_ability_check(cr, CURTAINABL_EXEC)))
