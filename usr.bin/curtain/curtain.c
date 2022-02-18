@@ -506,9 +506,10 @@ main(int argc, char *argv[])
 				path = abspath;
 			}
 			r = curtain_path_str(args_slot, path,
-			    ch == 'u' ? CURTAIN_PATH_NOSTAT | CURTAIN_PATH_NOLIST : 0,
+			    CURTAIN_QUIET |
+			    (ch == 'u' ? CURTAIN_PATH_NOSTAT | CURTAIN_PATH_NOLIST : 0),
 			    perms);
-			if (r < 0 && errno != ENOENT)
+			if (r < 0)
 				warn("%s", path);
 			break;
 		}

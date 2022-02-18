@@ -742,7 +742,7 @@ curtain_sysctl(struct curtain_slot *slot, const char *sysctl, int flags)
 	mibn = nitems(mibv);
 	r = sysctlnametomib(sysctl, mibv, &mibn);
 	if (r < 0) {
-		if (errno != ENOENT)
+		if (!(flags & CURTAIN_QUIET) && errno != ENOENT)
 			warn("%s", sysctl);
 		return (-1);
 	}
@@ -1166,7 +1166,7 @@ curtain_path_multi(struct curtain_slot **slots, size_t nslots,
 
 	r = unveil_path_1(&trail, flags & CURTAIN_PATH_NOFOLLOW, true, path, &node);
 	if (r < 0) {
-		if (errno != ENOENT && errno != EACCES)
+		if (!(flags & CURTAIN_QUIET) && errno != ENOENT && errno != EACCES)
 			warn("%s: %s", "curtain_path", path);
 		return (r);
 	}
