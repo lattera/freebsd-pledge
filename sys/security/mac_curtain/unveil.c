@@ -696,47 +696,58 @@ unveil_vnode_walk_created(struct ucred *cr, struct vnode *dvp, struct vnode *vp)
 }
 
 int
+unveil_vnode_walk_finish(struct ucred *cr, struct vnode *dvp, struct vnode *vp)
+{
+	struct unveil_tracker *track;
+	struct unveil_tracker_entry *entry;
+	unveil_perms uperms;
+	if (!(track = unveil_track_get(cr, false)))
+		return (0);
+	if (!(entry = unveil_track_pick(track, vp ? vp : dvp)))
+		return (ENOENT);
+	uperms = entry->create_pending ? entry->pending_uperms : entry->uperms;
+	/*
+	 * Many syscalls inspect the target vnodes before calling the
+	 * MAC check functions (which would then return ENOENT when
+	 * needed permissions are missing and UPERM_EXPOSE is not set)
+	 * and may return various errnos instead of ENOENT.
+	 *
+	 * This errno fixup is to make them fail early with ENOENT
+	 * after lookup in the case where the path was not unveiled or
+	 * was unveiled with just UPERM_TRAVERSE (which is the default
+	 * for intermediate path components when using unveil(3)).
+	 *
+	 * It also deals with a few special cases (and maybe others?):
+	 *
+	 * - mac_vnode_check_readlink() should be allowed with just
+	 *   UPERM_TRAVERSE when called from within namei() for a path
+	 *   lookup, but should be denied when it's done for readlink(2)
+	 *   and the user could retrieve the symlink target string.
+	 *
+	 * - __realpathat(2) lacks MAC checks, and this protects it.
+	 */
+	if (!(uperms & ~UPERM_TRAVERSE))
+		return (ENOENT);
+	return (0);
+}
+
+int
 unveil_vnode_walk_fixup_errno(struct ucred *cr, int error)
 {
 	struct unveil_tracker *track;
 	struct unveil_tracker_entry *entry;
-	unveil_perms uhave, uneed;
+	unveil_perms uperms;
 	if (!(track = unveil_track_get(cr, false)))
 		return (error);
 	entry = unveil_track_peek(track);
-	if (error) {
-		/*
-		 * Prevent using errnos (like EISDIR/ENOTDIR/etc) to infer the
-		 * existence and type of path components after a lookup.  Note
-		 * that UPERM_DEVFS gives an inheritable UPERM_TRAVERSE on a
-		 * whole directory hierarchy.
-		 */
-		uneed = UPERM_EXPOSE;
-	} else {
-		/*
-		 * Many syscalls inspect the target vnodes before calling the
-		 * MAC check functions (which would then return ENOENT when
-		 * needed permissions are missing and UPERM_EXPOSE is not set)
-		 * and may return various errnos instead of ENOENT.
-		 *
-		 * This errno fixup is to make them fail early with ENOENT
-		 * after lookup in the case where the path was not unveiled or
-		 * was unveiled with just UPERM_TRAVERSE (which is the default
-		 * for intermediate path components when using unveil(3)).
-		 *
-		 * It also deals with a few special cases (and maybe others?):
-		 *
-		 * - mac_vnode_check_readlink() should be allowed with just
-		 *   UPERM_TRAVERSE when called from within namei() for a path
-		 *   lookup, but should be denied when it's done for readlink(2)
-		 *   and the user could retrieve the symlink target string.
-		 *
-		 * - __realpathat(2) lacks MAC checks, and this protects it.
-		 */
-		uneed = ~UPERM_TRAVERSE;
-	}
-	uhave = entry->create_pending ? entry->pending_uperms : entry->uperms;
-	if (!(uhave & uneed))
+	uperms = entry->create_pending ? entry->pending_uperms : entry->uperms;
+	/*
+	 * Prevent using errnos (like EISDIR/ENOTDIR/etc) to infer the
+	 * existence and type of path components after a lookup.  Note
+	 * that UPERM_DEVFS gives an inheritable UPERM_TRAVERSE on a
+	 * whole directory hierarchy.
+	 */
+	if (!(uperms & UPERM_EXPOSE))
 		error = ENOENT;
 	return (error);
 }

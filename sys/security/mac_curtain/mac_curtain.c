@@ -1604,6 +1604,7 @@ static struct mac_policy_ops curtain_policy_ops = {
 	.mpo_vnode_walk_backtrack = unveil_vnode_walk_backtrack,
 	.mpo_vnode_walk_replace = unveil_vnode_walk_replace,
 	.mpo_vnode_walk_created = unveil_vnode_walk_created,
+	.mpo_vnode_walk_finish = unveil_vnode_walk_finish,
 	.mpo_vnode_walk_fixup_errno = unveil_vnode_walk_fixup_errno,
 	.mpo_vnode_walk_dirent_visible = unveil_vnode_walk_dirent_visible,
 

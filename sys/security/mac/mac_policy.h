@@ -695,6 +695,8 @@ typedef void	(*mpo_vnode_walk_replace_t)(struct ucred *cred,
 		    struct vnode *from_vp, struct vnode *to_vp);
 typedef void	(*mpo_vnode_walk_created_t)(struct ucred *cred,
 		    struct vnode *dvp, struct vnode *vp);
+typedef int	(*mpo_vnode_walk_finish_t)(struct ucred *cred,
+		    struct vnode *dvp, struct vnode *vp);
 typedef int	(*mpo_vnode_walk_fixup_errno_t)(struct ucred *cred, int error);
 typedef bool	(*mpo_vnode_walk_dirent_visible_t)(struct ucred *cred,
 		    struct vnode *vp, struct dirent *dp);
@@ -1025,6 +1027,7 @@ struct mac_policy_ops {
 	mpo_vnode_walk_backtrack_t		mpo_vnode_walk_backtrack;
 	mpo_vnode_walk_replace_t		mpo_vnode_walk_replace;
 	mpo_vnode_walk_created_t		mpo_vnode_walk_created;
+	mpo_vnode_walk_finish_t			mpo_vnode_walk_finish;
 	mpo_vnode_walk_fixup_errno_t		mpo_vnode_walk_fixup_errno;
 	mpo_vnode_walk_dirent_visible_t		mpo_vnode_walk_dirent_visible;
 

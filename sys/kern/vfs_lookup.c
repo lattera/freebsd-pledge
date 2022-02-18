@@ -694,8 +694,8 @@ namei(struct nameidata *ndp)
 			NDVALIDATE(ndp);
 #ifdef MAC
 			if (ndp->ni_lcf & NI_LCF_MACWALK_ACTIVE) {
-				error = mac_vnode_walk_fixup_errno(
-				    cnp->cn_cred, error);
+				error = mac_vnode_walk_finish(
+				    cnp->cn_cred, ndp->ni_dvp, ndp->ni_vp);
 				if (error != 0) {
 					/*
 					 * The lookup() call was successful

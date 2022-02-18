@@ -1263,6 +1263,16 @@ mac_vnode_walk_created(struct ucred *cred,
 }
 
 int
+mac_vnode_walk_finish(struct ucred *cred, struct vnode *dvp, struct vnode *vp)
+{
+	int error;
+
+	MAC_POLICY_CHECK(vnode_walk_finish, cred, dvp, vp);
+
+	return (error);
+}
+
+int
 mac_vnode_walk_fixup_errno(struct ucred *cred, int error1)
 {
 	int error;

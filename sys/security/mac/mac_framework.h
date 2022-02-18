@@ -716,6 +716,8 @@ void	mac_vnode_walk_replace(struct ucred *cred,
 	    struct vnode *from_vp, struct vnode *to_vp);
 void	mac_vnode_walk_created(struct ucred *cred,
 	    struct vnode *dvp, struct vnode *vp);
+int	mac_vnode_walk_finish(struct ucred *cred,
+	    struct vnode *dvp, struct vnode *vp);
 int	mac_vnode_walk_fixup_errno(struct ucred *cred, int error);
 bool	mac_vnode_walk_dirent_visible(struct ucred *cred,
 	    struct vnode *vp, struct dirent *dp);
