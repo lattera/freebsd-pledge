@@ -884,6 +884,7 @@ curtain_parse_unveil_perms(unveil_perms *uperms_ret, const char *s)
 	int r = 0;
 	while (*s)
 		switch (*s++) {
+		case 'e': uperms |= UPERM_EXPOSE; break;
 		case 'l': uperms |= UPERM_LIST; break;
 		case 'b': uperms |= UPERM_BROWSE; break;
 		case 'r': uperms |= UPERM_READ; break;
@@ -1124,7 +1125,7 @@ expand_interm_uperms(int flags, unveil_perms uperms)
 static unveil_perms
 expand_final_uperms(int flags, unveil_perms uperms)
 {
-	if (!(flags & CURTAIN_PATH_NOSTAT) && uperms & ~UPERM_TRAVERSE)
+	if (!(flags & CURTAIN_PATH_NOSTAT) && uperms & ~UPERM_INSPECT)
 		uperms |= UPERM_INSPECT;
 	return (uperms_expand(uperms));
 }

@@ -487,6 +487,38 @@ system_tmpdir_body() {
 		rmdir /tmp/curtain.test.$r
 }
 
+atf_test_case expose_eacces
+expose_eacces_head() {
+	atf_set require.user unprivileged
+}
+expose_eacces_body() {
+	atf_check -s not-exit:0 -e save:ls-enoent ls d/f
+	atf_check -s not-exit:0 -e save:touch-enoent touch d/f
+	atf_check mkdir d
+	atf_check chmod -x d
+	atf_check -s not-exit:0 -e save:ls-eacces ls d/f
+	atf_check chmod +x d
+	atf_check chmod -w d
+	atf_check -s not-exit:0 -e save:touch-eacces touch d/f
+	atf_check chmod +w d
+	atf_check -o save:touch-ok touch d/f
+	atf_check -o save:ls-ok ls d/f
+
+	atf_check -s not-exit:0 -e file:ls-enoent curtain ls d/f
+	atf_check -s not-exit:0 -e file:ls-enoent curtain -p d: ls d/f
+	atf_check -s not-exit:0 -e file:ls-enoent curtain -p d:r -p d/f: ls d/f
+	atf_check -s not-exit:0 -e file:ls-eacces curtain -p d:e ls d/f
+	atf_check -s not-exit:0 -e file:touch-enoent curtain touch d/f
+	atf_check -s not-exit:0 -e file:touch-enoent curtain -p d: touch d/f
+	atf_check -s not-exit:0 -e file:touch-eacces curtain -p d:e touch d/f
+	atf_check -s not-exit:0 -e file:touch-eacces curtain -p d:r touch d/f
+	atf_check -s not-exit:0 -e file:touch-eacces curtain -p d:rw -p d/f: touch d/f
+	atf_check -o file:ls-ok curtain -p d:r ls d/f
+	atf_check -o file:ls-ok curtain -p d/f:i ls d/f
+	atf_check -o file:touch-ok curtain -p d:rw touch d/f
+	atf_check -o file:touch-ok curtain -p d/f:rw touch d/f
+}
+
 atf_init_test_cases() {
 	atf_add_test_case cmd_true
 	atf_add_test_case cmd_false
@@ -525,4 +557,5 @@ atf_init_test_cases() {
 	atf_add_test_case chroot
 	atf_add_test_case exec_rsugid
 	atf_add_test_case system_tmpdir
+	atf_add_test_case expose_eacces
 }
