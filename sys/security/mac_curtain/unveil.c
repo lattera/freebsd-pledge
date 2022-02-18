@@ -502,8 +502,9 @@ unveil_vnode_walk_start(struct ucred *cr, struct vnode *dvp)
 	struct curtain_unveil *cover;
 	struct unveil_tracker *track;
 	struct unveil_cache *cache;
-	int error;
+	unveil_perms uperms;
 	unsigned depth;
+	int error;
 	MPASS(dvp);
 	track = unveil_track_get(cr, true);
 	cache = curthread->td_proc->p_unveil_cache;
@@ -558,19 +559,17 @@ unveil_vnode_walk_start(struct ucred *cr, struct vnode *dvp)
 			}
 		}
 	}
+
 	track->uncharted = true;
-	track->uperms = UPERM_NONE;
 	if (cover) {
-		track->uperms = cover->soft_uperms;
+		uperms = cover->soft_uperms;
 		if (depth)
-			track->uperms = uperms_inherit(track->uperms);
+			uperms = uperms_inherit(uperms);
 		else
 			track->uncharted = false;
-	} else {
-		track->uperms = default_uperms(track);
-	}
-
-	unveil_track_fill(track, dvp)->uperms = track->uperms;
+	} else
+		uperms = default_uperms(track);
+	unveil_track_fill(track, dvp)->uperms = uperms;
 	return (0);
 }
 
@@ -579,16 +578,17 @@ unveil_vnode_walk_backtrack(struct ucred *cr, struct vnode *dvp)
 {
 	struct unveil_tracker *track;
 	struct curtain_unveil *uv;
+	unveil_perms uperms;
 	if (!(track = unveil_track_get(cr, false)))
 		return;
-
 	if (track->ct && (uv = curtain_lookup_unveil(track->ct, dvp, NULL, 0))) {
 		track->uncharted = false;
-		track->uperms = uv->soft_uperms;
-	} else if (!track->uncharted)
-		track->uperms = UPERM_NONE;
-
-	unveil_track_fill(track, dvp)->uperms = track->uperms;
+		uperms = uv->soft_uperms;
+	} else if (track->uncharted)
+		uperms = unveil_track_peek(track)->uperms;
+	else
+		uperms = UPERM_NONE;
+	unveil_track_fill(track, dvp)->uperms = uperms;
 }
 
 /*
@@ -602,45 +602,44 @@ unveil_vnode_walk_component(struct ucred *cr,
     struct vnode *dvp, struct componentname *cnp, struct vnode *vp)
 {
 	struct unveil_tracker *track;
-	struct curtain_unveil *uv = NULL;
-	char *name = NULL;
-	size_t name_len = 0;
+	struct curtain_unveil *uv;
+	unveil_perms uperms;
 	if (!(track = unveil_track_get(cr, false)))
 		return;
-	if (cnp->cn_flags & ISDOTDOT) {
-		if (!track->uncharted)
-			track->uperms = UPERM_NONE;
-	} else {
-		/*
-		 * When resolving a path that ends with slashes, the last path
-		 * component may have a zero-length name.
-		 */
-		if ((name_len = cnp->cn_namelen))
-			name = cnp->cn_nameptr;
-	}
 
+	uv = NULL;
 	if (track->ct) {
 		if (vp && vp->v_type == VDIR)
 			uv = curtain_lookup_unveil(track->ct, vp, NULL, 0);
-		else if (name)
-			uv = curtain_lookup_unveil(track->ct, dvp, name, name_len);
+		else if (!(cnp->cn_flags & ISDOTDOT) && cnp->cn_namelen != 0)
+			uv = curtain_lookup_unveil(track->ct, dvp,
+			    cnp->cn_nameptr, cnp->cn_namelen);
 	}
 
 	if (uv) {
 		track->uncharted = false;
-		track->uperms = uv->soft_uperms;
+		uperms = uv->soft_uperms;
 	} else {
-		track->uncharted = true;
-		track->uperms = uperms_inherit(track->uperms);
+		if (cnp->cn_flags & ISDOTDOT) {
+			if (track->uncharted)
+				uperms = unveil_track_peek(track)->uperms;
+			else
+				uperms = UPERM_NONE;
+		} else {
+			track->uncharted = true;
+			uperms = uperms_inherit(unveil_track_peek(track)->uperms);
+		}
 	}
 
 	if (vp) {
-		track->uperms = unveil_special_exemptions(cr, vp, track->uperms);
-		unveil_track_fill(track, vp)->uperms = track->uperms;
+		uperms = unveil_special_exemptions(cr, vp, uperms);
+		unveil_track_fill(track, vp)->uperms = uperms;
 	} else {
 		struct unveil_tracker_entry *entry;
-		if ((entry = unveil_track_find(track, dvp)))
-			entry->pending_uperms = track->uperms;
+		if ((entry = unveil_track_find(track, dvp))) {
+			entry->create_pending = true;
+			entry->pending_uperms = uperms;
+		}
 	}
 }
 
@@ -665,7 +664,8 @@ unveil_vnode_walk_created(struct ucred *cr, struct vnode *dvp, struct vnode *vp)
 	struct unveil_tracker_entry *entry;
 	if (!(track = unveil_track_get(cr, false)))
 		return;
-	if ((entry = unveil_track_peek(track))->vp == dvp) {
+	entry = unveil_track_peek(track);
+	if (entry->vp == dvp && entry->create_pending) {
 		unveil_perms uperms = entry->pending_uperms;
 		unveil_track_fill(track, vp)->uperms = uperms;
 	}
@@ -675,8 +675,12 @@ int
 unveil_vnode_walk_fixup_errno(struct ucred *cr, int error)
 {
 	struct unveil_tracker *track;
+	struct unveil_tracker_entry *entry;
+	unveil_perms uperms;
 	if (!(track = unveil_track_get(cr, false)))
 		return (error);
+	entry = unveil_track_peek(track);
+	uperms = entry->create_pending ? entry->pending_uperms : entry->uperms;
 	if (error) {
 		/*
 		 * Prevent using errnos (like EISDIR/ENOTDIR/etc) to infer the
@@ -684,7 +688,7 @@ unveil_vnode_walk_fixup_errno(struct ucred *cr, int error)
 		 * that UPERM_DEVFS gives an inheritable UPERM_TRAVERSE on a
 		 * whole directory hierarchy.
 		 */
-		if (!(track->uperms & UPERM_EXPOSE))
+		if (!(uperms & UPERM_EXPOSE))
 			error = ENOENT;
 	} else {
 		/*
@@ -707,7 +711,7 @@ unveil_vnode_walk_fixup_errno(struct ucred *cr, int error)
 		 *
 		 * - __realpathat(2) lacks MAC checks, and this protects it.
 		 */
-		if (!(track->uperms & ~UPERM_TRAVERSE))
+		if (!(uperms & ~UPERM_TRAVERSE))
 			error = ENOENT;
 	}
 	return (error);

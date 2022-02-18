@@ -231,7 +231,6 @@ struct unveil_cache {
 struct unveil_tracker {
 	uint64_t serial;
 	struct curtain *ct;
-	unveil_perms uperms;
 #define	UNVEIL_TRACKER_ENTRIES_COUNT 2
 	unsigned fill;
 	bool uncharted;
@@ -241,6 +240,7 @@ struct unveil_tracker {
 		unsigned vp_nchash, vp_hash;
 		int mp_gen;
 		unveil_perms uperms, pending_uperms;
+		bool create_pending;
 	} entries[UNVEIL_TRACKER_ENTRIES_COUNT];
 };
 
