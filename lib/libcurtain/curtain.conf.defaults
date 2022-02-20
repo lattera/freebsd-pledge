@@ -136,7 +136,7 @@ ability any_sysctl
 
 
 [_vfs]
-ability vfs_read vfs_write vfs_create vfs_delete vfs_fifo
+ability vfs_read vfs_write vfs_create vfs_delete vfs_unbind vfs_fifo
 ability flock
 ability fattr fmode_special
 
