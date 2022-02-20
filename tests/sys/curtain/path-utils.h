@@ -13,7 +13,7 @@ try_creat_nonexec(const char *path)
 	int r;
 	r = creat(path, S_IRUSR|S_IWUSR | S_IRGRP|S_IWGRP | S_IROTH|S_IWOTH);
 	if (r >= 0)
-		close(r);
+		ATF_CHECK(close(r) >= 0);
 	return (r);
 }
 
@@ -23,7 +23,7 @@ try_creat(const char *path)
 	int r;
 	r = creat(path, S_IRWXU | S_IRWXG | S_IRWXO);
 	if (r >= 0)
-		close(r);
+		ATF_CHECK(close(r) >= 0);
 	return (r);
 }
 
@@ -39,7 +39,7 @@ try_open(const char *path, int flags)
 	int r;
 	r = open(path, flags);
 	if (r >= 0)
-		close(r);
+		ATF_CHECK(close(r) >= 0);
 	return (r);
 }
 
@@ -49,7 +49,7 @@ try_openat(int atfd, const char *path, int flags)
 	int r, r2;
 	r = openat(atfd, path ? path : "", (path ? 0 : O_EMPTY_PATH) | flags);
 	if (r >= 0)
-		close(r);
+		ATF_CHECK(close(r) >= 0);
 	if (atfd == AT_FDCWD) {
 		r2 = try_open(path, flags);
 		ATF_CHECK_EQ(r, r2);
@@ -191,7 +191,7 @@ check_accessat(int atfd, const char *path, const char *flags)
 			fd1 = openat(atfd, path, O_PATH);
 		if (fd1 >= 0) {
 			check_accessat(fd1, NULL, flags);
-			close(fd1);
+			ATF_CHECK(close(fd1) >= 0);
 		}
 	}
 }
