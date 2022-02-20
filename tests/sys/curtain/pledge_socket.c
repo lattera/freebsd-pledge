@@ -283,6 +283,7 @@ ATF_TC_BODY(unix_bind_allow, tc)
 	ATF_REQUIRE(pledge("stdio unix", "") >= 0);
 	ATF_CHECK(bind(fd, (void *)&un, sizeof un) >= 0);
 	ATF_CHECK(listen(fd, 0) >= 0);
+	ATF_CHECK(unlink(un.sun_path) >= 0);
 }
 
 ATF_TC_WITHOUT_HEAD(unix_bind_deny);

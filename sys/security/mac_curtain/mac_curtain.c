@@ -699,7 +699,7 @@ curtain_vnode_check_unlink(struct ucred *cr,
 	}
 
 	if (vp->v_type == VSOCK) {
-		if ((error = cred_ability_check(cr, CURTAINABL_VFS_BIND)))
+		if ((error = cred_ability_check(cr, CURTAINABL_VFS_UNBIND)))
 			return (error);
 	} else {
 		if ((error = cred_ability_check(cr, CURTAINABL_VFS_DELETE)))
