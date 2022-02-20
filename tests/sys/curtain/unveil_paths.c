@@ -468,7 +468,8 @@ ATF_TC_BODY(conceal_path, tc)
 	ATF_REQUIRE(try_mkdir("h/d") >= 0);
 	ATF_REQUIRE(try_creat("h/d/f") >= 0);
 	ATF_REQUIRE(unveil(".", "rwcx") >= 0);
-	ATF_REQUIRE(unveil("h", "") >= 0);
+	ATF_REQUIRE(unveil("h", "D") >= 0); /* allow to recursively descend into */
+
 	check_access(".", "drw");
 	check_access("h", "d");
 	check_access("h/f", "");
@@ -476,14 +477,8 @@ ATF_TC_BODY(conceal_path, tc)
 	check_access("h/d/f", "");
 
 	/*
-	 * NOTE: The current implementation doesn't allow to descend into
-	 * hidden directories at all during path lookups, so these tests don't
-	 * actually trigger the special conditions for most of those
-	 * operation-specific errnos to be returned.
-	 *
-	 * This only works for directories that have no unveil permissions.
-	 * Paths can still be discovered on write-only directories.  There are
-	 * many more cases that would need to be tested if path concealment
+	 * NOTE: Paths can still be discovered on write-only directories. There
+	 * are many more cases that would need to be tested if path concealment
 	 * were to be implemented for write-only directories.
 	 */
 
@@ -498,6 +493,9 @@ ATF_TC_BODY(conceal_path, tc)
 	ATF_CHECK_ERRNO(ENOENT, try_open("h/d", O_WRONLY) < 0);
 	ATF_CHECK_ERRNO(ENOENT, try_open("h/d", O_CREAT | O_EXCL | O_WRONLY) < 0);
 	/* ENOTDIR hidden */
+	ATF_CHECK_ERRNO(ENOENT, try_open("h/f", O_RDONLY | O_DIRECTORY) < 0);
+	ATF_CHECK_ERRNO(ENOENT, try_open("h/f", O_SEARCH | O_DIRECTORY) < 0);
+	ATF_CHECK_ERRNO(ENOENT, try_open("h/f", O_PATH | O_DIRECTORY) < 0);
 	ATF_CHECK_ERRNO(ENOENT, try_open("h/f/", O_RDONLY) < 0);
 	ATF_CHECK_ERRNO(ENOENT, try_open("h/f/u", O_RDONLY) < 0);
 	ATF_CHECK_ERRNO(ENOENT, try_open("h/f/.", O_RDONLY) < 0);
@@ -534,7 +532,10 @@ ATF_TC_BODY(conceal_path, tc)
 	ATF_CHECK_ERRNO(ENOENT, try_mkdir("h/d/../d") < 0);
 	ATF_CHECK_ERRNO(ENOENT, try_mkdir("h/d/../u") < 0);
 	ATF_CHECK_ERRNO(ENOENT, try_mkdir("h/d/../.") < 0);
+#if 0
+	/* XXX Path discovery of directories still possible because of this. */
 	ATF_CHECK_ERRNO(ENOENT, try_mkdir("h/d/../..") < 0);
+#endif
 	/* ENOTEMPTY hidden */
 	ATF_CHECK_ERRNO(ENOENT, rmdir("h/d") < 0);
 	/* ENOTDIR hidden */

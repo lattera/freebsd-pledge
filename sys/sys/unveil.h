@@ -36,21 +36,20 @@ static const unveil_perms uperms_inheritable =
     UPERM_EXECUTE | UPERM_SETATTR | UPERM_BIND | UPERM_CONNECT |
     UPERM_SHELL | UPERM_DEVFS;
 
-static const unveil_perms uperms_searchable = uperms_inheritable | UPERM_TMPDIR;
-static const unveil_perms uperms_exposable = uperms_inheritable & ~UPERM_DEVFS;
+static const unveil_perms uperms_searchable = uperms_inheritable & ~UPERM_DEVFS;
+static const unveil_perms uperms_resolvable = uperms_searchable |
+    UPERM_SEARCH | UPERM_STATUS | UPERM_LIST;
 
 static inline unveil_perms
 uperms_expand(unveil_perms uperms)
 {
 	if (uperms & uperms_searchable)
-		uperms |= UPERM_SEARCH;
-	if (uperms & uperms_exposable)
-		uperms |= UPERM_EXPOSE;
+		uperms |= UPERM_SEARCH | UPERM_EXPOSE;
 	if (uperms & UPERM_WRITE)
 		uperms |= UPERM_APPEND;
 	if (uperms & (UPERM_BROWSE | UPERM_READ))
 		uperms |= UPERM_STATUS | UPERM_BROWSE | UPERM_LIST;
-	if (uperms & UPERM_SEARCH)
+	if (uperms & (UPERM_SEARCH | UPERM_TMPDIR | UPERM_DEVFS))
 		uperms |= UPERM_TRAVERSE;
 	if (uperms & UPERM_EXECUTE)
 		uperms |= UPERM_SHELL;

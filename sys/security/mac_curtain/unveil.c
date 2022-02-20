@@ -720,26 +720,24 @@ unveil_vnode_walk_finish(struct ucred *cr, struct vnode *dvp, struct vnode *vp)
 		uperms = entry->pending_uperms;
 	}
 	/*
-	 * Many syscalls inspect the target vnodes before calling the
-	 * MAC check functions (which would then return ENOENT when
-	 * needed permissions are missing and UPERM_EXPOSE is not set)
-	 * and may return various errnos instead of ENOENT.
+	 * Many namei() callers inspect the looked up vnodes before calling the
+	 * MAC handlers and may return error numbers to the user that reveal
+	 * the existence of files.
 	 *
-	 * This errno fixup is to make them fail early with ENOENT
-	 * after lookup in the case where the path was not unveiled or
-	 * was unveiled with just UPERM_TRAVERSE (which is the default
-	 * for intermediate path components when using unveil(3)).
+	 * Thus, make namei() fail early when the the looked up vnode isn't
+	 * supposed to be visible and doesn't have permissions to do anything
+	 * useful with it.
 	 *
-	 * It also deals with a few special cases (and maybe others?):
+	 * Some cases that this deals with:
 	 *
-	 * - mac_vnode_check_readlink() should be allowed with just
-	 *   UPERM_TRAVERSE when called from within namei() for a path
-	 *   lookup, but should be denied when it's done for readlink(2)
-	 *   and the user could retrieve the symlink target string.
-	 *
-	 * - __realpathat(2) lacks MAC checks, and this protects it.
+	 * - access(2)/eaccess(2)/faccessat(2) with F_OK.
+	 * - open(2)/openat(2) with O_PATH, O_CREAT|O_EXCL, others...
+	 * - readlink(2) on symlinks unveiled with just UPERM_TRAVERSE.
+	 * - __realpathat(2).
 	 */
-	if (uperms & ~UPERM_TRAVERSE)
+	if (uperms & uperms_resolvable)
+		return (0);
+	if (uperms & UPERM_TMPDIR_CHILD && (!vp || vp->v_type == VREG))
 		return (0);
 	return (entry->exposed_create ? EACCES : ENOENT);
 }

@@ -825,6 +825,7 @@ unveil_parse_perms(unveil_perms *uperms, const char *s)
 		case 'i': *uperms |= UPERM_INSPECT; break;
 		case 't': *uperms |= UPERM_TMPDIR; break;
 		case 'u': *uperms |= UPERM_UNIX; break;
+		case 'D': *uperms |= UPERM_DEVFS; break;
 		default:
 			return (-1);
 		}

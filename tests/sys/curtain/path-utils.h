@@ -127,6 +127,21 @@ check_accessat(int atfd, const char *path, const char *flags)
 
 	int expected_errno = a ? EACCES : ENOENT;
 
+	if (e) {
+		ATF_CHECK(try_accessat(atfd, path, F_OK) >= 0);
+		ATF_CHECK(try_openat(atfd, path, O_PATH) >= 0);
+	} else {
+		ATF_CHECK_ERRNO(expected_errno, try_accessat(atfd, path, F_OK) < 0);
+		ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_PATH) < 0);
+		if (d) { /* check if EISDIR hidden */
+			ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_WRONLY) < 0);
+		} else { /* check if ENOTDIR hidden */
+			ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_RDONLY|O_DIRECTORY) < 0);
+			ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_SEARCH|O_DIRECTORY) < 0);
+			ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_PATH|O_DIRECTORY) < 0);
+		}
+	}
+
 	if (i)
 		ATF_CHECK(try_statat(atfd, path) >= 0);
 	else if (!p)
@@ -136,19 +151,21 @@ check_accessat(int atfd, const char *path, const char *flags)
 		if (s) {
 			ATF_CHECK(try_accessat(atfd, path, X_OK) >= 0);
 			ATF_CHECK(try_openat(atfd, path, O_SEARCH) >= 0);
-			ATF_CHECK(try_openat(atfd, path, O_PATH|O_EXEC) >= 0);
+			ATF_CHECK(try_openat(atfd, path, O_PATH|O_SEARCH) >= 0);
 		} else if (!p) {
 			ATF_CHECK_ERRNO(expected_errno, try_accessat(atfd, path, X_OK) < 0);
 			ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_SEARCH) < 0);
-			ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_PATH|O_EXEC) < 0);
+			ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_PATH|O_SEARCH) < 0);
 		}
 	} else {
 		if (x) {
 			ATF_CHECK(try_accessat(atfd, path, X_OK) >= 0);
 			ATF_CHECK(try_openat(atfd, path, O_EXEC) >= 0);
+			ATF_CHECK(try_openat(atfd, path, O_PATH|O_EXEC) >= 0);
 		} else if (!p) {
 			ATF_CHECK_ERRNO(expected_errno, try_accessat(atfd, path, X_OK) < 0);
 			ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_EXEC) < 0);
+			ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_PATH|O_EXEC) < 0);
 		}
 	}
 
