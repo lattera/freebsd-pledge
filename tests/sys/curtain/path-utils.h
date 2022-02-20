@@ -132,18 +132,24 @@ check_accessat(int atfd, const char *path, const char *flags)
 	else if (!p)
 		ATF_CHECK_ERRNO(expected_errno, try_statat(atfd, path) < 0);
 
-	if (d && s) {
-		ATF_CHECK(try_accessat(atfd, path, X_OK) >= 0);
-		ATF_CHECK(try_openat(atfd, path, O_SEARCH) >= 0);
-		ATF_CHECK(try_openat(atfd, path, O_PATH|O_EXEC) >= 0);
-		ATF_CHECK(try_openat(atfd, path, O_SEARCH|O_DIRECTORY) >= 0);
-		ATF_CHECK(try_openat(atfd, path, O_PATH|O_EXEC|O_DIRECTORY) >= 0);
-	} else if (d && !s && !p) {
-		ATF_CHECK_ERRNO(expected_errno, try_accessat(atfd, path, X_OK) < 0);
-		ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_SEARCH) < 0);
-		ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_PATH|O_EXEC) < 0);
-		ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_SEARCH|O_DIRECTORY) < 0);
-		ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_PATH|O_EXEC|O_DIRECTORY) < 0);
+	if (d) {
+		if (s) {
+			ATF_CHECK(try_accessat(atfd, path, X_OK) >= 0);
+			ATF_CHECK(try_openat(atfd, path, O_SEARCH) >= 0);
+			ATF_CHECK(try_openat(atfd, path, O_PATH|O_EXEC) >= 0);
+		} else if (!p) {
+			ATF_CHECK_ERRNO(expected_errno, try_accessat(atfd, path, X_OK) < 0);
+			ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_SEARCH) < 0);
+			ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_PATH|O_EXEC) < 0);
+		}
+	} else {
+		if (x) {
+			ATF_CHECK(try_accessat(atfd, path, X_OK) >= 0);
+			ATF_CHECK(try_openat(atfd, path, O_EXEC) >= 0);
+		} else if (!p) {
+			ATF_CHECK_ERRNO(expected_errno, try_accessat(atfd, path, X_OK) < 0);
+			ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_EXEC) < 0);
+		}
 	}
 
 	if (r) {
@@ -174,16 +180,6 @@ check_accessat(int atfd, const char *path, const char *flags)
 		if (!d) {
 			ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_WRONLY) < 0);
 			ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_RDWR) < 0);
-		}
-	}
-
-	if (!d) {
-		if (x) {
-			ATF_CHECK(try_accessat(atfd, path, X_OK) >= 0);
-			ATF_CHECK(try_openat(atfd, path, O_EXEC) >= 0);
-		} else if (!p) {
-			ATF_CHECK_ERRNO(expected_errno, try_accessat(atfd, path, X_OK) < 0);
-			ATF_CHECK_ERRNO(expected_errno, try_openat(atfd, path, O_EXEC) < 0);
 		}
 	}
 
