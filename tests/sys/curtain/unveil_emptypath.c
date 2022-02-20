@@ -82,7 +82,7 @@ ATF_TC_BODY(open_empty_path_search_allow, tc)
 	int fd;
 	ATF_REQUIRE(try_mkdir("d") >= 0);
 	ATF_REQUIRE(unveil("d", "c") >= 0);
-	check_access("d", "de");
+	check_access("d", "dse");
 	ATF_REQUIRE((fd = open("d", O_SEARCH)) >= 0);
 	ATF_CHECK(openat(fd, "", O_SEARCH | O_EMPTY_PATH) >= 0);
 }
@@ -93,7 +93,7 @@ ATF_TC_BODY(open_empty_path_search_deny, tc)
 	int fd;
 	ATF_REQUIRE(try_mkdir("d") >= 0);
 	ATF_REQUIRE(unveil("d", "c") >= 0);
-	check_access("d", "de");
+	check_access("d", "dse");
 	ATF_REQUIRE((fd = open("d", O_SEARCH)) >= 0);
 	ATF_CHECK_ERRNO(EACCES, openat(fd, "", O_RDONLY | O_EMPTY_PATH) < 0);
 }

@@ -112,7 +112,7 @@ check_accessat(int atfd, const char *path, const char *flags)
 	for (const char *ptr = flags; *ptr; ptr++)
 		switch (*ptr) {
 		case 's':         s         = true; break;
-		case 'e':         s = e = a = true; break;
+		case 'e':             e = a = true; break;
 		case 'i':     i = s = e = a = true; break;
 		case 'r': r = i = s = e = a = true; break;
 		case 'w': w =     s = e = a = true; break;
@@ -129,17 +129,9 @@ check_accessat(int atfd, const char *path, const char *flags)
 
 	if (i)
 		ATF_CHECK(try_statat(atfd, path) >= 0);
-		/*
-		 * TODO: Test chdir()?  It should be possible to chdir into
-		 * inspectable directories but not to access their content.
-		 */
 	else if (!p)
 		ATF_CHECK_ERRNO(expected_errno, try_statat(atfd, path) < 0);
 
-	/*
-	 * NOTE: The pledge(3)/unveil(3) library currently always maintain
-	 * UPERM_SEARCH on the root directory.
-	 */
 	if (d && s) {
 		ATF_CHECK(try_accessat(atfd, path, X_OK) >= 0);
 		ATF_CHECK(try_openat(atfd, path, O_SEARCH) >= 0);

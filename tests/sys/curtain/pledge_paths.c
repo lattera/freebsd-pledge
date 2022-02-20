@@ -106,7 +106,7 @@ ATF_TC_BODY(cpath_allow, tc)
 	ATF_REQUIRE(try_creat("d/1") >= 0);
 	ATF_REQUIRE(pledge("stdio cpath", "") >= 0);
 	check_access("0", "e");
-	check_access("d", "ed");
+	check_access("d", "dse");
 	check_access("d/1", "e");
 	ATF_CHECK(unlink("0") >= 0);
 	ATF_CHECK(unlink("d/1") >= 0);
@@ -137,7 +137,7 @@ ATF_TC_BODY(fattr_allow, tc)
 	ATF_REQUIRE((fd = open("0", O_WRONLY)) >= 0);
 	ATF_REQUIRE(pledge("stdio fattr", "") >= 0);
 	check_access("0", "e");
-	check_access("d", "ed");
+	check_access("d", "dse");
 	check_access("d/1", "e");
 	ATF_CHECK(fchmod(fd, 0000) >= 0);
 	ATF_CHECK(fchmod(fd, 0600) >= 0);
