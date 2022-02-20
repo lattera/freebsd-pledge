@@ -211,7 +211,7 @@ ATF_TC_BODY(tmppath_deny, tc)
 	ATF_REQUIRE(asprintf(&file1, "%s/file1", tmpdir));
 	ATF_REQUIRE(asprintf(&file2, "%s/file2", tmpdir));
 	ATF_REQUIRE(try_creat(file1) >= 0);
-	ATF_REQUIRE(mkdir(subdir, 0777) >= 0);
+	ATF_REQUIRE(mkdir(subdir, S_IRWXU) >= 0);
 	ATF_REQUIRE(asprintf(&subfile1, "%s/subfile1", subdir));
 	ATF_REQUIRE(asprintf(&subfile2, "%s/subfile2", subdir));
 	ATF_REQUIRE(try_creat(subfile1) >= 0);
@@ -227,7 +227,7 @@ ATF_TC_BODY(tmppath_deny, tc)
 	ATF_REQUIRE(asprintf(&path, "%s/%s.XXXXXXXXXX", tmpdir, getprogname()) > 0);
 	ATF_REQUIRE((path = mktemp(path)));
 
-	ATF_CHECK_ERRNO(ENOENT, mkdir(path, 0777) < 0);
+	ATF_CHECK_ERRNO(ENOENT, mkdir(path, S_IRWXU) < 0);
 	ATF_CHECK_ERRNO(ENOENT, link(file1, path) < 0);
 	ATF_CHECK_ERRNO(ENOENT, link(file2, path) < 0);
 	ATF_CHECK_ERRNO(ENOENT, link(subfile1, path) < 0);
@@ -239,6 +239,21 @@ ATF_TC_BODY(tmppath_deny, tc)
 	ATF_CHECK_ERRNO(ENOENT, unlink(subfile2) < 0);
 	ATF_CHECK_ERRNO(ENOENT, link(subfile1, subfile2) < 0);
 	ATF_CHECK_ERRNO(ENOENT, symlink("symlink-test", subfile2) < 0);
+}
+
+ATF_TC_WITHOUT_HEAD(dpath_allow);
+ATF_TC_BODY(dpath_allow, tc)
+{
+	ATF_REQUIRE(pledge("stdio cpath dpath dpath", "") >= 0);
+	ATF_CHECK(mkfifo("test.fifo", S_IRWXU) >= 0);
+	ATF_CHECK(unlink("test.fifo") >= 0);
+}
+
+ATF_TC_WITHOUT_HEAD(dpath_deny);
+ATF_TC_BODY(dpath_deny, tc)
+{
+	ATF_REQUIRE(pledge("stdio error cpath", "") >= 0);
+	ATF_CHECK_ERRNO(EPERM, mkfifo("test.fifo", S_IRWXU) < 0);
 }
 
 ATF_TP_ADD_TCS(tp)
@@ -254,5 +269,7 @@ ATF_TP_ADD_TCS(tp)
 	ATF_TP_ADD_TC(tp, fattr_deny);
 	ATF_TP_ADD_TC(tp, tmppath_allow);
 	ATF_TP_ADD_TC(tp, tmppath_deny);
+	ATF_TP_ADD_TC(tp, dpath_allow);
+	ATF_TP_ADD_TC(tp, dpath_deny);
 	return (atf_no_error());
 }
