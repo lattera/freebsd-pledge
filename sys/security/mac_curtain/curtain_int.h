@@ -94,6 +94,7 @@ typedef uint16_t barrier_bits;
 #define	BARRIER_SYSVIPC		(1 << 6)
 #define	BARRIER_DEVICE		(1 << 7)
 #define	BARRIER_POSIXIPC_RENAME	(1 << 8)
+#define	BARRIER_CATCHALL	(1 << 15)
 
 #define	BARRIER_NONE	0
 #define	BARRIER_ALL	-1

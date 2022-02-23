@@ -1282,12 +1282,17 @@ curtain_generic_check_vm_prot(struct ucred *cr, struct file *fp, vm_prot_t prot)
 static int
 curtain_generic_check_sendfd(struct ucred *cr, struct thread *td, struct file *fp)
 {
+	struct curtain *ct;
 	int error;
 	if ((error = cred_ability_check(cr, CURTAINABL_SENDFD)))
 		return (error);
-	if (fp->f_vnode && fp->f_vnode->v_type == VDIR &&
-	    (error = cred_ability_check(cr, CURTAINABL_PASSDIR)))
-		return (error);
+	if (fp->f_vnode && fp->f_vnode->v_type == VDIR) {
+		if ((error = cred_ability_check(cr, CURTAINABL_PASSDIR)))
+			return (error);
+		if ((ct = CRED_SLOT(cr)) && curtain_serial(ct) != fp->f_uldgen &&
+		    (error = cred_ability_check(cr, CURTAINABL_PASSDIR_PREOPENED)))
+			return (error);
+	}
 	return (0);
 }
 
@@ -1297,9 +1302,14 @@ curtain_generic_check_recvfd(struct ucred *cr, struct thread *td, struct file *f
 	int error;
 	if ((error = cred_ability_check(cr, CURTAINABL_RECVFD)))
 		return (error);
-	if (fp->f_vnode && fp->f_vnode->v_type == VDIR &&
-	    (error = cred_ability_check(cr, CURTAINABL_PASSDIR)))
-		return (error);
+	if (fp->f_vnode && fp->f_vnode->v_type == VDIR) {
+		if ((error = cred_ability_check(cr, CURTAINABL_PASSDIR)))
+			return (error);
+		if ((cr->cr_uid != fp->f_cred->cr_uid || cr->cr_gid != fp->f_cred->cr_gid) &&
+		    !barrier_visible(CRED_SLOT_BR(fp->f_cred), CRED_SLOT_BR(cr), BARRIER_CATCHALL) &&
+		    (error = priv_check_cred(cr, PRIV_VFS_CHROOT)))
+			return (error);
+	}
 	return (0);
 }
 
