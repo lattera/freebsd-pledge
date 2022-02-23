@@ -1,10 +1,7 @@
 /*-
- * Copyright (c) 2014 Andrew Turner
- * Copyright (c) 2014-2015 The FreeBSD Foundation
- * All rights reserved.
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
  *
- * This software was developed by Andrew Turner under
- * sponsorship from the FreeBSD Foundation.
+ * Copyright (c) 2022 NetApp, Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,68 +23,49 @@
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- *
- * $FreeBSD$
  */
 
-#ifndef	_MACHINE_REG_H_
-#define	_MACHINE_REG_H_
+#include <sys/types.h>
+#include <sys/boottrace.h>
+#include <sys/sysctl.h>
+#include <sys/wait.h>
 
-#include <sys/_types.h>
+#include <err.h>
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
-struct reg {
-	__uint64_t x[30];
-	__uint64_t lr;
-	__uint64_t sp;
-	__uint64_t elr;
-	__uint32_t spsr;
-};
+static void
+usage(void)
+{
+	fprintf(stderr, "usage: boottrace utility [argument ...]\n");
+	exit(1);
+}
 
-struct reg32 {
-	unsigned int r[13];
-	unsigned int r_sp;
-	unsigned int r_lr;
-	unsigned int r_pc;
-	unsigned int r_cpsr;
-};
+int
+main(int argc, char **argv)
+{
+	pid_t pid;
+	int status;
 
-struct fpreg {
-	__uint128_t	fp_q[32];
-	__uint32_t	fp_sr;
-	__uint32_t	fp_cr;
-};
+	if (argc < 2)
+		usage();
+	argv++;
 
-struct fpreg32 {
-	int dummy;
-};
+	BOOTTRACE("%s start", *argv);
+	pid = fork();
+	if (pid == -1) {
+		exit(1);
+	} else if (pid == 0) {
+		execvp(*argv, argv);
+		err(errno == ENOENT ? 127 : 126, "execvp %s", *argv);
+	}
+	waitpid(pid, &status, 0);
+	if (!WIFEXITED(status))
+		warnx("command terminated abnormally");
+	BOOTTRACE("%s done", *argv);
 
-struct dbreg {
-	__uint8_t	db_debug_ver;
-	__uint8_t	db_nbkpts;
-	__uint8_t	db_nwtpts;
-	__uint8_t	db_pad[5];
-
-	struct {
-		__uint64_t dbr_addr;
-		__uint32_t dbr_ctrl;
-		__uint32_t dbr_pad;
-	} db_breakregs[16];
-	struct {
-		__uint64_t dbw_addr;
-		__uint32_t dbw_ctrl;
-		__uint32_t dbw_pad;
-	} db_watchregs[16];
-};
-
-struct dbreg32 {
-	int dummy;
-};
-
-struct arm64_addr_mask {
-	__uint64_t	code;
-	__uint64_t	data;
-};
-
-#define	__HAVE_REG32
-
-#endif /* !_MACHINE_REG_H_ */
+	return (WIFEXITED(status) ? WEXITSTATUS(status) : EXIT_FAILURE);
+}

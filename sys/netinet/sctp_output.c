@@ -12716,6 +12716,8 @@ sctp_lower_sosend(struct socket *so,
 		} else {
 			SCTP_TCB_LOCK_ASSERT(stcb);
 			hold_tcblock = true;
+			SCTP_ASOC_CREATE_UNLOCK(inp);
+			create_lock_applied = false;
 		}
 		if (error) {
 			goto out_unlocked;
@@ -13319,6 +13321,10 @@ skip_preblock:
 					sp->processing = 0;
 				}
 				SCTP_TCB_SEND_UNLOCK(stcb);
+				if (!hold_tcblock) {
+					SCTP_TCB_LOCK(stcb);
+					hold_tcblock = true;
+				}
 				goto skip_out_eof;
 			}
 			/* What about the INIT, send it maybe */
@@ -13511,8 +13517,8 @@ skip_preblock:
 	if (error != 0) {
 		goto out;
 	}
-dataless_eof:
 
+dataless_eof:
 	KASSERT(stcb != NULL, ("stcb is NULL"));
 	KASSERT(hold_tcblock, ("hold_tcblock is false"));
 	SCTP_TCB_LOCK_ASSERT(stcb);
@@ -13600,6 +13606,7 @@ dataless_eof:
 			}
 		}
 	}
+
 skip_out_eof:
 	KASSERT(stcb != NULL, ("stcb is NULL"));
 	KASSERT(hold_tcblock, ("hold_tcblock is false"));
@@ -13689,8 +13696,6 @@ skip_out_eof:
 	KASSERT(stcb != NULL, ("stcb is NULL"));
 	KASSERT(hold_tcblock, ("hold_tcblock is false"));
 	SCTP_TCB_LOCK_ASSERT(stcb);
-	KASSERT((asoc->state & SCTP_STATE_ABOUT_TO_BE_FREED) == 0,
-	    ("Association about to be freed"));
 
 out:
 out_unlocked:

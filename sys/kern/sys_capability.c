@@ -246,7 +246,7 @@ kern_cap_rights_limit(struct thread *td, int fd, cap_rights_t *rights)
 
 	fdp = td->td_proc->p_fd;
 	FILEDESC_XLOCK(fdp);
-	fdep = fdeget_locked(fdp, fd);
+	fdep = fdeget_noref(fdp, fd);
 	if (fdep == NULL) {
 		FILEDESC_XUNLOCK(fdp);
 		return (EBADF);
@@ -332,7 +332,7 @@ sys___cap_rights_get(struct thread *td, struct __cap_rights_get_args *uap)
 
 	fdp = td->td_proc->p_fd;
 	FILEDESC_SLOCK(fdp);
-	if (fget_locked(fdp, fd) == NULL) {
+	if (fget_noref(fdp, fd) == NULL) {
 		FILEDESC_SUNLOCK(fdp);
 		return (EBADF);
 	}
@@ -374,7 +374,7 @@ cap_ioctl_check(struct filedesc *fdp, int fd, u_long cmd)
 	KASSERT(fd >= 0 && fd < fdp->fd_nfiles,
 		("%s: invalid fd=%d", __func__, fd));
 
-	fdep = fdeget_locked(fdp, fd);
+	fdep = fdeget_noref(fdp, fd);
 	KASSERT(fdep != NULL,
 	    ("%s: invalid fd=%d", __func__, fd));
 
@@ -440,7 +440,7 @@ kern_cap_ioctls_limit(struct thread *td, int fd, u_long *cmds, size_t ncmds)
 	fdp = td->td_proc->p_fd;
 	FILEDESC_XLOCK(fdp);
 
-	fdep = fdeget_locked(fdp, fd);
+	fdep = fdeget_noref(fdp, fd);
 	if (fdep == NULL) {
 		error = EBADF;
 		goto out;
@@ -516,7 +516,7 @@ sys_cap_ioctls_get(struct thread *td, struct cap_ioctls_get_args *uap)
 	}
 
 	FILEDESC_SLOCK(fdp);
-	fdep = fdeget_locked(fdp, fd);
+	fdep = fdeget_noref(fdp, fd);
 	if (fdep == NULL) {
 		error = EBADF;
 		FILEDESC_SUNLOCK(fdp);
@@ -600,7 +600,7 @@ sys_cap_fcntls_limit(struct thread *td, struct cap_fcntls_limit_args *uap)
 	fdp = td->td_proc->p_fd;
 	FILEDESC_XLOCK(fdp);
 
-	fdep = fdeget_locked(fdp, fd);
+	fdep = fdeget_noref(fdp, fd);
 	if (fdep == NULL) {
 		FILEDESC_XUNLOCK(fdp);
 		return (EBADF);
@@ -633,7 +633,7 @@ sys_cap_fcntls_get(struct thread *td, struct cap_fcntls_get_args *uap)
 
 	fdp = td->td_proc->p_fd;
 	FILEDESC_SLOCK(fdp);
-	fdep = fdeget_locked(fdp, fd);
+	fdep = fdeget_noref(fdp, fd);
 	if (fdep == NULL) {
 		FILEDESC_SUNLOCK(fdp);
 		return (EBADF);
