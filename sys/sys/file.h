@@ -197,7 +197,7 @@ struct file {
 	 */
 #ifndef NOUNVEIL
 	unveil_perms	f_uperms;	/* unveil permissions when opened */
-	uint64_t	f_uldgen;	/* unveil lockdown generation number */
+	uint64_t	f_userial;	/* unveil curtain serial number */
 #endif
 	union {
 		int16_t	f_seqcount[2];	/* (a) Count of seq. reads and writes. */

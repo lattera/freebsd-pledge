@@ -479,7 +479,7 @@ unveil_vnode_walk_annotate_file(struct ucred *cr, struct file *fp, struct vnode 
 	struct unveil_tracker *track;
 	struct unveil_tracker_entry *entry;
 	struct curtain *ct;
-	fp->f_uldgen = (ct = curtain_from_cred(cr)) ? curtain_serial(ct) : 0;
+	fp->f_userial = (ct = curtain_from_cred(cr)) ? curtain_serial(ct) : 0;
 	if (CRED_IN_VFS_VEILED_MODE(cr)) {
 		if ((track = unveil_track_get(cr, false)) &&
 		    (entry = unveil_track_find(track, vp)))
@@ -499,7 +499,7 @@ unveil_vnode_walk_start_file(struct ucred *cr, struct file *fp)
 		return (0);
 	track = unveil_track_get(cr, true);
 	uperms = fp->f_uperms;
-	if ((fp->f_uldgen != track->serial))
+	if ((fp->f_userial != track->serial))
 		uperms &= unveil_fflags_uperms(fp->f_vnode->v_type, fp->f_flag);
 	unveil_track_roll(track, 1);
 	unveil_track_fill(track, fp->f_vnode)->uperms = uperms;

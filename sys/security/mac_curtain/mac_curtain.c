@@ -1289,7 +1289,7 @@ curtain_generic_check_sendfd(struct ucred *cr, struct thread *td, struct file *f
 	if (fp->f_vnode && fp->f_vnode->v_type == VDIR) {
 		if ((error = cred_ability_check(cr, CURTAINABL_PASSDIR)))
 			return (error);
-		if ((ct = CRED_SLOT(cr)) && curtain_serial(ct) != fp->f_uldgen &&
+		if ((ct = CRED_SLOT(cr)) && curtain_serial(ct) != fp->f_userial &&
 		    (error = cred_ability_check(cr, CURTAINABL_PASSDIR_PREOPENED)))
 			return (error);
 	}
