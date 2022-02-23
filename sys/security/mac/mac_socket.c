@@ -512,7 +512,7 @@ mac_socket_check_setsockopt(struct ucred *cred, struct socket *so,
 	int error;
 
 	MAC_POLICY_CHECK_NOSLEEP(socket_check_setsockopt, cred,
-	    so, so ? so->so_label : NULL, sopt);
+	    so, so->so_label, sopt);
 	MAC_CHECK_PROBE3(socket_check_setsockopt, error, cred, so, sopt);
 
 	return (error);
@@ -528,7 +528,7 @@ mac_socket_check_getsockopt(struct ucred *cred, struct socket *so,
 	int error;
 
 	MAC_POLICY_CHECK_NOSLEEP(socket_check_getsockopt, cred,
-	    so, so ? so->so_label : NULL, sopt);
+	    so, so->so_label, sopt);
 	MAC_CHECK_PROBE3(socket_check_getsockopt, error, cred, so, sopt);
 
 	return (error);
