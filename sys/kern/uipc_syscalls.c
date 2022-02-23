@@ -1263,7 +1263,7 @@ kern_setsockopt(struct thread *td, int s, int level, int name, const void *val,
 	if (error == 0) {
 		so = fp->f_data;
 #ifdef MAC
-		error = mac_socket_check_getsockopt(td->td_ucred, so, &sopt);
+		error = mac_socket_check_setsockopt(td->td_ucred, so, &sopt);
 #endif
 		if (error == 0)
 			error = sosetopt(so, &sopt);
