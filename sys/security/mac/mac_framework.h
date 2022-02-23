@@ -730,6 +730,10 @@ int	mac_generic_check_ioctl(struct ucred *cred, struct file *fp,
 int	mac_generic_check_vm_prot(struct ucred *cred, struct file *fp,
 	    vm_prot_t prot);
 int	mac_generic_ipc_name_prefix(struct ucred *cred, char **prefix, char *end);
+int	mac_generic_check_sendfd(struct ucred *cred, struct thread *td,
+	    struct file *fp);
+int	mac_generic_check_recvfd(struct ucred *cred, struct thread *td,
+	    struct file *fp);
 
 int	mac_sysfil_check(struct ucred *cred, sysfilset_t sfs);
 

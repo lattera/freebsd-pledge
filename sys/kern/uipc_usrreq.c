@@ -64,7 +64,6 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
 #include <sys/capsicum.h>
-#include <sys/sysfil.h>
 #include <sys/domain.h>
 #include <sys/eventhandler.h>
 #include <sys/fcntl.h>
@@ -2037,9 +2036,16 @@ unp_externalize(struct mbuf *control, struct mbuf **controlp, int flags)
 			newfds = datalen / sizeof(*fdep);
 			if (newfds == 0)
 				goto next;
-			if (error == 0)
-				error = sysfil_check(td, SYSFIL_RECVFD);
 			fdep = data;
+
+#ifdef MAC
+			for (i = 0; i < newfds; i++) {
+				error = mac_generic_check_recvfd(td->td_ucred,
+				    td, fdep[i]->fde_file);
+				if (error)
+					break;
+			}
+#endif
 
 			/* If we're not outputting the descriptors free them. */
 			if (error || controlp == NULL) {
@@ -2258,9 +2264,6 @@ unp_internalize(struct mbuf **controlp, struct thread *td)
 			oldfds = datalen / sizeof (int);
 			if (oldfds == 0)
 				break;
-			error = sysfil_check(td, SYSFIL_SENDFD);
-			if (error)
-				goto out;
 			/*
 			 * Check that all the FDs passed in refer to legal
 			 * files.  If not, reject the entire operation.
@@ -2279,11 +2282,14 @@ unp_internalize(struct mbuf **controlp, struct thread *td)
 					error = EOPNOTSUPP;
 					goto out;
 				}
-				if (fp->f_vnode && fp->f_vnode->v_type == VDIR &&
-				    (error = sysfil_check(td, SYSFIL_PASSDIR))) {
+#ifdef MAC
+				error = mac_generic_check_sendfd(td->td_ucred,
+				    td, fp);
+				if (error) {
 					FILEDESC_SUNLOCK(fdesc);
 					goto out;
 				}
+#endif
 			}
 
 			/*

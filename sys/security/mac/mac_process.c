@@ -500,6 +500,26 @@ mac_generic_ipc_name_prefix(struct ucred *cred, char **prefix, char *end)
 	return (error);
 }
 
+int
+mac_generic_check_sendfd(struct ucred *cred, struct thread *td, struct file *fp)
+{
+	int error;
+
+	MAC_POLICY_CHECK(generic_check_sendfd, cred, td, fp);
+
+	return (error);
+}
+
+int
+mac_generic_check_recvfd(struct ucred *cred, struct thread *td, struct file *fp)
+{
+	int error;
+
+	MAC_POLICY_CHECK(generic_check_recvfd, cred, td, fp);
+
+	return (error);
+}
+
 void
 mac_cred_trim(struct ucred *cred)
 {

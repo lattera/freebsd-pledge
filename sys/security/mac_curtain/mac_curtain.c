@@ -1279,6 +1279,30 @@ curtain_generic_check_vm_prot(struct ucred *cr, struct file *fp, vm_prot_t prot)
 	return (0);
 }
 
+static int
+curtain_generic_check_sendfd(struct ucred *cr, struct thread *td, struct file *fp)
+{
+	int error;
+	if ((error = cred_ability_check(cr, CURTAINABL_SENDFD)))
+		return (error);
+	if (fp->f_vnode && fp->f_vnode->v_type == VDIR &&
+	    (error = cred_ability_check(cr, CURTAINABL_PASSDIR)))
+		return (error);
+	return (0);
+}
+
+static int
+curtain_generic_check_recvfd(struct ucred *cr, struct thread *td, struct file *fp)
+{
+	int error;
+	if ((error = cred_ability_check(cr, CURTAINABL_RECVFD)))
+		return (error);
+	if (fp->f_vnode && fp->f_vnode->v_type == VDIR &&
+	    (error = cred_ability_check(cr, CURTAINABL_PASSDIR)))
+		return (error);
+	return (0);
+}
+
 
 static char *
 sysctl_name_str(const struct sysctl_oid *oidp, char *p, size_t n)
@@ -1659,6 +1683,8 @@ static struct mac_policy_ops curtain_policy_ops = {
 	.mpo_generic_ipc_name_prefix = curtain_generic_ipc_name_prefix,
 	.mpo_generic_check_ioctl = curtain_generic_check_ioctl,
 	.mpo_generic_check_vm_prot = curtain_generic_check_vm_prot,
+	.mpo_generic_check_sendfd = curtain_generic_check_sendfd,
+	.mpo_generic_check_recvfd = curtain_generic_check_recvfd,
 
 	.mpo_system_check_sysctl = curtain_system_check_sysctl,
 
