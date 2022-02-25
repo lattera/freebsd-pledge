@@ -553,3 +553,13 @@ mac_proc_check_exec_sugid(struct ucred *cred, struct proc *p)
 	return (error);
 }
 
+int
+mac_proc_check_procctl(struct ucred *cred, struct proc *p, int com, void *data)
+{
+	int error;
+
+	MAC_POLICY_CHECK_NOSLEEP(proc_check_procctl, cred, p, com, data);
+
+	return (error);
+}
+

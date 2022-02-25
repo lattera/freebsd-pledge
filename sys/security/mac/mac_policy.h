@@ -720,6 +720,9 @@ typedef int	(*mpo_proc_exec_check_t)(struct image_params *imgp);
 typedef bool	(*mpo_proc_exec_will_alter_t)(struct proc *p, struct ucred *cred);
 typedef void	(*mpo_proc_exec_alter_t)(struct proc *p, struct ucred *cred);
 
+typedef int	(*mpo_proc_check_procctl_t)(struct ucred *cred,
+		    struct proc *proc, int com, void *data);
+
 typedef int	(*mpo_generic_check_sendfd_t)(struct ucred *cred,
 		    struct thread *td, struct file *fp);
 typedef int	(*mpo_generic_check_recvfd_t)(struct ucred *cred,
@@ -1048,6 +1051,7 @@ struct mac_policy_ops {
 	mpo_proc_exec_check_t			mpo_proc_exec_check;
 	mpo_proc_exec_will_alter_t		mpo_proc_exec_will_alter;
 	mpo_proc_exec_alter_t			mpo_proc_exec_alter;
+	mpo_proc_check_procctl_t		mpo_proc_check_procctl;
 };
 
 /*

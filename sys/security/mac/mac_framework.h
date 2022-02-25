@@ -738,5 +738,7 @@ int	mac_generic_check_recvfd(struct ucred *cred, struct thread *td,
 int	mac_sysfil_check(struct ucred *cred, sysfilset_t sfs);
 
 int	mac_proc_check_exec_sugid(struct ucred *cred, struct proc *p);
+int	mac_proc_check_procctl(struct ucred *cred, struct proc *p,
+	    int com, void *data);
 
 #endif /* !_SECURITY_MAC_MAC_FRAMEWORK_H_ */

@@ -43,12 +43,13 @@ __FBSDID("$FreeBSD$");
 #include <sys/syscallsubr.h>
 #include <sys/sysproto.h>
 #include <sys/wait.h>
-#include <sys/sysfil.h>
 
 #include <vm/vm.h>
 #include <vm/pmap.h>
 #include <vm/vm_map.h>
 #include <vm/vm_extern.h>
+
+#include <security/mac/mac_framework.h>
 
 static int
 protect_setchild(struct thread *td, struct proc *p, int flags)
@@ -873,23 +874,6 @@ sys_procctl(struct thread *td, struct procctl_args *uap)
 	const struct procctl_cmd_info *cmd_info;
 	int error, error1;
 
-	switch (uap->com) {
-	case PROC_REAP_ACQUIRE:
-	case PROC_REAP_RELEASE:
-	case PROC_REAP_STATUS:
-	case PROC_REAP_GETPIDS:
-	case PROC_REAP_KILL:
-	case PROC_PDEATHSIG_CTL:
-	case PROC_PDEATHSIG_STATUS:
-		error = sysfil_check(td, SYSFIL_REAP);
-		break;
-	default:
-		error = sysfil_check(td, SYSFIL_FULL);
-		break;
-	}
-	if (error)
-		return (error);
-
 	if (uap->com >= PROC_PROCCTL_MD_MIN)
 		return (cpu_procctl(td, uap->idtype, uap->id,
 		    uap->com, uap->data));
@@ -922,6 +906,12 @@ kern_procctl_single(struct thread *td, struct proc *p, int com, void *data)
 {
 
 	PROC_LOCK_ASSERT(p, MA_OWNED);
+#ifdef MAC
+	int error;
+	error = mac_proc_check_procctl(td->td_ucred, p, com, data);
+	if (error)
+		return (error);
+#endif
 	return (procctl_cmds_info[com].exec(td, p, data));
 }
 

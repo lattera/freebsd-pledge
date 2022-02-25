@@ -83,6 +83,8 @@ __FBSDID("$FreeBSD$");
 #include <vm/vm_map.h>
 #include <vm/vm_param.h>
 
+#include <security/mac/mac_framework.h>
+
 _Static_assert(OFFSETOF_MONITORBUF == offsetof(struct pcpu, pc_monitorbuf),
     "OFFSETOF_MONITORBUF does not correspond with offset of pc_monitorbuf.");
 
@@ -527,6 +529,13 @@ cpu_procctl(struct thread *td, int idtype, id_t id, int com, void *data)
 		error = pget(id, PGET_CANSEE | PGET_NOTWEXIT | PGET_NOTID, &p);
 		if (error != 0)
 			break;
+#ifdef MAC
+		error = mac_proc_check_procctl(td->td_ucred, p, com, data);
+		if (error != 0) {
+			PROC_UNLOCK(p);
+			break;
+		}
+#endif
 		switch (com) {
 		case PROC_KPTI_CTL:
 			cpu_procctl_kpti_ctl(p, val);

@@ -35,6 +35,7 @@
 #include <sys/protosw.h>
 #include <sys/filio.h>
 #include <sys/tty.h>
+#include <sys/procctl.h>
 
 SDT_PROBE_DEFINE3(curtain,, cred_key_check, check,
     "struct ucred *", "enum curtain_type", "union curtain_key *");
@@ -1583,6 +1584,27 @@ curtain_proc_exec_alter(struct proc *p, struct ucred *cr)
 	MPASS(CRED_IN_RESTRICTED_MODE(cr));
 }
 
+static int
+curtain_proc_check_procctl(struct ucred *cr, struct proc *proc, int com, void *data)
+{
+	enum curtain_ability abl;
+	switch (com) {
+	case PROC_REAP_ACQUIRE:
+	case PROC_REAP_RELEASE:
+	case PROC_REAP_STATUS:
+	case PROC_REAP_GETPIDS:
+	case PROC_REAP_KILL:
+	case PROC_PDEATHSIG_CTL:
+	case PROC_PDEATHSIG_STATUS:
+		abl = CURTAINABL_REAP;
+		break;
+	default:
+		abl = CURTAINABL_ANY_PROCCTL;
+		break;
+	}
+	return (cred_ability_check(cr, abl));
+}
+
 
 static struct mac_policy_ops curtain_policy_ops = {
 	.mpo_cred_init_label = curtain_cred_init_label,
@@ -1706,6 +1728,7 @@ static struct mac_policy_ops curtain_policy_ops = {
 	.mpo_proc_exec_check = curtain_proc_exec_check,
 	.mpo_proc_exec_will_alter = curtain_proc_exec_will_alter,
 	.mpo_proc_exec_alter = curtain_proc_exec_alter,
+	.mpo_proc_check_procctl = curtain_proc_check_procctl,
 };
 
 MAC_POLICY_SET(&curtain_policy_ops, mac_curtain, "MAC/curtain", 0, &curtain_slot);
