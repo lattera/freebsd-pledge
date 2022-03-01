@@ -1232,7 +1232,7 @@ process_syscall_def = function(line)
 	if not (flags & known_flags['CAPENABLED'] ~= 0 or
 	    config["capenabled"][funcname] ~= nil or
 	    config["capenabled"][stripped_name] ~= nil) then
-		sysfils_list[#sysfils_list + 1] = "SYSFIL_UNCAPSICUM"
+		sysfils_list[#sysfils_list + 1] = "SYSFIL_NOTCAPMODE"
 	end
 
 	local sysflags = "SYF_SYSFILS(" .. (table.concat(sysfils_list, " | ")) .. ")"

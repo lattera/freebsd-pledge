@@ -80,7 +80,7 @@ struct sysent {			/* system call table */
 #define	SYF_CAPENABLED		1	/* permitted in capability mode */
 #define	SYF_SYSFILS(sfs)	~(sfs)
 #ifdef _KERNEL
-CTASSERT((sysfilset_t)SYF_CAPENABLED == SYSFIL_UNCAPSICUM);
+CTASSERT((sysfilset_t)SYF_CAPENABLED == SYSFIL_NOTCAPMODE);
 #endif
 
 #define	SY_THR_FLAGMASK	0x7

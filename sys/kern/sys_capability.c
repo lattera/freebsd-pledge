@@ -112,7 +112,7 @@ sys_cap_enter(struct thread *td, struct cap_enter_args *uap)
 	p = td->td_proc;
 	PROC_LOCK(p);
 	oldcred = crcopysafe(p, newcred);
-	newcred->cr_sysfilset &= ~SYSFIL_UNCAPSICUM;
+	newcred->cr_sysfilset &= ~SYSFIL_NOTCAPMODE;
 	MPASS(CRED_IN_CAPABILITY_MODE(newcred));
 	MPASS(CRED_IN_RESTRICTED_MODE(newcred));
 	proc_set_cred(p, newcred);

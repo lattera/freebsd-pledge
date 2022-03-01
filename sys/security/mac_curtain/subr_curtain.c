@@ -794,7 +794,7 @@ curtain_dup(const struct curtain *src)
 }
 
 
-const sysfilset_t curtain_preserve_sysfils = SYSFIL_UNCAPSICUM;
+const sysfilset_t curtain_preserve_sysfils = SYSFIL_NOTCAPMODE;
 
 const sysfilset_t curtain_abilities_sysfils[CURTAINABL_COUNT] = {
 	[CURTAINABL_DEFAULT] = SYSFIL_CATCHALL,
