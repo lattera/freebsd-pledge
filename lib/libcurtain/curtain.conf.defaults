@@ -49,6 +49,7 @@
 /etc/malloc.conf			: r
 
 ability stdio
+ability vfs_read vfs_write
 
 [_crude : _stdio]
 
