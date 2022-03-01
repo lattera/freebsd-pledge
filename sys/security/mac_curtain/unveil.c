@@ -556,15 +556,21 @@ unveil_vnode_walk_start(struct ucred *cr, struct vnode *dvp)
 			counter_u64_add(unveil_stats_ascent_total_depth, depth);
 #endif
 			if (unveil_cover_cache_enabled && cache && cover) {
-				struct unveil_cache_entry *ent;
 				mtx_lock(&cache->mtx);
-				ent = cache->entries;
-				memcpy(ent, &ent[1], (UNVEIL_CACHE_ENTRIES_COUNT - 1) * sizeof *ent);
-				ent->cover = cover;
-				ent->vp = dvp;
-				ent->vp_nchash = dvp->v_nchash;
-				ent->vp_hash = dvp->v_hash;
-				cache->serial = track->serial;
+				if (cache->serial == track->serial) { /* shift */
+					for (size_t i = UNVEIL_CACHE_ENTRIES_COUNT - 1; i >= 1; i--)
+						cache->entries[i] = cache->entries[i - 1];
+				} else { /* clear */
+					for (size_t i = 0; i < UNVEIL_CACHE_ENTRIES_COUNT; i++)
+						cache->entries[i] = (struct unveil_cache_entry){ 0 };
+					cache->serial = track->serial;
+				}
+				cache->entries[0] = (struct unveil_cache_entry){
+					.vp = dvp,
+					.vp_nchash = dvp->v_nchash,
+					.vp_hash = dvp->v_hash,
+					.cover = cover,
+				};
 				mtx_unlock(&cache->mtx);
 			}
 		}
