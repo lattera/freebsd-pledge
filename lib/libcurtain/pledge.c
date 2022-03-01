@@ -184,6 +184,7 @@ static const struct promise_ability {
 	{ PROMISE_DPATH,		CURTAINABL_MAKEDEV },
 	{ PROMISE_FLOCK,		CURTAINABL_FLOCK },
 	{ PROMISE_FATTR,		CURTAINABL_FATTR },
+	{ PROMISE_FATTR,		CURTAINABL_VFS_SETATTR },
 	{ PROMISE_FATTR,		CURTAINABL_CHFLAGS },
 	{ PROMISE_CHOWN,		CURTAINABL_CHOWN },
 	{ PROMISE_ID,			CURTAINABL_CRED },
@@ -495,8 +496,10 @@ abilities_for_uperms(struct curtain_slot *slot, unveil_perms uperms, unsigned fl
 		curtain_ability(slot, CURTAINABL_VFS_DELETE, flags);
 	if (uperms & UPERM_EXECUTE)
 		curtain_ability(slot, CURTAINABL_EXEC, flags);
-	if (uperms & UPERM_SETATTR)
+	if (uperms & UPERM_SETATTR) {
 		curtain_ability(slot, CURTAINABL_FATTR, flags);
+		curtain_ability(slot, CURTAINABL_VFS_SETATTR, flags);
+	}
 	if (uperms & UPERM_UNIX)
 		curtain_ability(slot, CURTAINABL_VFS_SOCK, flags);
 	if (uperms & UPERM_TMPDIR) {

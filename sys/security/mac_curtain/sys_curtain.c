@@ -166,13 +166,12 @@ SYSCTL_PROC(_debug, OID_AUTO, show_curtain,
 #endif
 
 
-/* Some abilities don't make much sense without some others. */
-static const enum curtain_ability abilities_expand[][2] = {
+static const enum curtain_ability abilities_depend[][2] = {
 	{ CURTAINABL_VFS_READ,		CURTAINABL_VFS_MISC		},
 	{ CURTAINABL_VFS_WRITE,		CURTAINABL_VFS_MISC		},
 	{ CURTAINABL_VFS_CREATE,	CURTAINABL_VFS_MISC		},
 	{ CURTAINABL_VFS_DELETE,	CURTAINABL_VFS_MISC		},
-	{ CURTAINABL_FATTR,		CURTAINABL_VFS_MISC		},
+	{ CURTAINABL_VFS_SETATTR,	CURTAINABL_VFS_MISC		},
 	{ CURTAINABL_PROT_EXEC,		CURTAINABL_PROT_EXEC_LOOSER	},
 	{ CURTAINABL_PROT_EXEC_LOOSER,	CURTAINABL_PROT_EXEC_LOOSE	},
 	{ CURTAINABL_MOUNT_NONUSER,	CURTAINABL_MOUNT		},
@@ -194,8 +193,8 @@ curtain_fill_expand(struct curtain *ct)
 	bool propagate;
 	do {
 		propagate = false;
-		for (size_t i = 0; i < nitems(abilities_expand); i++) {
-			enum curtain_ability from = abilities_expand[i][0], to = abilities_expand[i][1];
+		for (size_t i = 0; i < nitems(abilities_depend); i++) {
+			enum curtain_ability from = abilities_depend[i][0], to = abilities_depend[i][1];
 			if (ct->ct_abilities[to].soft > ct->ct_abilities[from].soft) {
 				ct->ct_abilities[to].soft = ct->ct_abilities[from].soft;
 				propagate = true;

@@ -805,7 +805,7 @@ curtain_vnode_check_setflags(struct ucred *cr,
 	int error;
 	if ((error = check_uperms(get_vp_uperms(cr, vp), UPERM_SETATTR)))
 		return (error);
-	if ((error = cred_ability_check(cr, CURTAINABL_FATTR)))
+	if ((error = cred_ability_check(cr, CURTAINABL_VFS_SETATTR)))
 		return (error);
 	if ((error = cred_ability_check(cr, CURTAINABL_CHFLAGS)))
 		return (error);
@@ -823,7 +823,7 @@ curtain_vnode_check_setmode(struct ucred *cr,
 		return (error);
 	if ((error = check_uperms(uperms, UPERM_SETATTR)))
 		return (error);
-	if ((error = cred_ability_check(cr, CURTAINABL_FATTR)))
+	if ((error = cred_ability_check(cr, CURTAINABL_VFS_SETATTR)))
 		return (error);
 	return (0);
 }
@@ -835,7 +835,7 @@ curtain_vnode_check_setowner(struct ucred *cr,
 	int error;
 	if ((error = check_uperms(get_vp_uperms(cr, vp), UPERM_SETATTR)))
 		return (error);
-	if ((error = cred_ability_check(cr, CURTAINABL_FATTR)))
+	if ((error = cred_ability_check(cr, CURTAINABL_VFS_SETATTR)))
 		return (error);
 	return (0);
 }
@@ -848,7 +848,7 @@ curtain_vnode_check_setutimes(struct ucred *cr,
 	int error;
 	if ((error = check_uperms(get_vp_uperms(cr, vp), UPERM_SETATTR)))
 		return (error);
-	if ((error = cred_ability_check(cr, CURTAINABL_FATTR)))
+	if ((error = cred_ability_check(cr, CURTAINABL_VFS_SETATTR)))
 		return (error);
 	return (0);
 }
@@ -890,7 +890,7 @@ curtain_vnode_check_setextattr(struct ucred *cr,
 		return (error);
 	if ((error = cred_ability_check(cr, CURTAINABL_EXTATTR)))
 		return (error);
-	if ((error = cred_ability_check(cr, CURTAINABL_FATTR)))
+	if ((error = cred_ability_check(cr, CURTAINABL_VFS_SETATTR)))
 		return (error);
 	return (0);
 }
@@ -904,7 +904,7 @@ curtain_vnode_check_deleteextattr(struct ucred *cr,
 		return (error);
 	if ((error = cred_ability_check(cr, CURTAINABL_EXTATTR)))
 		return (error);
-	if ((error = cred_ability_check(cr, CURTAINABL_FATTR)))
+	if ((error = cred_ability_check(cr, CURTAINABL_VFS_SETATTR)))
 		return (error);
 	return (0);
 }
@@ -932,7 +932,7 @@ curtain_vnode_check_setacl(struct ucred *cr,
 		return (error);
 	if ((error = cred_ability_check(cr, CURTAINABL_ACL)))
 		return (error);
-	if ((error = cred_ability_check(cr, CURTAINABL_FATTR)))
+	if ((error = cred_ability_check(cr, CURTAINABL_VFS_SETATTR)))
 		return (error);
 	return (0);
 }
@@ -946,7 +946,7 @@ curtain_vnode_check_deleteacl(struct ucred *cr,
 		return (error);
 	if ((error = cred_ability_check(cr, CURTAINABL_ACL)))
 		return (error);
-	if ((error = cred_ability_check(cr, CURTAINABL_FATTR)))
+	if ((error = cred_ability_check(cr, CURTAINABL_VFS_SETATTR)))
 		return (error);
 	return (0);
 }
@@ -960,7 +960,7 @@ curtain_vnode_check_relabel(struct ucred *cr,
 		return (error);
 	if ((error = cred_ability_check(cr, CURTAINABL_MAC)))
 		return (error);
-	if ((error = cred_ability_check(cr, CURTAINABL_FATTR)))
+	if ((error = cred_ability_check(cr, CURTAINABL_VFS_SETATTR)))
 		return (error);
 	return (0);
 }
