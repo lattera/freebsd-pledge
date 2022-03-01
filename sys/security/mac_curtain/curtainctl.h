@@ -1,8 +1,9 @@
 #ifndef _SYS_CURTAINCTL_H_
 #define	_SYS_CURTAINCTL_H_
 
-#include <sys/curtain_ability.h>
 #include <sys/_unveil.h>
+
+#include <security/mac_curtain/curtain_ability.h>
 
 enum curtainreq_type {
 	CURTAINTYP_DEFAULT = 1,

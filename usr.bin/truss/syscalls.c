@@ -79,7 +79,7 @@ __FBSDID("$FreeBSD$");
 #include <unistd.h>
 #include <vis.h>
 
-#include <sys/curtainctl.h>
+#include <security/mac_curtain/curtainctl.h>
 
 #include "truss.h"
 #include "extern.h"

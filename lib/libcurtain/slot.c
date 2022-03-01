@@ -4,18 +4,19 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/curtainctl.h>
 #include <sys/param.h>
 #include <sys/queue.h>
 #include <sys/sysctl.h>
 #include <sys/tree.h>
 #include <sys/types.h>
-#include <sys/unveil.h>
 #include <sys/stat.h>
 #include <sysexits.h>
 #include <unistd.h>
 
 #include <curtain.h>
+
+#include <security/mac_curtain/curtainctl.h>
+#include <security/mac_curtain/unveil.h>
 
 /*
  * Things that can be restricted (or allowed) are represented by "nodes".

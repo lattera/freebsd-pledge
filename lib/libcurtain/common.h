@@ -5,7 +5,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include <sys/curtain_ability.h>
+#include <security/mac_curtain/curtain_ability.h>
 
 struct curtain_config {
 	struct config_tag *tags_pending, *tags_current, *tags_visited;

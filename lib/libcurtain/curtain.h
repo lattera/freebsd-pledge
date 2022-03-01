@@ -5,8 +5,9 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <sys/curtain_ability.h>
+
 #include <sys/_unveil.h>
+#include <security/mac_curtain/curtain_ability.h>
 
 struct curtain_slot;
 

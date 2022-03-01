@@ -23,8 +23,8 @@
 #endif
 
 #include <security/mac_curtain/curtain_int.h>
+#include <security/mac_curtain/unveil.h>
 #include <security/mac/mac_policy.h>
-#include <sys/unveil.h>
 
 SDT_PROVIDER_DEFINE(curtain);
 SDT_PROBE_DEFINE2(curtain,, curtain_fill, begin,

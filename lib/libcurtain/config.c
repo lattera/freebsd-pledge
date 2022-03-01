@@ -13,9 +13,10 @@
 #include <string.h>
 #include <sys/param.h>
 #include <sys/stat.h>
-#include <sys/unveil.h>
 #include <sysexits.h>
 #include <unistd.h>
+
+#include <security/mac_curtain/unveil.h>
 
 #include "common.h"
 #include "pathexp.h"

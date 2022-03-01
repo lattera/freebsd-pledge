@@ -1,8 +1,6 @@
 #ifndef _PLEDGE_H_
 #define	_PLEDGE_H_
 
-#include <sys/unveil.h>
-
 int	pledge(const char *, const char *);
 int	unveil(const char *, const char *);
 int	unveil_freeze(void);

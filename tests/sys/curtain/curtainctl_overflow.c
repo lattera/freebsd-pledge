@@ -3,10 +3,11 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <errno.h>
-#include <sys/curtainctl.h>
-#include <sys/unveil.h>
 #include <sys/param.h>
 #include <atf-c.h>
+
+#include <security/mac_curtain/curtainctl.h>
+#include <security/mac_curtain/unveil.h>
 
 ATF_TC_WITHOUT_HEAD(curtainctl_sanity);
 ATF_TC_BODY(curtainctl_sanity, tc)

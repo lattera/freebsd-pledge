@@ -23,9 +23,9 @@
 #include <sys/sysent.h>
 #include <sys/syscall.h>
 #include <sys/fnv_hash.h>
-#include <sys/unveil.h>
 
 #include <security/mac_curtain/curtain_int.h>
+#include <security/mac_curtain/unveil.h>
 
 static MALLOC_DEFINE(M_UNVEIL_CACHE, "unveil cache", "mac_curtain per-procecess unveil caches");
 static MALLOC_DEFINE(M_UNVEIL_TRACK, "unveil track", "mac_curtain per-thread unveil trackers");

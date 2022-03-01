@@ -21,6 +21,7 @@ __FBSDID("$FreeBSD$");
 
 #include <curtain.h>
 #include <pledge.h>
+#include <security/mac_curtain/unveil.h>
 
 enum promise_type {
 	PROMISE_ERROR,
