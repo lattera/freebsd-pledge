@@ -176,19 +176,6 @@ sysfil_cred_init(struct ucred *cr)
 #endif
 }
 
-
-static inline bool
-sysfil_match_sy_flags(const struct ucred *cr, sysfilset_t sy_flags)
-{
-	return (sysfil_match_cred(cr, ~sy_flags));
-}
-
-static inline int
-sysfil_check_sy_flags(struct ucred *cr, sysfilset_t sy_flags)
-{
-	return (sysfil_check_cred(cr, ~sy_flags));
-}
-
 #endif
 
 #endif

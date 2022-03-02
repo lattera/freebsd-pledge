@@ -119,7 +119,7 @@ syscallenter(struct thread *td)
 	}
 
 #ifndef NOSYSFIL
-	if (__predict_false(!sysfil_match_sy_flags(td->td_ucred, se->sy_flags))) {
+	if (__predict_false(!sysfil_match_cred(td->td_ucred, ~se->sy_flags))) {
 #ifdef CAPABILITY_MODE
 		/*
 		 * In capability mode, we only allow access to system calls
@@ -131,9 +131,9 @@ syscallenter(struct thread *td)
 			goto retval;
 		}
 #endif
-		error = sysfil_check_sy_flags(td->td_ucred, se->sy_flags);
-		KASSERT(error, ("sysfil checks inconsistent"));
-		if (error) {
+		error = sysfil_check_cred(td->td_ucred, ~se->sy_flags);
+		KASSERT(error != 0, ("sysfil checks inconsistent"));
+		if (error != 0) {
 			td->td_errno = error;
 			goto retval;
 		}
