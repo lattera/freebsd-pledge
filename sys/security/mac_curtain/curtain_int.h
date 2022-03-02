@@ -12,6 +12,7 @@
 #include <security/mac_curtain/curtain_ability.h>
 
 enum curtain_type {
+	CURTAIN_UNUSED,
 	CURTAIN_ABILITY,
 	CURTAIN_UNVEIL,
 	CURTAIN_IOCTL,
@@ -161,24 +162,22 @@ extern const sysfilset_t curtain_abilities_sysfils[CURTAINABL_COUNT];
 
 extern int __read_mostly curtain_slot;
 #define	CURTAIN_CTH_IS_CT(cth) ((cth) != &(cth)->cth_barrier->br_head)
-#define	CURTAIN_SLOT_CTH(l) ((l) ? (struct curtain_head *)mac_label_get((l), curtain_slot) : NULL)
+#define	CURTAIN_SLOT_CTH(l) ((l) != NULL ? (struct curtain_head *)mac_label_get((l), curtain_slot) : NULL)
 #define	CURTAIN_SLOT_CT_UNCHECKED(l) ((struct curtain *)CURTAIN_SLOT_CTH(l))
 #define	CURTAIN_SLOT_CT(l) ({ \
 	struct curtain_head *__cth; \
 	struct curtain *__ct; \
 	__cth = CURTAIN_SLOT_CTH(l); \
-	__ct = __cth && CURTAIN_CTH_IS_CT(__cth) ? (struct curtain *)__cth : NULL; \
-	MPASS(!__ct || __ct->ct_magic == CURTAIN_MAGIC); \
+	__ct = __cth != NULL && CURTAIN_CTH_IS_CT(__cth) ? (struct curtain *)__cth : NULL; \
+	MPASS(__ct == NULL || __ct->ct_magic == CURTAIN_MAGIC); \
 	__ct; \
 })
 #define	CURTAIN_SLOT_BR(l) ({ \
 	struct curtain_head *__cth = CURTAIN_SLOT_CTH(l); \
-	__cth ? __cth->cth_barrier : NULL; \
+	__cth != NULL ? __cth->cth_barrier : NULL; \
 })
 
 struct barrier *barrier_hold(struct barrier *);
-struct barrier *barrier_dup(const struct barrier *);
-void	barrier_bump(struct barrier *);
 void	barrier_link(struct barrier *child, struct barrier *parent);
 void	barrier_unlink(struct barrier *);
 void	barrier_free(struct barrier *);

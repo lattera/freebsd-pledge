@@ -80,7 +80,6 @@ barrier_init(struct barrier *br)
 static inline void
 barrier_invariants(const struct barrier *br)
 {
-	MPASS(br);
 	MPASS(br->br_head.cth_barrier == br);
 	MPASS(br->br_parent != br);
 	MPASS(br->br_ref > 0);
@@ -121,12 +120,6 @@ barrier_hold(struct barrier *br)
 	return (br);
 }
 
-void
-barrier_bump(struct barrier *br)
-{
-	br->br_serial = atomic_fetchadd_64(&barrier_serial, 1);
-}
-
 static void
 barrier_collapse(const struct barrier *src, struct barrier *dst)
 {
@@ -136,26 +129,26 @@ barrier_collapse(const struct barrier *src, struct barrier *dst)
 static void
 barrier_unlink_locked(struct barrier *victim)
 {
-	struct barrier *child;
+	struct barrier *parent, *child;
 	MPASS(LIST_EMPTY(&victim->br_children) == (victim->br_nchildren == 0));
-	if (victim->br_parent) {
-		barrier_invariants_sync(victim->br_parent);
+	if ((parent = victim->br_parent) != NULL) {
+		barrier_invariants_sync(parent);
 		LIST_REMOVE(victim, br_sibling);
-		MPASS(victim->br_parent->br_nchildren != 0);
-		victim->br_parent->br_nchildren--;
-		barrier_invariants_sync(victim->br_parent);
+		MPASS(parent->br_nchildren != 0);
+		parent->br_nchildren--;
+		barrier_invariants_sync(parent);
 	}
 	while (!LIST_EMPTY(&victim->br_children)) {
 		child = LIST_FIRST(&victim->br_children);
-		MPASS(child->br_parent == victim);
 		barrier_invariants_sync(child);
+		MPASS(child->br_parent == victim);
 		MPASS(victim->br_nchildren != 0);
 		victim->br_nchildren--;
 		LIST_REMOVE(child, br_sibling);
-		if ((child->br_parent = victim->br_parent)) {
-			LIST_INSERT_HEAD(&child->br_parent->br_children, child, br_sibling);
-			child->br_parent->br_nchildren++;
-			MPASS(child->br_parent->br_nchildren != 0);
+		if ((child->br_parent = parent) != NULL) {
+			LIST_INSERT_HEAD(&parent->br_children, child, br_sibling);
+			if (++parent->br_nchildren == 0)
+				panic("barrier nchildren overflow");
 		}
 		/*
 		 * TODO: This may cutoff child processes from objects they had
@@ -174,24 +167,19 @@ void
 barrier_link(struct barrier *child, struct barrier *parent)
 {
 	rw_wlock(&barrier_tree_lock);
-	if (child->br_parent)
+	if (child->br_parent != NULL)
 		barrier_unlink_locked(child);
 	barrier_invariants_sync(child);
 #ifdef INVARIANTS
-	for (const struct barrier *iter = parent; iter; iter = iter->br_parent)
+	for (const struct barrier *iter = parent; iter != NULL; iter = iter->br_parent)
 		MPASS(iter != child);
 #endif
-	if ((child->br_parent = parent)) {
+	if ((child->br_parent = parent) != NULL) {
 		barrier_invariants_sync(parent);
-		parent->br_nchildren++;
-		if (parent->br_nchildren == 0)
+		if (++parent->br_nchildren == 0)
 			panic("barrier nchildren overflow");
 		LIST_INSERT_HEAD(&parent->br_children, child, br_sibling);
 		barrier_invariants_sync(parent);
-	} else {
-#ifdef INVARIANTS
-		memset(&child->br_sibling, -1, sizeof child->br_sibling);
-#endif
 	}
 	barrier_invariants_sync(child);
 	rw_wunlock(&barrier_tree_lock);
@@ -218,9 +206,9 @@ barrier_free(struct barrier *br)
 static struct barrier *
 barrier_cross_locked(struct barrier *br, barrier_bits bar)
 {
-	if (br && !(br->br_mode.soft & bar))
+	if (br != NULL && (br->br_mode.soft & bar) == 0)
 		do br = br->br_parent;
-		while (br && !(br->br_mode.hard & bar));
+		while (br != NULL && (br->br_mode.hard & bar) == 0);
 	return (br);
 }
 
@@ -240,44 +228,19 @@ barrier_visible(struct barrier *subject, const struct barrier *target, barrier_b
 	 * NOTE: One or both of subject and target may be NULL (indicating
 	 * credentials with no curtain restrictions).
 	 */
-	if (subject)
+	if (subject != NULL)
 		barrier_invariants(subject);
-	if (target)
+	if (target != NULL)
 		barrier_invariants(target);
-	if (subject == target) /* fast path */
+	if (subject == target) /* shortcut */
 		return (true);
 	rw_rlock(&barrier_tree_lock);
 	subject = barrier_cross_locked(subject, bar);
-	while (target && subject != target)
+	while (target != NULL && subject != target)
 		target = target->br_parent;
 	rw_runlock(&barrier_tree_lock);
 	return (subject == target);
 
-}
-
-static void
-barrier_copy(struct barrier *dst, const struct barrier *src)
-{
-	memcpy(dst, src, sizeof *src);
-	dst->br_head.cth_barrier = dst;
-	dst->br_ref = 1;
-	dst->br_parent = NULL;
-	dst->br_nchildren = 0;
-	LIST_INIT(&dst->br_children);
-#ifdef INVARIANTS
-	memset(&dst->br_sibling, -1, sizeof dst->br_sibling);
-#endif
-	barrier_invariants_sync(dst);
-}
-
-struct barrier *
-barrier_dup(const struct barrier *src)
-{
-	struct barrier *dst;
-	barrier_invariants(src);
-	dst = barrier_alloc();
-	barrier_copy(dst, src);
-	return (dst);
 }
 
 
@@ -299,13 +262,12 @@ curtain_init(struct curtain *ct, size_t nslots)
 		.ct_cellar = nslots,
 	};
 	for (curtain_index i = 0; i < nslots; i++)
-		ct->ct_slots[i].type = 0;
+		ct->ct_slots[i].type = CURTAIN_UNUSED;
 }
 
 void
 curtain_invariants(const struct curtain *ct)
 {
-	MPASS(ct);
 	MPASS(ct->ct_magic == CURTAIN_MAGIC);
 	MPASS(ct->ct_ref > 0);
 	MPASS(ct->ct_nslots >= ct->ct_nitems);
@@ -313,7 +275,7 @@ curtain_invariants(const struct curtain *ct)
 	MPASS(ct->ct_nslots >= ct->ct_cellar);
 	barrier_invariants(CURTAIN_BARRIER(ct));
 	MPASS(ct->ct_on_exec != ct);
-	if (ct->ct_on_exec)
+	if (ct->ct_on_exec != NULL)
 		curtain_invariants(ct->ct_on_exec);
 }
 
@@ -322,7 +284,7 @@ curtain_invariants_sync(const struct curtain *ct)
 {
 	curtain_invariants(ct);
 	barrier_invariants_sync(CURTAIN_BARRIER(ct));
-	if (ct->ct_on_exec)
+	if (ct->ct_on_exec != NULL)
 		curtain_invariants_sync(ct->ct_on_exec);
 }
 
@@ -370,11 +332,11 @@ curtain_free_1(struct curtain *ct)
 {
 	struct curtain_item *item;
 	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
-		if (item->type != 0)
+		if (item->type != CURTAIN_UNUSED)
 			curtain_key_free(item->type, item->key);
-	if (ct->ct_on_exec)
+	if (ct->ct_on_exec != NULL)
 		curtain_free(ct->ct_on_exec);
-	if (CURTAIN_BARRIER(ct))
+	if (CURTAIN_BARRIER(ct) != NULL)
 		barrier_free(CURTAIN_BARRIER(ct));
 	free(ct, M_CURTAIN);
 }
@@ -402,6 +364,7 @@ curtain_dirty(struct curtain *ct)
 
 
 #define CURTAIN_KEY_INVALID_TYPE_CASES	\
+	case CURTAIN_UNUSED:		\
 	case CURTAIN_ABILITY:
 
 static unsigned
@@ -421,7 +384,7 @@ curtain_key_hash(enum curtain_type type, union curtain_key key)
 	case CURTAIN_SOCKOPT:
 		return (key.sockopt.level ^ key.sockopt.optname);
 	case CURTAIN_PRIV:
-		return (key.priv);
+		return (~key.priv);
 	case CURTAIN_SYSCTL:
 		return ((uintptr_t)key.sysctl >> 5);
 	case CURTAIN_FIBNUM:
@@ -429,7 +392,7 @@ curtain_key_hash(enum curtain_type type, union curtain_key key)
 	case CURTAIN_UNVEIL:
 		return (key.unveil->hash);
 	}
-	MPASS(0);
+	KASSERT(false, ("unexpected item type: %d", type));
 	return (-1);
 }
 
@@ -472,7 +435,7 @@ curtain_key_same(enum curtain_type type,
 		return (memcmp(name0, name1, name_len) == 0);
 	}
 	}
-	MPASS(0);
+	KASSERT(false, ("unexpected item type: %d", type));
 	return (false);
 }
 
@@ -530,12 +493,13 @@ curtain_key_dup_fixup(const struct curtain *ct, enum curtain_type type, union cu
 {
 	switch (type) {
 	case CURTAIN_UNVEIL:
-		if (key->unveil->parent) {
+		/* Update parent link with corresponding unveil in the new curtain. */
+		if (key->unveil->parent != NULL) {
 			struct curtain_item *item;
 			item = curtain_lookup(ct, type,
 			    (union curtain_key){ .unveil = key->unveil->parent });
-			KASSERT(item || ct->ct_overflowed, ("parent unveil missing"));
-			key->unveil->parent = item ? item->key.unveil : NULL;
+			KASSERT(item != NULL || ct->ct_overflowed, ("parent unveil missing"));
+			key->unveil->parent = item != NULL ? item->key.unveil : NULL;
 		}
 		break;
 	default:
@@ -585,13 +549,13 @@ curtain_key_fallback(enum curtain_type *type, union curtain_key *key)
 		*type = CURTAIN_SOCKLVL;
 		return;
 	case CURTAIN_SYSCTL:
-		if (key->sysctl->parent) {
+		if (key->sysctl->parent != NULL) {
 			*key = (union curtain_key){ .sysctl = key->sysctl->parent };
 			return;
 		}
 		break;
 	case CURTAIN_UNVEIL:
-		if (key->unveil->parent) {
+		if (key->unveil->parent != NULL) {
 			*key = (union curtain_key){ .unveil = key->unveil->parent };
 			return;
 		}
@@ -610,7 +574,7 @@ curtain_key_extend(enum curtain_type dst_type, union curtain_key *dst_key,
 	switch (dst_type) {
 	case CURTAIN_UNVEIL: {
 		unveil_perms soft_uperms, hard_uperms;
-		if (src_type == dst_type) {
+		if (src_type == CURTAIN_UNVEIL) {
 			soft_uperms = src_key.unveil->soft_uperms;
 			hard_uperms = src_key.unveil->hard_uperms;
 		} else {
@@ -633,14 +597,13 @@ curtain_key_mask(enum curtain_type dst_type, union curtain_key *dst_key,
 	switch (dst_type) {
 	case CURTAIN_UNVEIL: {
 		unveil_perms mask_uperms;
-		if (src_type == dst_type) {
+		if (src_type == CURTAIN_UNVEIL) {
 			mask_uperms = src_key.unveil->hard_uperms;
 			if (!curtain_key_same(dst_type, *dst_key, src_key))
 				mask_uperms = uperms_inherit(mask_uperms);
 		} else
 			mask_uperms = src_mode.hard == CURTAIN_ALLOW ? UPERM_ALL : UPERM_NONE;
-		dst_key->unveil->soft_uperms &= mask_uperms;
-		dst_key->unveil->hard_uperms &= mask_uperms;
+		dst_key->unveil->soft_uperms &= dst_key->unveil->hard_uperms &= mask_uperms;
 		break;
 	}
 	default:
@@ -661,10 +624,10 @@ static inline struct curtain_item *
 curtain_hash_next(struct curtain *ct, const struct curtain_item *item)
 {
 	struct curtain_item *next;
-	MPASS(item->type != 0);
+	MPASS(item->type != CURTAIN_UNUSED);
 	MPASS(item->chain < ct->ct_nslots);
 	next = &ct->ct_slots[item->chain];
-	MPASS(next->type != 0);
+	MPASS(next->type != CURTAIN_UNUSED);
 	return (next == item ? NULL : next);
 }
 
@@ -679,9 +642,9 @@ static inline void
 curtain_hash_link(struct curtain *ct,
     struct curtain_item *item, const struct curtain_item *next)
 {
-	MPASS(item->type != 0);
-	MPASS(next->type != 0);
-	item->chain = (next ? next : item) - ct->ct_slots;
+	MPASS(item->type != CURTAIN_UNUSED);
+	MPASS(next->type != CURTAIN_UNUSED);
+	item->chain = (next != NULL ? next : item) - ct->ct_slots;
 	MPASS(curtain_hash_next(ct, item) == next);
 }
 
@@ -690,18 +653,17 @@ curtain_lookup(const struct curtain *ctc, enum curtain_type type, union curtain_
 {
 	struct curtain *ct = __DECONST(struct curtain *, ctc);
 	struct curtain_item *item;
-	size_t probes = 0;
+	size_t probes;
+	probes = 1;
 	item = curtain_hash_head(ct, curtain_key_hash(type, key));
-	if (item && item->type != 0) {
+	if (item != NULL && item->type != CURTAIN_UNUSED) {
 		do {
-			probes++;
 			if (item->type == type && curtain_key_same(type, key, item->key))
 				break;
-		} while ((item = curtain_hash_next(ct, item)));
-	} else {
+			probes++;
+		} while ((item = curtain_hash_next(ct, item)) != NULL);
+	} else
 		item = NULL;
-		probes = 1;
-	}
 #ifdef CURTAIN_STATS_LOOKUP
 	counter_u64_add(curtain_stats_lookups, 1);
 	counter_u64_add(curtain_stats_probes, probes);
@@ -719,39 +681,41 @@ curtain_search(struct curtain *ct, enum curtain_type type, union curtain_key key
 {
 	struct curtain_item *item, *prev;
 	item = curtain_hash_head(ct, curtain_key_hash(type, key));
-	if (item && item->type != 0) {
+	if (item != NULL && item->type != CURTAIN_UNUSED) {
 		do {
 			prev = item;
 			if (item->type == type && curtain_key_same(type, key, item->key))
 				break;
-		} while ((item = curtain_hash_next(ct, item)));
-		if (!item)
-			while (ct->ct_cellar != 0)
-				if (ct->ct_slots[--ct->ct_cellar].type == 0) {
+		} while ((item = curtain_hash_next(ct, item)) != NULL);
+		if (item == NULL)
+			while (ct->ct_cellar > 0)
+				if (ct->ct_slots[--ct->ct_cellar].type == CURTAIN_UNUSED) {
 					item = &ct->ct_slots[ct->ct_cellar];
 					break;
 				}
 	} else
 		prev = NULL;
-	if (!item) {
+	if (item == NULL) {
 		ct->ct_overflowed = true;
 		if (inserted)
 			*inserted = false;
 		return (NULL);
 	}
 	curtain_dirty(ct);
-	if (item->type == 0) {
-		if (inserted)
-			*inserted = true;
+	if (item->type == CURTAIN_UNUSED) { /* insert item */
 		ct->ct_nitems++;
 		item->type = type;
 		item->key = key;
 		curtain_hash_init(ct, item);
-		if (prev)
+		if (prev != NULL)
 			curtain_hash_link(ct, prev, item);
 		mode_set(&item->mode, CURTAIN_KILL);
-	} else if (inserted)
-		*inserted = false;
+		if (inserted)
+			*inserted = true;
+	} else { /* item found */
+		if (inserted)
+			*inserted = false;
+	}
 	return (item);
 }
 
@@ -763,13 +727,13 @@ curtain_dup(const struct curtain *src)
 	struct curtain *dst;
 	curtain_invariants(src);
 	dst = curtain_make_without_barrier(src->ct_nitems);
-	if (src->ct_on_exec && !curtain_equivalent(src, src->ct_on_exec))
+	if (src->ct_on_exec != NULL && !curtain_equivalent(src, src->ct_on_exec))
 		dst->ct_on_exec = curtain_dup(src->ct_on_exec);
 	dst->ct_head.cth_barrier = barrier_hold(CURTAIN_BARRIER(src));
 	dst->ct_overflowed = src->ct_overflowed;
 	memcpy(dst->ct_abilities, src->ct_abilities, sizeof dst->ct_abilities);
 	for (si = src->ct_slots; si < &src->ct_slots[src->ct_nslots]; si++)
-		if (si->type != 0) {
+		if (si->type != CURTAIN_UNUSED) {
 			bool inserted;
 			di = curtain_search(dst, si->type, si->key, &inserted);
 			MPASS(inserted);
@@ -777,13 +741,13 @@ curtain_dup(const struct curtain *src)
 			curtain_key_dup(di->type, &di->key, si->key);
 		}
 	for (di = dst->ct_slots; di < &dst->ct_slots[dst->ct_nslots]; di++)
-		if (di->type != 0)
+		if (di->type != CURTAIN_UNUSED)
 			curtain_key_dup_fixup(dst, di->type, &di->key);
 	MPASS(!dst->ct_overflowed);
 	dst->ct_cached = src->ct_cached;
 #ifdef INVARIANTS
 	for (si = src->ct_slots; si < &src->ct_slots[src->ct_nslots]; si++)
-		if (si->type != 0) {
+		if (si->type != CURTAIN_UNUSED) {
 			di = curtain_lookup(dst, si->type, si->key);
 			MPASS(di);
 			MPASS(mode_equivalent(di->mode, si->mode));
@@ -851,7 +815,7 @@ curtain_resolve_1(const struct curtain *ct,
 		if (*type == CURTAIN_ABILITY)
 			return (ct->ct_abilities[key->ability]);
 		item = curtain_lookup(ct, *type, *key);
-		if (item) {
+		if (item != NULL) {
 			*key = item->key;
 			return (item->mode);
 		}
@@ -875,7 +839,7 @@ curtain_restrictive(const struct curtain *ct)
 		if (mode_restricted(ct->ct_abilities[abl]))
 			return (true);
 	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
-		if (item->type != 0 && (mode_restricted(item->mode) ||
+		if (item->type != CURTAIN_UNUSED && (mode_restricted(item->mode) ||
 		    curtain_key_restrictive(item->type, item->key)))
 			return (true);
 	br = CURTAIN_BARRIER(ct);
@@ -899,15 +863,17 @@ curtain_cache_update_sysfils(struct curtain *ct)
 	handled_sfs = SYSFIL_NONE;
 	for (enum curtain_ability abl = 0; abl < nitems(curtain_abilities_sysfils); abl++) {
 		sysfilset_t sfs = curtain_abilities_sysfils[abl];
-		while (sfs) {
+		while (sfs != 0) {
 			unsigned i = ffsll(sfs) - 1;
-			ct->ct_cached.sysfilacts[i] = MIN(
-			    handled_sfs & SYSFIL_INDEX(i) ? ct->ct_cached.sysfilacts[i]
-			                                  : CURTAIN_KILL,
-			    ct->ct_abilities[abl].soft);
-			handled_sfs |= SYSFIL_INDEX(i);
+			if ((handled_sfs & SYSFIL_INDEX(i)) != 0)
+				ct->ct_cached.sysfilacts[i] = MIN(
+				    ct->ct_cached.sysfilacts[i],
+				    ct->ct_abilities[abl].soft);
+			else
+				ct->ct_cached.sysfilacts[i] = ct->ct_abilities[abl].soft;
 			sfs ^= SYSFIL_INDEX(i);
 		}
+		handled_sfs |= curtain_abilities_sysfils[abl];
 	}
 	if (ct->ct_cached.restrictive) {
 		ct->ct_cached.sysfilset = SYSFIL_NONE;
@@ -927,14 +893,14 @@ curtain_harden(struct curtain *ct)
 {
 	struct curtain_item *item;
 	for (item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
-		if (item->type != 0) {
+		if (item->type != CURTAIN_UNUSED) {
 			mode_harden(&item->mode);
 			curtain_key_harden(item->type, &item->key);
 		}
 	for (enum curtain_ability abl = 0; abl <= CURTAINABL_LAST; abl++)
 		mode_harden(&ct->ct_abilities[abl]);
 	CURTAIN_BARRIER(ct)->br_mode.hard |= CURTAIN_BARRIER(ct)->br_mode.soft;
-	if (ct->ct_on_exec)
+	if (ct->ct_on_exec != NULL)
 		curtain_harden(ct->ct_on_exec);
 }
 
@@ -945,9 +911,9 @@ curtain_mask_sysfils(struct curtain *ct, sysfilset_t sfs)
 	mode_set(&deny, CURTAIN_DENY);
 	KASSERT(ct->ct_ref == 1, ("modifying shared curtain"));
 	for (enum curtain_ability abl = 0; abl < nitems(curtain_abilities_sysfils); abl++)
-		if (curtain_abilities_sysfils[abl] & ~sfs)
+		if ((curtain_abilities_sysfils[abl] & ~sfs) != 0)
 			mode_mask(&ct->ct_abilities[abl], deny);
-	if (ct->ct_on_exec)
+	if (ct->ct_on_exec != NULL)
 		curtain_mask_sysfils(ct->ct_on_exec, sfs);
 	curtain_dirty(ct);
 }
@@ -958,8 +924,6 @@ curtain_extend(struct curtain *ct, enum curtain_type type, union curtain_key key
 	struct curtain_item *item, *fallback_item;
 	bool inserted;
 	item = curtain_search(ct, type, key, &inserted);
-	if (!item)
-		return (NULL);
 	if (inserted) {
 		curtain_key_dup(type, &item->key, key);
 		curtain_key_fallback(&type, &key);
@@ -967,7 +931,7 @@ curtain_extend(struct curtain *ct, enum curtain_type type, union curtain_key key
 			item->mode = ct->ct_abilities[key.ability];
 		} else {
 			fallback_item = curtain_extend(ct, type, key);
-			if (fallback_item) {
+			if (fallback_item != NULL) {
 				key = fallback_item->key;
 				item->mode = fallback_item->mode;
 			}
@@ -996,20 +960,20 @@ curtain_mask(struct curtain *dst, const struct curtain *src)
 	const struct curtain_item *si;
 	curtain_invariants(src);
 	KASSERT(dst->ct_ref == 1, ("modifying shared curtain"));
-	if (src->ct_on_exec && !dst->ct_on_exec)
+	if (src->ct_on_exec != NULL && dst->ct_on_exec == NULL)
 		dst->ct_on_exec = curtain_dup(dst);
 	for (si = src->ct_slots; si < &src->ct_slots[src->ct_nslots]; si++)
 		/* Insert missing items and mask them in the next loop. */
-		if (si->type != 0)
+		if (si->type != CURTAIN_UNUSED)
 			curtain_extend(dst, si->type, si->key);
 	for (di = dst->ct_slots; di < &dst->ct_slots[dst->ct_nslots]; di++)
-		if (di->type != 0)
+		if (di->type != CURTAIN_UNUSED)
 			curtain_item_mask(di, src);
 	for (enum curtain_ability abl = 0; abl <= CURTAINABL_LAST; abl++)
 		mode_mask(&dst->ct_abilities[abl], src->ct_abilities[abl]);
 	curtain_dirty(dst);
 	curtain_invariants(dst);
-	if (dst->ct_on_exec)
+	if (dst->ct_on_exec != NULL)
 		curtain_mask(dst->ct_on_exec, src->ct_on_exec ? src->ct_on_exec : src);
 }
 
@@ -1019,20 +983,16 @@ curtain_finish(struct curtain *ct, struct ucred *cr)
 {
 	int error;
 	error = curtain_finish_unveils(ct, cr);
-	if (error)
+	if (error != 0)
 		return (error);
-
-	ct->ct_cached.restrictive = curtain_restrictive(ct);
-	if (ct->ct_cached.restrictive && ct->ct_abilities[CURTAINABL_DEFAULT].soft < CURTAIN_DENY)
+	if ((ct->ct_cached.restrictive = curtain_restrictive(ct)) &&
+	    ct->ct_abilities[CURTAINABL_DEFAULT].soft < CURTAIN_DENY)
 		ct->ct_abilities[CURTAINABL_DEFAULT].soft = CURTAIN_DENY;
-
 	curtain_cache_update_sysfils(ct);
-
 	ct->ct_cached.valid = true;
-
-	if (ct->ct_on_exec) {
+	if (ct->ct_on_exec != NULL) {
 		error = curtain_finish(ct->ct_on_exec, cr);
-		if (error)
+		if (error != 0)
 			return (error);
 	}
 	return (0);

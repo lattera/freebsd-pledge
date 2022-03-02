@@ -40,21 +40,32 @@ static const unveil_perms uperms_searchable = uperms_inheritable & ~UPERM_DEVFS;
 static const unveil_perms uperms_resolvable = uperms_searchable |
     UPERM_SEARCH | UPERM_STATUS | UPERM_LIST;
 
+static inline bool
+uperms_overlaps(unveil_perms uhave, unveil_perms uneed)
+{
+	return ((uneed & uhave) != 0);
+}
+
+static inline bool
+uperms_contains(unveil_perms uhave, unveil_perms uneed)
+{
+	return ((uneed & ~uhave) == 0);
+}
+
 static inline unveil_perms
 uperms_expand(unveil_perms uperms)
 {
-	if (uperms & uperms_searchable)
+	if (uperms_overlaps(uperms, uperms_searchable))
 		uperms |= UPERM_SEARCH | UPERM_EXPOSE;
-	if (uperms & UPERM_WRITE)
+	if (uperms_overlaps(uperms, UPERM_WRITE))
 		uperms |= UPERM_APPEND;
-	if (uperms & (UPERM_BROWSE | UPERM_READ))
+	if (uperms_overlaps(uperms, UPERM_BROWSE | UPERM_READ))
 		uperms |= UPERM_STATUS | UPERM_BROWSE | UPERM_LIST;
-	if (uperms & (UPERM_SEARCH | UPERM_TMPDIR | UPERM_DEVFS))
+	if (uperms_overlaps(uperms, UPERM_SEARCH | UPERM_TMPDIR | UPERM_DEVFS))
 		uperms |= UPERM_TRAVERSE;
-	if (uperms & UPERM_EXECUTE)
+	if (uperms_overlaps(uperms, UPERM_EXECUTE))
 		uperms |= UPERM_SHELL;
-	if (uperms & UPERM_READ && uperms & UPERM_WRITE &&
-	    uperms & UPERM_CREATE && uperms & UPERM_DELETE)
+	if (uperms_contains(uperms, UPERM_READ | UPERM_WRITE | UPERM_CREATE | UPERM_DELETE))
 		uperms |= UPERM_TMPDIR;
 	return (uperms);
 }
@@ -63,19 +74,13 @@ static inline unveil_perms
 uperms_inherit_1(unveil_perms uperms)
 {
 	return ((uperms & uperms_inheritable) |
-	    (uperms & UPERM_TMPDIR ? UPERM_TMPDIR_CHILD : UPERM_NONE));
+	    (uperms_contains(uperms, UPERM_TMPDIR) ? UPERM_TMPDIR_CHILD : UPERM_NONE));
 }
 
 static inline unveil_perms
 uperms_inherit(unveil_perms uperms)
 {
 	return (uperms_expand(uperms_inherit_1(uperms)));
-}
-
-static inline bool
-uperms_contains(unveil_perms uhave, unveil_perms uneed)
-{
-	return (!(uneed & ~uhave));
 }
 
 static inline bool

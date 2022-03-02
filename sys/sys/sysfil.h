@@ -156,7 +156,7 @@ sysfil_check_cred(struct ucred *cr, sysfilset_t sfs)
 	int error;
 	error = sysfil_probe_cred(cr, sfs);
 #ifdef MAC
-	if (error)
+	if (error != 0)
 		error = mac_sysfil_check(cr, sfs);
 #endif
 	return (error);

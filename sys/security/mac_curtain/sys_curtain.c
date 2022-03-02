@@ -88,7 +88,7 @@ sysctl_curtain_max_items(SYSCTL_HANDLER_ARGS)
 	int error, val;
 	val = curtain_max_items_per_curtain;
 	error = sysctl_handle_int(oidp, &val, 0, req);
-	if (!error && req->newptr) {
+	if (error == 0 && req->newptr != NULL) {
 		if (val >= 0 && val <= (curtain_index)-1) {
 			curtain_max_items_per_curtain = val;
 		} else
@@ -106,7 +106,7 @@ sysctl_curtain_curtained(SYSCTL_HANDLER_ARGS)
 {
 	struct curtain *ct;
 	int ret;
-	ret = ((ct = CRED_SLOT(req->td->td_ucred)) ? ct->ct_cached.restrictive : 0);
+	ret = (ct = CRED_SLOT(req->td->td_ucred)) != NULL ? ct->ct_cached.restrictive : 0;
 	return (SYSCTL_OUT(req, &ret, sizeof(ret)));
 }
 
@@ -117,12 +117,11 @@ SYSCTL_PROC(_security_curtain, OID_AUTO, curtained,
 static int
 sysctl_curtain_curtained_exec(SYSCTL_HANDLER_ARGS)
 {
-	struct curtain *ct, *ct1;
+	struct curtain *ct;
 	int ret;
-	if ((ct = CRED_SLOT(req->td->td_ucred))) {
-		ct1 = ct->ct_on_exec ? ct->ct_on_exec : ct;
-		ret = ct1->ct_cached.restrictive;
-	} else
+	if ((ct = CRED_SLOT(req->td->td_ucred)) != NULL)
+		ret = (ct->ct_on_exec != NULL ? ct->ct_on_exec : ct)->ct_cached.restrictive;
+	else
 		ret = 0;
 	return (SYSCTL_OUT(req, &ret, sizeof(ret)));
 }
@@ -141,18 +140,18 @@ sysctl_curtain_show(SYSCTL_HANDLER_ARGS)
 	struct proc *p;
 	struct curtain *ct;
 	int val, error;
-	if (!req->newptr)
+	if (req->newptr == NULL)
 		return (EINVAL);
 	error = sysctl_handle_int(oidp, &val, 0, req);
-	if (error)
+	if (error != 0)
 		return (error);
 	error = pget(val, PGET_CANDEBUG | PGET_NOTWEXIT, &p);
-	if (error)
+	if (error != 0)
 		return (error);
-	if ((ct = CRED_SLOT(p->p_ucred)))
+	if ((ct = CRED_SLOT(p->p_ucred)) != NULL)
 		ct = curtain_hold(ct);
 	PROC_UNLOCK(p);
-	if (ct) {
+	if (ct != NULL) {
 		db_print_curtain(ct);
 		curtain_free(ct);
 	}
@@ -194,15 +193,15 @@ curtain_fill_expand(struct curtain *ct)
 	do {
 		propagate = false;
 		for (size_t i = 0; i < nitems(abilities_depend); i++) {
-			enum curtain_ability from = abilities_depend[i][0], to = abilities_depend[i][1];
+			enum curtain_ability from = abilities_depend[i][0],
+			                       to = abilities_depend[i][1];
 			if (ct->ct_abilities[to].soft > ct->ct_abilities[from].soft) {
 				ct->ct_abilities[to].soft = ct->ct_abilities[from].soft;
 				propagate = true;
 			}
 		}
 	} while (propagate);
-
-	if (ct->ct_on_exec)
+	if (ct->ct_on_exec != NULL)
 		curtain_fill_expand(ct->ct_on_exec);
 }
 
@@ -213,7 +212,7 @@ curtain_fill_restrict_exec(struct curtain *ct, struct ucred *cr)
 	    ct->ct_abilities[CURTAINABL_EXEC_RSUGID].soft < CURTAIN_DENY &&
 	    priv_check_cred(cr, PRIV_VFS_CHROOT) != 0)
 		ct->ct_abilities[CURTAINABL_EXEC_RSUGID].soft = CURTAIN_DENY;
-	if (ct->ct_on_exec)
+	if (ct->ct_on_exec != NULL)
 		curtain_fill_restrict_exec(ct->ct_on_exec, cr);
 }
 
@@ -262,7 +261,7 @@ curtain_fill_item(struct curtain *ct, enum curtain_type type, union curtain_key 
 {
 	struct curtain_item *item;
 	item = curtain_search(ct, type, key, NULL);
-	if (item) {
+	if (item != NULL) {
 		item->mode.soft = lvl2act[lvl];
 		item->mode.hard = CURTAIN_ALLOW;
 	}
@@ -272,7 +271,7 @@ curtain_fill_item(struct curtain *ct, enum curtain_type type, union curtain_key 
 MALLOC_DECLARE(M_CURTAIN_UNVEIL);
 
 static int
-curtain_fill_unveil(struct curtain *ct, struct curtainent_unveil **ent_ret, char *end)
+curtain_fill_unveil(struct curtain *ct, struct curtainent_unveil **entp, char *end)
 {
 	struct curtainent_unveil *ent;
 	struct file *fp;
@@ -283,16 +282,15 @@ curtain_fill_unveil(struct curtain *ct, struct curtainent_unveil **ent_ret, char
 	bool inserted, has_name;
 	int error;
 
-	ent = *ent_ret;
-
+	ent = *entp;
 	name_end = memchr(ent->name, '\0', end - ent->name);
-	if (!name_end)
+	if (name_end == NULL)
 		return (EINVAL);
 	name_size = name_end - ent->name + 1;
 	has_name = name_size > 1;
 
 	error = getvnode_path(curthread, ent->dir_fd, &cap_no_rights, &fp);
-	if (error)
+	if (error != 0)
 		return (error);
 	vp = fp->f_vnode;
 	if (vp->v_type != VDIR) {
@@ -304,46 +302,38 @@ curtain_fill_unveil(struct curtain *ct, struct curtainent_unveil **ent_ret, char
 	inserted = false;
 
 	if (!has_name) {
-		struct curtain_unveil uv = {
-			.vp = vp,
-			.hash = vp->v_nchash,
-		};
+		struct curtain_unveil uv = { .vp = vp, .hash = vp->v_nchash };
 		item = curtain_lookup(ct, CURTAIN_UNVEIL, (ctkey){ .unveil = &uv });
 	}
 
-	if (!item) {
+	if (item == NULL) {
 		struct curtain_unveil *uv;
 		uv = malloc(sizeof *uv + name_size, M_CURTAIN_UNVEIL, M_WAITOK);
-		*uv = (struct curtain_unveil){
-			.vp = vp,
-			.hash = vp->v_nchash,
-		};
+		*uv = (struct curtain_unveil){ .vp = vp, .hash = vp->v_nchash };
 		if (has_name) {
 			uv->name_len = name_size - 1;
 			memcpy(uv->name, ent->name, name_size);
 			uv->hash = fnv_32_buf(uv->name, uv->name_len, uv->hash);
 		}
 		item = curtain_search(ct, CURTAIN_UNVEIL, (ctkey){ .unveil = uv }, &inserted);
-		if (item && inserted) {
+		if (item != NULL && inserted) {
 			item->mode.hard = item->mode.soft = CURTAIN_ALLOW;
 			vref(uv->vp);
 		} else
 			free(uv, M_CURTAIN_UNVEIL);
 	}
 
-	if (item) {
+	if (item != NULL) {
 		item->key.unveil->soft_uperms = uperms_expand(ent->uperms);
 		item->key.unveil->hard_uperms = UPERM_ALL;
 	}
 	fdrop(fp, curthread);
 
-	space = __align_up(name_size, __alignof(struct curtainent_unveil));
-	if (space < name_size)
+	space = __align_up(offsetof(struct curtainent_unveil, name) + name_size,
+	    __alignof(struct curtainent_unveil));
+	if (end - (char *)ent < space)
 		return (EINVAL);
-	if (end - ent->name < space)
-		return (EINVAL);
-	*ent_ret = (void *)(ent->name + space);
-
+	*entp = (void *)((char *)ent + space);
 	return (0);
 }
 
@@ -426,7 +416,7 @@ curtain_fill_req(struct curtain *ct, const struct curtainreq *req)
 			if (l == 0 || l > c)
 				return (EINVAL);
 			error = sysctl_shadow_find(p, l, &sdw, NULL, NULL);
-			if (!error)
+			if (error == 0)
 				curtain_fill_item(ct, CURTAIN_SYSCTL,
 				    (ctkey){ .sysctl = sdw }, req->level);
 			else if (error != ENOENT)
@@ -454,7 +444,7 @@ curtain_fill_req(struct curtain *ct, const struct curtainreq *req)
 			if (endp - (char *)entp < sizeof *entp)
 				return (EINVAL);
 			error = curtain_fill_unveil(ct, &entp, endp);
-			if (error)
+			if (error != 0)
 				return (error);
 		}
 		break;
@@ -477,7 +467,7 @@ curtain_fill(struct curtain *ct, struct ucred *cr,
 
 	def = CURTAINLVL_KILL;
 	for (req = reqv; req < &reqv[reqc]; req++)
-		if (req->flags & flags_filter) {
+		if ((req->flags & flags_filter) != 0) {
 			if (!(req->level >= 0 && req->level < CURTAINLVL_COUNT) ||
 			    !(req->type >= CURTAINTYP_DEFAULT && req->type <= CURTAINTYP_LAST)) {
 				error = EINVAL;
@@ -493,9 +483,9 @@ curtain_fill(struct curtain *ct, struct ucred *cr,
 	}
 
 	for (req = reqv; req < &reqv[reqc]; req++)
-		if (req->flags & flags_filter) {
+		if ((req->flags & flags_filter) != 0) {
 			error = curtain_fill_req(ct, req);
-			if (error)
+			if (error != 0)
 				goto fail;
 		}
 
@@ -505,7 +495,7 @@ curtain_fill(struct curtain *ct, struct ucred *cr,
 	}
 
 	error = curtain_fixup_unveils_parents(ct, cr);
-	if (error)
+	if (error != 0)
 		goto fail;
 
 	SDT_PROBE1(curtain,, curtain_fill, done, ct);
@@ -528,13 +518,13 @@ update_ucred_curtain(struct ucred *cr, struct curtain *ct, bool harden)
 	 * multiple times.  This is fine since masking can only drop
 	 * permissions.  This avoids having to do an extra copy.
 	 */
-	if ((old_ct = CRED_SLOT(cr)))
+	if ((old_ct = CRED_SLOT(cr)) != NULL)
 		curtain_mask(ct, old_ct);
 	else
 		curtain_mask_sysfils(ct, cr->cr_sysfilset);
 
 	ct = curtain_dup(ct); /* compaction */
-	if (old_ct)
+	if (old_ct != NULL)
 		/* old_ct can still be used since there's still a reference to
 		   it in the old ucred referenced by the caller. */
 		curtain_free(old_ct);
@@ -546,16 +536,16 @@ update_ucred_curtain(struct ucred *cr, struct curtain *ct, bool harden)
 		return (E2BIG);
 
 	error = curtain_finish(ct, cr);
-	if (error)
+	if (error != 0)
 		return (error);
 
 	if (harden)
 		curtain_harden(ct);
 
 	/* Will be unlinked on failure when the new ucred is freed. */
-	if (old_ct)
+	if (old_ct != NULL)
 		barrier_link(CURTAIN_BARRIER(ct), CURTAIN_BARRIER(old_ct));
-	if (ct->ct_on_exec)
+	if (ct->ct_on_exec != NULL)
 		barrier_link(CURTAIN_BARRIER(ct->ct_on_exec), CURTAIN_BARRIER(ct));
 
 	curtain_cred_update(ct, cr);
@@ -581,12 +571,12 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 	ct->ct_on_exec = curtain_make(curtain_max_items_per_curtain);
 
 	error = curtain_fill(ct, td->td_ucred, CURTAINREQ_ON_SELF, reqc, reqv);
-	if (error) {
+	if (error != 0) {
 		curtain_free(ct);
 		return (error);
 	}
 	error = curtain_fill(ct->ct_on_exec, td->td_ucred, CURTAINREQ_ON_EXEC, reqc, reqv);
-	if (error) {
+	if (error != 0) {
 		curtain_free(ct);
 		return (error);
 	}
@@ -607,7 +597,7 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 		crhold(old_cr);
 		PROC_UNLOCK(p);
 		error = update_ucred_curtain(new_cr, ct, !(flags & CURTAINCTL_SOFT));
-		if (error) {
+		if (error != 0) {
 			crfree(old_cr);
 			crfree(new_cr);
 			curtain_free(ct);
@@ -625,7 +615,7 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 		crfree(new_cr);
 	} while (true);
 
-	if (flags & CURTAINCTL_REPLACE) {
+	if ((flags & CURTAINCTL_REPLACE) != 0) {
 		proc_set_cred(p, new_cr);
 		if (CRED_IN_RESTRICTED_MODE(new_cr) != PROC_IN_RESTRICTED_MODE(p))
 			panic("PROC_IN_RESTRICTED_MODE() bogus");
@@ -654,7 +644,7 @@ sys_curtainctl(struct thread *td, struct curtainctl_args *uap)
 	reqi = 0;
 	reqv = mallocarray(reqc, sizeof *reqv, M_TEMP, M_WAITOK);
 	error = copyin(uap->reqv, reqv, reqc * sizeof *reqv);
-	if (error)
+	if (error != 0)
 		goto out;
 	avail = CURTAINCTL_MAX_SIZE;
 	while (reqi < reqc) {
@@ -665,11 +655,11 @@ sys_curtainctl(struct thread *td, struct curtainctl_args *uap)
 			goto out;
 		}
 		reqi++;
-		if (udata) {
+		if (udata != NULL) {
 			avail -= req->size;
 			req->data = malloc(req->size, M_TEMP, M_WAITOK);
 			error = copyin(udata, req->data, req->size);
-			if (error)
+			if (error != 0)
 				goto out;
 		}
 	}
@@ -707,7 +697,7 @@ db_print_curtain(struct curtain *ct)
 		    ct->ct_abilities[abl].soft, ct->ct_abilities[abl].hard);
 	db_printf("ct_slots:\n");
 	for (struct curtain_item *item = ct->ct_slots; item < &ct->ct_slots[ct->ct_nslots]; item++)
-		if (item->type != 0) {
+		if (item->type != CURTAIN_UNUSED) {
 			union curtain_key key = item->key;
 			db_printf("\tslot: %3zu chain: %3zu type: %2d soft: %d hard: %d",
 			    (size_t)(item - ct->ct_slots), (size_t)item->chain,
@@ -748,19 +738,19 @@ db_print_curtain(struct curtain *ct)
 				db_printf(" hash: 0x%08x\n", key.unveil->hash);
 				db_printf("\t\tsoft-uperms: 0x%08x hard-uperms: 0x%08x\n",
 				    key.unveil->soft_uperms, key.unveil->hard_uperms);
-				if (key.unveil->vp) {
+				if (key.unveil->vp != NULL) {
 					int error;
 					char *fullpath, *freepath;
 					freepath = fullpath = NULL;
 					error = vn_fullpath(key.unveil->vp, &fullpath, &freepath);
-					if (error)
+					if (error != 0)
 						db_printf("\t\tpath error: %d\n", error);
-					else if (key.unveil->name_len)
+					else if (key.unveil->name_len != 0)
 						db_printf("\t\tpath: %s/%s\n",
 						    fullpath, key.unveil->name);
 					else
 						db_printf("\t\tpath: %s\n", fullpath);
-					if (freepath)
+					if (freepath != NULL)
 						free(freepath, M_TEMP);
 				}
 				break;
@@ -769,7 +759,7 @@ db_print_curtain(struct curtain *ct)
 				break;
 			}
 		}
-	if (ct->ct_on_exec)
+	if (ct->ct_on_exec != NULL)
 		db_print_curtain(ct->ct_on_exec);
 }
 
@@ -789,7 +779,7 @@ DB_SHOW_ALL_COMMAND(curtains, db_show_all_curtains)
 		struct curtain *ct;
 		if (p->p_state == PRS_NEW)
 			continue;
-		if (p->p_ucred && (ct = CRED_SLOT(p->p_ucred))) {
+		if (p->p_ucred != NULL && (ct = CRED_SLOT(p->p_ucred)) != NULL) {
 			db_printf("proc at %p pid %d\n", p, p->p_pid);
 			db_print_curtain(ct);
 			db_printf("\n");
@@ -811,7 +801,7 @@ sys_curtain_sysinit(void *arg)
 	int error;
 	error = syscall_helper_register(curtain_syscalls,
 	    SY_THR_STATIC_KLD | SY_HLP_PRESERVE_SYFLAGS);
-	if (error)
+	if (error != 0)
 		printf("%s: syscall_helper_register error %d\n", __FUNCTION__, error);
 }
 
