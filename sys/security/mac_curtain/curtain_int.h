@@ -210,7 +210,7 @@ void	curtain_harden(struct curtain *);
 void	curtain_mask_sysfils(struct curtain *, sysfilset_t);
 struct curtain_item *curtain_extend(struct curtain *, enum curtain_type, union curtain_key);
 void	curtain_mask(struct curtain *dst, const struct curtain *src);
-int	curtain_finish(struct curtain *, struct ucred *);
+int	curtain_finish(struct curtain *);
 
 bool	curtain_cred_restricted(const struct curtain *, const struct ucred *);
 bool	curtain_cred_visible(const struct ucred *subject, const struct ucred *target,
@@ -269,7 +269,7 @@ void unveil_track_reset(struct unveil_tracker *);
 
 unveil_perms curtain_lookup_mount(const struct curtain *, struct mount *);
 int	curtain_fixup_unveils_parents(struct curtain *, struct ucred *);
-int	curtain_finish_unveils(struct curtain *, struct ucred *);
+int	curtain_finish_unveils(struct curtain *);
 
 #endif
 

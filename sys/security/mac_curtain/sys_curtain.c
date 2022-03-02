@@ -535,7 +535,7 @@ update_ucred_curtain(struct ucred *cr, struct curtain *ct, bool harden)
 	if (ct->ct_overflowed) /* masking can overflow */
 		return (E2BIG);
 
-	error = curtain_finish(ct, cr);
+	error = curtain_finish(ct);
 	if (error != 0)
 		return (error);
 

@@ -979,10 +979,10 @@ curtain_mask(struct curtain *dst, const struct curtain *src)
 
 
 int
-curtain_finish(struct curtain *ct, struct ucred *cr)
+curtain_finish(struct curtain *ct)
 {
 	int error;
-	error = curtain_finish_unveils(ct, cr);
+	error = curtain_finish_unveils(ct);
 	if (error != 0)
 		return (error);
 	if ((ct->ct_cached.restrictive = curtain_restrictive(ct)) &&
@@ -991,7 +991,7 @@ curtain_finish(struct curtain *ct, struct ucred *cr)
 	curtain_cache_update_sysfils(ct);
 	ct->ct_cached.valid = true;
 	if (ct->ct_on_exec != NULL) {
-		error = curtain_finish(ct->ct_on_exec, cr);
+		error = curtain_finish(ct->ct_on_exec);
 		if (error != 0)
 			return (error);
 	}

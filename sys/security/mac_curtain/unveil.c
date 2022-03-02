@@ -366,7 +366,7 @@ curtain_fixup_unveils_parents(struct curtain *ct, struct ucred *cr)
 }
 
 int
-curtain_finish_unveils(struct curtain *ct, struct ucred *cr __unused)
+curtain_finish_unveils(struct curtain *ct)
 {
 	struct curtain_item *item;
 	size_t count;
