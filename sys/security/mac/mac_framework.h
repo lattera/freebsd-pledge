@@ -735,6 +735,8 @@ int	mac_generic_check_sendfd(struct ucred *cred, struct thread *td,
 int	mac_generic_check_recvfd(struct ucred *cred, struct thread *td,
 	    struct file *fp);
 
+extern sysfilset_t mac_sysfils_preserve;
+
 int	mac_sysfil_check(struct ucred *cred, sysfilset_t sfs);
 
 int	mac_proc_check_exec_sugid(struct ucred *cred, struct proc *p);

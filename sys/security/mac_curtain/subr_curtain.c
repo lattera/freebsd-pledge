@@ -758,9 +758,7 @@ curtain_dup(const struct curtain *src)
 }
 
 
-const sysfilset_t curtain_preserve_sysfils = SYSFIL_NOTCAPMODE;
-
-const sysfilset_t curtain_abilities_sysfils[CURTAINABL_COUNT] = {
+static const sysfilset_t curtain_abilities_sysfils[CURTAINABL_COUNT] = {
 	[CURTAINABL_DEFAULT] = SYSFIL_CATCHALL,
 	[CURTAINABL_STDIO] = SYSFIL_STDIO,
 	[CURTAINABL_VFS_MISC] = SYSFIL_VFS_MISC,
@@ -1003,10 +1001,10 @@ curtain_to_sysfils(const struct curtain *ct, const struct ucred *cr)
 {
 	sysfilset_t sysfils;
 	MPASS(ct->ct_cached.valid);
-	sysfils = (cr->cr_sysfilset & curtain_preserve_sysfils) |
-	    (ct->ct_cached.sysfilset & ~curtain_preserve_sysfils);
+	sysfils = (cr->cr_sysfilset & mac_sysfils_preserve) |
+	    (ct->ct_cached.sysfilset & ~mac_sysfils_preserve);
 	MPASS(SYSFILSET_IS_RESTRICTED(sysfils) ==
-	    SYSFILSET_IS_RESTRICTED(cr->cr_sysfilset | ~curtain_preserve_sysfils) ||
+	    SYSFILSET_IS_RESTRICTED(cr->cr_sysfilset | ~mac_sysfils_preserve) ||
 	    ct->ct_cached.restrictive);
 	return (sysfils);
 }

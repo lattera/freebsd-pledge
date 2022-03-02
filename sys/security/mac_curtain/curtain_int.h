@@ -157,9 +157,6 @@ SYSCTL_DECL(_security_curtain_stats);
 extern unsigned __read_mostly curtain_log_level;
 extern unsigned __read_mostly curtain_sysctls_log_level;
 
-extern const sysfilset_t curtain_preserve_sysfils;
-extern const sysfilset_t curtain_abilities_sysfils[CURTAINABL_COUNT];
-
 extern int __read_mostly curtain_slot;
 #define	CURTAIN_CTH_IS_CT(cth) ((cth) != &(cth)->cth_barrier->br_head)
 #define	CURTAIN_SLOT_CTH(l) ((l) != NULL ? (struct curtain_head *)mac_label_get((l), curtain_slot) : NULL)

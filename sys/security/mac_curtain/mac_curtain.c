@@ -1512,7 +1512,7 @@ curtain_sysfil_check(struct ucred *cr, sysfilset_t sfs)
 	if ((ct = CRED_SLOT(cr)) == NULL)
 		return (sysfil_probe_cred(cr, sfs));
 	act = CURTAIN_ALLOW;
-	sfs &= ~curtain_preserve_sysfils;
+	sfs &= ~mac_sysfils_preserve;
 	while (sfs != 0) {
 		unsigned i = ffsll(sfs) - 1;
 		act = MAX(act, ct->ct_cached.sysfilacts[i]);
