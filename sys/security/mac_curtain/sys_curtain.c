@@ -38,21 +38,6 @@ SDT_PROBE_DEFINE1(curtain,, do_curtainctl, assign, "struct curtain *");
 
 typedef union curtain_key ctkey;
 
-#define	CRED_SLOT(cr) CURTAIN_SLOT_CT((cr)->cr_label)
-#define	CRED_SLOT_BR(cr) CURTAIN_SLOT_BR((cr)->cr_label)
-
-bool
-curtain_cred_visible(const struct ucred *subject, const struct ucred *target, barrier_bits bar)
-{
-	return (barrier_visible(CRED_SLOT_BR(subject), CRED_SLOT_BR(target), bar));
-}
-
-struct curtain *
-curtain_from_cred(struct ucred *cr)
-{
-	return (CRED_SLOT(cr));
-}
-
 
 static bool __read_mostly curtainctl_enabled = true;
 static curtain_index curtain_max_items_per_curtain = CURTAINCTL_MAX_ITEMS;
@@ -106,7 +91,7 @@ sysctl_curtain_curtained(SYSCTL_HANDLER_ARGS)
 {
 	struct curtain *ct;
 	int ret;
-	ret = (ct = CRED_SLOT(req->td->td_ucred)) != NULL ? ct->ct_cached.restrictive : 0;
+	ret = (ct = CURTAIN_CRED_SLOT_CT(req->td->td_ucred)) != NULL ? ct->ct_cached.restrictive : 0;
 	return (SYSCTL_OUT(req, &ret, sizeof(ret)));
 }
 
@@ -119,7 +104,7 @@ sysctl_curtain_curtained_exec(SYSCTL_HANDLER_ARGS)
 {
 	struct curtain *ct;
 	int ret;
-	if ((ct = CRED_SLOT(req->td->td_ucred)) != NULL)
+	if ((ct = CURTAIN_CRED_SLOT_CT(req->td->td_ucred)) != NULL)
 		ret = (ct->ct_on_exec != NULL ? ct->ct_on_exec : ct)->ct_cached.restrictive;
 	else
 		ret = 0;
@@ -148,7 +133,7 @@ sysctl_curtain_show(SYSCTL_HANDLER_ARGS)
 	error = pget(val, PGET_CANDEBUG | PGET_NOTWEXIT, &p);
 	if (error != 0)
 		return (error);
-	if ((ct = CRED_SLOT(p->p_ucred)) != NULL)
+	if ((ct = CURTAIN_CRED_SLOT_CT(p->p_ucred)) != NULL)
 		ct = curtain_hold(ct);
 	PROC_UNLOCK(p);
 	if (ct != NULL) {
@@ -518,7 +503,7 @@ update_ucred_curtain(struct ucred *cr, struct curtain *ct, bool harden)
 	 * multiple times.  This is fine since masking can only drop
 	 * permissions.  This avoids having to do an extra copy.
 	 */
-	if ((old_ct = CRED_SLOT(cr)) != NULL)
+	if ((old_ct = CURTAIN_CRED_SLOT_CT(cr)) != NULL)
 		curtain_mask(ct, old_ct);
 	else
 		curtain_mask_sysfils(ct, cr->cr_sysfilset);
@@ -530,7 +515,7 @@ update_ucred_curtain(struct ucred *cr, struct curtain *ct, bool harden)
 		curtain_free(old_ct);
 	/* Must assign new curtain to (tentative) new ucred before we return so
 	   that it can be cleaned up on failure. */
-	mac_label_set(cr->cr_label, curtain_slot, (uintptr_t)ct);
+	CURTAIN_CRED_SLOT_SET(cr, ct);
 
 	if (ct->ct_overflowed) /* masking can overflow */
 		return (E2BIG);
@@ -779,7 +764,7 @@ DB_SHOW_ALL_COMMAND(curtains, db_show_all_curtains)
 		struct curtain *ct;
 		if (p->p_state == PRS_NEW)
 			continue;
-		if (p->p_ucred != NULL && (ct = CRED_SLOT(p->p_ucred)) != NULL) {
+		if (p->p_ucred != NULL && (ct = CURTAIN_CRED_SLOT_CT(p->p_ucred)) != NULL) {
 			db_printf("proc at %p pid %d\n", p, p->p_pid);
 			db_print_curtain(ct);
 			db_printf("\n");

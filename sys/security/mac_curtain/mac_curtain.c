@@ -60,16 +60,30 @@ STATNODE_COUNTER(check_kills, curtain_stats_check_kills, "");
 
 typedef union curtain_key ctkey;
 
-#define	CTH_IS_CT(l) CURTAIN_CTH_IS_CT(l)
-#define	SLOT_CTH(l) CURTAIN_SLOT_CTH(l)
-#define	SLOT_CT(l) CURTAIN_SLOT_CT(l)
-#define	SLOT_BR(l) CURTAIN_SLOT_BR(l)
-#define	CRED_SLOT(cr) CURTAIN_SLOT_CT((cr)->cr_label)
-#define	CRED_SLOT_BR(cr) CURTAIN_SLOT_BR((cr)->cr_label)
-#define	SLOT_SET(l, val) mac_label_set((l), curtain_slot, (uintptr_t)(val))
+#define	CTH_IS_CT	CURTAIN_CTH_IS_CT
+#define	SLOT_CTH	CURTAIN_SLOT_CTH
+#define	SLOT_CT		CURTAIN_SLOT_CT
+#define	SLOT_BR		CURTAIN_SLOT_BR
+#define	CRED_SLOT	CURTAIN_CRED_SLOT_CT
+#define	CRED_SLOT_BR	CURTAIN_CRED_SLOT_BR
+#define	SLOT_SET	CURTAIN_SLOT_SET
+#define	CRED_SLOT_SET	CURTAIN_CRED_SLOT_SET
 
 int __read_mostly curtain_slot;
 
+bool
+curtain_cred_visible(const struct ucred *subject, const struct ucred *target, barrier_bits bar)
+{
+	return (barrier_visible(CRED_SLOT_BR(subject), CRED_SLOT_BR(target), bar));
+}
+
+struct curtain *
+curtain_from_cred(struct ucred *cr)
+{
+	return (CRED_SLOT(cr));
+}
+
+
 static const char act2str[][6] = {
 	[CURTAIN_ALLOW] = "allow",
 	[CURTAIN_DENY] = "deny",
@@ -335,7 +349,7 @@ curtain_cred_trim(struct ucred *cr)
 	if ((ct = CRED_SLOT(cr)) == NULL)
 		return;
 	br = barrier_hold(CURTAIN_BARRIER(ct));
-	SLOT_SET(cr->cr_label, &br->br_head);
+	CRED_SLOT_SET(cr, &br->br_head);
 	curtain_free(ct);
 }
 
@@ -1566,7 +1580,7 @@ curtain_proc_exec_alter(struct proc *p, struct ucred *cr)
 	if (!curtain_cred_restricted(ct->ct_on_exec, cr)) {
 		/* Can drop the curtain and unveils altogether. */
 		curtain_free(ct);
-		SLOT_SET(cr->cr_label, NULL);
+		CRED_SLOT_SET(cr, NULL);
 		sysfil_cred_init(cr);
 		MPASS(!CRED_IN_RESTRICTED_MODE(cr));
 		unveil_proc_drop_cache(p);
@@ -1576,7 +1590,7 @@ curtain_proc_exec_alter(struct proc *p, struct ucred *cr)
 	ct = curtain_hold(ct->ct_on_exec);
 	curtain_free(CRED_SLOT(cr));
 	curtain_cred_update(ct, cr);
-	SLOT_SET(cr->cr_label, ct);
+	CRED_SLOT_SET(cr, ct);
 	MPASS(CRED_IN_RESTRICTED_MODE(cr));
 }
 

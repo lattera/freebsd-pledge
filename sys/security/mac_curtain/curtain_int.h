@@ -176,6 +176,10 @@ extern int __read_mostly curtain_slot;
 	struct curtain_head *__cth = CURTAIN_SLOT_CTH(l); \
 	__cth != NULL ? __cth->cth_barrier : NULL; \
 })
+#define CURTAIN_CRED_SLOT_CT(cr) CURTAIN_SLOT_CT((cr)->cr_label)
+#define CURTAIN_CRED_SLOT_BR(cr) CURTAIN_SLOT_BR((cr)->cr_label)
+#define CURTAIN_SLOT_SET(l, cth) mac_label_set((l), curtain_slot, (uintptr_t)(cth))
+#define CURTAIN_CRED_SLOT_SET(cr, cth) CURTAIN_SLOT_SET((cr)->cr_label, cth)
 
 struct barrier *barrier_hold(struct barrier *);
 void	barrier_link(struct barrier *child, struct barrier *parent);
