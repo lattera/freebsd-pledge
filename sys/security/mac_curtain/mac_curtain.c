@@ -1353,7 +1353,7 @@ curtain_system_check_sysctl(struct ucred *cr,
 {
 	enum curtain_action act;
 	struct sysctl_oid *p;
-	if ((oidp->oid_kind & (CTLFLAG_RESTRICT|CTLFLAG_CAPRW)) != 0)
+	if ((oidp->oid_kind & CTLFLAG_CAPRW) != 0)
 		return (0);
 	if (CRED_SLOT(cr) == NULL)
 		return (0);

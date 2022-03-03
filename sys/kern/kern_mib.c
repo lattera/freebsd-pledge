@@ -102,8 +102,7 @@ SYSCTL_STRING(_kern, OID_AUTO, ident, CTLFLAG_RD|CTLFLAG_MPSAFE,
 SYSCTL_INT(_kern, KERN_OSREV, osrevision, CTLFLAG_RD|CTLFLAG_CAPRD,
     SYSCTL_NULL_INT_PTR, BSD, "Operating system revision");
 
-SYSCTL_STRING(_kern, KERN_VERSION, version,
-    CTLFLAG_RD|CTLFLAG_RESTRICT|CTLFLAG_MPSAFE,
+SYSCTL_STRING(_kern, KERN_VERSION, version, CTLFLAG_RD|CTLFLAG_MPSAFE,
     version, 0, "Kernel version");
 
 SYSCTL_STRING(_kern, OID_AUTO, compiler_version, CTLFLAG_RD|CTLFLAG_MPSAFE,
@@ -244,7 +243,7 @@ SYSCTL_PROC(_hw, HW_USERMEM, usermem,
     sysctl_hw_usermem, "LU",
     "Amount of memory (in bytes) which is not wired");
 
-SYSCTL_LONG(_hw, OID_AUTO, availpages, CTLFLAG_RD|CTLFLAG_RESTRICT, &physmem, 0,
+SYSCTL_LONG(_hw, OID_AUTO, availpages, CTLFLAG_RD, &physmem, 0,
     "Amount of physical memory (in pages)");
 
 u_long pagesizes[MAXPAGESIZES] = { PAGE_SIZE };
@@ -315,9 +314,8 @@ sysctl_hw_machine_arch(SYSCTL_HANDLER_ARGS)
 		machine_arch = MACHINE_ARCH;
 	return (SYSCTL_OUT(req, machine_arch, strlen(machine_arch) + 1));
 }
-SYSCTL_PROC(_hw, HW_MACHINE_ARCH, machine_arch,
-    CTLTYPE_STRING | CTLFLAG_RD | CTLFLAG_RESTRICT | CTLFLAG_MPSAFE,
-    NULL, 0, sysctl_hw_machine_arch, "A",
+SYSCTL_PROC(_hw, HW_MACHINE_ARCH, machine_arch, CTLTYPE_STRING | CTLFLAG_RD |
+    CTLFLAG_MPSAFE, NULL, 0, sysctl_hw_machine_arch, "A",
     "System architecture");
 
 #ifndef MACHINE_ARCHES
@@ -723,7 +721,7 @@ sysctl_kern_pid_max(SYSCTL_HANDLER_ARGS)
 	return (error);
 }
 SYSCTL_PROC(_kern, OID_AUTO, pid_max, CTLTYPE_INT |
-    CTLFLAG_RWTUN | CTLFLAG_NOFETCH | CTLFLAG_RESTRICT | CTLFLAG_MPSAFE,
+    CTLFLAG_RWTUN | CTLFLAG_NOFETCH | CTLFLAG_MPSAFE,
     0, 0, sysctl_kern_pid_max, "I", "Maximum allowed pid");
 
 #include <sys/bio.h>

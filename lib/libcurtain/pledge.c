@@ -341,6 +341,11 @@ static const struct promise_sysctl {
 	enum promise_type promise;
 	const char *sysctl;
 } sysctls_table[] = {
+	{ PROMISE_STDIO, "hw.machine" },
+	{ PROMISE_STDIO, "vm.overcommit" },
+	{ PROMISE_STDIO, "kern.iov_max" },
+	{ PROMISE_STDIO, "kern.proc" },
+	{ PROMISE_PS, "kern.pid_max" },
 #ifdef AF_INET6
 	{ PROMISE_INET, "net.inet6.ip6.addrctlpolicy" },
 #endif

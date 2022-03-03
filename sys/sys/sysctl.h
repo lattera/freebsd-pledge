@@ -106,10 +106,6 @@
  * for SYSCTL_PROC and SYSCTL_NODE.
  */
 #define	CTLFLAG_NEEDGIANT 0x00000800	/* Handler require Giant */
-/*
- * Keeping pledge(2) exemptions separate from Capsicum.
- */
-#define	CTLFLAG_RESTRICT 0x00000400	/* Can be accessed under pledge */
 
 /*
  * Secure level.   Note that CTLFLAG_SECURE == CTLFLAG_SECURE1.

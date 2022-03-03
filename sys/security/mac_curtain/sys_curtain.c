@@ -83,7 +83,7 @@ sysctl_curtain_max_items(SYSCTL_HANDLER_ARGS)
 }
 
 SYSCTL_PROC(_security_curtain, OID_AUTO, max_items_per_curtain,
-    CTLTYPE_INT | CTLFLAG_RW | CTLFLAG_RESTRICT | CTLFLAG_MPSAFE, NULL, 0,
+    CTLTYPE_INT | CTLFLAG_RW | CTLFLAG_MPSAFE, NULL, 0,
     sysctl_curtain_max_items, "I", "");
 
 static int
@@ -96,7 +96,7 @@ sysctl_curtain_curtained(SYSCTL_HANDLER_ARGS)
 }
 
 SYSCTL_PROC(_security_curtain, OID_AUTO, curtained,
-    CTLTYPE_INT | CTLFLAG_RD | CTLFLAG_RESTRICT | CTLFLAG_MPSAFE, NULL, 0,
+    CTLTYPE_INT | CTLFLAG_RD | CTLFLAG_MPSAFE, NULL, 0,
     sysctl_curtain_curtained, "I", "");
 
 static int
@@ -112,7 +112,7 @@ sysctl_curtain_curtained_exec(SYSCTL_HANDLER_ARGS)
 }
 
 SYSCTL_PROC(_security_curtain, OID_AUTO, curtained_exec,
-    CTLTYPE_INT | CTLFLAG_RD | CTLFLAG_RESTRICT | CTLFLAG_MPSAFE, NULL, 0,
+    CTLTYPE_INT | CTLFLAG_RD | CTLFLAG_MPSAFE, NULL, 0,
     sysctl_curtain_curtained_exec, "I", "");
 
 #ifdef DDB
