@@ -1469,7 +1469,7 @@ dump_context_vec(FILE *f1, FILE *f2, int flags)
 
 	printf("***************");
 	if (flags & (D_PROTOTYPE | D_MATCHLAST)) {
-		f = match_function(ixold, lowa - 1, f1);
+		f = match_function(ixold, cvp->a - 1, f1);
 		if (f != NULL)
 			printf(" %s", f);
 	}
@@ -1576,7 +1576,7 @@ dump_unified_vec(FILE *f1, FILE *f2, int flags)
 	uni_range(lowc, upd);
 	printf(" @@");
 	if (flags & (D_PROTOTYPE | D_MATCHLAST)) {
-		f = match_function(ixold, lowa - 1, f1);
+		f = match_function(ixold, cvp->a - 1, f1);
 		if (f != NULL)
 			printf(" %s", f);
 	}
