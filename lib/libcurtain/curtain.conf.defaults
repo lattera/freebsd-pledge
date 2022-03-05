@@ -309,6 +309,7 @@ ability net_server
 merge _net_inet
 merge _net_route
 merge _net_resolv
+merge _ssl
 
 [_syslog]
 /var/run/log : v

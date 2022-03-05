@@ -25,26 +25,28 @@
 # OSS directly instead.
 
 
-# XXX Those paths shouldn't be unveiled by default.
-
 [_editor]
-~/Documents/				: rw
-~/Templates/				: rw
+#~/Documents/				: rw
+#~/Templates/				: rw
 
 [_browser]
 merge _audio
-~/Downloads/				: rw
+#~/Downloads/				: rw
 
 [_p2p]
-~/Downloads/				: rw
+#~/Downloads/				: rw
 
 [_player]
 merge _audio
-~/Music/				: r
-~/Videos/				: r
+#~/Music/				: r
+#~/Videos/				: r
 
 [_viewer]
-~/Pictures/				: r
+#~/Pictures/				: r
+
+[_game]
+merge _audio
+# TODO: joysticks/gamepads
 
 [_terminal]
 merge _pty
@@ -608,10 +610,9 @@ merge _basic
 merge _basic
 merge! _pwddb
 
-[arx : _games]
+[arx : _game]
 merge _basic _xdg
 ability prot_exec
-merge _audio
 ~/.config/arx/ : rw +
 ~/.local/share/arx/ : rw +
 
@@ -646,6 +647,72 @@ ability prot_exec
 ~/.wine/ : rw +
 ~/.i386-wine-pkg/ : rx
 ~/.cache/fontconfig/ : r
+
+[lynx : _browser]
+merge _basic _network
+/usr/local/etc/lynx.{cfg,lss}
+~/.lynxrc : rw
+~/.lynxsig
+~/.lynx_cookies : rw
+
+[links : _browser]
+merge _basic _network
+~/.links/ : rw +
+
+[lyx : _editor]
+merge _basic
+merge! _pwddb
+~/.lyx/ : rw +
+
+[youtube-dl]
+merge _basic _network
+/usr/local/etc/youtube-dl.conf
+~/.config/youtube-dl/
+~/.cache/youtube-dl/ : rw +
+
+[yt-dlp]
+merge _basic _network
+/usr/local/etc/yt-dlp.conf
+~/.config/yt-dlp/
+~/.cache/yt-dlp/ : rw +
+
+[curl]
+merge _basic _network
+~/.curlrc
+
+[_java]
+ability prot_exec
+/usr/local/etc/javavms
+/usr/local/openjdk{8,11,12,13,14,15,16,17}/ : rx
+
+[jedit : _editor]
+# Seems to require trusted X11.
+merge _basic
+merge _java
+merge! _pwddb
+~/.jedit/ : rw +
+
+[clementine-player : _player]
+merge _basic _qt
+ability prot_exec
+~/.cache/Clementine/ : rw +
+~/.config/Clementine/ : rw +
+
+[strawberry : _player]
+merge _basic _qt
+ability prot_exec
+~/.cache/strawberry/ : rw +
+~/.local/share/strawberry/ : rw +
+~/.config/strawberry/ : rw +
+
+[deadbeef : _player]
+merge _basic _gtk
+~/.config/deadbeef/ : rwu +
+
+[geany : _editor]
+merge _basic _network _pty _gtk
+~/.config/geany/ : rw +
+~/.cache/geany/ : rwu +
 
 
 [_build]
@@ -738,6 +805,7 @@ merge _login
 merge _syslog
 merge _setcred
 ability chown
+ability chroot
 /etc/ftpusers
 /etc/ftpchroot
 /etc/ftphosts
