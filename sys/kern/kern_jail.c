@@ -2620,6 +2620,10 @@ do_jail_attach(struct thread *td, struct prison *pr, int drflags)
 	if (error)
 		goto e_revert_osd;
 
+#ifdef MAC
+	if ((error = mac_vnode_walk_start(td->td_ucred, pr->pr_root)) != 0)
+		goto e_revert_osd;
+#endif
 	vn_lock(pr->pr_root, LK_EXCLUSIVE | LK_RETRY);
 	if ((error = change_dir(pr->pr_root, td)) != 0)
 		goto e_unlock;
