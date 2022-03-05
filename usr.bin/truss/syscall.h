@@ -93,6 +93,7 @@ enum Argtype {
 	CapFcntlRights,
 	Curtainctl,
 	CurtainctlFlags,
+	Closerangeflags,
 	Extattrnamespace,
 	Fadvice,
 	Fcntl,

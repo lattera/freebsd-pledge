@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: BSD-2-Clause-FreeBSD
 #
-# Copyright (c) 2021 Peter Holm <pho@FreeBSD.org>
+# Copyright (c) 2022 Peter Holm <pho@FreeBSD.org>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -30,18 +30,14 @@
 # fsck test with forced unmount of a SU FS.
 # Variation of gnop8.sh by Kirk McKusick <mckusick@mckusick.com>
 
-# Copy of gnop9.sh. Uses SU instead of SUJ.
+# Long fsck_ffs runtime scenario
 
 [ `id -u ` -ne 0 ] && echo "Must be root!" && exit 1
 . ../default.cfg
 
-# Check for lingering threads from the last run
-pgrep -x mount && { pgrep -x mount | xargs ps -lp; exit 1; }
-../tools/killall.sh || exit 1
-
 fsck=/sbin/fsck_ffs
 fsck_loops=10
-log=/tmp/gnop10.log
+log=/tmp/gnop12.log
 [ -c /dev/md$mdstart ] && mdconfig -d -u $mdstart
 mdconfig -a -t swap -s 5g -u $mdstart || exit 1
 md=md$mdstart
@@ -54,20 +50,7 @@ export RUNDIR=$mntpoint/stressX
 export CTRLDIR=$mntpoint/stressX.control
 export MAXSWAPPCT=80
 export TESTPROGS='
-testcases/lockf2/lockf2
-testcases/symlink/symlink
-testcases/openat/openat
-testcases/socket/socket
-testcases/rw/rw
-testcases/fts/fts
-testcases/link/link
-testcases/lockf/lockf
 testcases/creat/creat
-testcases/mkdir/mkdir
-testcases/rename/rename
-testcases/mkfifo/mkfifo
-testcases/dirnprename/dirnprename
-testcases/dirrename/dirrename
 '
 
 start=`date +%s`
@@ -81,8 +64,6 @@ while [ $((`date +%s` - start)) -lt 600 ]; do
 	set `df -ik $mntpoint | tail -1 | awk '{print $4,$7}'`
 	export KBLOCKS=$(($1 / 10 * 7))
 	export INODES=$(($2 / 10 * 7))
-
-	# start your favorite I/O test here
 
 	su $testuser -c 'cd ..; ./testcases/run/run $TESTPROGS' > /dev/null 2>&1 &
 
@@ -115,7 +96,7 @@ while [ $((`date +%s` - start)) -lt 600 ]; do
 	t=`date +%s`
 	$fsck -fy /dev/$md > /dev/null 2>&1
 	t=$((`date +%s`- t))
-	[ $t -gt 300 ] && echo "First fsck took $(((t + 30) / 60)) minutes!"
+	[ $t -gt 300 ] && { echo "First fsck took $(((t + 30) / 60)) minutes!"; e=1; }
 
 	for i in `jot $fsck_loops`; do
 		sleep 10
@@ -130,4 +111,4 @@ done
 $fsck -fy /dev/$md > $log || { tail -5 $log; exit 1; }
 mdconfig -d -u ${md#md}
 rm -f $log
-exit 0
+exit $e
