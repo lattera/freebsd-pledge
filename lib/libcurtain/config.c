@@ -101,7 +101,7 @@ emalloc(size_t n)
 {
 	void *p;
 	p = malloc(n);
-	if (!p)
+	if (p == NULL)
 		err(EX_TEMPFAIL, "malloc");
 	return (p);
 }
@@ -111,7 +111,7 @@ estrdup(const char *src)
 {
 	char *dst;
 	dst = strdup(src);
-	if (!dst)
+	if (dst == NULL)
 		err(EX_TEMPFAIL, "strdup");
 	return (dst);
 }
@@ -150,7 +150,7 @@ static struct config_tag **
 tag_find(struct curtain_config *cfg, const char *name)
 {
 	struct config_tag **link;
-	for (link = &cfg->tags_pending; *link; link = &(*link)->next) {
+	for (link = &cfg->tags_pending; *link != NULL; link = &(*link)->next) {
 		assert((*link)->link == link);
 		if (strcmp((*link)->name, name) == 0)
 			break;
@@ -165,7 +165,7 @@ tag_make(struct curtain_config *cfg __unused, struct config_tag **link, const ch
 	tag = emalloc(offsetof(struct config_tag, name) + strlen(name) + 1);
 	*tag = (struct config_tag){ .link = link, .next = *link };
 	strcpy(tag->name, name);
-	if (tag->next)
+	if (tag->next != NULL)
 		tag->next->link = &tag->next;
 	*tag->link = tag;
 	return (tag);
@@ -175,7 +175,7 @@ static struct config_tag *
 tag_get(struct curtain_config *cfg, const char *name)
 {
 	struct config_tag *tag, **link;
-	if ((tag = *(link = tag_find(cfg, name))))
+	if ((tag = *(link = tag_find(cfg, name))) != NULL)
 		return (tag);
 	return (tag_make(cfg, link, name));
 }
@@ -184,10 +184,10 @@ static void
 tag_relink(struct config_tag *tag, struct config_tag **link)
 {
 	assert(*tag->link == tag);
-	assert(!tag->next || tag->next->link == &tag->next);
-	if ((*tag->link = tag->next))
+	assert(tag->next == NULL || tag->next->link == &tag->next);
+	if ((*tag->link = tag->next) != NULL)
 		tag->next->link = tag->link;
-	if ((tag->next = *link))
+	if ((tag->next = *link) != NULL)
 		tag->next->link = &tag->next;
 	*(tag->link = link) = tag;
 }
@@ -205,7 +205,7 @@ static struct config_tag *
 tag_push(struct curtain_config *cfg, const char *name)
 {
 	struct config_tag *tag, **link;
-	if ((tag = *(link = tag_find(cfg, name)))) {
+	if ((tag = *(link = tag_find(cfg, name))) != NULL) {
 		if (!tag->enabled) {
 			tag_relink(tag, &cfg->tags_pending);
 			tag->enabled = true;
@@ -220,7 +220,7 @@ tag_push(struct curtain_config *cfg, const char *name)
 static void
 tags_sweep(struct curtain_config *cfg)
 {
-	for (struct config_tag *tag = cfg->tags_pending; tag; tag = tag->next)
+	for (struct config_tag *tag = cfg->tags_pending; tag != NULL; tag = tag->next)
 		if (!tag->locked)
 			tag->enabled = false;
 }
@@ -265,7 +265,7 @@ guard_free(struct config_guard *guard)
 	case CONFIG_GUARD_NOT:
 	case CONFIG_GUARD_AND:
 	case CONFIG_GUARD_OR:
-		for (struct config_guard *child = guard->child, *next; child; child = next) {
+		for (struct config_guard *child = guard->child, *next; child != NULL; child = next) {
 			next = child->next;
 			guard_free(child);
 		}
@@ -290,7 +290,7 @@ guard_dump(struct config_guard *guard, bool top, FILE *file)
 	case CONFIG_GUARD_OR:
 		if (!top)
 			fputc('(', file);
-		for (struct config_guard *child = guard->child; child; child = child->next) {
+		for (struct config_guard *child = guard->child; child != NULL; child = child->next) {
 			if (child != guard->child)
 				fputs(guard->type == CONFIG_GUARD_AND ? " " : ", ", file);
 			guard_dump(child, top && guard->type == CONFIG_GUARD_OR, file);
@@ -342,17 +342,17 @@ static void block_free(struct config_block *);
 static void
 block_free_1(struct config_block *blk)
 {
-	if (blk->guard)
+	if (blk->guard != NULL)
 		guard_free(blk->guard);
-	for (struct config_merge *mrg = blk->merges, *next; mrg; mrg = next) {
+	for (struct config_merge *mrg = blk->merges, *next; mrg != NULL; mrg = next) {
 		next = mrg->next;
 		free(mrg);
 	}
-	for (struct config_include *inc = blk->new_includes, *next; inc; inc = next) {
+	for (struct config_include *inc = blk->new_includes, *next; inc != NULL; inc = next) {
 		next = inc->next;
 		free(inc);
 	}
-	for (struct config_block *subblk = blk->subblocks, *next; subblk; subblk = next) {
+	for (struct config_block *subblk = blk->subblocks, *next; subblk != NULL; subblk = next) {
 		next = subblk->next;
 		block_free(subblk);
 	}
@@ -386,7 +386,7 @@ section_make(struct config_parser *par)
 static struct config_section *
 section_get(struct config_parser *par)
 {
-	if (!par->current_section)
+	if (par->current_section == NULL)
 		par->current_section = section_make(par);
 	return (par->current_section);
 }
@@ -394,7 +394,7 @@ section_get(struct config_parser *par)
 static struct curtain_slot *
 section_slot(struct config_section *sec)
 {
-	if (!sec->slot) {
+	if (sec->slot == NULL) {
 		if (sec->cfg->on_exec_only)
 			curtain_enable((sec->slot = curtain_slot_neutral()), CURTAIN_ON_EXEC);
 		else
@@ -407,7 +407,7 @@ section_slot(struct config_section *sec)
 static void
 section_free(struct config_section *sec)
 {
-	for (struct config_command *cmd = sec->commands, *next; cmd; cmd = next) {
+	for (struct config_command *cmd = sec->commands, *next; cmd != NULL; cmd = next) {
 		next = cmd->next;
 		command_free(cmd);
 	}
@@ -463,7 +463,7 @@ skip_word(char *p, const char *brk)
 			p++;
 			if (!*p)
 				break;
-		} else if (is_space(*p) || strchr(brk, *p))
+		} else if (is_space(*p) || strchr(brk, *p) != NULL)
 			break;
 		p++;
 	}
@@ -492,7 +492,7 @@ perform_diag(struct config_section *sec, struct config_command *cmd)
 {
 	COMMAND_DIAG_1(0, sec, cmd, "", "");
 	for (size_t i = 0; i < cmd->words_count; i++) {
-		if (i)
+		if (i != 0)
 			fputc(' ', stderr);
 		fputs(cmd->words[i], stderr);
 	}
@@ -502,7 +502,7 @@ perform_diag(struct config_section *sec, struct config_command *cmd)
 static void
 perform_tmpdir(struct config_section *sec, struct config_command *cmd)
 {
-	if (cmd->words_count) {
+	if (cmd->words_count != 0) {
 		COMMAND_ERROR(sec, cmd, "unexpected word");
 		return;
 	}
@@ -513,7 +513,7 @@ perform_tmpdir(struct config_section *sec, struct config_command *cmd)
 static void
 perform_default(struct config_section *sec, struct config_command *cmd)
 {
-	if (cmd->words_count) {
+	if (cmd->words_count != 0) {
 		COMMAND_ERROR(sec, cmd, "unexpected word");
 		return;
 	}
@@ -525,10 +525,10 @@ perform_ability(struct config_section *sec, struct config_command *cmd)
 {
 	for (size_t i = 0; i < cmd->words_count; i++) {
 		const struct abilityent *e;
-		for (e = curtain_abilitytab; e->name; e++)
+		for (e = curtain_abilitytab; e->name != NULL; e++)
 			if (strcmp(e->name, cmd->words[i]) == 0)
 				break;
-		if (!e->name) {
+		if (e->name == NULL) {
 			COMMAND_ERROR(sec, cmd, "unknown ability: %s", cmd->words[i]);
 			continue;
 		}
@@ -552,10 +552,10 @@ perform_priv(struct config_section *sec, struct config_command *cmd)
 {
 	for (size_t i = 0; i < cmd->words_count; i++) {
 		const struct privent *e;
-		for (e = curtain_privtab; e->name; e++)
+		for (e = curtain_privtab; e->name != NULL; e++)
 			if (strcmp(e->name, cmd->words[i]) == 0)
 				break;
-		if (!e->name) {
+		if (e->name == NULL) {
 			COMMAND_ERROR(sec, cmd, "unknown privilege: %s", cmd->words[i]);
 			continue;
 		}
@@ -588,7 +588,7 @@ perform_ioctl(struct config_section *sec, struct config_command *cmd)
 			char *end;
 			errno = 0;
 			n = strtoul(word, &end, 0);
-			if (errno || *end) {
+			if (errno != 0 || *end) {
 				COMMAND_ERROR(sec, cmd, "invalid ioctl: %s", word);
 				continue;
 			}
@@ -601,7 +601,7 @@ perform_ioctl(struct config_section *sec, struct config_command *cmd)
 					bundle = ioctls_bundles[j].ioctls;
 					break;
 				}
-			if (!bundle) {
+			if (bundle == NULL) {
 				COMMAND_ERROR(sec, cmd, "unknown ioctl bundle: %s", word);
 				continue;
 			}
@@ -615,10 +615,10 @@ perform_sockaf(struct config_section *sec, struct config_command *cmd)
 {
 	for (size_t i = 0; i < cmd->words_count; i++) {
 		const struct sockafent *e;
-		for (e = curtain_sockaftab; e->name; e++)
+		for (e = curtain_sockaftab; e->name != NULL; e++)
 			if (strcmp(e->name, cmd->words[i]) == 0)
 				break;
-		if (!e->name) {
+		if (e->name == NULL) {
 			COMMAND_ERROR(sec, cmd, "unknown address family: %s", cmd->words[i]);
 			continue;
 		}
@@ -631,10 +631,10 @@ perform_socklvl(struct config_section *sec, struct config_command *cmd)
 {
 	for (size_t i = 0; i < cmd->words_count; i++) {
 		const struct socklvlent *e;
-		for (e = curtain_socklvltab; e->name; e++)
+		for (e = curtain_socklvltab; e->name != NULL; e++)
 			if (strcmp(e->name, cmd->words[i]) == 0)
 				break;
-		if (!e->name) {
+		if (e->name == NULL) {
 			COMMAND_ERROR(sec, cmd, "unknown socket level: %s", cmd->words[i]);
 			continue;
 		}
@@ -650,7 +650,7 @@ perform_fibnum(struct config_section *sec, struct config_command *cmd)
 		char *end;
 		errno = 0;
 		n = strtol(cmd->words[i], &end, 0);
-		if (errno || *end) {
+		if (errno != 0 || *end) {
 			COMMAND_ERROR(sec, cmd, "invalid fibnum: %s", cmd->words[i]);
 			continue;
 		}
@@ -687,7 +687,7 @@ do_unveil(struct unveil_ctx *ctx, const char *path)
 	 * the application will not be allowed to replace it with a symlink.
 	 */
 	is_dir = len && path[len - 1] == '/';
-	if (ctx->uperms & UPERM_CREATE && !is_dir)
+	if (uperms_contains(ctx->uperms, UPERM_CREATE) && !is_dir)
 		flags |= CURTAIN_PATH_NOFOLLOW;
 
 	r = curtain_path(section_slot(ctx->sec), path, flags, ctx->uperms);
@@ -809,7 +809,7 @@ perform_unveil(struct config_section *sec, struct config_command *cmd)
 	if (words < words_end) {
 		ctx.create = true;
 		ctx.setmode = setmode(*words);
-		if (!ctx.setmode) {
+		if (ctx.setmode == NULL) {
 			if (errno == EINVAL || errno == ERANGE) {
 				COMMAND_ERROR(sec, cmd, "invalid creation mode");
 				return;
@@ -824,7 +824,7 @@ perform_unveil(struct config_section *sec, struct config_command *cmd)
 		return;
 	}
 
-	while (patterns != patterns_end)
+	while (patterns < patterns_end)
 		do_unveils(&ctx, *patterns++);
 	if (*ctx.pending)
 		do_unveil_pending(&ctx);
@@ -865,11 +865,11 @@ guard_match(struct config_guard *guard)
 static void
 block_match(struct config_section *sec, struct config_block *blk, bool matched)
 {
-	matched = matched && (blk->guard ? guard_match(blk->guard) : true);
+	matched = matched && (blk->guard != NULL ? guard_match(blk->guard) : true);
 	if (sec->cfg->verbosity >= (matched ? 3 : 4)) {
 		COMMAND_DIAG_1(0, sec, blk, "%s section: ", matched ? "matched" : "skipped", "");
 		fputs("[", stderr);
-		if (blk->guard)
+		if (blk->guard != NULL)
 			guard_dump(blk->guard, true, stderr);
 		fputs("]\n", stderr);
 	}
@@ -879,11 +879,11 @@ block_match(struct config_section *sec, struct config_block *blk, bool matched)
 		blk->matched = matched;
 	}
 	if (matched) {
-		for (struct config_merge *mrg = blk->merges; mrg; mrg = mrg->next) {
+		for (struct config_merge *mrg = blk->merges; mrg != NULL; mrg = mrg->next) {
 			COMMAND_DIAG(2, sec, blk, "merging tag: %s", mrg->tag->name);
 			tag_merge(sec->cfg, mrg->tag);
 		}
-		for (struct config_include *inc = blk->new_includes, *next; inc; inc = next) {
+		for (struct config_include *inc = blk->new_includes, *next; inc != NULL; inc = next) {
 			COMMAND_DIAG(2, sec, blk, "including path: %s", inc->path);
 			next = inc->next;
 			inc->next = sec->cfg->incs_pending;
@@ -891,21 +891,21 @@ block_match(struct config_section *sec, struct config_block *blk, bool matched)
 		}
 		blk->new_includes = NULL;
 	}
-	for (struct config_block *subblk = blk->subblocks; subblk; subblk = subblk->next)
+	for (struct config_block *subblk = blk->subblocks; subblk != NULL; subblk = subblk->next)
 		block_match(sec, subblk, matched);
 }
 
 static void
 config_match(struct curtain_config *cfg)
 {
-	for (struct config_section *sec = cfg->sections; sec; sec = sec->next)
+	for (struct config_section *sec = cfg->sections; sec != NULL; sec = sec->next)
 		block_match(sec, &sec->block, true);
 }
 
 static void
 config_fill(struct curtain_config *cfg)
 {
-	for (struct config_section *sec = cfg->sections; sec; sec = sec->next)
+	for (struct config_section *sec = cfg->sections; sec != NULL; sec = sec->next)
 		if (!sec->slot_synced) {
 			if (sec->slot_owned) {
 				COMMAND_DIAG(3, sec, &sec->block, "dropping slot");
@@ -914,7 +914,7 @@ config_fill(struct curtain_config *cfg)
 				sec->slot_filled = sec->slot_owned = false;
 			} else if (sec->slot_filled)
 				continue;
-			for (struct config_command *cmd = sec->commands; cmd; cmd = cmd->next)
+			for (struct config_command *cmd = sec->commands; cmd != NULL; cmd = cmd->next)
 				if (cmd->block->matched) {
 					COMMAND_DIAG(4, sec, cmd, "perform");
 					cmd->perform(sec, cmd);
@@ -949,7 +949,7 @@ static void
 parse_merge(struct config_parser *par, struct directive_ctx *ctx)
 {
 	struct config_block *blk = par->current_block;
-	for (struct directive_word *word = ctx->head; word; word = word->next) {
+	for (struct directive_word *word = ctx->head; word != NULL; word = word->next) {
 		struct config_merge *mrg;
 		mrg = emalloc(sizeof *blk->merges);
 		*mrg = (struct config_merge){
@@ -980,7 +980,7 @@ do_include_callback(void *ctx1, char *path)
 static void
 parse_include(struct config_parser *par, struct directive_ctx *ctx)
 {
-	for (struct directive_word *word = ctx->head; word; word = word->next) {
+	for (struct directive_word *word = ctx->head; word != NULL; word = word->next) {
 		char path[PATH_MAX];
 		const char *error;
 		int r;
@@ -1046,7 +1046,7 @@ parse_directive_3(struct config_parser *par, struct directive_ctx *ctx)
 	struct config_section *sec;
 	struct config_block *saved_block;
 
-	for (count = size = 0, word = ctx->head; word; word = word->next) {
+	for (count = size = 0, word = ctx->head; word != NULL; word = word->next) {
 		word->str[word->len] = '\0';
 		if (!ctx->dir->raw_words)
 			word->len = unescape(word->str) - word->str;
@@ -1057,7 +1057,7 @@ parse_directive_3(struct config_parser *par, struct directive_ctx *ctx)
 	sec = section_get(par);
 	saved_block = par->current_block;
 
-	if (ctx->guard) {
+	if (ctx->guard != NULL) {
 		block_make(par, ctx->guard);
 		ctx->guard = NULL;
 	}
@@ -1072,7 +1072,7 @@ parse_directive_3(struct config_parser *par, struct directive_ctx *ctx)
 		q = (char *)&cmd->words[count];
 		cmd->perform = ctx->dir->perform;
 		cmd->curtain_flags = ctx->dir->extra_flags | ctx->flags;
-		for (index = 0, word = ctx->head; word; word = word->next) {
+		for (index = 0, word = ctx->head; word != NULL; word = word->next) {
 			cmd->words[index++] = q;
 			memcpy(q, word->str, word->len + 1);
 			q += word->len + 1;
@@ -1129,7 +1129,7 @@ parse_directive_2(struct config_parser *par, char *p, struct directive_ctx *ctx)
 	parse_directive_3(par, ctx);
 	return;
 error:
-	if (ctx->guard)
+	if (ctx->guard != NULL)
 		guard_free(ctx->guard);
 }
 
@@ -1194,7 +1194,7 @@ parse_directive(struct config_parser *par)
 	par->cursor = p;
 	c = *name_end;
 	*name_end = '\0';
-	if ((dir = find_directive(name))) {
+	if ((dir = find_directive(name)) != NULL) {
 		if (dir->need_explicit_flags && !explicit_flags) {
 			PARSE_ERROR(par, "expected explicit flags");
 			return;
@@ -1253,8 +1253,8 @@ parse_guard_and(struct config_parser *par)
 {
 	struct config_guard *and_guard, *term_guard;
 	and_guard = NULL;
-	while ((term_guard = parse_guard_term(par)))
-		if (and_guard) {
+	while ((term_guard = parse_guard_term(par)) != NULL)
+		if (and_guard != NULL) {
 			assert(!and_guard->next);
 			if (and_guard->type != CONFIG_GUARD_AND)
 				and_guard = guard_make_child(CONFIG_GUARD_AND, and_guard);
@@ -1270,10 +1270,10 @@ parse_guard_or(struct config_parser *par)
 {
 	struct config_guard *or_guard, *and_guard;
 	or_guard = NULL;
-	while ((and_guard = parse_guard_and(par))) {
+	while ((and_guard = parse_guard_and(par)) != NULL) {
 		while (*(par->cursor = skip_spaces(par->cursor)) == ',')
 			par->cursor++;
-		if (or_guard) {
+		if (or_guard != NULL) {
 			assert(!or_guard->next);
 			if (or_guard->type != CONFIG_GUARD_OR)
 				or_guard = guard_make_child(CONFIG_GUARD_OR, or_guard);
@@ -1323,7 +1323,7 @@ parse_section(struct config_parser *par)
 	if (*p++ != ']') {
 		PARSE_ERROR(par, "expected closing bracket");
 		/* disable section */
-		if (blk->guard)
+		if (blk->guard != NULL)
 			guard_free(blk->guard);
 		blk->guard = guard_make_child(CONFIG_GUARD_OR, NULL); /* false when no arguments */
 		return;
@@ -1374,8 +1374,8 @@ static void
 parse_config(struct config_parser *par)
 {
 	size_t size;
-	while ((par->line = fgetln(par->file, &size))) {
-		if (!size || par->line[size - 1] != '\n') {
+	while ((par->line = fgetln(par->file, &size)) != NULL) {
+		if (size == 0 || par->line[size - 1] != '\n') {
 			PARSE_ERROR(par, "unterminated line");
 			break;
 		}
@@ -1410,7 +1410,7 @@ process_file_at(struct curtain_config *cfg,
 		.cfg = cfg,
 	};
 	int fd, saved_errno;
-	if (base_path) {
+	if (base_path != NULL) {
 		pathfmt(path, "%s/%s", base_path, sub_path);
 		par.file_name = path;
 	} else
@@ -1422,7 +1422,7 @@ process_file_at(struct curtain_config *cfg,
 		return (-1);
 	}
 	par.file = fdopen(fd, "r");
-	if (!par.file)
+	if (par.file == NULL)
 		err(EX_OSERR, "fopen");
 	if (par.cfg->verbosity >= 1)
 		warnx("parsing file: %s", par.file_name);
@@ -1467,7 +1467,7 @@ process_dir_tag(struct curtain_config *cfg, struct config_tag *tag,
 	dir = fdopendir(dir_fd);
 	if (!dir)
 		err(EX_OSERR, "opendir");
-	while ((ent = readdir(dir))) {
+	while ((ent = readdir(dir)) != NULL) {
 		if (ent->d_name[0] == '.')
 			continue;
 		if (ent->d_namlen < 5 ||
@@ -1507,7 +1507,7 @@ process_includes(struct curtain_config *cfg)
 {
 	struct config_include *inc;
 	bool visited;
-	for (inc = cfg->incs_current, visited = false; inc; inc = inc->next) {
+	for (inc = cfg->incs_current, visited = false; inc != NULL; inc = inc->next) {
 		if (inc == cfg->incs_visited)
 			visited = true;
 		assert(*inc->path);
@@ -1556,7 +1556,7 @@ curtain_config_directive(struct curtain_config *cfg, struct curtain_slot *slot,
 	};
 	par.line = par.cursor = estrdup(directive);
 	sec = section_get(&par);
-	if (!sec->slot)
+	if (sec->slot == NULL)
 		sec->slot = slot;
 	parse_directive(&par);
 	free(par.line);
@@ -1595,11 +1595,11 @@ curtain_config_init(struct curtain_config *cfg, unsigned flags)
 		.on_exec_only = flags & CURTAIN_CONFIG_ON_EXEC_ONLY,
 	};
 
-	if (tainted || !(cfg->old_tmpdir = getenv("TMPDIR")))
+	if (tainted || (cfg->old_tmpdir = getenv("TMPDIR")) == NULL)
 		cfg->old_tmpdir = _PATH_TMP;
 
-	if (!(flags & CURTAIN_CONFIG_NO_STD_INCS)) {
-		if (!tainted && (home = getenv("HOME"))) {
+	if ((flags & CURTAIN_CONFIG_NO_STD_INCS) == 0) {
+		if (!tainted && (home = getenv("HOME")) != NULL) {
 			pathfmt(path, "%s/.curtain.d/", home);
 			include_add(cfg, path);
 			pathfmt(path, "%s/.curtain.conf", home);
@@ -1623,15 +1623,15 @@ curtain_config_new(unsigned flags)
 void
 curtain_config_free(struct curtain_config *cfg)
 {
-	for (struct config_section *sec = cfg->sections, *next; sec; sec = next) {
+	for (struct config_section *sec = cfg->sections, *next; sec != NULL; sec = next) {
 		next = sec->next;
 		section_free(sec);
 	}
-	for (struct config_include *inc = cfg->incs_pending, *next; inc; inc = next) {
+	for (struct config_include *inc = cfg->incs_pending, *next; inc != NULL; inc = next) {
 		next = inc->next;
 		free(inc);
 	}
-	for (struct config_tag *tag = cfg->tags_pending, *next; tag; tag = next) {
+	for (struct config_tag *tag = cfg->tags_pending, *next; tag != NULL; tag = next) {
 		next = tag->next;
 		free(tag);
 	}
@@ -1658,9 +1658,9 @@ void
 curtain_config_tags_from_env(struct curtain_config *cfg, const char *env_var_name)
 {
 	char *p, *q, c;
-	if (!env_var_name)
+	if (env_var_name == NULL)
 		env_var_name = "CURTAIN_TAGS";
-	if (issetugid() || !(p = getenv(env_var_name)))
+	if (issetugid() != 0 || (p = getenv(env_var_name)) == NULL)
 		return;
 	q = p;
 	do {
@@ -1681,7 +1681,7 @@ curtain_config_tags_from_env(struct curtain_config *cfg, const char *env_var_nam
 void
 curtain_config_tags_clear(struct curtain_config *cfg)
 {
-	for (struct config_tag *tag = cfg->tags_pending; tag; tag = tag->next)
+	for (struct config_tag *tag = cfg->tags_pending; tag != NULL; tag = tag->next)
 		tag->enabled = false;
 	cfg->tags_dropped = true;
 }

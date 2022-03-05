@@ -116,14 +116,14 @@ struct curtain_type {
 static struct curtain_slot *curtain_slots = NULL;
 static struct curtain_node *curtain_root_nodes = NULL;
 
-#define	DEBUG_ENV(name) (issetugid() ? NULL : getenv(name))
+#define	DEBUG_ENV(name) (issetugid() != 0 ? NULL : getenv(name))
 
 static struct curtain_slot *
 curtain_slot_1(const enum curtain_state state_on[CURTAIN_ON_COUNT])
 {
 	struct curtain_slot *slot;
 	slot = malloc(sizeof *slot);
-	if (!slot)
+	if (slot == NULL)
 		return (NULL);
 	*slot = (struct curtain_slot){ 0 };
 	memcpy(slot->state_on, state_on, sizeof slot->state_on);
@@ -210,7 +210,7 @@ node_remove(struct curtain_node *node)
 static void
 node_drop(struct curtain_node *node)
 {
-	assert(!node->items);
+	assert(node->items == NULL);
 	if (node->type->cleanup)
 		node->type->cleanup(node);
 	node_remove(node);
@@ -220,7 +220,7 @@ node_drop(struct curtain_node *node)
 static void
 node_trim(struct curtain_node *node)
 {
-	if (!node->children && !node->items)
+	if (node->children == NULL && node->items == NULL)
 		node_drop(node);
 }
 
@@ -275,14 +275,14 @@ node_get(struct curtain_type *type, union curtain_key key, bool create)
 	for (link = &type->nodes; (node = *link); link = &node->type_next)
 		if (type->key_cmp(&node->key, &key) == 0)
 			break;
-	if (node) { /* move-to-front heuristic */
+	if (node != NULL) { /* move-to-front heuristic */
 		assert(node->type == type);
 		*link = node->type_next;
 		node->type_next = type->nodes;
 		type->nodes = node;
 	} else if (create) {
 		node = malloc(sizeof *node);
-		if (!node)
+		if (node == NULL)
 			err(EX_TEMPFAIL, "malloc");
 		*node = (struct curtain_node){
 			.type = type,
@@ -316,11 +316,11 @@ nslot:		for (nlink = &node->items; (item = *nlink); nlink = &item->node_next)
 				break;
 			}
 	}
-	if (!item && create) {
-		if (!nlink)
+	if (item == NULL && create) {
+		if (nlink == NULL)
 			goto nslot;
 		item = malloc(sizeof *item);
-		if (!item)
+		if (item == NULL)
 			err(EX_TEMPFAIL, "malloc");
 		*item = (struct curtain_item){
 			.slot = slot,
@@ -345,7 +345,7 @@ node_item_get(struct curtain_type *type, struct curtain_slot *slot,
 {
 	struct curtain_node *node;
 	node = node_get(type, key, create);
-	if (!node)
+	if (node == NULL)
 		return (NULL);
 	return (item_get(node, slot, create));
 }
@@ -353,7 +353,7 @@ node_item_get(struct curtain_type *type, struct curtain_slot *slot,
 static void
 item_set_flags(struct curtain_item *item, int flags)
 {
-	item->override = !(flags & CURTAIN_INHERIT);
+	item->override = (flags & CURTAIN_INHERIT) == 0;
 }
 
 static void
@@ -440,7 +440,7 @@ curtain_default(struct curtain_slot *slot, unsigned flags)
 {
 	struct curtain_item *item;
 	item = node_item_get(&default_type, slot, (union curtain_key){ 0 }, true);
-	if (!item)
+	if (item == NULL)
 		return (-1);
 	item_set_flags_level(item, flags);
 	return (0);
@@ -463,7 +463,7 @@ static struct curtain_node *
 ability_fallback_helper(struct curtain_node *node)
 {
 	enum curtain_ability ability = node->type->fallback_ability;
-	assert(ability);
+	assert(ability != 0);
 	return (node_get(&abilities_type, KEY(.ability, ability), true));
 }
 
@@ -472,7 +472,7 @@ curtain_ability(struct curtain_slot *slot, enum curtain_ability ability, int fla
 {
 	struct curtain_item *item;
 	item = node_item_get(&abilities_type, slot, KEY(.ability, ability), true);
-	if (!item)
+	if (item == NULL)
 		return (-1);
 	item_set_flags_level(item, flags);
 	return (0);
@@ -497,7 +497,7 @@ curtain_ioctl(struct curtain_slot *slot, unsigned long ioctl, int flags)
 {
 	struct curtain_item *item;
 	item = node_item_get(&ioctls_type, slot, KEY(.ioctl, ioctl), true);
-	if (!item)
+	if (item == NULL)
 		return (-1);
 	item_set_flags_level(item, flags);
 	return (0);
@@ -530,7 +530,7 @@ curtain_sockaf(struct curtain_slot *slot, int sockaf, int flags)
 {
 	struct curtain_item *item;
 	item = node_item_get(&sockafs_type, slot, KEY(.sockaf, sockaf), true);
-	if (!item)
+	if (item == NULL)
 		return (-1);
 	item_set_flags_level(item, flags);
 	return (0);
@@ -555,7 +555,7 @@ curtain_socklvl(struct curtain_slot *slot, int socklvl, int flags)
 {
 	struct curtain_item *item;
 	item = node_item_get(&socklvls_type, slot, KEY(.socklvl, socklvl), true);
-	if (!item)
+	if (item == NULL)
 		return (-1);
 	item_set_flags_level(item, flags);
 	return (0);
@@ -613,7 +613,7 @@ curtain_sockopt_1(struct curtain_type *type, struct curtain_slot *slot,
 {
 	struct curtain_item *item;
 	item = node_item_get(type, slot, KEY(.sockopt, { level, optname }), true);
-	if (!item)
+	if (item == NULL)
 		return (-1);
 	item_set_flags_level(item, flags);
 	return (0);
@@ -682,7 +682,7 @@ curtain_priv(struct curtain_slot *slot, int priv, int flags)
 {
 	struct curtain_item *item;
 	item = node_item_get(&privs_type, slot, KEY(.priv, priv), true);
-	if (!item)
+	if (item == NULL)
 		return (-1);
 	item_set_flags_level(item, flags);
 	return (0);
@@ -750,16 +750,16 @@ curtain_sysctl(struct curtain_slot *slot, const char *sysctl, int flags)
 	prev_node = NULL;
 	for (size_t mibc = 1; mibc <= mibn; mibc++) {
 		node = node_get(&sysctls_type, KEY(.sysctl, { mibc, mibp }), true);
-		if (!node)
+		if (node == NULL)
 			return (-1);
 		if (mibc == mibn) {
 			struct curtain_item *item;
 			item = item_get(node, slot, true);
-			if (!item)
+			if (item == NULL)
 				return (-1);
 			item_set_flags_level(item, flags);
 		}
-		if (prev_node)
+		if (prev_node != NULL)
 			node_reparent(node, prev_node);
 		prev_node = node;
 	}
@@ -785,7 +785,7 @@ curtain_fibnum(struct curtain_slot *slot, int fibnum, int flags)
 {
 	struct curtain_item *item;
 	item = node_item_get(&fibnums_type, slot, KEY(.fibnum, fibnum), true);
-	if (!item)
+	if (item == NULL)
 		return (-1);
 	item_set_flags_level(item, flags);
 	return (0);
@@ -850,7 +850,7 @@ unveil_ent_fill(void *dest,
 {
 	struct curtainent_unveil *fill = dest;
 	size_t size;
-	if (!(size = unveil_ent_size(key)))
+	if ((size = unveil_ent_size(key)) == 0)
 		return (fill);
 	*fill = (struct curtainent_unveil){
 		.dir_fd = key->unveil.is_dir ? key->unveil.fd : key->unveil.parent->fd,
@@ -912,17 +912,6 @@ curtain_parse_unveil_perms(unveil_perms *uperms_ret, const char *s)
 
 static struct curtain_node *unveil_root_node;
 
-static char *
-unveil_node_path(struct curtain_node *node, char *path)
-{
-	if (node->parent && node->parent->type == &unveils_type) {
-		path = unveil_node_path(node->parent, path);
-		*path++ = '/';
-	}
-	path = stpcpy(path, node->key.unveil.name);
-	return (path);
-}
-
 static struct curtain_node *
 unveil_node_get(struct curtain_node *parent, const char *name)
 {
@@ -931,9 +920,9 @@ unveil_node_get(struct curtain_node *parent, const char *name)
 	for (link = &parent->children; *link; link = &(*link)->sibling)
 		if (strcmp((*link)->key.unveil.name, name) == 0)
 			break;
-	if (!(node = *link)) {
+	if ((node = *link) == NULL) {
 		node = malloc(sizeof *node + strlen(name) + 1);
-		if (!node)
+		if (node == NULL)
 			err(EX_TEMPFAIL, "malloc");
 		*node = (struct curtain_node){
 			.type = type,
@@ -1004,7 +993,7 @@ unveil_node_open(struct curtain_node *node)
 		break;
 	case S_IFLNK:
 		symlink = malloc(st.st_size + 1);
-		if (!symlink)
+		if (symlink == NULL)
 			goto err;
 		r = readlinkat(fd, "", symlink, st.st_size);
 		if (r < 0)
@@ -1076,7 +1065,7 @@ unveil_path_1(struct curtain_node **trail, bool nofollow, bool last,
 		name[next - path] = '\0';
 
 		node = unveil_node_get(parent_node, name);
-		if (!node)
+		if (node == NULL)
 			return (-1);
 		unveil_node_chain(trail, node);
 
@@ -1116,9 +1105,9 @@ static unveil_perms
 expand_interm_uperms(int flags, unveil_perms uperms)
 {
 	uperms |= UPERM_TRAVERSE;
-	if (!(flags & CURTAIN_PATH_NOSTAT))
+	if ((flags & CURTAIN_PATH_NOSTAT) == 0)
 		uperms |= UPERM_INSPECT;
-	if (!(flags & CURTAIN_PATH_NOLIST))
+	if ((flags & CURTAIN_PATH_NOLIST) == 0)
 		uperms |= UPERM_LIST;
 	return (uperms_expand(uperms));
 }
@@ -1126,7 +1115,7 @@ expand_interm_uperms(int flags, unveil_perms uperms)
 static unveil_perms
 expand_final_uperms(int flags, unveil_perms uperms)
 {
-	if (!(flags & CURTAIN_PATH_NOSTAT) && uperms & ~UPERM_INSPECT)
+	if ((flags & CURTAIN_PATH_NOSTAT) == 0 && uperms_overlaps(uperms, ~UPERM_INSPECT))
 		uperms |= UPERM_INSPECT;
 	return (uperms_expand(uperms));
 }
@@ -1145,7 +1134,7 @@ curtain_path_multi(struct curtain_slot **slots, size_t nslots,
 	if (!path[0])
 		return (0);
 
-	if (!unveil_root_node)
+	if (unveil_root_node == NULL)
 		unveil_root_node = node_get(&unveils_type,
 		    KEY(.unveil, { .name = "", .fd = -1, .is_dir = true }),
 		    true);
@@ -1155,7 +1144,7 @@ curtain_path_multi(struct curtain_slot **slots, size_t nslots,
 	if (path[0] != '/') {
 		char *p;
 		p = getcwd(NULL, 0);
-		if (!p)
+		if (p == NULL)
 			return (-1);
 		r = unveil_path_1(&trail, false, false, p, &node);
 		free(p);
@@ -1167,11 +1156,11 @@ curtain_path_multi(struct curtain_slot **slots, size_t nslots,
 	if (r < 0)
 		return (r);
 
-	if (trail) {
+	if (trail != NULL) {
 		for (size_t i = 0; i < nslots; i++) {
 			struct curtain_item *item;
 			item = item_get(trail, slots[i], true);
-			if (!item)
+			if (item == NULL)
 				return (-1);
 			item_set_flags(item, flags);
 			item->mode.uperms &= curtain_preserve_uperms;
@@ -1181,7 +1170,7 @@ curtain_path_multi(struct curtain_slot **slots, size_t nslots,
 			for (size_t i = 0; i < nslots; i++) {
 				struct curtain_item *item;
 				item = item_get(trail, slots[i], true);
-				if (!item)
+				if (item == NULL)
 					return (-1);
 				item->mode.uperms |= expand_interm_uperms(flags, interm_upermsv[i]);
 			}
@@ -1248,12 +1237,13 @@ node_inherit(struct curtain_node *node,
 	nitem = node->items; /* current node's items */
 	iitem = *(ilink = &inherit_head); /* inherited items */
 	while (nitem || iitem) {
-		assert(!nitem || !nitem->node_next ||
+		assert(nitem == NULL || nitem->node_next == NULL ||
 		    (uintptr_t)nitem->slot < (uintptr_t)nitem->node_next->slot);
-		assert(!iitem || !iitem->inherit_next ||
+		assert(iitem == NULL || iitem->inherit_next == NULL ||
 		    (uintptr_t)iitem->slot < (uintptr_t)iitem->inherit_next->slot);
 		assert(*ilink == iitem);
-		if (iitem && (!nitem || (uintptr_t)nitem->slot > (uintptr_t)iitem->slot)) {
+		if (iitem != NULL && (nitem == NULL ||
+		    (uintptr_t)nitem->slot > (uintptr_t)iitem->slot)) {
 			/*
 			 * Inherited slot item with no corresponding current
 			 * node item.  Permissions carry through nodes without
@@ -1334,20 +1324,8 @@ root_nodes_inherit(enum curtain_state min_state)
 {
 	struct curtain_node *node;
 	for (node = curtain_root_nodes; node; node = node->sibling) {
-		assert(!node->parent);
+		assert(node->parent == NULL);
 		node_inherit(node, NULL, min_state);
-	}
-
-	if (DEBUG_ENV("LIBCURTAIN_DEBUG_DUMP_UNVEILS")) {
-		warnx("%s", __func__);
-		for (node = unveils_type.nodes; node; node = node->type_next) {
-			char path[PATH_MAX];
-			unveil_node_path(node, path);
-			warnx("%s: 0x%08x:0x%08x %s", __func__,
-			    node->combined_mode_on[CURTAIN_ON_SELF].uperms,
-			    node->combined_mode_on[CURTAIN_ON_EXEC].uperms,
-			    path);
-		}
 	}
 }
 
@@ -1360,11 +1338,11 @@ type_expand(struct curtain_type *type,
 {
 	struct curtain_node *node;
 	size_t total_size;
-	if (counts)
+	if (counts != NULL)
 		for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++)
 			for (enum curtainreq_level lvl = 0; lvl < CURTAIN_LEVEL_COUNT; lvl++)
 				counts[on][lvl] = 0;
-	if (sizes)
+	if (sizes != NULL)
 		for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++)
 			for (enum curtainreq_level lvl = 0; lvl < CURTAIN_LEVEL_COUNT; lvl++)
 				sizes[on][lvl] = 0;
@@ -1375,11 +1353,11 @@ type_expand(struct curtain_type *type,
 				enum curtainreq_level lvl = type->mode->level(mode);
 				size_t size = type->ent_size(&node->key);
 				total_size += size;
-				if (counts)
+				if (counts != NULL)
 					counts[on][lvl]++;
-				if (sizes)
+				if (sizes != NULL)
 					sizes[on][lvl] += size;
-				if (fills) {
+				if (fills != NULL) {
 					void *p;
 					p = type->ent_fill(fills[on][lvl], &node->key, mode);
 					assert((char *)p == (char *)fills[on][lvl] + size);

@@ -18,14 +18,14 @@ static void
 cleanup_x11(void)
 {
 	int r;
-	if (tmp_xauth_file) {
+	if (tmp_xauth_file != NULL) {
 		r = unlink(tmp_xauth_file);
 		if (r < 0)
 			warn("%s", tmp_xauth_file);
 		free(tmp_xauth_file);
 		tmp_xauth_file = NULL;
 	}
-	if (display_unix_socket) {
+	if (display_unix_socket != NULL) {
 		free(display_unix_socket);
 		display_unix_socket = NULL;
 	}
@@ -40,7 +40,7 @@ curtain_config_setup_x11(struct curtain_config *cfg, bool trusted)
 	int status;
 
 	display = getenv("DISPLAY");
-	if (!display || !*display) {
+	if (display == NULL || !*display) {
 		warnx("DISPLAY environment variable not set");
 		return (-1);
 	}
@@ -110,12 +110,12 @@ curtain_config_setup_x11(struct curtain_config *cfg, bool trusted)
 	if (r < 0)
 		err(EX_TEMPFAIL, "setenv");
 
-	if (display_unix_socket) {
+	if (display_unix_socket != NULL) {
 		r = setenv("CURTAIN_X11_SOCKET", display_unix_socket, 1);
 		if (r < 0)
 			err(EX_TEMPFAIL, "setenv");
 	}
-	if (tmp_xauth_file) {
+	if (tmp_xauth_file != NULL) {
 		r = setenv("CURTAIN_X11_XAUTHORITY", tmp_xauth_file, 1);
 		if (r < 0)
 			err(EX_TEMPFAIL, "setenv");
@@ -131,16 +131,16 @@ curtain_config_setup_wayland(struct curtain_config *cfg __unused)
 	char *socket;
 	int r;
 	display = getenv("WAYLAND_DISPLAY");
-	if (!display)
+	if (display == NULL)
 		display = "wayland-0";
 	if (display[0] == '/') {
 		socket = strdup(display);
-		if (!socket)
+		if (socket == NULL)
 			err(EX_TEMPFAIL, "strdup");
 	} else {
 		char *rundir;
 		rundir = getenv("XDG_RUNTIME_DIR");
-		if (!rundir) {
+		if (rundir == NULL) {
 			warnx("XDG_RUNTIME_DIR environment variable not set");
 			return (-1);
 		}

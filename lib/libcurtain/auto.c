@@ -28,16 +28,16 @@ auto_curtain_setup_1(const char *name, char *buf)
 	curtain_config_tag_push(cfg, "_basic");
 	curtain_config_tag_push(cfg, "_auto");
 	curtain_config_tag_push(cfg, buf);
-	if (name)
+	if (name != NULL)
 		curtain_config_tag_push(cfg, name);
 	curtain_config_setup_tmpdir(cfg);
-	if ((p = getenv("CURTAIN_AUTO_X11"))) {
+	if ((p = getenv("CURTAIN_AUTO_X11")) != NULL) {
 		bool trusted = strcmp(p, "trusted") == 0;
 		curtain_config_tag_push(cfg, "_x11");
 		curtain_config_tag_push(cfg, trusted ? "_x11_trusted" : "_x11_untrusted");
 		curtain_config_setup_x11(cfg, trusted);
 	}
-	if (getenv("CURTAIN_AUTO_WAYLAND")) {
+	if (getenv("CURTAIN_AUTO_WAYLAND") != NULL) {
 		curtain_config_tag_push(cfg, "_wayland");
 		curtain_config_setup_wayland(cfg);
 	}
@@ -52,7 +52,7 @@ auto_curtain_setup(const char *name)
 	const char *home;
 	char path[PATH_MAX], buf[4096];
 	ssize_t r;
-	if (issetugid() || !(home = getenv("HOME")))
+	if (issetugid() != 0 || (home = getenv("HOME")) == NULL)
 		return;
 	r = snprintf(path, sizeof path, "%s/.curtain-auto.d/%s", home, name);
 	if (r < 0)
@@ -81,10 +81,10 @@ auto_curtain_ctor()
 	size_t argsbuf_size = sizeof argsbuf;
 	int r;
 
-	if (issetugid() || !getenv("CURTAIN_AUTO"))
+	if (issetugid() != 0 || getenv("CURTAIN_AUTO") == NULL)
 		return;
 
-	if (auto_curtain_cfg) {
+	if (auto_curtain_cfg != NULL) {
 		warnx("auto curtain constructor called multiple times!");
 		return;
 	}
@@ -98,17 +98,17 @@ auto_curtain_ctor()
 		name = argsbuf;
 	}
 
-	if ((p = strrchr(name, '/')))
+	if ((p = strrchr(name, '/')) != NULL)
 		name = p + 1;
 
 	p = getenv("CURTAIN_AUTO");
-	if (p) {
+	if (p != NULL) {
 		p = strdup(p);
-		if (!p)
+		if (p == NULL)
 			err(EX_TEMPFAIL, "strdup");
 		unsetenv("CURTAIN_AUTO");
 	}
 	auto_curtain_setup(name);
-	if (p)
+	if (p != NULL)
 		setenv("CURTAIN_AUTO", p, 1);
 }

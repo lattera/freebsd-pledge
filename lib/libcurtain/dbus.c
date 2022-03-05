@@ -54,7 +54,7 @@ curtain_config_setup_dbus(struct curtain_config *cfg)
 	    cfg->old_tmpdir, getprogname());
 	if (r < 0)
 		err(EX_TEMPFAIL, "asprintf");
-	if (!mktemp(p)) {
+	if (mktemp(p) == NULL) {
 		free(p);
 		warn("mktemp");
 		return (-1);

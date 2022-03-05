@@ -33,7 +33,7 @@ estrdup(const char *src)
 {
 	char *dst;
 	dst = strdup(src);
-	if (!dst)
+	if (dst == NULL)
 		err(EX_TEMPFAIL, "strdup");
 	return (dst);
 }
@@ -124,7 +124,7 @@ pty_wrap_setup(bool partial)
 			if (pty_outer_write_fd < 0 &&
 			    (fd == STDOUT_FILENO || fd == STDERR_FILENO))
 				pty_outer_write_fd = fd;
-		} else if (r < 0 || (errno && errno != ENOTTY)) {
+		} else if (r < 0 || (errno != 0 && errno != ENOTTY)) {
 			warn("isatty(%i)", fd);
 			pty_bypass_fds[fd] = false;
 		} else {
@@ -611,9 +611,9 @@ main(int argc, char *argv[])
 	if (login_shell)
 		curtain_config_tag_push(cfg, "_login_shell");
 
-	if (app_tag && argc) {
+	if (app_tag && argc != 0) {
 		char *p;
-		if ((p = strrchr(argv[0], '/')))
+		if ((p = strrchr(argv[0], '/')) != NULL)
 			p = p + 1;
 		else
 			p = argv[0];
@@ -688,16 +688,16 @@ main(int argc, char *argv[])
 		extern char **environ;
 		unsigned flags;
 
-		if (!pw) {
+		if (pw == NULL) {
 			errno = 0;
-			if (setuser_name)
+			if (setuser_name != NULL)
 				pw = getpwnam(setuser_name);
 			else
 				pw = getpwuid(getuid());
-			if (!pw) {
+			if (pw == NULL) {
 				if (errno)
 					err(EX_OSERR, "getpwuid");
-				if (setuser_name)
+				if (setuser_name != NULL)
 					errx(EX_OSERR, "user not found: %s", setuser_name);
 			}
 		}
@@ -706,10 +706,10 @@ main(int argc, char *argv[])
 
 		if (clean_env) {
 			if (login_shell) {
-				set_home = pw ? pw->pw_dir : "/";
-				set_shell = pw && pw->pw_shell && *pw->pw_shell ?
+				set_home = pw != NULL ? pw->pw_dir : "/";
+				set_shell = pw != NULL && pw->pw_shell != NULL && *pw->pw_shell ?
 				    pw->pw_shell : _PATH_BSHELL;
-				if (pw->pw_name)
+				if (pw->pw_name != NULL)
 					set_user = set_logname = pw->pw_name;
 			} else {
 				set_home = getenv("HOME");
@@ -727,47 +727,45 @@ main(int argc, char *argv[])
 				set_wdisplay = getenv("WAYLAND_DISPLAY");
 			if (dbus)
 				set_dbus_addr = getenv("DBUS_SESSION_BUS_ADDRESS");
-
 			environ = null_env;
-
 			flags |= LOGIN_SETENV | LOGIN_SETPATH;
 		}
 
-		if (setuser_name) {
+		if (setuser_name != NULL) {
 			flags |= LOGIN_SETUSER | LOGIN_SETGROUP;
 			if (login_shell)
 				flags |= LOGIN_SETLOGIN;
 		}
 
-		r = setusercontext(NULL, pw, pw ? pw->pw_uid : getuid(), flags);
+		r = setusercontext(NULL, pw, pw != NULL ? pw->pw_uid : getuid(), flags);
 		if (r < 0)
 			err(EX_OSERR, "setusercontext()");
 
 		if (clean_env) {
-			if (set_home)
+			if (set_home != NULL)
 				esetenv("HOME", set_home, 1);
-			if (set_shell)
+			if (set_shell != NULL)
 				esetenv("SHELL", set_shell, 1);
-			if (set_user)
+			if (set_user != NULL)
 				esetenv("USER", set_user, 1);
-			if (set_logname)
+			if (set_logname != NULL)
 				esetenv("LOGNAME", set_logname, 1);
-			if (set_term)
+			if (set_term != NULL)
 				esetenv("TERM", set_term, 1);
-			if (set_tmpdir)
+			if (set_tmpdir != NULL)
 				esetenv("TMPDIR", set_tmpdir, 1);
-			if (set_display)
+			if (set_display != NULL)
 				esetenv("DISPLAY", set_display, 1);
-			if (set_xauthority)
+			if (set_xauthority != NULL)
 				esetenv("XAUTHORITY", set_xauthority, 1);
-			if (set_wdisplay)
+			if (set_wdisplay != NULL)
 				esetenv("WAYLAND_DISPLAY", set_wdisplay, 1);
-			if (set_dbus_addr)
+			if (set_dbus_addr != NULL)
 				esetenv("DBUS_SESSION_BUS_ADDRESS", set_dbus_addr, 1);
 		}
 	}
 
-	while (argc && strchr(*argv, '=')) {
+	while (argc != 0 && strchr(*argv, '=') != NULL) {
 		eputenv(*argv);
 		argc--, argv++;
 	}
@@ -781,16 +779,16 @@ main(int argc, char *argv[])
 		if (!run_shell)
 			usage();
 		shell = getenv("SHELL");
-		if (!shell) {
-			if (!pw) {
+		if (shell == NULL) {
+			if (pw == NULL) {
 				errno = 0;
 				pw = getpwuid(getuid());
-				if (!pw && errno)
+				if (pw == NULL && errno != 0)
 					err(EX_OSERR, "getpwuid");
 			}
-			if (pw && pw->pw_shell && *pw->pw_shell)
+			if (pw != NULL && pw->pw_shell != NULL && *pw->pw_shell)
 				shell = pw->pw_shell;
-			shell = estrdup(shell ? shell : _PATH_BSHELL);
+			shell = estrdup(shell != NULL ? shell : _PATH_BSHELL);
 		}
 		sh_argv[0] = shell;
 		sh_argv[1] = NULL;
@@ -800,9 +798,9 @@ main(int argc, char *argv[])
 
 	if (login_shell) { /* prefix arg0 with "-" */
 		char *p, *q;
-		q = (p = strrchr(argv[0], '/')) ? p + 1 : argv[0];
+		q = (p = strrchr(argv[0], '/')) != NULL ? p + 1 : argv[0];
 		p = malloc(1 + strlen(q) + 1);
-		if (!p)
+		if (p == NULL)
 			err(EX_TEMPFAIL, "malloc");
 		p[0] = '-';
 		strcpy(p + 1, q);
@@ -812,7 +810,7 @@ main(int argc, char *argv[])
 	endpwent();
 	pw = NULL;
 
-	if (chroot_path) {
+	if (chroot_path != NULL) {
 		r = chdir(chroot_path);
 		if (r < 0)
 			err(EX_OSERR, "chdir %s", chroot_path);
@@ -864,7 +862,7 @@ main(int argc, char *argv[])
 	if (do_exec) {
 		char *file;
 		file = argv[0];
-		if (cmd_arg0)
+		if (cmd_arg0 != NULL)
 			argv[0] = cmd_arg0;
 		preexec_cleanup();
 		execvp(file, argv);

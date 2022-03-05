@@ -91,9 +91,8 @@ enum promise_type {
 	PROMISE_COUNT /* must be last */
 } __packed;
 
-#define	PROMISE_NAME_SIZE 16
 static const struct promise_name {
-	const char name[PROMISE_NAME_SIZE];
+	const char *name;
 } names_table[PROMISE_COUNT] = {
 	[PROMISE_ERROR] =		{ "error" },
 	[PROMISE_TRAP] =		{ "trap" },
@@ -443,35 +442,26 @@ bool pledge_quiet = false, unveil_quiet = false;
 static int
 parse_promises(struct promise_mode modes[], const char *promises_str)
 {
-	const char *p = promises_str;
-	do {
-		/* skip spaces */
-		while (*p == ' ')
-			p++;
-		if (!*p) /* whole string processed */
-			break;
-		/* get next promise name */
-		char name[PROMISE_NAME_SIZE] = { '\0' }, *q = name;
+	char promises_buf[strlen(promises_str) + 1], *p = promises_buf, *q;
+	strcpy(promises_buf, promises_str);
+	while ((q = strsep(&p, " ")) != NULL) {
+		enum promise_type type;
+		if (!*q)
+			continue;
+		type = 0;
 		do {
-			if (q == &name[sizeof name])
-				goto inval; /* name too long */
-			*q++ = *p++;
-		} while (*p && *p != ' ');
-		/* search for name in table */
-		enum promise_type type = 0;
-		do {
-			if (type >= PROMISE_COUNT)
-				goto inval; /* not found */
-			if (memcmp(name, names_table[type].name, sizeof name) == 0)
+			if (type >= PROMISE_COUNT) {
+				errno = EINVAL;
+				return (-1);
+			}
+			if (names_table[type].name != NULL &&
+			    strcmp(q, names_table[type].name) == 0)
 				break;
 			type++;
 		} while (true);
-		/* found */
 		modes[type].state = modes[type].unveil_state = CURTAIN_ENABLED;
-	} while (true);
+	}
 	return (0);
-inval:	errno = EINVAL;
-	return (-1);
 }
 
 
@@ -491,23 +481,23 @@ uperms_for_promises(const struct promise_mode modes[])
 static void
 abilities_for_uperms(struct curtain_slot *slot, unveil_perms uperms, unsigned flags)
 {
-	if (uperms & UPERM_READ)
+	if (uperms_contains(uperms, UPERM_READ))
 		curtain_ability(slot, CURTAINABL_VFS_READ, flags);
-	if (uperms & UPERM_WRITE)
+	if (uperms_contains(uperms, UPERM_WRITE))
 		curtain_ability(slot, CURTAINABL_VFS_WRITE, flags);
-	if (uperms & UPERM_CREATE)
+	if (uperms_contains(uperms, UPERM_CREATE))
 		curtain_ability(slot, CURTAINABL_VFS_CREATE, flags);
-	if (uperms & UPERM_DELETE)
+	if (uperms_contains(uperms, UPERM_DELETE))
 		curtain_ability(slot, CURTAINABL_VFS_DELETE, flags);
-	if (uperms & UPERM_EXECUTE)
+	if (uperms_contains(uperms, UPERM_EXECUTE))
 		curtain_ability(slot, CURTAINABL_EXEC, flags);
-	if (uperms & UPERM_SETATTR) {
+	if (uperms_contains(uperms, UPERM_SETATTR)) {
 		curtain_ability(slot, CURTAINABL_FATTR, flags);
 		curtain_ability(slot, CURTAINABL_VFS_SETATTR, flags);
 	}
-	if (uperms & UPERM_UNIX)
+	if (uperms_contains(uperms, UPERM_UNIX))
 		curtain_ability(slot, CURTAINABL_VFS_SOCK, flags);
-	if (uperms & UPERM_TMPDIR) {
+	if (uperms_contains(uperms, UPERM_TMPDIR)) {
 		curtain_ability(slot, CURTAINABL_VFS_READ, flags);
 		curtain_ability(slot, CURTAINABL_VFS_WRITE, flags);
 		curtain_ability(slot, CURTAINABL_VFS_CREATE, flags);
@@ -522,11 +512,11 @@ prepare_promise_slot(enum curtain_on on, bool needed_on[CURTAIN_ON_COUNT], struc
 {
 	bool must_fill, needed;
 	if ((needed_on[on] = state >= CURTAIN_RESERVED)) {
-		if ((must_fill = !*slot))
+		if ((must_fill = *slot == NULL))
 			*slot = curtain_slot_neutral();
 	} else
 		must_fill = false;
-	if (*slot) {
+	if (*slot != NULL) {
 		needed = false;
 		for (enum curtain_on on1 = 0; on1 < CURTAIN_ON_COUNT; on1++)
 			if (needed_on[on1])
@@ -592,7 +582,7 @@ do_promises_slots(enum curtain_on on, struct promise_mode modes[])
 			const char *path = e->path;
 			if (!tainted && path == tmp_path) {
 				char *tmpdir;
-				if ((tmpdir = getenv("TMPDIR")))
+				if ((tmpdir = getenv("TMPDIR")) != NULL)
 					path = tmpdir;
 			}
 			r = curtain_path(promise_unveil_slots[e->promise], path, path_flags, e->uperms);
@@ -637,7 +627,7 @@ do_promises_slots(enum curtain_on on, struct promise_mode modes[])
 	if (fill[PROMISE_TRAP])
 		curtain_default(promise_slots[PROMISE_TRAP], CURTAIN_TRAP);
 
-	if (!always_slot) {
+	if (always_slot == NULL) {
 		always_slot = curtain_slot_neutral();
 		/*
 		 * Always allow to reduce curtain/unveil permissions later on.
@@ -660,7 +650,7 @@ static void unveil_enable_delayed(enum curtain_on);
 static int
 do_pledge(struct promise_mode *modes_on[CURTAIN_ON_COUNT])
 {
-	if (modes_on[CURTAIN_ON_EXEC]) {
+	if (modes_on[CURTAIN_ON_EXEC] != NULL) {
 		/*
 		 * Implicitly enable what's needed for the rtld(1) to work when
 		 * the promises imply an ability to exec with restrictions.
@@ -668,22 +658,22 @@ do_pledge(struct promise_mode *modes_on[CURTAIN_ON_COUNT])
 		struct promise_mode *exec_rtld, *exec_exec, *self_exec;
 		exec_rtld = &modes_on[CURTAIN_ON_EXEC][PROMISE_RTLD];
 		exec_exec = &modes_on[CURTAIN_ON_EXEC][PROMISE_EXEC];
-		self_exec = modes_on[CURTAIN_ON_SELF] ?
+		self_exec = modes_on[CURTAIN_ON_SELF] != NULL ?
 		    &modes_on[CURTAIN_ON_SELF][PROMISE_EXEC] : NULL;
 		exec_rtld->state = MAX(exec_rtld->state, MAX(exec_exec->state,
-		    self_exec ? self_exec->state : CURTAIN_ENABLED));
+		    self_exec != NULL ? self_exec->state : CURTAIN_ENABLED));
 		exec_rtld->unveil_state = MAX(exec_rtld->unveil_state, MAX(exec_exec->unveil_state,
-		    self_exec ? self_exec->unveil_state : CURTAIN_ENABLED));
+		    self_exec != NULL ? self_exec->unveil_state : CURTAIN_ENABLED));
 	}
 
 	for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++) {
 		unveil_perms wanted_uperms;
-		if (!modes_on[on])
+		if (modes_on[on] == NULL)
 			continue;
 		has_pledges_on[on] = true;
 		do_promises_slots(on, modes_on[on]);
 		wanted_uperms = uperms_for_promises(modes_on[on]);
-		if (custom_slot_on[on]) {
+		if (custom_slot_on[on] != NULL) {
 			curtain_unveils_limit(custom_slot_on[on], wanted_uperms);
 			unveil_enable_delayed(on); /* see do_unveil_both() */
 		}
@@ -694,7 +684,7 @@ do_pledge(struct promise_mode *modes_on[CURTAIN_ON_COUNT])
 			curtain_state(root_slot_on[on], on,
 			    has_customs_on[on] ? CURTAIN_RESERVED : CURTAIN_ENABLED);
 		}
-		if (root_slot_on[on])
+		if (root_slot_on[on] != NULL)
 			curtain_path(root_slot_on[on], root_path, path_flags, wanted_uperms);
 	}
 	return (curtain_apply());
@@ -707,13 +697,13 @@ pledge(const char *promises_str, const char *execpromises_str)
 	struct promise_mode exec_modes[PROMISE_COUNT] = { 0 };
 	struct promise_mode *modes_on[CURTAIN_ON_COUNT] = { 0 };
 	int r;
-	if (promises_str) {
+	if (promises_str != NULL) {
 		r = parse_promises(self_modes, promises_str);
 		if (r < 0)
 			return (-1);
 		modes_on[CURTAIN_ON_SELF] = self_modes;
 	}
-	if (execpromises_str) {
+	if (execpromises_str != NULL) {
 		r = parse_promises(exec_modes, execpromises_str);
 		if (r < 0)
 			return (-1);
@@ -732,7 +722,7 @@ pledge(const char *promises_str, const char *execpromises_str)
 static void
 unveil_enable_delayed(enum curtain_on on)
 {
-	if (custom_slot_on[on]) {
+	if (custom_slot_on[on] != NULL) {
 		curtain_enable(custom_slot_on[on], on);
 		has_customs_on[on] = true;
 	}
@@ -741,11 +731,11 @@ unveil_enable_delayed(enum curtain_on on)
 static void
 do_unveil_init_on(enum curtain_on on)
 {
-	if (!unveil_traverse_slot) {
+	if (unveil_traverse_slot == NULL) {
 		unveil_traverse_slot = curtain_slot_neutral();
 		curtain_path(unveil_traverse_slot, "/", path_flags, UPERM_BROWSE);
 	}
-	if (!custom_slot_on[on])
+	if (custom_slot_on[on] == NULL)
 		custom_slot_on[on] = curtain_slot_neutral();
 	curtain_enable(custom_slot_on[on], on);
 	if (!has_pledges_on[on] && !has_customs_on[on]) {
@@ -761,7 +751,7 @@ do_unveil_init_on(enum curtain_on on)
 			};
 		do_promises_slots(on, modes);
 	}
-	if (root_slot_on[on])
+	if (root_slot_on[on] != NULL)
 		curtain_disable(root_slot_on[on], on);
 	has_customs_on[on] = true;
 }
@@ -779,10 +769,10 @@ do_unveil(bool *do_on, const char *path, unveil_perms uperms)
 	for (on = 0; on < CURTAIN_ON_COUNT; on++)
 		if (do_on[on])
 			do_unveil_init_on(on);
-		else if (!custom_slot_on[on])
+		else if (custom_slot_on[on] == NULL)
 			custom_slot_on[on] = curtain_slot_neutral();
 
-	if (!path) /* unveil(NULL, NULL) */
+	if (path == NULL) /* unveil(NULL, NULL) */
 		return (curtain_apply());
 
 	/*
@@ -850,9 +840,9 @@ unveil_on(enum curtain_on on, const char *path, const char *perms)
 	int r;
 	if ((perms == NULL) != (path == NULL))
 		return ((errno = EINVAL), -1);
-	if (!path && !has_customs_on[on])
+	if (path == NULL && !has_customs_on[on])
 		return (0);
-	if (perms) {
+	if (perms != NULL) {
 		r = unveil_parse_perms(&uperms, perms);
 		if (r < 0)
 			return ((errno = EINVAL), -1);
@@ -877,7 +867,7 @@ unveil(const char *path, const char *perms)
 	int r;
 	if ((perms == NULL) != (path == NULL))
 		return ((errno = EINVAL), -1);
-	if (!path) {
+	if (path == NULL) {
 		/*
 		 * On OpenBSD, unveil(NULL, NULL) without any prior unveils
 		 * just forbids further use of unveil() (equivalent of doing a
@@ -893,7 +883,7 @@ unveil(const char *path, const char *perms)
 		if (!has_custom)
 			return (0);
 	}
-	if (perms) {
+	if (perms != NULL) {
 		r = unveil_parse_perms(&uperms, perms);
 		if (r < 0)
 			return ((errno = EINVAL), -1);
