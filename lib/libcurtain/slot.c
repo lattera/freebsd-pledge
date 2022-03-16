@@ -118,6 +118,8 @@ static struct curtain_node *curtain_root_nodes = NULL;
 
 #define	DEBUG_ENV(name) (issetugid() != 0 ? NULL : getenv(name))
 
+#define	FOREACH_CURTAIN_ON(on) for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++)
+
 static struct curtain_slot *
 curtain_slot_1(const enum curtain_state state_on[CURTAIN_ON_COUNT])
 {
@@ -146,7 +148,7 @@ struct curtain_slot *
 curtain_slot_neutral(void)
 {
 	enum curtain_state state_on[CURTAIN_ON_COUNT];
-	for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++)
+	FOREACH_CURTAIN_ON(on)
 		state_on[on] = CURTAIN_NEUTRAL;
 	return (curtain_slot_1(state_on));
 }
@@ -1233,7 +1235,7 @@ node_inherit(struct curtain_node *node,
 	 * replacing inherited items for the same slot (if any).  The list is
 	 * restored to its previous state before returning.
 	 */
-	for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++) {
+	FOREACH_CURTAIN_ON(on) {
 		node->combined_mode_on[on] = type->mode->null;
 		node->has_mode_on[on] = false;
 	}
@@ -1252,7 +1254,7 @@ node_inherit(struct curtain_node *node,
 			 * node item.  Permissions carry through nodes without
 			 * items for a given slot.
 			 */
-			for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++)
+			FOREACH_CURTAIN_ON(on)
 				if (iitem->slot->state_on[on] >= min_state) {
 					struct curtain_mode m;
 					m = iitem->node->type->mode->merge(
@@ -1288,7 +1290,7 @@ node_inherit(struct curtain_node *node,
 			} else
 				nitem->inherited_mode = type->mode->null;
 			carry = false;
-			for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++)
+			FOREACH_CURTAIN_ON(on)
 				if (nitem->slot->state_on[on] >= min_state) {
 					struct curtain_mode m;
 					m = type->mode->merge(
@@ -1342,15 +1344,15 @@ type_expand(struct curtain_type *type,
 	struct curtain_node *node;
 	size_t total_size;
 	if (counts != NULL)
-		for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++)
+		FOREACH_CURTAIN_ON(on)
 			for (enum curtainreq_level lvl = 0; lvl < CURTAIN_LEVEL_COUNT; lvl++)
 				counts[on][lvl] = 0;
 	if (sizes != NULL)
-		for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++)
+		FOREACH_CURTAIN_ON(on)
 			for (enum curtainreq_level lvl = 0; lvl < CURTAIN_LEVEL_COUNT; lvl++)
 				sizes[on][lvl] = 0;
 	for (total_size = 0, node = type->nodes; node; node = node->type_next)
-		for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++)
+		FOREACH_CURTAIN_ON(on)
 			if (node->has_mode_on[on]) {
 				struct curtain_mode mode = node->combined_mode_on[on];
 				enum curtainreq_level lvl = type->mode->level(mode);
@@ -1411,7 +1413,7 @@ curtain_submit_1(int flags, bool neutral_on[CURTAIN_ON_COUNT], enum curtain_stat
 	char buffer_base[total_size], *buffer_fill = buffer_base;
 	/* Figure out offset of each run in the buffer. */
 	for (size_t i = 0; i < nitems(types); i++)
-		for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++)
+		FOREACH_CURTAIN_ON(on)
 			for (enum curtainreq_level lvl = 0; lvl < CURTAIN_LEVEL_COUNT; lvl++) {
 				fills[i][on][lvl] = buffer_fill;
 				buffer_fill += sizes[i][on][lvl];
@@ -1422,7 +1424,7 @@ curtain_submit_1(int flags, bool neutral_on[CURTAIN_ON_COUNT], enum curtain_stat
 		type_expand(types[i], NULL, NULL, fills[i]);
 
 	/* Build requests array. */
-	for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++) {
+	FOREACH_CURTAIN_ON(on) {
 		for (size_t i = 0; i < nitems(types); i++) {
 			if (neutral_on[on]) {
 				/*
@@ -1463,11 +1465,11 @@ curtain_submit(bool soft)
 	int r, flags;
 
 	has_reserve = false;
-	for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++)
+	FOREACH_CURTAIN_ON(on)
 		neutral_on[on] = curtain_slots != NULL;
 	for (struct curtain_slot *slot = curtain_slots; slot; slot = slot->next) {
 		bool has_neutral = false;
-		for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++) {
+		FOREACH_CURTAIN_ON(on) {
 			if (slot->state_on[on] > CURTAIN_NEUTRAL)
 				neutral_on[on] = false;
 			else if (neutral_on[on])
