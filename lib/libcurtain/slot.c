@@ -310,7 +310,7 @@ item_get(struct curtain_node *node, struct curtain_slot *slot, bool create)
 		for (item = slot->items; item && item->node != node; item = item->slot_next);
 	} else {
 nslot:		for (nlink = &node->items; (item = *nlink); nlink = &item->node_next)
-			/* keeping list ordered by slot */
+			/* keeping list ordered by slot for node_inherit() */
 			if ((uintptr_t)slot <= (uintptr_t)item->slot) {
 				if (slot != item->slot)
 					item = NULL;
@@ -1224,9 +1224,7 @@ node_inherit(struct curtain_node *node,
     struct curtain_item *inherit_head, enum curtain_state min_state)
 {
 	struct curtain_item *nitem, *iitem, **ilink;
-	struct curtain_type *type;
-	type = node->type;
-
+	struct curtain_type *ntype, *itype;
 	/*
 	 * Merge join the inherited and current node's slot item modes to
 	 * handle inheritance between nodes of corresponding slots.  The
@@ -1234,11 +1232,12 @@ node_inherit(struct curtain_node *node,
 	 * replacing inherited items for the same slot (if any).  The list is
 	 * restored to its previous state before returning.
 	 */
+	ntype = node->type;
 	FOREACH_CURTAIN_ON(on)
-		node->combined_mode_on[on] = type->mode->null;
+		node->combined_mode_on[on] = ntype->mode->null;
 	nitem = node->items; /* current node's items */
 	iitem = *(ilink = &inherit_head); /* inherited items */
-	while (nitem || iitem) {
+	while (nitem != NULL || iitem != NULL) {
 		assert(nitem == NULL || nitem->node_next == NULL ||
 		    (uintptr_t)nitem->slot < (uintptr_t)nitem->node_next->slot);
 		assert(iitem == NULL || iitem->inherit_next == NULL ||
@@ -1251,19 +1250,17 @@ node_inherit(struct curtain_node *node,
 			 * node item.  Permissions carry through nodes without
 			 * items for a given slot.
 			 */
-			FOREACH_CURTAIN_ON(on)
-				if (iitem->slot->state_on[on] >= min_state) {
-					struct curtain_mode m;
-					m = iitem->node->type->mode->merge(
-					    iitem->mode, iitem->inherited_mode);
-					if (iitem->node->type->mode != type->mode)
-						m = type->mode->convert(
-						    iitem->node->type->mode, m);
-					node->combined_mode_on[on] =
-					    type->mode->merge(
-						node->combined_mode_on[on],
-						type->mode->inherit(m));
-				}
+			itype = iitem->node->type;
+			FOREACH_CURTAIN_ON(on) {
+				struct curtain_mode m;
+				if (iitem->slot->state_on[on] < min_state)
+					continue;
+				m = itype->mode->merge(iitem->mode, iitem->inherited_mode);
+				if (itype->mode != ntype->mode)
+					m = ntype->mode->convert(itype->mode, m);
+				node->combined_mode_on[on] = ntype->mode->merge(
+				    node->combined_mode_on[on], ntype->mode->inherit(m));
+			}
 			iitem = *(ilink = &iitem->inherit_next);
 		} else {
 			/*
@@ -1274,29 +1271,26 @@ node_inherit(struct curtain_node *node,
 			 */
 			bool match, carry;
 			assert(nitem->node == node);
-			match = iitem && iitem->slot == nitem->slot;
+			match = iitem != NULL && iitem->slot == nitem->slot;
 			if (match && !nitem->override) {
 				struct curtain_mode m;
-				m = iitem->node->type->mode->merge(
-				    iitem->mode, iitem->inherited_mode);
-				if (iitem->node->type->mode != type->mode)
-					m = type->mode->convert(
-					    iitem->node->type->mode, m);
-				nitem->inherited_mode = type->mode->inherit(m);
+				itype = iitem->node->type;
+				m = itype->mode->merge(iitem->mode, iitem->inherited_mode);
+				if (itype->mode != ntype->mode)
+					m = ntype->mode->convert(itype->mode, m);
+				nitem->inherited_mode = ntype->mode->inherit(m);
 			} else
-				nitem->inherited_mode = type->mode->null;
+				nitem->inherited_mode = ntype->mode->null;
 			carry = false;
-			FOREACH_CURTAIN_ON(on)
-				if (nitem->slot->state_on[on] >= min_state) {
-					struct curtain_mode m;
-					m = type->mode->merge(
-					    nitem->mode, nitem->inherited_mode);
-					carry = carry ||
-					    !type->mode->is_null(type->mode->inherit(m));
-					node->combined_mode_on[on] =
-					    type->mode->merge(
-						node->combined_mode_on[on], m);
-				}
+			FOREACH_CURTAIN_ON(on) {
+				struct curtain_mode m;
+				if (nitem->slot->state_on[on] < min_state)
+					continue;
+				m = ntype->mode->merge(nitem->mode, nitem->inherited_mode);
+				carry = carry || !ntype->mode->is_null(ntype->mode->inherit(m));
+				node->combined_mode_on[on] = ntype->mode->merge(
+				    node->combined_mode_on[on], m);
+			}
 			nitem->saved_link = ilink;
 			nitem->saved = iitem;
 			if (match)
