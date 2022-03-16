@@ -391,7 +391,7 @@ struct thread {
 	SLIST_HEAD(, epoch_tracker) td_epochs;
 #endif
 #ifndef NOUNVEIL
-	struct unveil_tracker *td_unveil_tracker; /* (a) */
+	struct unveil_track *td_unveil_track; /* (a) */
 #endif
 };
 

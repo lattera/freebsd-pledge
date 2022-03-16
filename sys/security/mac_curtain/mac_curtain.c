@@ -477,8 +477,8 @@ check_uperms(unveil_perms uhave, unveil_perms uneed)
 static unveil_perms
 get_vp_uperms(struct ucred *cr, struct vnode *vp)
 {
-	struct unveil_tracker *track;
-	struct unveil_tracker_entry *entry;
+	struct unveil_track *track;
+	struct unveil_track_entry *entry;
 	if (!CRED_IN_VFS_VEILED_MODE(cr))
 		return (UPERM_ALL);
 	if ((track = unveil_track_get(cr, false)) != NULL &&
@@ -491,8 +491,8 @@ get_vp_uperms(struct ucred *cr, struct vnode *vp)
 static unveil_perms
 get_vp_create_uperms(struct ucred *cr, struct vnode *dvp, struct vnode *vp)
 {
-	struct unveil_tracker *track;
-	struct unveil_tracker_entry *entry;
+	struct unveil_track *track;
+	struct unveil_track_entry *entry;
 	if (!CRED_IN_VFS_VEILED_MODE(cr))
 		return (UPERM_ALL);
 	if ((track = unveil_track_get(cr, false)) != NULL) {
@@ -1015,8 +1015,8 @@ curtain_mount_check_stat(struct ucred *cr,
 			else
 				uperms = UPERM_NONE;
 		} else {
-			struct unveil_tracker *track;
-			struct unveil_tracker_entry *entry;
+			struct unveil_track *track;
+			struct unveil_track_entry *entry;
 			if ((track = unveil_track_get(cr, false)) != NULL &&
 			    (entry = unveil_track_find_mount(track, mp)) != NULL)
 				uperms = entry->uperms;

@@ -364,7 +364,7 @@ thread_ctor(void *mem, int size, void *arg, int flags)
 	kdtrace_thread_ctor(td);
 #endif
 #ifndef NOUNVEIL /* XXX */
-	td->td_unveil_tracker = NULL;
+	td->td_unveil_track = NULL;
 #endif
 	umtx_thread_alloc(td);
 	MPASS(td->td_sel == NULL);

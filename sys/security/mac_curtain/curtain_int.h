@@ -230,12 +230,12 @@ struct unveil_cache {
 	} entries[UNVEIL_CACHE_ENTRIES_COUNT];
 };
 
-struct unveil_tracker {
+struct unveil_track {
 	uint64_t serial;
 	struct curtain *ct;
-#define	UNVEIL_TRACKER_ENTRIES_COUNT 2
+#define	UNVEIL_TRACK_ENTRIES_COUNT 2
 	unsigned fill;
-	struct unveil_tracker_entry {
+	struct unveil_track_entry {
 		struct vnode *vp;
 		struct mount *mp;
 		unsigned vp_nchash, vp_hash;
@@ -244,7 +244,7 @@ struct unveil_tracker {
 		bool uncharted;
 		bool create_pending;
 		bool exposed_create;
-	} entries[UNVEIL_TRACKER_ENTRIES_COUNT];
+	} entries[UNVEIL_TRACK_ENTRIES_COUNT];
 };
 
 struct unveil_cache *unveil_proc_get_cache(struct proc *, bool create);
@@ -263,10 +263,10 @@ int	unveil_vnode_walk_finish(struct ucred *, struct vnode *dvp, struct vnode *vp
 int	unveil_vnode_walk_fixup_errno(struct ucred *, int error);
 bool	unveil_vnode_walk_dirent_visible(struct ucred *, struct vnode *dvp, struct dirent *dp);
 
-struct unveil_tracker *unveil_track_get(struct ucred *, bool create);
-struct unveil_tracker_entry *unveil_track_find(struct unveil_tracker *, struct vnode *);
-struct unveil_tracker_entry *unveil_track_find_mount(struct unveil_tracker *, struct mount *);
-void unveil_track_reset(struct unveil_tracker *);
+struct unveil_track *unveil_track_get(struct ucred *, bool create);
+struct unveil_track_entry *unveil_track_find(struct unveil_track *, struct vnode *);
+struct unveil_track_entry *unveil_track_find_mount(struct unveil_track *, struct mount *);
+void unveil_track_reset(struct unveil_track *);
 
 unveil_perms curtain_lookup_mount(const struct curtain *, struct mount *);
 int	curtain_fixup_unveils_parents(struct curtain *, struct ucred *);

@@ -108,33 +108,33 @@ unveil_fflags_uperms(enum vtype type, int fflags)
 }
 
 static void
-unveil_track_init(struct unveil_tracker *track, struct curtain *ct)
+unveil_track_init(struct unveil_track *track, struct curtain *ct)
 {
-	*track = (struct unveil_tracker){
+	*track = (struct unveil_track){
 		.ct = ct,
 		.serial = curtain_serial(ct),
-		.fill = UNVEIL_TRACKER_ENTRIES_COUNT - 1,
+		.fill = UNVEIL_TRACK_ENTRIES_COUNT - 1,
 	};
 }
 
 void
-unveil_track_reset(struct unveil_tracker *track)
+unveil_track_reset(struct unveil_track *track)
 {
-	*track = (struct unveil_tracker){ 0 };
+	*track = (struct unveil_track){ 0 };
 }
 
-struct unveil_tracker *
+struct unveil_track *
 unveil_track_get(struct ucred *cr, bool create)
 {
-	struct unveil_tracker *track;
+	struct unveil_track *track;
 	struct curtain *ct;
 	if ((ct = curtain_from_cred(cr)) == NULL)
 		return (NULL);
-	if ((track = curthread->td_unveil_tracker) != NULL) {
+	if ((track = curthread->td_unveil_track) != NULL) {
 		if (track->serial == curtain_serial(ct))
 			return (track);
 	} else if (create) {
-		curthread->td_unveil_tracker = track =
+		curthread->td_unveil_track = track =
 		    malloc(sizeof *track, M_UNVEIL_TRACK, M_WAITOK);
 	} else
 		return (NULL);
@@ -143,42 +143,42 @@ unveil_track_get(struct ucred *cr, bool create)
 }
 
 static unsigned
-unveil_track_roll(struct unveil_tracker *track, int offset)
+unveil_track_roll(struct unveil_track *track, int offset)
 {
 	if (offset > 0) {
 		do {
-			if (++track->fill == UNVEIL_TRACKER_ENTRIES_COUNT)
+			if (++track->fill == UNVEIL_TRACK_ENTRIES_COUNT)
 				track->fill = 0;
 		} while (--offset);
 	} else if (offset < 0) {
 		do {
 			if (track->fill-- == 0)
-				track->fill = UNVEIL_TRACKER_ENTRIES_COUNT - 1;
+				track->fill = UNVEIL_TRACK_ENTRIES_COUNT - 1;
 		} while (++offset);
 	}
 	return (track->fill);
 }
 
-static struct unveil_tracker_entry *
-unveil_track_peek(struct unveil_tracker *track)
+static struct unveil_track_entry *
+unveil_track_peek(struct unveil_track *track)
 {
 	return (&track->entries[track->fill]);
 }
 
-static struct unveil_tracker_entry *
-unveil_track_pick(struct unveil_tracker *track, struct vnode *vp)
+static struct unveil_track_entry *
+unveil_track_pick(struct unveil_track *track, struct vnode *vp)
 {
-	struct unveil_tracker_entry *entry;
+	struct unveil_track_entry *entry;
 	entry = unveil_track_peek(track);
 	if (entry->vp != vp)
 		return (NULL);
 	return (entry);
 }
 
-static struct unveil_tracker_entry *
-unveil_track_fill(struct unveil_tracker *track, struct vnode *vp)
+static struct unveil_track_entry *
+unveil_track_fill(struct unveil_track *track, struct vnode *vp)
 {
-	track->entries[track->fill] = (struct unveil_tracker_entry){
+	track->entries[track->fill] = (struct unveil_track_entry){
 		.vp = vp,
 		.vp_nchash = vp != NULL ? vp->v_nchash : 0,
 		.vp_hash = vp != NULL ? vp->v_hash : 0,
@@ -188,11 +188,11 @@ unveil_track_fill(struct unveil_tracker *track, struct vnode *vp)
 	return (&track->entries[track->fill]);
 }
 
-struct unveil_tracker_entry *
-unveil_track_find(struct unveil_tracker *track, struct vnode *vp)
+struct unveil_track_entry *
+unveil_track_find(struct unveil_track *track, struct vnode *vp)
 {
-	for (unsigned j = 0; j < UNVEIL_TRACKER_ENTRIES_COUNT; j++) {
-		unsigned i = (track->fill + j) % UNVEIL_TRACKER_ENTRIES_COUNT;
+	for (unsigned j = 0; j < UNVEIL_TRACK_ENTRIES_COUNT; j++) {
+		unsigned i = (track->fill + j) % UNVEIL_TRACK_ENTRIES_COUNT;
 		if (track->entries[i].vp == vp &&
 		    track->entries[i].vp_nchash == vp->v_nchash &&
 		    track->entries[i].vp_hash == vp->v_hash &&
@@ -203,11 +203,11 @@ unveil_track_find(struct unveil_tracker *track, struct vnode *vp)
 	return (NULL);
 }
 
-struct unveil_tracker_entry *
-unveil_track_find_mount(struct unveil_tracker *track, struct mount *mp)
+struct unveil_track_entry *
+unveil_track_find_mount(struct unveil_track *track, struct mount *mp)
 {
-	for (unsigned j = 0; j < UNVEIL_TRACKER_ENTRIES_COUNT; j++) {
-		unsigned i = (track->fill + j) % UNVEIL_TRACKER_ENTRIES_COUNT;
+	for (unsigned j = 0; j < UNVEIL_TRACK_ENTRIES_COUNT; j++) {
+		unsigned i = (track->fill + j) % UNVEIL_TRACK_ENTRIES_COUNT;
 		if (track->entries[i].mp == mp &&
 		    track->entries[i].mp_gen == mp->mnt_gen)
 			return (&track->entries[i]);
@@ -447,7 +447,7 @@ unveil_special_exemptions(struct ucred *cr, struct vnode *vp, unveil_perms uperm
 void
 unveil_vnode_walk_roll(struct ucred *cr, int offset)
 {
-	struct unveil_tracker *track;
+	struct unveil_track *track;
 	if ((track = unveil_track_get(cr, false)) == NULL)
 		return;
 	unveil_track_roll(track, offset);
@@ -456,8 +456,8 @@ unveil_vnode_walk_roll(struct ucred *cr, int offset)
 void
 unveil_vnode_walk_annotate_file(struct ucred *cr, struct file *fp, struct vnode *vp)
 {
-	struct unveil_tracker *track;
-	struct unveil_tracker_entry *entry;
+	struct unveil_track *track;
+	struct unveil_track_entry *entry;
 	struct curtain *ct;
 	fp->f_userial = (ct = curtain_from_cred(cr)) != NULL ? curtain_serial(ct) : 0;
 	if (CRED_IN_VFS_VEILED_MODE(cr)) {
@@ -473,7 +473,7 @@ unveil_vnode_walk_annotate_file(struct ucred *cr, struct file *fp, struct vnode 
 int
 unveil_vnode_walk_start_file(struct ucred *cr, struct file *fp)
 {
-	struct unveil_tracker *track;
+	struct unveil_track *track;
 	unveil_perms uperms;
 	if (fp->f_vnode == NULL)
 		return (0);
@@ -491,8 +491,8 @@ int
 unveil_vnode_walk_start(struct ucred *cr, struct vnode *dvp)
 {
 	struct curtain_unveil *cover;
-	struct unveil_tracker *track;
-	struct unveil_tracker_entry *entry;
+	struct unveil_track *track;
+	struct unveil_track_entry *entry;
 	struct unveil_cache *cache;
 	unsigned depth;
 	int error;
@@ -574,8 +574,8 @@ unveil_vnode_walk_start(struct ucred *cr, struct vnode *dvp)
 void
 unveil_vnode_walk_backtrack(struct ucred *cr, struct vnode *from_vp, struct vnode *to_vp)
 {
-	struct unveil_tracker *track;
-	struct unveil_tracker_entry *entry;
+	struct unveil_track *track;
+	struct unveil_track_entry *entry;
 	struct curtain_unveil *uv;
 	unveil_perms uperms;
 	bool uncharted;
@@ -605,8 +605,8 @@ void
 unveil_vnode_walk_component(struct ucred *cr,
     struct vnode *dvp, struct componentname *cnp, struct vnode *vp)
 {
-	struct unveil_tracker *track;
-	struct unveil_tracker_entry *entry;
+	struct unveil_track *track;
+	struct unveil_track_entry *entry;
 	struct curtain_unveil *uv;
 	unveil_perms uperms;
 	bool uncharted, parent_exposed;
@@ -664,8 +664,8 @@ void
 unveil_vnode_walk_replace(struct ucred *cr,
     struct vnode *from_vp, struct vnode *to_vp)
 {
-	struct unveil_tracker *track;
-	struct unveil_tracker_entry *entry;
+	struct unveil_track *track;
+	struct unveil_track_entry *entry;
 	if ((track = unveil_track_get(cr, false)) == NULL ||
 	    (entry = unveil_track_pick(track, from_vp)) == NULL)
 		return;
@@ -676,8 +676,8 @@ unveil_vnode_walk_replace(struct ucred *cr,
 void
 unveil_vnode_walk_created(struct ucred *cr, struct vnode *dvp, struct vnode *vp)
 {
-	struct unveil_tracker *track;
-	struct unveil_tracker_entry *entry;
+	struct unveil_track *track;
+	struct unveil_track_entry *entry;
 	if ((track = unveil_track_get(cr, false)) == NULL ||
 	    (entry = unveil_track_pick(track, dvp)) == NULL ||
 	    !entry->create_pending)
@@ -689,8 +689,8 @@ unveil_vnode_walk_created(struct ucred *cr, struct vnode *dvp, struct vnode *vp)
 int
 unveil_vnode_walk_finish(struct ucred *cr, struct vnode *dvp, struct vnode *vp)
 {
-	struct unveil_tracker *track;
-	struct unveil_tracker_entry *entry;
+	struct unveil_track *track;
+	struct unveil_track_entry *entry;
 	unveil_perms uperms;
 	if ((track = unveil_track_get(cr, false)) == NULL)
 		return (0);
@@ -729,8 +729,8 @@ unveil_vnode_walk_finish(struct ucred *cr, struct vnode *dvp, struct vnode *vp)
 int
 unveil_vnode_walk_fixup_errno(struct ucred *cr, int error)
 {
-	struct unveil_tracker *track;
-	struct unveil_tracker_entry *entry;
+	struct unveil_track *track;
+	struct unveil_track_entry *entry;
 	unveil_perms uperms;
 	if ((track = unveil_track_get(cr, false)) == NULL)
 		return (error);
@@ -754,8 +754,8 @@ unveil_vnode_walk_fixup_errno(struct ucred *cr, int error)
 bool
 unveil_vnode_walk_dirent_visible(struct ucred *cr, struct vnode *dvp, struct dirent *dp)
 {
-	struct unveil_tracker *track;
-	struct unveil_tracker_entry *entry;
+	struct unveil_track *track;
+	struct unveil_track_entry *entry;
 	struct curtain_unveil *uv;
 	struct vnode *vp;
 	struct mount *mp;
@@ -900,15 +900,15 @@ unveil_proc_fork(void *arg __unused, struct proc *parent, struct proc *child, in
 static void
 unveil_thread_ctor(void *arg __unused, struct thread *td)
 {
-	td->td_unveil_tracker = NULL;
+	td->td_unveil_track = NULL;
 }
 
 static void
 unveil_thread_dtor(void *arg __unused, struct thread *td)
 {
-	if (td->td_unveil_tracker != NULL) {
-		free(td->td_unveil_tracker, M_UNVEIL_TRACK);
-		td->td_unveil_tracker = NULL;
+	if (td->td_unveil_track != NULL) {
+		free(td->td_unveil_track, M_UNVEIL_TRACK);
+		td->td_unveil_track = NULL;
 	}
 }
 
