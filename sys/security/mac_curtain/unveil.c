@@ -112,7 +112,7 @@ unveil_track_init(struct unveil_tracker *track, struct curtain *ct)
 {
 	*track = (struct unveil_tracker){
 		.ct = ct,
-		.serial = ct != NULL ? curtain_serial(ct) : 0,
+		.serial = curtain_serial(ct),
 		.fill = UNVEIL_TRACKER_ENTRIES_COUNT - 1,
 	};
 }
@@ -128,17 +128,17 @@ unveil_track_get(struct ucred *cr, bool create)
 {
 	struct unveil_tracker *track;
 	struct curtain *ct;
+	if ((ct = curtain_from_cred(cr)) == NULL)
+		return (NULL);
 	if ((track = curthread->td_unveil_tracker) != NULL) {
-		ct = curtain_from_cred(cr);
-		if (__predict_false(track->serial != (ct != NULL ? curtain_serial(ct) : 0)))
-			unveil_track_init(track, ct);
-		return (track);
+		if (track->serial == curtain_serial(ct))
+			return (track);
 	} else if (create) {
-		ct = curtain_from_cred(cr);
-		track = malloc(sizeof *track, M_UNVEIL_TRACK, M_WAITOK);
-		unveil_track_init(track, ct);
-		curthread->td_unveil_tracker = track;
-	}
+		curthread->td_unveil_tracker = track =
+		    malloc(sizeof *track, M_UNVEIL_TRACK, M_WAITOK);
+	} else
+		return (NULL);
+	unveil_track_init(track, ct);
 	return (track);
 }
 
@@ -398,18 +398,6 @@ curtain_lookup_unveil(struct curtain *ct, struct vnode *vp, const char *name, si
 	return (item != NULL ? item->key.unveil : NULL);
 }
 
-static unveil_perms
-default_uperms(struct unveil_tracker *track)
-{
-	struct curtain *ct;
-	struct curtain_mode mode;
-	if ((ct = track->ct) == NULL)
-		return (UPERM_ALL);
-	mode = curtain_resolve(ct, CURTAIN_ABILITY,
-	    (union curtain_key){ .ability = curtain_type_fallback(CURTAIN_UNVEIL) });
-	return (mode.soft == CURTAIN_ALLOW ? UPERM_ALL : UPERM_NONE);
-}
-
 static int
 unveil_find_cover(struct ucred *cr, struct curtain *ct, struct vnode *dp,
     struct curtain_unveil **cover, unsigned *depth)
@@ -489,7 +477,8 @@ unveil_vnode_walk_start_file(struct ucred *cr, struct file *fp)
 	unveil_perms uperms;
 	if (fp->f_vnode == NULL)
 		return (0);
-	track = unveil_track_get(cr, true);
+	if ((track = unveil_track_get(cr, true)) == NULL)
+		return (0);
 	uperms = fp->f_uperms;
 	if ((fp->f_userial != track->serial))
 		uperms &= unveil_fflags_uperms(fp->f_vnode->v_type, fp->f_flag);
@@ -508,7 +497,8 @@ unveil_vnode_walk_start(struct ucred *cr, struct vnode *dvp)
 	unsigned depth;
 	int error;
 	MPASS(dvp != NULL);
-	track = unveil_track_get(cr, true);
+	if ((track = unveil_track_get(cr, true)) == NULL)
+		return (0);
 	cache = curthread->td_proc->p_unveil_cache;
 #ifdef CURTAIN_STATS
 	counter_u64_add(unveil_stats_traversals, 1);
@@ -537,11 +527,9 @@ unveil_vnode_walk_start(struct ucred *cr, struct vnode *dvp)
 		}
 	}
 	if (cover == NULL) {
-		if (track->ct != NULL) {
-			error = unveil_find_cover(cr, track->ct, dvp, &cover, &depth);
-			if (error != 0)
-				return (error);
-		}
+		error = unveil_find_cover(cr, track->ct, dvp, &cover, &depth);
+		if (error != 0)
+			return (error);
 		if (depth > 0) {
 #ifdef CURTAIN_STATS
 			counter_u64_add(unveil_stats_ascents, 1);
@@ -570,8 +558,11 @@ unveil_vnode_walk_start(struct ucred *cr, struct vnode *dvp)
 
 	entry = unveil_track_fill(track, dvp);
 	if (cover == NULL) {
+		struct curtain_mode mode;
+		mode = curtain_resolve(track->ct, CURTAIN_ABILITY,
+		    (union curtain_key){ .ability = curtain_type_fallback(CURTAIN_UNVEIL) });
 		entry->uncharted = true;
-		entry->uperms = default_uperms(track);
+		entry->uperms = mode.soft == CURTAIN_ALLOW ? UPERM_ALL : UPERM_NONE;
 	} else if (depth != 0) {
 		entry->uncharted = true;
 		entry->uperms = uperms_inherit(cover->soft_uperms);
@@ -594,7 +585,7 @@ unveil_vnode_walk_backtrack(struct ucred *cr, struct vnode *from_vp, struct vnod
 
 	uncharted = false;
 	uperms = UPERM_NONE;
-	if (track->ct != NULL && (uv = curtain_lookup_unveil(track->ct, to_vp, NULL, 0)) != NULL)
+	if ((uv = curtain_lookup_unveil(track->ct, to_vp, NULL, 0)) != NULL)
 		uperms = uv->soft_uperms;
 	else if ((uncharted = entry->uncharted))
 		uperms = entry->uperms;
@@ -635,14 +626,13 @@ unveil_vnode_walk_component(struct ucred *cr,
 		return;
 	parent_exposed = entry->uperms & UPERM_EXPOSE;
 
-	uv = NULL;
-	if (track->ct != NULL) {
-		if (vp != NULL && vp->v_type == VDIR)
-			uv = curtain_lookup_unveil(track->ct, vp, NULL, 0);
-		else if ((cnp->cn_flags & ISDOTDOT) == 0 && cnp->cn_namelen != 0)
-			uv = curtain_lookup_unveil(track->ct, dvp,
-			    cnp->cn_nameptr, cnp->cn_namelen);
-	}
+	if (vp != NULL && vp->v_type == VDIR)
+		uv = curtain_lookup_unveil(track->ct, vp, NULL, 0);
+	else if ((cnp->cn_flags & ISDOTDOT) == 0 && cnp->cn_namelen != 0)
+		uv = curtain_lookup_unveil(track->ct, dvp,
+		    cnp->cn_nameptr, cnp->cn_namelen);
+	else
+		uv = NULL;
 
 	uncharted = false;
 	uperms = UPERM_NONE;
@@ -784,7 +774,7 @@ unveil_vnode_walk_dirent_visible(struct ucred *cr, struct vnode *dvp, struct dir
 	if (dp == NULL) { /* request to check if all children are visible */
 		if (!uperms_contains(uperms, UPERM_BROWSE))
 			return (false); /* children not visible by default */
-		uv = track->ct != NULL ? curtain_lookup_unveil(track->ct, dvp, NULL, 0) : NULL;
+		uv = curtain_lookup_unveil(track->ct, dvp, NULL, 0);
 		return (uv == NULL || !uv->hidden_children);
 	}
 
@@ -792,62 +782,59 @@ unveil_vnode_walk_dirent_visible(struct ucred *cr, struct vnode *dvp, struct dir
 	    (dp->d_namlen == 1 && dp->d_name[0] == '.'))
 		return (true);
 
-	if (track->ct != NULL)
-		switch (dp->d_type) {
-		case DT_UNKNOWN:
+	switch (dp->d_type) {
+	case DT_UNKNOWN:
 #ifdef CURTAIN_STATS
-			counter_u64_add(unveil_stats_dirent_unknowns, 1);
+		counter_u64_add(unveil_stats_dirent_unknowns, 1);
 #endif
-			/* FALLTHROUGH */
-		case DT_DIR:
+		/* FALLTHROUGH */
+	case DT_DIR:
 #ifdef CURTAIN_STATS
-			counter_u64_add(unveil_stats_dirent_vnode_lookups, 1);
+		counter_u64_add(unveil_stats_dirent_vnode_lookups, 1);
 #endif
-			cn = (struct componentname){
-				.cn_nameiop = LOOKUP,
-				.cn_flags = ISLASTCN,
-				.cn_lkflags = LK_SHARED,
-				.cn_cred = cr,
-				.cn_nameptr = dp->d_name,
-				.cn_namelen = dp->d_namlen,
-			};
-			error = VOP_LOOKUP(dvp, &vp, &cn);
-			if (error != 0) {
+		cn = (struct componentname){
+			.cn_nameiop = LOOKUP,
+			.cn_flags = ISLASTCN,
+			.cn_lkflags = LK_SHARED,
+			.cn_cred = cr,
+			.cn_nameptr = dp->d_name,
+			.cn_namelen = dp->d_namlen,
+		};
+		error = VOP_LOOKUP(dvp, &vp, &cn);
+		if (error != 0) {
 #ifdef CURTAIN_STATS
-				counter_u64_add(unveil_stats_dirent_vnode_errors, 1);
+			counter_u64_add(unveil_stats_dirent_vnode_errors, 1);
 #endif
-				return (false);
-			}
-			while (vp->v_type == VDIR && (mp = vp->v_mountedhere) != NULL) {
-				if (vfs_busy(mp, 0))
-					continue;
-				if (vp != dvp)
-					vput(vp);
-				else
-					vrele(vp);
-				error = VFS_ROOT(mp, LK_SHARED, &vp);
-				vfs_unbusy(mp);
-				if (error != 0)
-					return (false);
-			}
-			if (vp != dvp)
-				VOP_UNLOCK(vp);
-			if (vp->v_type == VDIR) {
-				uv = curtain_lookup_unveil(track->ct, vp, NULL, 0);
-				vrele(vp);
-				break;
-			} else
-				vrele(vp);
-			/* FALLTHROUGH */
-		default:
-#ifdef CURTAIN_STATS
-			counter_u64_add(unveil_stats_dirent_name_lookups, 1);
-#endif
-			uv = curtain_lookup_unveil(track->ct, dvp, dp->d_name, dp->d_namlen);
-			break;
+			return (false);
 		}
-	else
-		uv = NULL;
+		while (vp->v_type == VDIR && (mp = vp->v_mountedhere) != NULL) {
+			if (vfs_busy(mp, 0))
+				continue;
+			if (vp != dvp)
+				vput(vp);
+			else
+				vrele(vp);
+			error = VFS_ROOT(mp, LK_SHARED, &vp);
+			vfs_unbusy(mp);
+			if (error != 0)
+				return (false);
+		}
+		if (vp != dvp)
+			VOP_UNLOCK(vp);
+		if (vp->v_type == VDIR) {
+			uv = curtain_lookup_unveil(track->ct, vp, NULL, 0);
+			vrele(vp);
+			break;
+		} else
+			vrele(vp);
+		/* FALLTHROUGH */
+	default:
+#ifdef CURTAIN_STATS
+		counter_u64_add(unveil_stats_dirent_name_lookups, 1);
+#endif
+		uv = curtain_lookup_unveil(track->ct, dvp, dp->d_name, dp->d_namlen);
+		break;
+	}
 
 	uperms = uv != NULL ? uv->soft_uperms : uperms_inherit(uperms);
 	return (uperms_contains(uperms, UPERM_EXPOSE));
