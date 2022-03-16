@@ -76,7 +76,6 @@ struct curtain_node {
 		struct curtain_key_unveil unveil;
 	} key;
 	/* scratch */
-	bool has_mode_on[CURTAIN_ON_COUNT];
 	struct curtain_mode combined_mode_on[CURTAIN_ON_COUNT];
 };
 
@@ -1235,10 +1234,8 @@ node_inherit(struct curtain_node *node,
 	 * replacing inherited items for the same slot (if any).  The list is
 	 * restored to its previous state before returning.
 	 */
-	FOREACH_CURTAIN_ON(on) {
+	FOREACH_CURTAIN_ON(on)
 		node->combined_mode_on[on] = type->mode->null;
-		node->has_mode_on[on] = false;
-	}
 	nitem = node->items; /* current node's items */
 	iitem = *(ilink = &inherit_head); /* inherited items */
 	while (nitem || iitem) {
@@ -1266,7 +1263,6 @@ node_inherit(struct curtain_node *node,
 					    type->mode->merge(
 						node->combined_mode_on[on],
 						type->mode->inherit(m));
-					node->has_mode_on[on] = true;
 				}
 			iitem = *(ilink = &iitem->inherit_next);
 		} else {
@@ -1300,7 +1296,6 @@ node_inherit(struct curtain_node *node,
 					node->combined_mode_on[on] =
 					    type->mode->merge(
 						node->combined_mode_on[on], m);
-					node->has_mode_on[on] = true;
 				}
 			nitem->saved_link = ilink;
 			nitem->saved = iitem;
@@ -1353,7 +1348,7 @@ type_expand(struct curtain_type *type,
 				sizes[on][lvl] = 0;
 	for (total_size = 0, node = type->nodes; node; node = node->type_next)
 		FOREACH_CURTAIN_ON(on)
-			if (node->has_mode_on[on]) {
+			if (!node->type->mode->is_null(node->combined_mode_on[on])) {
 				struct curtain_mode mode = node->combined_mode_on[on];
 				enum curtainreq_level lvl = type->mode->level(mode);
 				size_t size = type->ent_size(&node->key);
