@@ -38,8 +38,8 @@ struct curtain_slot {
 };
 
 struct curtain_mode {
+	enum curtainreq_level level;
 	union {
-		enum curtainreq_level level;
 		unveil_perms uperms;
 	};
 };
@@ -354,12 +354,6 @@ static void
 item_set_flags(struct curtain_item *item, int flags)
 {
 	item->override = (flags & CURTAIN_INHERIT) == 0;
-}
-
-static void
-item_set_flags_level(struct curtain_item *item, int flags)
-{
-	item_set_flags(item, flags);
 	item->mode.level = flags2level(flags);
 }
 
@@ -391,8 +385,8 @@ level_mode_inherit(struct curtain_mode m)
 { return (m); }
 
 static struct curtain_mode
-level_mode_convert(const struct mode_type *type __unused, struct curtain_mode m __unused)
-{ return ((struct curtain_mode){ .level = CURTAINLVL_LEAST }); }
+level_mode_convert(const struct mode_type *type __unused, struct curtain_mode m)
+{ return (m); }
 
 static enum curtainreq_level
 level_mode_level(struct curtain_mode m)
@@ -442,7 +436,7 @@ curtain_default(struct curtain_slot *slot, unsigned flags)
 	item = node_item_get(&default_type, slot, (union curtain_key){ 0 }, true);
 	if (item == NULL)
 		return (-1);
-	item_set_flags_level(item, flags);
+	item_set_flags(item, flags);
 	return (0);
 }
 
@@ -474,7 +468,7 @@ curtain_ability(struct curtain_slot *slot, enum curtain_ability ability, int fla
 	item = node_item_get(&abilities_type, slot, KEY(.ability, ability), true);
 	if (item == NULL)
 		return (-1);
-	item_set_flags_level(item, flags);
+	item_set_flags(item, flags);
 	return (0);
 }
 
@@ -499,7 +493,7 @@ curtain_ioctl(struct curtain_slot *slot, unsigned long ioctl, int flags)
 	item = node_item_get(&ioctls_type, slot, KEY(.ioctl, ioctl), true);
 	if (item == NULL)
 		return (-1);
-	item_set_flags_level(item, flags);
+	item_set_flags(item, flags);
 	return (0);
 }
 
@@ -532,7 +526,7 @@ curtain_sockaf(struct curtain_slot *slot, int sockaf, int flags)
 	item = node_item_get(&sockafs_type, slot, KEY(.sockaf, sockaf), true);
 	if (item == NULL)
 		return (-1);
-	item_set_flags_level(item, flags);
+	item_set_flags(item, flags);
 	return (0);
 }
 
@@ -557,7 +551,7 @@ curtain_socklvl(struct curtain_slot *slot, int socklvl, int flags)
 	item = node_item_get(&socklvls_type, slot, KEY(.socklvl, socklvl), true);
 	if (item == NULL)
 		return (-1);
-	item_set_flags_level(item, flags);
+	item_set_flags(item, flags);
 	return (0);
 }
 
@@ -615,7 +609,7 @@ curtain_sockopt_1(struct curtain_type *type, struct curtain_slot *slot,
 	item = node_item_get(type, slot, KEY(.sockopt, { level, optname }), true);
 	if (item == NULL)
 		return (-1);
-	item_set_flags_level(item, flags);
+	item_set_flags(item, flags);
 	return (0);
 }
 
@@ -684,7 +678,7 @@ curtain_priv(struct curtain_slot *slot, int priv, int flags)
 	item = node_item_get(&privs_type, slot, KEY(.priv, priv), true);
 	if (item == NULL)
 		return (-1);
-	item_set_flags_level(item, flags);
+	item_set_flags(item, flags);
 	return (0);
 }
 
@@ -757,7 +751,7 @@ curtain_sysctl(struct curtain_slot *slot, const char *sysctl, int flags)
 			item = item_get(node, slot, true);
 			if (item == NULL)
 				return (-1);
-			item_set_flags_level(item, flags);
+			item_set_flags(item, flags);
 		}
 		if (prev_node != NULL)
 			node_reparent(node, prev_node);
@@ -787,43 +781,52 @@ curtain_fibnum(struct curtain_slot *slot, int fibnum, int flags)
 	item = node_item_get(&fibnums_type, slot, KEY(.fibnum, fibnum), true);
 	if (item == NULL)
 		return (-1);
-	item_set_flags_level(item, flags);
+	item_set_flags(item, flags);
 	return (0);
 }
 
 
 static bool
 unveil_mode_is_null(struct curtain_mode m)
-{ return (m.uperms == UPERM_NONE); }
+{
+	return (level_mode_is_null(m) && m.uperms == UPERM_NONE);
+}
 
 static struct curtain_mode
 unveil_mode_merge(struct curtain_mode m1, struct curtain_mode m2)
-{ return ((struct curtain_mode){ .uperms = m1.uperms | m2.uperms }); }
+{
+	struct curtain_mode mm;
+	mm = level_mode_merge(m1, m2);
+	mm.uperms = m1.uperms | m2.uperms;
+	return (mm);
+}
 
 static struct curtain_mode
 unveil_mode_inherit(struct curtain_mode m)
-{ return ((struct curtain_mode){ .uperms = uperms_inherit(m.uperms) }); }
-
-static struct curtain_mode
-unveil_mode_convert(const struct mode_type *type, struct curtain_mode m) {
-	if (type == &level_mode_type)
-		return (m.level == CURTAINLVL_PASS ?
-		    (struct curtain_mode){ .uperms = UPERM_ALL } :
-		    (struct curtain_mode){ .uperms = UPERM_NONE });
-	return ((struct curtain_mode){ .uperms = UPERM_NONE });
+{
+	struct curtain_mode mm;
+	mm = level_mode_inherit(m);
+	mm.uperms = uperms_inherit(m.uperms);
+	return (mm);
 }
 
-static enum curtainreq_level
-unveil_mode_level(struct curtain_mode m __unused)
-{ return (CURTAINLVL_PASS); }
+static struct curtain_mode
+unveil_mode_convert(const struct mode_type *type, struct curtain_mode m)
+{
+	struct curtain_mode mm;
+	mm = level_mode_convert(type, m);
+	if (type == &level_mode_type)
+		mm.uperms = mm.level == CURTAINLVL_PASS ? UPERM_ALL : UPERM_NONE;
+	return (mm);
+}
 
 static const struct mode_type unveil_mode_type = {
-	.null = { .uperms = UPERM_NONE },
+	.null = { .level = CURTAINLVL_LEAST, .uperms = UPERM_NONE },
 	.is_null = unveil_mode_is_null,
 	.inherit = unveil_mode_inherit,
 	.convert = unveil_mode_convert,
 	.merge = unveil_mode_merge,
-	.level = unveil_mode_level,
+	.level = level_mode_level,
 };
 
 static int

@@ -256,7 +256,8 @@ curtain_fill_item(struct curtain *ct, enum curtain_type type, union curtain_key 
 MALLOC_DECLARE(M_CURTAIN_UNVEIL);
 
 static int
-curtain_fill_unveil(struct curtain *ct, struct curtainent_unveil **entp, char *end)
+curtain_fill_unveil(struct curtain *ct, enum curtainreq_level lvl,
+    struct curtainent_unveil **entp, char *end)
 {
 	struct curtainent_unveil *ent;
 	struct file *fp;
@@ -301,14 +302,15 @@ curtain_fill_unveil(struct curtain *ct, struct curtainent_unveil **entp, char *e
 			uv->hash = fnv_32_buf(uv->name, uv->name_len, uv->hash);
 		}
 		item = curtain_search(ct, CURTAIN_UNVEIL, (ctkey){ .unveil = uv }, &inserted);
-		if (item != NULL && inserted) {
-			item->mode.hard = item->mode.soft = CURTAIN_ALLOW;
+		if (item != NULL && inserted)
 			vref(uv->vp);
-		} else
+		else
 			free(uv, M_CURTAIN_UNVEIL);
 	}
 
 	if (item != NULL) {
+		item->mode.soft = lvl2act[lvl];
+		item->mode.hard = CURTAIN_ALLOW;
 		item->key.unveil->soft_uperms = uperms_expand(ent->uperms);
 		item->key.unveil->hard_uperms = UPERM_ALL;
 	}
@@ -428,7 +430,7 @@ curtain_fill_req(struct curtain *ct, const struct curtainreq *req)
 		while ((char *)entp < endp) {
 			if (endp - (char *)entp < sizeof *entp)
 				return (EINVAL);
-			error = curtain_fill_unveil(ct, &entp, endp);
+			error = curtain_fill_unveil(ct, req->level, &entp, endp);
 			if (error != 0)
 				return (error);
 		}

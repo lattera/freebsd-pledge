@@ -196,8 +196,7 @@ struct file {
 	 *  DTYPE_VNODE specific fields.
 	 */
 #ifndef NOUNVEIL
-	unveil_perms	f_uperms;	/* unveil permissions when opened */
-	uint64_t	f_userial;	/* unveil curtain serial number */
+	struct file_unveil_info	f_unveil;
 #endif
 	union {
 		int16_t	f_seqcount[2];	/* (a) Count of seq. reads and writes. */

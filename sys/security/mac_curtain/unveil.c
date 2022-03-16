@@ -377,6 +377,7 @@ curtain_finish_unveils(struct curtain *ct)
 			uv = item->key.unveil;
 			if (uv->parent != NULL && !uperms_contains(uv->soft_uperms, UPERM_EXPOSE))
 				uv->parent->hidden_children = true;
+			uv->action = item->mode.soft;
 		}
 	return (count > unveil_max_per_curtain ? E2BIG : 0);
 }
@@ -396,6 +397,15 @@ curtain_lookup_unveil(struct curtain *ct, struct vnode *vp, const char *name, si
 	}
 	item = curtain_lookup(ct, CURTAIN_UNVEIL, (union curtain_key){ .unveil = uv });
 	return (item != NULL ? item->key.unveil : NULL);
+}
+
+static void
+curtain_unveil_fallback(struct curtain *ct, unveil_perms *uperms, enum curtain_action *action)
+{
+	struct curtain_mode mode;
+	mode = curtain_resolve(ct, CURTAIN_ABILITY,
+	    (union curtain_key){ .ability = curtain_type_fallback(CURTAIN_UNVEIL) });
+	*uperms = (*action = mode.soft) == CURTAIN_ALLOW ? UPERM_ALL : UPERM_NONE;
 }
 
 static int
@@ -458,32 +468,47 @@ unveil_vnode_walk_annotate_file(struct ucred *cr, struct file *fp, struct vnode 
 {
 	struct unveil_track *track;
 	struct unveil_track_entry *entry;
-	struct curtain *ct;
-	fp->f_userial = (ct = curtain_from_cred(cr)) != NULL ? curtain_serial(ct) : 0;
-	if (CRED_IN_VFS_VEILED_MODE(cr)) {
-		if ((track = unveil_track_get(cr, false)) != NULL &&
-		    (entry = unveil_track_find(track, vp)) != NULL)
-			fp->f_uperms = entry->uperms;
-		else
-			fp->f_uperms = UPERM_NONE;
-	} else
-		fp->f_uperms = UPERM_ALL;
+	if (!CRED_IN_VFS_VEILED_MODE(cr)) {
+		fp->f_unveil.serial = 0;
+		fp->f_unveil.uperms = UPERM_ALL;
+		fp->f_unveil.action = CURTAIN_ALLOW;
+		return;
+	}
+	if ((track = unveil_track_get(cr, false)) != NULL &&
+	    (entry = unveil_track_find(track, vp)) != NULL) {
+		fp->f_unveil.serial = curtain_serial(track->ct);
+		fp->f_unveil.uperms = entry->uperms;
+		fp->f_unveil.action = entry->action;
+	} else {
+		struct curtain *ct;
+		if ((ct = curtain_from_cred(cr))) {
+			fp->f_unveil.serial = curtain_serial(ct);
+			curtain_unveil_fallback(ct, &fp->f_unveil.uperms, &fp->f_unveil.action);
+		} else {
+			fp->f_unveil.serial = 0;
+			fp->f_unveil.uperms = UPERM_NONE;
+			fp->f_unveil.action = CURTAIN_DENY;
+		}
+	}
 }
 
 int
 unveil_vnode_walk_start_file(struct ucred *cr, struct file *fp)
 {
 	struct unveil_track *track;
+	struct unveil_track_entry *entry;
 	unveil_perms uperms;
 	if (fp->f_vnode == NULL)
 		return (0);
 	if ((track = unveil_track_get(cr, true)) == NULL)
 		return (0);
-	uperms = fp->f_uperms;
-	if ((fp->f_userial != track->serial))
+	uperms = fp->f_unveil.uperms;
+	if ((fp->f_unveil.serial != track->serial))
 		uperms &= unveil_fflags_uperms(fp->f_vnode->v_type, fp->f_flag);
 	unveil_track_roll(track, 1);
-	unveil_track_fill(track, fp->f_vnode)->uperms = uperms;
+	entry = unveil_track_fill(track, fp->f_vnode);
+	entry->uperms = uperms;
+	entry->action = fp->f_unveil.action;
 	return (0);
 }
 
@@ -557,17 +582,17 @@ unveil_vnode_walk_start(struct ucred *cr, struct vnode *dvp)
 	}
 
 	entry = unveil_track_fill(track, dvp);
-	if (cover == NULL) {
-		struct curtain_mode mode;
-		mode = curtain_resolve(track->ct, CURTAIN_ABILITY,
-		    (union curtain_key){ .ability = curtain_type_fallback(CURTAIN_UNVEIL) });
+	if (cover != NULL) {
+		if (depth != 0) {
+			entry->uncharted = true;
+			entry->uperms = uperms_inherit(cover->soft_uperms);
+		} else
+			entry->uperms = cover->soft_uperms;
+		entry->action = cover->action;
+	} else {
 		entry->uncharted = true;
-		entry->uperms = mode.soft == CURTAIN_ALLOW ? UPERM_ALL : UPERM_NONE;
-	} else if (depth != 0) {
-		entry->uncharted = true;
-		entry->uperms = uperms_inherit(cover->soft_uperms);
-	} else
-		entry->uperms = cover->soft_uperms;
+		curtain_unveil_fallback(track->ct, &entry->uperms, &entry->action);
+	}
 	return (0);
 }
 
@@ -578,21 +603,26 @@ unveil_vnode_walk_backtrack(struct ucred *cr, struct vnode *from_vp, struct vnod
 	struct unveil_track_entry *entry;
 	struct curtain_unveil *uv;
 	unveil_perms uperms;
+	enum curtain_action action;
 	bool uncharted;
 	if ((track = unveil_track_get(cr, false)) == NULL ||
 	    (entry = unveil_track_pick(track, from_vp)) == NULL)
 		return;
 
-	uncharted = false;
-	uperms = UPERM_NONE;
-	if ((uv = curtain_lookup_unveil(track->ct, to_vp, NULL, 0)) != NULL)
+	if ((uv = curtain_lookup_unveil(track->ct, to_vp, NULL, 0)) != NULL) {
+		uncharted = false;
 		uperms = uv->soft_uperms;
-	else if ((uncharted = entry->uncharted))
+		action = uv->action;
+	} else if ((uncharted = entry->uncharted)) {
 		uperms = entry->uperms;
+		action = entry->action;
+	} else
+		curtain_unveil_fallback(track->ct, &uperms, &action);
 
 	entry = unveil_track_fill(track, to_vp);
-	entry->uperms = uperms;
 	entry->uncharted = uncharted;
+	entry->uperms = uperms;
+	entry->action = action;
 }
 
 /*
@@ -609,6 +639,7 @@ unveil_vnode_walk_component(struct ucred *cr,
 	struct unveil_track_entry *entry;
 	struct curtain_unveil *uv;
 	unveil_perms uperms;
+	enum curtain_action action;
 	bool uncharted, parent_exposed;
 	if ((track = unveil_track_get(cr, false)) == NULL)
 		return;
@@ -634,27 +665,34 @@ unveil_vnode_walk_component(struct ucred *cr,
 	else
 		uv = NULL;
 
-	uncharted = false;
-	uperms = UPERM_NONE;
 	if (uv != NULL) {
+		uncharted = false;
 		uperms = uv->soft_uperms;
-	} else if ((cnp->cn_flags & ISDOTDOT) != 0) {
-		if ((uncharted = entry->uncharted))
-			uperms = entry->uperms;
+		action = uv->action;
 	} else {
-		uncharted = true;
-		uperms = uperms_inherit(entry->uperms);
+		if ((cnp->cn_flags & ISDOTDOT) != 0) {
+			if ((uncharted = entry->uncharted))
+				uperms = entry->uperms;
+			else
+				uperms = UPERM_NONE;
+		} else {
+			uncharted = true;
+			uperms = uperms_inherit(entry->uperms);
+		}
+		action = entry->action;
 	}
 
 	if (vp != NULL) {
 		uperms = unveil_special_exemptions(cr, vp, uperms);
 		entry = unveil_track_fill(track, vp);
-		entry->uperms = uperms;
 		entry->uncharted = uncharted;
+		entry->uperms = uperms;
+		entry->action = action;
 	} else {
 		MPASS(entry->vp == dvp);
 		entry->create_pending = true;
 		entry->pending_uperms = uperms;
+		entry->pending_action = action;
 	}
 	if (parent_exposed && (cnp->cn_flags & ISLASTCN) != 0 && cnp->cn_nameiop == CREATE)
 		entry->exposed_create = true;
@@ -670,7 +708,10 @@ unveil_vnode_walk_replace(struct ucred *cr,
 	    (entry = unveil_track_pick(track, from_vp)) == NULL)
 		return;
 	unveil_perms uperms = entry->uperms;
-	unveil_track_fill(track, to_vp)->uperms = uperms;
+	enum curtain_action action = entry->action;
+	entry = unveil_track_fill(track, to_vp);
+	entry->uperms = uperms;
+	entry->action = action;
 }
 
 void
@@ -683,7 +724,10 @@ unveil_vnode_walk_created(struct ucred *cr, struct vnode *dvp, struct vnode *vp)
 	    !entry->create_pending)
 		return;
 	unveil_perms uperms = entry->pending_uperms;
-	unveil_track_fill(track, vp)->uperms = uperms;
+	enum curtain_action action = entry->action;
+	entry = unveil_track_fill(track, vp);
+	entry->uperms = uperms;
+	entry->action = action;
 }
 
 int
