@@ -131,12 +131,14 @@ merge _tmpdir_exec
 ability reap
 ability rfork
 ability cpuset
+ability getquota
 # NOTE: Privileges to manipulate modules are still denied, this is for programs
 # that need to inspect what modules are loaded.
 ability kmod
 
 [_level8 : _level7]
 ability debug
+ability aslr
 
 [_level9 : _level8]
 merge _pwddb

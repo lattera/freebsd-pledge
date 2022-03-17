@@ -1673,14 +1673,29 @@ curtain_proc_check_procctl(struct ucred *cr, struct proc *proc, int com, void *d
 	case PROC_REAP_STATUS:
 	case PROC_REAP_GETPIDS:
 	case PROC_REAP_KILL:
+		abl = CURTAINABL_REAP;
+		break;
 	case PROC_PDEATHSIG_CTL:
 	case PROC_PDEATHSIG_STATUS:
-		abl = CURTAINABL_REAP;
+		abl = CURTAINABL_PROC;
+		break;
+	case PROC_ASLR_CTL:
+	case PROC_ASLR_STATUS:
+	case PROC_STACKGAP_CTL:
+	case PROC_STACKGAP_STATUS:
+		abl = CURTAINABL_ASLR;
+		break;
+	case PROC_NO_NEW_PRIVS_CTL:
+	case PROC_NO_NEW_PRIVS_STATUS:
+		abl = CURTAINABL_CHROOT;
 		break;
 	default:
 		abl = CURTAINABL_ANY_PROCCTL;
 		break;
 	}
+	if (abl != CURTAINABL_ANY_PROCCTL &&
+	    cred_ability_action(cr, abl) == CURTAIN_ALLOW)
+		return (0);
 	return (cred_ability_check(cr, abl));
 }
 
