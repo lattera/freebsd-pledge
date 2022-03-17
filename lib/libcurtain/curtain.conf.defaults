@@ -56,8 +56,8 @@ sysctl kern.version
 sysctl vm.overcommit
 sysctl hw.availpages
 sysctl kern.iov_max
-sysctl kern.pid_max
-sysctl kern.proc
+
+sysctl kern.proc.{args,pathname}
 
 sysctl security.curtain.curtained{,_exec}
 
@@ -137,7 +137,7 @@ ability getquota
 ability kmod
 
 [_level8 : _level7]
-ability debug
+merge _debug
 ability aslr
 
 [_level9 : _level8]
@@ -156,6 +156,26 @@ ability flock fattr fmode_special
 ability proc
 [_ps]
 ability ps
+sysctl kern.pid_max
+sysctl kern.proc.{all,{proc,gid,pgrp,rgid,sid,tty,uid,ruid,pid}{,_td}}
+sysctl kern.proc.args
+sysctl kern.proc.pathname
+sysctl kern.proc.groups
+sysctl kern.proc.rlimit
+sysctl kern.proc.umask
+sysctl kern.proc.osrel
+
+[_debug]
+ability debug
+[_debug _ps]
+sysctl kern.proc.{env,auxv}
+sysctl kern.proc.sv_name
+sysctl kern.proc.vmmap
+sysctl kern.proc.kstack
+sysctl kern.proc.ps_strings
+sysctl kern.proc.sigtramp
+sysctl kern.proc.sigfastblk
+sysctl kern.proc.vm_layout
 
 [_localbase]
 sysctl user.localbase

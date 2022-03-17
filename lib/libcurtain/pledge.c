@@ -343,8 +343,10 @@ static const struct promise_sysctl {
 	{ PROMISE_STDIO, "hw.machine" },
 	{ PROMISE_STDIO, "vm.overcommit" },
 	{ PROMISE_STDIO, "kern.iov_max" },
-	{ PROMISE_STDIO, "kern.proc" },
+	{ PROMISE_STDIO, "kern.proc.args" },
+	{ PROMISE_STDIO, "kern.proc.pathname" },
 	{ PROMISE_PS, "kern.pid_max" },
+	{ PROMISE_PS, "kern.proc" },
 #ifdef AF_INET6
 	{ PROMISE_INET, "net.inet6.ip6.addrctlpolicy" },
 #endif
