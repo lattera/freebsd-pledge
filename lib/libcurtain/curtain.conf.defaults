@@ -51,7 +51,7 @@
 ability stdio
 ability vfs_read vfs_write
 
-sysctl hw.machine hw.machine_arch
+sysctl hw.machine{,_arch}
 sysctl kern.version
 sysctl vm.overcommit
 sysctl hw.availpages
@@ -59,7 +59,7 @@ sysctl kern.iov_max
 sysctl kern.pid_max
 sysctl kern.proc
 
-sysctl security.curtain.curtained security.curtain.curtained_exec
+sysctl security.curtain.curtained{,_exec}
 
 [_crude : _stdio]
 

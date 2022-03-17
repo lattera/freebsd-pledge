@@ -536,14 +536,33 @@ perform_ability(struct config_section *sec, struct config_command *cmd)
 	}
 }
 
+struct sysctl_ctx {
+	struct config_section *sec;
+	struct config_command *cmd;
+};
+
+static int
+do_sysctl_callback(void *ctx1, char *name)
+{
+	struct sysctl_ctx *ctx = ctx1;
+	int r;
+	r = curtain_sysctl(section_slot(ctx->sec), name, ctx->cmd->curtain_flags);
+	if (r < 0 && errno != ENOENT)
+		COMMAND_ERROR(ctx->sec, ctx->cmd, "sysctl %s: %m", name);
+	return (0);
+}
+
 static void
 perform_sysctl(struct config_section *sec, struct config_command *cmd)
 {
+	struct sysctl_ctx ctx = { sec, cmd };
 	for (size_t i = 0; i < cmd->words_count; i++) {
+		char name[PATH_MAX];
+		const char *error;
 		int r;
-		r = curtain_sysctl(section_slot(sec), cmd->words[i], cmd->curtain_flags);
+		r = pathexp(cmd->words[i], name, sizeof name, &error, do_sysctl_callback, &ctx);
 		if (r < 0)
-			COMMAND_ERROR(sec, cmd, "sysctl %s: %m", cmd->words[i]);
+			COMMAND_ERROR(sec, cmd, "path expansion: %s", error);
 	}
 }
 
