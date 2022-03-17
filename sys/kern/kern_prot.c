@@ -1462,16 +1462,12 @@ cr_cansee(struct ucred *u1, struct ucred *u2)
 int
 p_cansee(struct thread *td, struct proc *p)
 {
-	int error;
 	/* Wrap cr_cansee() for all functionality. */
 	KASSERT(td == curthread, ("%s: td not curthread", __func__));
 	PROC_LOCK_ASSERT(p, MA_OWNED);
 
 	if (td->td_proc == p)
 		return (0);
-	error = sysfil_check(td, SYSFIL_PROC);
-	if (error)
-		return (error);
 	return (cr_cansee(td->td_ucred, p->p_ucred));
 }
 
@@ -1577,14 +1573,10 @@ int
 p_cansignal(struct thread *td, struct proc *p, int signum)
 {
 
-	int error;
 	KASSERT(td == curthread, ("%s: td not curthread", __func__));
 	PROC_LOCK_ASSERT(p, MA_OWNED);
 	if (td->td_proc == p)
 		return (0);
-	error = sysfil_check(td, SYSFIL_PROC);
-	if (error)
-		return (error);
 
 	/*
 	 * UNIX signalling semantics require that processes in the same
@@ -1628,9 +1620,6 @@ p_cansched(struct thread *td, struct proc *p)
 	if (td->td_proc == p)
 		return (0);
 	if ((error = prison_check(td->td_ucred, p->p_ucred)))
-		return (error);
-	error = sysfil_check(td, SYSFIL_PROC);
-	if (error)
 		return (error);
 #ifdef MAC
 	if ((error = mac_proc_check_sched(td->td_ucred, p)))
@@ -1696,8 +1685,6 @@ p_candebug(struct thread *td, struct proc *p)
 
 	KASSERT(td == curthread, ("%s: td not curthread", __func__));
 	PROC_LOCK_ASSERT(p, MA_OWNED);
-	if ((error = sysfil_check(td, SYSFIL_DEBUG)))
-		return (error);
 	if (td->td_proc == p)
 		return (0);
 	if ((error = priv_check(td, PRIV_DEBUG_UNPRIV)))

@@ -169,6 +169,7 @@ static const enum curtain_ability abilities_depend[][2] = {
 	{ CURTAINABL_NET_CLIENT,	CURTAINABL_SOCK			},
 	{ CURTAINABL_NET_SERVER,	CURTAINABL_SOCK			},
 	{ CURTAINABL_CPUSET,		CURTAINABL_SCHED		},
+	{ CURTAINABL_TRACE,		CURTAINABL_DEBUG		},
 };
 
 static void
