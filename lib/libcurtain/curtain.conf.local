@@ -1,5 +1,7 @@
 # NOTE: Default system configurations are located in /etc/defaults/curtain.conf
+# and are always included.
 
 include /usr/local/etc/curtain.{conf,d/}
 
+# Uncomment below line to include sample application profiles.
 # include /usr/share/examples/curtain/curtain.conf.sample

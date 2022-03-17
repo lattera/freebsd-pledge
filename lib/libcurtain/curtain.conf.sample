@@ -94,6 +94,12 @@ ability! any_ioctl # XXX
 # Needs platform-dependent ioctls from libdrm.
 # See /usr/share/examples/curtain/make-drm-render-conf.c
 
+[_alsa]
+merge _audio
+/usr/local/etc/asound.conf
+/usr/local/etc/alsa/
+~/.asoundrc
+
 [_xdg]
 ~/.config/user-dirs.{dirs,locale}
 
@@ -132,10 +138,11 @@ sysctl vm.stats.vm.v_laundry_count
 sysctl vm.stats.vm.v_cache_count
 sysctl vm.stats.vm.v_free_count
 sysctl kstat.zfs.misc.arcstats.size
+sysctl vm.vmtotal
 
 
 [_misc_shell_utils]
-merge curtain
+#merge curtain
 
 [_shell]
 merge _misc_shell_utils
@@ -226,6 +233,13 @@ path! /var/tmp/vi.recover/		: rw
 merge _basic _network
 ~/.gitconfig				: r
 
+
+[ps]
+merge _crude _tty _ps
+sysctl kern.ccpu
+sysctl kern.bootfile
+sysctl kern.fscale
+sysctl kern.devname
 
 [top]
 merge _basic
@@ -328,12 +342,19 @@ merge _basic _gtk
 [gimp : _editor]
 # File previews won't work without access to ~/.cache/thumbnails.
 merge _basic _gtk
-merge! _memstat
-ability ps # exiv2
+merge _memstat
 ability sysvipc
 /usr/local/etc/gimp/			: r
 ~/.config/GIMP/				: rw +
 ~/.cache/gimp/				: rw +
+
+[mypaint]
+merge _basic _gtk
+ability prot_exec
+ability posixipc
+~/.cache/mypaint/ : rw +
+~/.local/share/mypaint/ : rw +
+~/.config/mypaint/ : rw +
 
 [inkscape : _editor]
 merge _basic _gtk
@@ -342,8 +363,12 @@ ability posixipc
 ~/.config/inkscape/			: rw +
 /usr/local/bin/inkscape			: i
 
-[libreoffice : _editor]
+[blender : _editor]
 merge _basic _xdg
+~/.config/blender/ ~/.blender/ : rw +
+
+[libreoffice : _editor]
+merge _basic _java _net_client _xdg
 ability prot_exec
 ability acl # ls(1)
 merge! _pwddb
@@ -368,7 +393,7 @@ merge _basic _gtk
 
 [okular : _viewer]
 merge _basic _qt
-merge! _memstat
+merge _memstat
 ~/.config/okularrc			: rw +
 ~/.local/share/okular/			: rw +
 
@@ -404,9 +429,20 @@ sysctl-deny machdep.tsc_freq [_strict]
 merge _basic _network _gtk
 ~/.purple/				: rw +
 
+[filezilla]
+merge _basic _network _xdg
+merge putty
+~/.cache/filezilla/ : rw +
+~/.config/filezilla/ : rw +
+~/.putty/ : rw +
+
+[putty]
+merge _basic _network _gtk
+~/.putty/ : rw +
+
 [_gecko]
 merge _fdpass
-merge! _memstat
+merge _memstat
 merge _fontconfig
 ability posixipc prot_exec
 sysctl-deny kern.proc.vmmap [_strict]
@@ -482,10 +518,11 @@ merge _basic
 # setting "Use system title bar and borders" in the "Appearance" section must
 # be enabled.
 merge _basic _network _fdpassdir _gtk
-merge! _memstat
+merge _memstat
 ability posixipc prot_exec sendfile
 sysctl-deny kern.bootfile [_strict] # kvm_open(3)
 sysctl kern.ipc.shm_allow_removed
+sysctl kern.ipc.shmmax
 ~/.config/chromium/			: rw +
 ~/.cache/chromium/			: rw +
 
@@ -497,7 +534,8 @@ merge _gecko
 
 [_webkit]
 merge _fdpass
-merge! _memstat
+merge _memstat
+merge _alsa [_audio]
 ability prot_exec
 sysctl-deny kern.bootfile [_strict] # kvm_open(3)
 
@@ -519,6 +557,22 @@ merge _webkit
 ability posixipc mlock
 ./.cache/midori/ : rw +
 ./.config/midori/ : rw +
+
+[dooble : _browser]
+merge _basic _network _qt
+merge _webkit
+ability mlock
+~/.dooble/ : rw +
+
+[liferea]
+merge _basic _network _gtk
+merge _webkit
+ability-deny prot_exec [_strict]
+ability-deny mlock [_strict]
+ability posixipc
+~/.config/liferea/ : rw +
+~/.cache/liferea/ : rw +
+~/.local/share/liferea/ : rw +
 
 [evolution : _mua]
 merge _basic _network _gtk
@@ -598,6 +652,10 @@ ability prot_exec
 ~/.config/vlc/				: rw +
 ~/.local/share/vlc/			: rw +
 
+[HandBrake]
+merge _basic _gtk
+~/.config/ghb/ : rw +
+
 [xterm : _terminal]
 # Dies with an X11 error when trying to select text under -X.
 merge _basic
@@ -609,6 +667,24 @@ merge _basic
 [st : _terminal]
 merge _basic
 merge! _pwddb
+
+[qterminal : _terminal]
+merge _basic _qt
+
+[dolphin-emu : _game]
+# Needs trusted X11.
+merge _basic _qt
+ability prot_exec posixipc
+~/.cache/dolphin-emu/ : rw +
+~/.local/share/dolphin-emu/ : rw +
+~/.config/dolphin-emu/ : rw +
+
+[citra, citra-qt : _game]
+merge _basic _network
+merge _qt [citra-qt]
+ability prot_exec posixipc
+~/.local/share/citra-emu/ : rw +
+~/.config/citra-emu/ : rw +
 
 [arx : _game]
 merge _basic _xdg
@@ -681,16 +757,26 @@ merge _basic _network
 ~/.curlrc
 
 [_java]
-ability prot_exec
+ability prot_exec aslr
+merge _memstat
 /usr/local/etc/javavms
 /usr/local/openjdk{8,11,12,13,14,15,16,17}/ : rx
 
 [jedit : _editor]
 # Seems to require trusted X11.
-merge _basic
+merge _basic _network _xdg
 merge _java
 merge! _pwddb
 ~/.jedit/ : rw +
+
+[eclipse]
+merge _basic _network _java _xdg
+merge! _pwddb
+ability sysvipc
+merge! _shared_system_tmpdir
+~/.eclipse/ : rw +
+~/.cache/Eclipse/ : rw +
+#~/workspace/ : rw +
 
 [clementine-player : _player]
 merge _basic _qt
