@@ -1427,6 +1427,10 @@ curtain_priv_check(struct ucred *cr, int priv)
 {
 	enum curtain_ability abl;
 	switch (priv) {
+	/*
+	 * This is similar to what's being allowed for jails (see
+	 * prison_priv_check()) with some extra conditions based on abilities.
+	 */
 	case PRIV_AUDIT_CONTROL:
 	case PRIV_AUDIT_FAILSTOP:
 	case PRIV_AUDIT_GETAUDIT:
@@ -1434,16 +1438,6 @@ curtain_priv_check(struct ucred *cr, int priv)
 	case PRIV_AUDIT_SUBMIT:
 		abl = CURTAINABL_AUDIT;
 		break;
-	case PRIV_SCHED_SETPRIORITY:
-		abl = CURTAINABL_SCHED;
-		break;
-	default:
-		abl = CURTAINABL_ANY_PRIV;
-		break;
-	/*
-	 * Mostly a subset of what's being allowed for jails (see
-	 * prison_priv_check()) with some extra conditions based on sysfils.
-	 */
 	case PRIV_CRED_SETUID:
 	case PRIV_CRED_SETEUID:
 	case PRIV_CRED_SETGID:
@@ -1470,10 +1464,34 @@ curtain_priv_check(struct ucred *cr, int priv)
 	case PRIV_PROC_SETRLIMIT:
 		abl = CURTAINABL_RLIMIT;
 		break;
+	case PRIV_IPC_READ:
+	case PRIV_IPC_WRITE:
+	case PRIV_IPC_ADMIN:
+	case PRIV_IPC_MSGSIZE:
+	case PRIV_MQ_ADMIN:
+		abl = CURTAINABL_POSIXIPC;
+		break;
 	case PRIV_JAIL_ATTACH:
 	case PRIV_JAIL_SET:
 	case PRIV_JAIL_REMOVE:
 		abl = CURTAINABL_JAIL;
+		break;
+	case PRIV_SCHED_SETPRIORITY:
+	case PRIV_SCHED_DIFFCRED:
+		abl = CURTAINABL_SCHED;
+		break;
+	case PRIV_SCHED_CPUSET:
+		abl = CURTAINABL_CPUSET;
+		break;
+	case PRIV_SIGNAL_DIFFCRED:
+	case PRIV_SIGNAL_SUGID:
+		abl = CURTAINABL_PROC;
+		break;
+	case PRIV_VFS_GETQUOTA:
+		abl = CURTAINABL_GETQUOTA;
+		break;
+	case PRIV_VFS_SETQUOTA:
+		abl = CURTAINABL_SETQUOTA;
 		break;
 	case PRIV_VFS_READ:
 	case PRIV_VFS_WRITE:
@@ -1501,7 +1519,6 @@ curtain_priv_check(struct ucred *cr, int priv)
 	case PRIV_VFS_MOUNT_NONUSER:
 		abl = CURTAINABL_MOUNT_NONUSER;
 		break;
-
 	case PRIV_VFS_READ_DIR:
 		/* Let other policies handle this (like is done for jails). */
 		abl = CURTAINABL_VFS_MISC;
@@ -1524,12 +1541,13 @@ curtain_priv_check(struct ucred *cr, int priv)
 		break;
 	case PRIV_NETINET_RESERVEDPORT:
 	case PRIV_NETINET_REUSEPORT:
-#if 0
-	case PRIV_NETINET_SETHDROPTS:
-	case PRIV_NETINET_RAW:
 	case PRIV_NETINET_GETCRED:
-#endif
 		abl = CURTAINABL_SOCK;
+		break;
+	case PRIV_NET_RAW:
+	case PRIV_NETINET_RAW:
+	case PRIV_NETINET_SETHDROPTS:
+		abl = CURTAINABL_NET_RAW;
 		break;
 	case PRIV_ADJTIME:
 	case PRIV_NTP_ADJTIME:
@@ -1542,6 +1560,9 @@ curtain_priv_check(struct ucred *cr, int priv)
 	case PRIV_VFS_FHSTATFS:
 	case PRIV_VFS_GENERATION:
 		abl = CURTAINABL_FH;
+		break;
+	default:
+		abl = CURTAINABL_ANY_PRIV;
 		break;
 	}
 	if (abl != CURTAINABL_ANY_PRIV &&
