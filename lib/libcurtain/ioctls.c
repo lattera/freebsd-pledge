@@ -35,6 +35,7 @@ const unsigned long curtain_ioctls_tty_basic[] = {
 	TIOCSETA,
 	TIOCSETAW,
 	TIOCSETAF,
+	TIOCOUTQ,
 	TIOCNOTTY,
 	TIOCSTOP,
 	TIOCSTART,
