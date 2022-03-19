@@ -27,10 +27,11 @@ enum curtain_type {
 } __packed;
 
 enum curtain_action {
-	CURTAIN_ALLOW = 0,
-	CURTAIN_DENY = 1,
-	CURTAIN_TRAP = 2,
-	CURTAIN_KILL = 3,
+	CURTAIN_KILL,
+	CURTAIN_TRAP,
+	CURTAIN_DENY,
+	CURTAIN_ALLOW,
+#define	ACTION_COUNT 4
 } __packed;
 
 struct curtain_mode {
@@ -155,8 +156,11 @@ SYSCTL_DECL(_security_curtain_unveil);
 SYSCTL_DECL(_security_curtain_stats);
 #endif
 
-extern unsigned __read_mostly curtain_log_level;
-extern unsigned __read_mostly curtain_sysctls_log_level;
+extern enum curtain_action __read_mostly curtain_log_level;
+extern enum curtain_action __read_mostly curtain_sysctls_log_level;
+
+extern const char curtain_act2str[ACTION_COUNT][6];
+extern const int curtain_act2err[ACTION_COUNT];
 
 extern int __read_mostly curtain_slot;
 #define	CURTAIN_CTH_IS_CT(cth) ((cth) != &(cth)->cth_barrier->br_head)

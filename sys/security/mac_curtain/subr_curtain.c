@@ -39,14 +39,14 @@ mode_set(struct curtain_mode *mode, enum curtain_action act)
 static inline void
 mode_mask(struct curtain_mode *dst, const struct curtain_mode src)
 {
-	dst->hard = MAX(src.hard,  dst->hard);
-	dst->soft = MAX(dst->soft, dst->hard);
+	dst->hard = MIN(src.hard,  dst->hard);
+	dst->soft = MIN(dst->soft, dst->hard);
 }
 
 static inline void
 mode_harden(struct curtain_mode *mode)
 {
-	mode->hard = mode->soft = MAX(mode->soft, mode->hard);
+	mode->hard = mode->soft = MIN(mode->soft, mode->hard);
 }
 
 static inline bool
@@ -864,7 +864,7 @@ curtain_cache_update_sysfils(struct curtain *ct)
 		while (sfs != 0) {
 			unsigned i = ffsll(sfs) - 1;
 			if ((handled_sfs & SYSFIL_INDEX(i)) != 0)
-				ct->ct_cached.sysfilacts[i] = MIN(
+				ct->ct_cached.sysfilacts[i] = MAX(
 				    ct->ct_cached.sysfilacts[i],
 				    ct->ct_abilities[abl].soft);
 			else
@@ -983,9 +983,9 @@ curtain_finish(struct curtain *ct)
 	error = curtain_finish_unveils(ct);
 	if (error != 0)
 		return (error);
-	if ((ct->ct_cached.restrictive = curtain_restrictive(ct)) &&
-	    ct->ct_abilities[CURTAINABL_DEFAULT].soft < CURTAIN_DENY)
-		ct->ct_abilities[CURTAINABL_DEFAULT].soft = CURTAIN_DENY;
+	if ((ct->ct_cached.restrictive = curtain_restrictive(ct)))
+		ct->ct_abilities[CURTAINABL_DEFAULT].soft = MIN(
+		    ct->ct_abilities[CURTAINABL_DEFAULT].soft, CURTAIN_DENY);
 	curtain_cache_update_sysfils(ct);
 	ct->ct_cached.valid = true;
 	if (ct->ct_on_exec != NULL) {

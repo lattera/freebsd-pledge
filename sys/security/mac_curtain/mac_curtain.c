@@ -84,14 +84,14 @@ curtain_from_cred(struct ucred *cr)
 }
 
 
-static const char act2str[][6] = {
+const char curtain_act2str[][6] = {
 	[CURTAIN_ALLOW] = "allow",
 	[CURTAIN_DENY] = "deny",
 	[CURTAIN_TRAP] = "trap",
 	[CURTAIN_KILL] = "kill",
 };
 
-static const int act2err[] = {
+const int curtain_act2err[] = {
 	[CURTAIN_ALLOW] = 0,
 	[CURTAIN_DENY] = SYSFIL_FAILED_ERRNO,
 	[CURTAIN_TRAP] = ESYSFILTRAP,
@@ -106,8 +106,8 @@ static const int act2err[] = {
 } while (0)
 
 #define	CURTAIN_LOG_ACTION(td, act, fmt, ...) do { \
-	if ((act) >= curtain_log_level) \
-		CURTAIN_LOG(td, act2str[act], fmt, __VA_ARGS__); \
+	if ((act) <= curtain_log_level) \
+		CURTAIN_LOG(td, curtain_act2str[act], fmt, __VA_ARGS__); \
 } while (0)
 
 #define	CURTAIN_CRED_LOG(cr, cat, fmt, ...) do { \
@@ -225,7 +225,7 @@ cred_key_check(const struct ucred *cr, enum curtain_type type, union curtain_key
 	if (__predict_true(act == CURTAIN_ALLOW))
 		return (0);
 	cred_key_failed(cr, type, key, act);
-	return (act2err[act]);
+	return (curtain_act2err[act]);
 }
 
 static inline int
@@ -568,7 +568,7 @@ check_udisp(struct unveil_disp udisp, unveil_perms uperms)
 	if (uperms_contains(udisp.uperms, uperms))
 		return (0);
 	if (udisp.action != CURTAIN_ALLOW)
-		return (act2err[udisp.action]);
+		return (curtain_act2err[udisp.action]);
 	if (udisp.create_pending && udisp.exposed_create)
 		return (EACCES);
 	return (uperms_contains(udisp.uperms, UPERM_EXPOSE) ? EACCES : ENOENT);
@@ -1413,12 +1413,12 @@ curtain_system_check_sysctl(struct ucred *cr,
 		act = cred_ability_action(cr, curtain_type_fallback(CURTAIN_SYSCTL));
 	if (__predict_true(act == CURTAIN_ALLOW))
 		return (0);
-	if (act >= curtain_sysctls_log_level) {
+	if (act <= curtain_sysctls_log_level) {
 		char buf[256], *name;
 		if ((name = sysctl_name_str(oidp, buf, sizeof buf)) != NULL)
 			CURTAIN_CRED_LOG_ACTION(cr, act, "sysctl %s", name);
 	}
-	return (act2err[act]);
+	return (curtain_act2err[act]);
 }
 
 
@@ -1584,7 +1584,7 @@ curtain_sysfil_check(struct ucred *cr, sysfilset_t sfs)
 	sfs &= ~mac_sysfils_preserve;
 	while (sfs != 0) {
 		unsigned i = ffsll(sfs) - 1;
-		act = MAX(act, ct->ct_cached.sysfilacts[i]);
+		act = MIN(act, ct->ct_cached.sysfilacts[i]);
 		sfs ^= SYSFIL_INDEX(i);
 	}
 	sfs = orig_sfs;
@@ -1593,7 +1593,7 @@ curtain_sysfil_check(struct ucred *cr, sysfilset_t sfs)
 	CURTAIN_CRED_LOG_ACTION(cr, act, "sysfil %#jx", (uintmax_t)sfs);
 	SDT_PROBE3(curtain,, cred_sysfil_check, failed, cr, sfs, act);
 	cred_action_failed(cr, act, false);
-	return (act2err[act]);
+	return (curtain_act2err[act]);
 }
 
 
@@ -1613,7 +1613,7 @@ curtain_proc_check_exec_sugid(struct ucred *cr, struct proc *p)
 		act = CURTAIN_DENY;
 	else
 		act = CURTAIN_ALLOW;
-	return (act2err[act]);
+	return (curtain_act2err[act]);
 }
 
 static int

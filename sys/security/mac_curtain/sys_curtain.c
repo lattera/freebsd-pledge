@@ -41,8 +41,8 @@ typedef union curtain_key ctkey;
 
 static bool __read_mostly curtainctl_enabled = true;
 static curtain_index curtain_max_items_per_curtain = CURTAINCTL_MAX_ITEMS;
-unsigned __read_mostly curtain_log_level = CURTAIN_TRAP;
-unsigned __read_mostly curtain_sysctls_log_level = CURTAIN_TRAP;
+enum curtain_action __read_mostly curtain_log_level = CURTAIN_TRAP;
+enum curtain_action __read_mostly curtain_sysctls_log_level = CURTAIN_TRAP;
 
 SYSCTL_NODE(_security, OID_AUTO, curtain,
     CTLFLAG_RW | CTLFLAG_MPSAFE, 0,
@@ -59,12 +59,32 @@ SYSCTL_BOOL(_security_curtain, OID_AUTO, enabled,
     CTLFLAG_RW, &curtainctl_enabled, 0,
     "Allow curtainctl(2) usage");
 
-SYSCTL_UINT(_security_curtain, OID_AUTO, log_level,
-    CTLFLAG_RW, &curtain_log_level, 0,
+static int
+sysctl_curtain_log_level(SYSCTL_HANDLER_ARGS)
+{
+	enum curtain_action *target = arg1;
+	char buf[32];
+	int error;
+	strlcpy(buf, curtain_act2str[*target], sizeof(buf));
+	error = sysctl_handle_string(oidp, buf, sizeof(buf), req);
+	if (error != 0 || req->newptr == NULL)
+		return (error);
+	for (size_t i = 0; i < ACTION_COUNT; i++)
+		if (strcmp(curtain_act2str[i], buf) == 0) {
+			*target = i;
+			return (0);
+		}
+	return (EINVAL);
+}
+
+SYSCTL_PROC(_security_curtain, OID_AUTO, log_level,
+    CTLFLAG_RW | CTLTYPE_STRING | CTLFLAG_MPSAFE,
+    &curtain_log_level, 0, sysctl_curtain_log_level, "A",
     "");
 
-SYSCTL_UINT(_security_curtain, OID_AUTO, sysctls_log_level,
-    CTLFLAG_RW, &curtain_sysctls_log_level, 0,
+SYSCTL_PROC(_security_curtain, OID_AUTO, sysctls_log_level,
+    CTLFLAG_RW | CTLTYPE_STRING | CTLFLAG_MPSAFE,
+    &curtain_sysctls_log_level, 0, sysctl_curtain_log_level, "A",
     "");
 
 static int
@@ -181,7 +201,7 @@ curtain_fill_expand(struct curtain *ct)
 		for (size_t i = 0; i < nitems(abilities_depend); i++) {
 			enum curtain_ability from = abilities_depend[i][0],
 			                       to = abilities_depend[i][1];
-			if (ct->ct_abilities[to].soft > ct->ct_abilities[from].soft) {
+			if (ct->ct_abilities[from].soft > ct->ct_abilities[to].soft) {
 				ct->ct_abilities[to].soft = ct->ct_abilities[from].soft;
 				propagate = true;
 			}
@@ -195,7 +215,7 @@ static void
 curtain_fill_restrict_exec(struct curtain *ct, struct ucred *cr)
 {
 	if (curtain_restrictive(ct) &&
-	    ct->ct_abilities[CURTAINABL_EXEC_RSUGID].soft < CURTAIN_DENY &&
+	    ct->ct_abilities[CURTAINABL_EXEC_RSUGID].soft == CURTAIN_ALLOW &&
 	    priv_check_cred(cr, PRIV_VFS_CHROOT) != 0)
 		ct->ct_abilities[CURTAINABL_EXEC_RSUGID].soft = CURTAIN_DENY;
 	if (ct->ct_on_exec != NULL)
@@ -467,6 +487,7 @@ curtain_fill(struct curtain *ct, struct ucred *cr,
 
 	for (enum curtain_ability abl = 0; abl <= CURTAINABL_LAST; abl++) {
 		ct->ct_abilities[abl].soft = lvl2act[def];
+		ct->ct_abilities[abl].hard = CURTAIN_ALLOW;
 		curtain_fill_barrier_mode(&CURTAIN_BARRIER(ct)->br_mode, def, abl);
 	}
 
