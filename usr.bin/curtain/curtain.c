@@ -373,6 +373,7 @@ main(int argc, char *argv[])
 	enum {
 		LONGOPT_NEWPGRP = CHAR_MAX + 1,
 		LONGOPT_NEWSID,
+		LONGOPT_CHDIR,
 		LONGOPT_CHROOT,
 		LONGOPT_UNENFORCED,
 		LONGOPT_SETUSER,
@@ -384,6 +385,7 @@ main(int argc, char *argv[])
 	const struct option longopts[] = {
 		{ "newpgrp", no_argument, NULL, LONGOPT_NEWPGRP },
 		{ "newsid", no_argument, NULL, LONGOPT_NEWSID },
+		{ "chdir", required_argument, NULL, LONGOPT_CHDIR },
 		{ "chroot", required_argument, NULL, LONGOPT_CHROOT },
 		{ "unenforced", no_argument, NULL, LONGOPT_UNENFORCED },
 		{ "setuser", required_argument, NULL, LONGOPT_SETUSER },
@@ -420,7 +422,7 @@ main(int argc, char *argv[])
 	bool wayland = false;
 	bool dbus = false;
 	char *cmd_arg0 = NULL;
-	const char *chroot_path = NULL;
+	const char *chdir_path = NULL, *chroot_path = NULL;
 	const char *setuser_name = NULL;
 	char abspath[PATH_MAX];
 	size_t abspath_len = 0;
@@ -558,6 +560,9 @@ main(int argc, char *argv[])
 			break;
 		case LONGOPT_NEWSID:
 			new_sid = true;
+			break;
+		case LONGOPT_CHDIR:
+			chdir_path = optarg;
 			break;
 		case LONGOPT_CHROOT:
 			chroot_path = optarg;
@@ -817,6 +822,11 @@ main(int argc, char *argv[])
 		r = chroot(".");
 		if (r < 0)
 			err(EX_OSERR, "chroot %s", chroot_path);
+	}
+	if (chdir_path != NULL) {
+		r = chdir(chdir_path);
+		if (r < 0)
+			err(EX_OSERR, "chdir %s", chdir_path);
 	}
 
 	/*
