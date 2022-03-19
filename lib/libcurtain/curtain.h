@@ -7,7 +7,7 @@
 #include <stdbool.h>
 
 #include <sys/_unveil.h>
-#include <security/mac_curtain/curtain_ability.h>
+#include <security/mac_curtain/ability.h>
 
 struct curtain_slot;
 

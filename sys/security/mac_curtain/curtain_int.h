@@ -7,9 +7,9 @@
 #include <sys/sysctl.h>
 #include <sys/queue.h>
 
-#include <security/mac_curtain/curtainctl.h>
+#include <sys/curtainctl.h>
+#include <security/mac_curtain/ability.h>
 #include <security/mac_curtain/unveil.h>
-#include <security/mac_curtain/curtain_ability.h>
 
 enum curtain_type {
 	CURTAIN_UNUSED,

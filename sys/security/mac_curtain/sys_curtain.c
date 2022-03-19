@@ -363,10 +363,10 @@ curtain_fill_req(struct curtain *ct, const struct curtainreq *req)
 		/* handled earlier */
 		break;
 	case CURTAINTYP_ABILITY: {
-		enum curtain_ability *ablp = req->data;
-		size_t ablc = req->size / sizeof *ablp;
-		while (ablc--) {
-			enum curtain_ability abl = *ablp++;
+		int *p = req->data;
+		size_t c = req->size / sizeof *p;
+		while (c--) {
+			enum curtain_ability abl = *p++;
 			if (!CURTAINABL_USER_VALID(abl))
 				return (EINVAL);
 			curtain_fill_ability(ct, req->level, abl);

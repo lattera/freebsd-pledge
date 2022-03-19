@@ -15,7 +15,8 @@
 
 #include <curtain.h>
 
-#include <security/mac_curtain/curtainctl.h>
+#include <sys/curtainctl.h>
+#include <security/mac_curtain/ability.h>
 #include <security/mac_curtain/unveil.h>
 
 /*
@@ -443,7 +444,7 @@ curtain_default(struct curtain_slot *slot, unsigned flags)
 
 
 DEF_SIMPLE_KEY_FUNCS(ability, ability);
-DEF_SIMPLE_ENT_FUNCS(ability, ability, enum curtain_ability);
+DEF_SIMPLE_ENT_FUNCS(ability, ability, int);
 
 static struct curtain_type abilities_type = {
 	.req_type = CURTAINTYP_ABILITY,

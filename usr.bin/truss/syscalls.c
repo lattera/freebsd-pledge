@@ -79,7 +79,7 @@ __FBSDID("$FreeBSD$");
 #include <unistd.h>
 #include <vis.h>
 
-#include <security/mac_curtain/curtainctl.h>
+#include <sys/curtainctl.h>
 
 #include "truss.h"
 #include "extern.h"
@@ -2720,7 +2720,7 @@ print_arg(struct syscall_arg *sc, unsigned long *args, register_t *retval,
 					if ((handled = get_struct(pid,
 					    (uintptr_t)req->data,
 					    buf, sizeof buf) != -1)) {
-						enum curtain_ability *p = (void*)buf;
+						int *p = (void *)buf;
 						size_t c = req->size / sizeof *p;
 						fprintf(fp, "[");
 						for (size_t i = 0; i < c; i++)

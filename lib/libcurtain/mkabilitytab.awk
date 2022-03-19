@@ -1,6 +1,6 @@
 BEGIN {
 	print "#include <stddef.h>"
-	print "#include <security/mac_curtain/curtain_ability.h>"
+	print "#include <security/mac_curtain/ability.h>"
 	print "#include \"common.h\""
 	print
 	print "const struct abilityent curtain_abilitytab[] = {"

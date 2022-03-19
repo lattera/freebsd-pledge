@@ -3,8 +3,6 @@
 
 #include <sys/_unveil.h>
 
-#include <security/mac_curtain/curtain_ability.h>
-
 enum curtainreq_type {
 	CURTAINTYP_DEFAULT = 1,
 	CURTAINTYP_ABILITY = 2,

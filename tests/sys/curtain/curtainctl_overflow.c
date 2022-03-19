@@ -6,13 +6,14 @@
 #include <sys/param.h>
 #include <atf-c.h>
 
-#include <security/mac_curtain/curtainctl.h>
+#include <sys/curtainctl.h>
+#include <security/mac_curtain/ability.h>
 #include <security/mac_curtain/unveil.h>
 
 ATF_TC_WITHOUT_HEAD(curtainctl_sanity);
 ATF_TC_BODY(curtainctl_sanity, tc)
 {
-	enum curtain_ability abilities[] = { CURTAINABL_STDIO };
+	int abilities[] = { CURTAINABL_STDIO };
 	struct curtainreq reqs[] = {
 		{
 			.type = CURTAINTYP_ABILITY,
@@ -29,7 +30,7 @@ ATF_TC_BODY(curtainctl_sanity, tc)
 ATF_TC_WITHOUT_HEAD(curtainctl_overflow_reqs);
 ATF_TC_BODY(curtainctl_overflow_reqs, tc)
 {
-	enum curtain_ability abilities[] = { CURTAINABL_STDIO };
+	int abilities[] = { CURTAINABL_STDIO };
 	struct curtainreq reqs[CURTAINCTL_MAX_REQS + 1];
 	int flags = CURTAINCTL_THIS_VERSION | CURTAINCTL_REPLACE;
 	for (size_t i = 0; i < nitems(reqs); i++)
@@ -45,7 +46,7 @@ ATF_TC_BODY(curtainctl_overflow_reqs, tc)
 ATF_TC_WITHOUT_HEAD(curtainctl_overflow_size);
 ATF_TC_BODY(curtainctl_overflow_size, tc)
 {
-	enum curtain_ability abilities[CURTAINCTL_MAX_SIZE / sizeof (int) / 8];
+	int abilities[CURTAINCTL_MAX_SIZE / sizeof (int) / 8];
 	struct curtainreq reqs[32];
 	int flags = CURTAINCTL_THIS_VERSION | CURTAINCTL_REPLACE;
 	for (size_t i = 0; i < nitems(abilities); i++)
@@ -63,7 +64,7 @@ ATF_TC_BODY(curtainctl_overflow_size, tc)
 ATF_TC_WITHOUT_HEAD(curtainctl_overflow_items);
 ATF_TC_BODY(curtainctl_overflow_items, tc)
 {
-	enum curtain_ability abilities[] = { CURTAINABL_STDIO };
+	int abilities[] = { CURTAINABL_STDIO };
 	unsigned long ioctls[CURTAINCTL_MAX_ITEMS + 1];
 	struct curtainreq reqs[] = {
 		{
