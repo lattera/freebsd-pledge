@@ -467,6 +467,21 @@ curtain_key_restrictive(enum curtain_type type, union curtain_key key)
 	}
 }
 
+static bool
+curtain_key_equivalent(enum curtain_type type,
+    union curtain_key key0, union curtain_key key1)
+{
+	if (!curtain_key_same(type, key0, key1))
+		return (false);
+	switch (type) {
+	case CURTAIN_UNVEIL:
+		return (key0.unveil->soft_uperms == key1.unveil->soft_uperms &&
+		        key0.unveil->hard_uperms == key1.unveil->hard_uperms);
+	default:
+		return (true);
+	}
+}
+
 static void
 curtain_key_dup(enum curtain_type type, union curtain_key *dst, union curtain_key src)
 {
@@ -743,7 +758,6 @@ curtain_dup(const struct curtain *src)
 	for (di = dst->ct_slots; di < &dst->ct_slots[dst->ct_nslots]; di++)
 		if (di->type != CURTAIN_UNUSED)
 			curtain_key_dup_fixup(dst, di->type, &di->key);
-	MPASS(!dst->ct_overflowed);
 	dst->ct_cached = src->ct_cached;
 #ifdef INVARIANTS
 	for (si = src->ct_slots; si < &src->ct_slots[src->ct_nslots]; si++)
@@ -751,6 +765,7 @@ curtain_dup(const struct curtain *src)
 			di = curtain_lookup(dst, si->type, si->key);
 			MPASS(di != NULL);
 			MPASS(mode_equivalent(di->mode, si->mode));
+			MPASS(curtain_key_equivalent(si->type, di->key, si->key));
 		}
 #endif
 	curtain_invariants_sync(dst);

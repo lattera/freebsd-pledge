@@ -27,14 +27,23 @@
 #include <security/mac/mac_policy.h>
 
 SDT_PROVIDER_DEFINE(curtain);
-SDT_PROBE_DEFINE2(curtain,, curtain_fill, begin,
-    "size_t", "const struct curtainreq *");
+SDT_PROBE_DEFINE2(curtain,, curtain_fill, begin, "size_t", "const struct curtainreq *");
 SDT_PROBE_DEFINE1(curtain,, curtain_fill, done, "struct curtain *");
-SDT_PROBE_DEFINE0(curtain,, curtain_fill, failed);
-SDT_PROBE_DEFINE1(curtain,, do_curtainctl, mask, "struct curtain *");
-SDT_PROBE_DEFINE1(curtain,, do_curtainctl, compact, "struct curtain *");
-SDT_PROBE_DEFINE1(curtain,, do_curtainctl, harden, "struct curtain *");
-SDT_PROBE_DEFINE1(curtain,, do_curtainctl, assign, "struct curtain *");
+SDT_PROBE_DEFINE1(curtain,, curtain_fill, failed, "int");
+SDT_PROBE_DEFINE2(curtain,, curtain_fill_req, begin, "struct curtain *", "struct curtainreq *");
+SDT_PROBE_DEFINE2(curtain,, curtain_fill_req, done, "struct curtain *", "struct curtainreq *");
+SDT_PROBE_DEFINE2(curtain,, curtain_apply, mask, "struct ucred *", "struct curtain *");
+SDT_PROBE_DEFINE2(curtain,, curtain_apply, compact, "struct ucred *", "struct curtain *");
+SDT_PROBE_DEFINE2(curtain,, curtain_apply, finish, "struct ucred *", "struct curtain *");
+SDT_PROBE_DEFINE2(curtain,, curtain_apply, link, "struct ucred *", "struct curtain *");
+SDT_PROBE_DEFINE2(curtain,, curtain_apply, update, "struct ucred *", "struct curtain *");
+SDT_PROBE_DEFINE2(curtain,, curtain_apply, done, "struct ucred *", "struct curtain *");
+SDT_PROBE_DEFINE3(curtain,, do_curtainctl, begin, "int", "size_t", "const struct curtainreq *");
+SDT_PROBE_DEFINE1(curtain,, do_curtainctl, built, "struct curtain *");
+SDT_PROBE_DEFINE1(curtain,, do_curtainctl, install, "struct curtain *");
+SDT_PROBE_DEFINE1(curtain,, do_curtainctl, discard, "struct curtain *");
+SDT_PROBE_DEFINE1(curtain,, do_curtainctl, done, "struct curtain *");
+SDT_PROBE_DEFINE2(curtain,, do_curtainctl, failed, "struct curtain *", "int");
 
 typedef union curtain_key ctkey;
 
@@ -348,6 +357,7 @@ curtain_fill_unveil(struct curtain *ct, enum curtainreq_level lvl,
 static int
 curtain_fill_req(struct curtain *ct, const struct curtainreq *req)
 {
+	SDT_PROBE2(curtain,, curtain_fill_req, begin, ct, req);
 	switch (req->type) {
 	case CURTAINTYP_DEFAULT:
 		/* handled earlier */
@@ -387,7 +397,6 @@ curtain_fill_req(struct curtain *ct, const struct curtainreq *req)
 			    (ctkey){ .socklvl = *p++ }, req->level);
 		break;
 	}
-
 	case CURTAINTYP_GETSOCKOPT:
 	case CURTAINTYP_SETSOCKOPT:
 	case CURTAINTYP_SOCKOPT: {
@@ -403,7 +412,6 @@ curtain_fill_req(struct curtain *ct, const struct curtainreq *req)
 		}
 		break;
 	}
-
 	case CURTAINTYP_PRIV: {
 		int *p = req->data;
 		size_t c = req->size / sizeof *p;
@@ -412,7 +420,6 @@ curtain_fill_req(struct curtain *ct, const struct curtainreq *req)
 			    (ctkey){ .priv = *p++ }, req->level);
 		break;
 	}
-
 	case CURTAINTYP_SYSCTL: {
 		int *p = req->data;
 		size_t c = req->size / sizeof *p;
@@ -434,7 +441,6 @@ curtain_fill_req(struct curtain *ct, const struct curtainreq *req)
 		}
 		break;
 	}
-
 	case CURTAINTYP_FIBNUM: {
 		int *p = req->data;
 		size_t c = req->size / sizeof *p;
@@ -443,7 +449,6 @@ curtain_fill_req(struct curtain *ct, const struct curtainreq *req)
 			    (ctkey){ .fibnum = *p++ }, req->level);
 		break;
 	}
-
 	case CURTAINTYP_UNVEIL: {
 		struct curtainent_unveil *entp = (void *)req->data;
 		char *endp = (char *)req->data + req->size;
@@ -460,6 +465,7 @@ curtain_fill_req(struct curtain *ct, const struct curtainreq *req)
 	default:
 		return (EINVAL);
 	}
+	SDT_PROBE2(curtain,, curtain_fill_req, done, ct, req);
 	return (0);
 }
 
@@ -511,13 +517,13 @@ curtain_fill(struct curtain *ct, struct ucred *cr,
 	curtain_invariants_sync(ct);
 	return (0);
 
-fail:	SDT_PROBE0(curtain,, curtain_fill, failed);
+fail:	SDT_PROBE1(curtain,, curtain_fill, failed, error);
 	return (error);
 }
 
 
 static int
-update_ucred_curtain(struct ucred *cr, struct curtain *ct, bool harden)
+curtain_apply(struct ucred *cr, struct curtain *ct, bool harden)
 {
 	struct curtain *old_ct;
 	int error;
@@ -527,11 +533,13 @@ update_ucred_curtain(struct ucred *cr, struct curtain *ct, bool harden)
 	 * multiple times.  This is fine since masking can only drop
 	 * permissions.  This avoids having to do an extra copy.
 	 */
+	SDT_PROBE2(curtain,, curtain_apply, mask, cr, ct);
 	if ((old_ct = CURTAIN_CRED_SLOT_CT(cr)) != NULL)
 		curtain_mask(ct, old_ct);
 	else
 		curtain_mask_sysfils(ct, cr->cr_sysfilset);
 
+	SDT_PROBE2(curtain,, curtain_apply, compact, cr, ct);
 	ct = curtain_dup(ct); /* compaction */
 	if (old_ct != NULL)
 		/* old_ct can still be used since there's still a reference to
@@ -544,6 +552,7 @@ update_ucred_curtain(struct ucred *cr, struct curtain *ct, bool harden)
 	if (ct->ct_overflowed) /* masking can overflow */
 		return (E2BIG);
 
+	SDT_PROBE2(curtain,, curtain_apply, finish, cr, ct);
 	error = curtain_finish(ct);
 	if (error != 0)
 		return (error);
@@ -551,13 +560,17 @@ update_ucred_curtain(struct ucred *cr, struct curtain *ct, bool harden)
 	if (harden)
 		curtain_harden(ct);
 
+	SDT_PROBE2(curtain,, curtain_apply, link, cr, ct);
 	/* Will be unlinked on failure when the new ucred is freed. */
 	if (old_ct != NULL)
 		barrier_link(CURTAIN_BARRIER(ct), CURTAIN_BARRIER(old_ct));
 	if (ct->ct_on_exec != NULL)
 		barrier_link(CURTAIN_BARRIER(ct->ct_on_exec), CURTAIN_BARRIER(ct));
 
+	SDT_PROBE2(curtain,, curtain_apply, update, cr, ct);
 	curtain_cred_update(ct, cr);
+
+	SDT_PROBE2(curtain,, curtain_apply, done, cr, ct);
 	return (0);
 }
 
@@ -572,26 +585,22 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 	if (!curtainctl_enabled)
 		return (ENOSYS);
 
-	ct = curtain_make(curtain_max_items_per_curtain);
-	/*
-	 * TODO: Could skip filling a second curtain when all requests have the
-	 * same flags, but libcurtain doesn't generate requests like that yet.
-	 */
-	ct->ct_on_exec = curtain_make(curtain_max_items_per_curtain);
+	SDT_PROBE3(curtain,, do_curtainctl, begin, flags, reqc, reqv);
 
+	ct = curtain_make(curtain_max_items_per_curtain);
 	error = curtain_fill(ct, td->td_ucred, CURTAINREQ_ON_SELF, reqc, reqv);
-	if (error != 0) {
-		curtain_free(ct);
-		return (error);
-	}
+	if (error != 0)
+		goto fail;
+
+	ct->ct_on_exec = curtain_make(curtain_max_items_per_curtain);
 	error = curtain_fill(ct->ct_on_exec, td->td_ucred, CURTAINREQ_ON_EXEC, reqc, reqv);
-	if (error != 0) {
-		curtain_free(ct);
-		return (error);
-	}
+	if (error != 0)
+		goto fail;
 
 	curtain_fill_expand(ct);
-	curtain_fill_restrict_exec(ct->ct_on_exec ? ct->ct_on_exec : ct, td->td_ucred);
+	curtain_fill_restrict_exec(ct->ct_on_exec != NULL ? ct->ct_on_exec : ct, td->td_ucred);
+
+	SDT_PROBE1(curtain,, do_curtainctl, built, ct);
 
 	/*
 	 * Mask the requested curtain against the curtain (or sysfilset) of the
@@ -605,18 +614,16 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 		old_cr = crcopysafe(p, new_cr);
 		crhold(old_cr);
 		PROC_UNLOCK(p);
-		error = update_ucred_curtain(new_cr, ct, !(flags & CURTAINCTL_SOFT));
+		error = curtain_apply(new_cr, ct, (flags & CURTAINCTL_SOFT) == 0);
 		if (error != 0) {
 			crfree(old_cr);
 			crfree(new_cr);
-			curtain_free(ct);
-			return (error);
+			goto fail;
 		}
 		PROC_LOCK(p);
 		if (old_cr == p->p_ucred) {
 			crfree(old_cr);
 			curtain_free(ct);
-			ct = NULL;
 			break;
 		}
 		PROC_UNLOCK(p);
@@ -625,17 +632,24 @@ do_curtainctl(struct thread *td, int flags, size_t reqc, const struct curtainreq
 	} while (true);
 
 	if ((flags & CURTAINCTL_REPLACE) != 0) {
+		SDT_PROBE1(curtain,, do_curtainctl, install, CURTAIN_CRED_SLOT_CT(new_cr));
 		proc_set_cred(p, new_cr);
 		if (CRED_IN_RESTRICTED_MODE(new_cr) != PROC_IN_RESTRICTED_MODE(p))
 			panic("PROC_IN_RESTRICTED_MODE() bogus");
 		PROC_UNLOCK(p);
 		crfree(old_cr);
 		unveil_proc_get_cache(p, true);
+		SDT_PROBE1(curtain,, do_curtainctl, done, CURTAIN_CRED_SLOT_CT(new_cr));
 	} else {
+		SDT_PROBE1(curtain,, do_curtainctl, discard, CURTAIN_CRED_SLOT_CT(new_cr));
 		PROC_UNLOCK(p);
 		crfree(new_cr);
 	}
 	return (0);
+fail:
+	SDT_PROBE2(curtain,, do_curtainctl, failed, ct, error);
+	curtain_free(ct);
+	return (error);
 }
 
 int
@@ -658,23 +672,26 @@ sys_curtainctl(struct thread *td, struct curtainctl_args *uap)
 	avail = CURTAINCTL_MAX_SIZE;
 	while (reqi < reqc) {
 		struct curtainreq *req = &reqv[reqi];
-		void *udata = req->data;
-		if (avail < req->size || (req->data == NULL && req->size != 0)) {
+		if (avail < req->size) {
 			error = E2BIG;
 			goto out;
 		}
 		reqi++;
-		if (udata != NULL) {
+		if (req->data != NULL) {
+			void *udata = req->data;
 			avail -= req->size;
 			req->data = malloc(req->size, M_TEMP, M_WAITOK);
 			error = copyin(udata, req->data, req->size);
 			if (error != 0)
 				goto out;
+		} else if (req->size != 0) {
+			error = EINVAL;
+			goto out;
 		}
 	}
 	error = do_curtainctl(td, flags, reqc, reqv);
 out:	while (reqi--)
-		if (reqv[reqi].data)
+		if (reqv[reqi].data != NULL)
 			free(reqv[reqi].data, M_TEMP);
 	free(reqv, M_TEMP);
 	return (error);
