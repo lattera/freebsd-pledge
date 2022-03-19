@@ -697,7 +697,7 @@ curtain_search(struct curtain *ct, enum curtain_type type, union curtain_key key
 		prev = NULL;
 	if (item == NULL) {
 		ct->ct_overflowed = true;
-		if (inserted)
+		if (inserted != NULL)
 			*inserted = false;
 		return (NULL);
 	}
@@ -710,10 +710,10 @@ curtain_search(struct curtain *ct, enum curtain_type type, union curtain_key key
 		if (prev != NULL)
 			curtain_hash_link(ct, prev, item);
 		mode_set(&item->mode, CURTAIN_KILL);
-		if (inserted)
+		if (inserted != NULL)
 			*inserted = true;
 	} else { /* item found */
-		if (inserted)
+		if (inserted != NULL)
 			*inserted = false;
 	}
 	return (item);
@@ -749,7 +749,7 @@ curtain_dup(const struct curtain *src)
 	for (si = src->ct_slots; si < &src->ct_slots[src->ct_nslots]; si++)
 		if (si->type != CURTAIN_UNUSED) {
 			di = curtain_lookup(dst, si->type, si->key);
-			MPASS(di);
+			MPASS(di != NULL);
 			MPASS(mode_equivalent(di->mode, si->mode));
 		}
 #endif
