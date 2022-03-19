@@ -61,8 +61,10 @@ __FBSDID("$FreeBSD$");
 #include <fcntl.h>
 #include <sched.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <strings.h>
 #include <sysdecode.h>
 #include <unistd.h>
@@ -1334,5 +1336,99 @@ sysdecode_curtainctlflags(FILE *fp, int flags, int *rem)
 	if (rem != NULL)
 		*rem = val;
 	return (printed);
+}
+
+void
+sysdecode_curtainreq(FILE *fp, const struct curtainreq *req, bool copiedin)
+{
+	const void *data;
+	fprintf(fp, "{ ");
+	fprintf(fp, "type=%u", req->type);
+	fprintf(fp, ",level=%u", req->level);
+	fprintf(fp, ",flags=%#x", req->flags);
+	fprintf(fp, ",size=%zu", req->size);
+	if (req->size == 0)
+		goto skip;
+	if ((req->flags & CURTAINREQ_PAYLOAD) != 0) {
+		fprintf(fp, ",payload=");
+		data = (const char *)(req + 1);
+	} else {
+		fprintf(fp, ",data=");
+		if (copiedin) {
+			data = req->data;
+		} else {
+			fprintf(fp, "%p", req->data);
+			goto skip;
+		}
+	}
+	switch (req->type) {
+	case CURTAINTYP_ABILITY:
+	case CURTAINTYP_PRIV:
+	case CURTAINTYP_SOCKAF:
+	case CURTAINTYP_SOCKLVL:
+	case CURTAINTYP_SYSCTL: /* XXX */
+	case CURTAINTYP_FIBNUM: {
+		const int *p = data;
+		size_t c = req->size / sizeof *p;
+		fprintf(fp, "[");
+		for (size_t i = 0; i < c; i++)
+			fprintf(fp, "%s%d", i == 0 ? "" : ",", p[i]);
+		fprintf(fp, "]");
+		break;
+	}
+	case CURTAINTYP_SOCKOPT:
+	case CURTAINTYP_GETSOCKOPT:
+	case CURTAINTYP_SETSOCKOPT: {
+		const int (*p)[2] = data;
+		size_t c = req->size / sizeof *p;
+		fprintf(fp, "[");
+		for (size_t i = 0; i < c; i++)
+			fprintf(fp, "%s%d:%d", i == 0 ? "" : ",", p[i][0], p[i][1]);
+		fprintf(fp, "]");
+		break;
+	}
+	case CURTAINTYP_IOCTL: {
+		const long *p = data;
+		size_t c = req->size / sizeof *p;
+		fprintf(fp, "[");
+		for (size_t i = 0; i < c; i++)
+			fprintf(fp, "%s%#lx", i == 0 ? "" : ",", p[i]);
+		fprintf(fp, "]");
+		break;
+	}
+	case CURTAINTYP_UNVEIL: {
+		const char *p, *q, *end;
+		end = (p = data) + req->size;
+		fprintf(fp, "[");
+		while (p < end) {
+			const struct curtainent_unveil *ent = (const void *)p;
+			size_t size, name_size, remain;
+			remain = end - p;
+			if (remain < sizeof *ent)
+				goto invalid;
+			q = memchr(ent->name, '\0', end - ent->name);
+			if (q == NULL)
+				goto invalid;
+			name_size = q - ent->name + 1;
+			if (p != data)
+				fprintf(fp, ",");
+			fprintf(fp, "%d", ent->dir_fd);
+			if (*ent->name)
+				fprintf(fp, ":\"%s\"", ent->name);
+			fprintf(fp, "=%#010x", ent->uperms);
+			size = __align_up(offsetof(struct curtainent_unveil, name) + name_size,
+			    __alignof(struct curtainent_unveil));
+			if (remain < size)
+				goto invalid;
+			p += size;
+		}
+		fprintf(fp, "]");
+		break;
+	}
+	default:
+invalid:	fprintf(fp, "<undecoded>");
+		break;
+	}
+skip:	fprintf(fp, " }");
 }
 

@@ -131,4 +131,7 @@ const char *sysdecode_whence(int _whence);
 bool	sysdecode_shmflags(FILE *_fp, int _flags, int *_rem);
 bool	sysdecode_curtainctlflags(FILE *_fp, int _flags, int *_rem);
 
+struct curtainreq;
+void	sysdecode_curtainreq(FILE *fp, const struct curtainreq *req, bool copiedin);
+
 #endif /* !__SYSDECODE_H__ */

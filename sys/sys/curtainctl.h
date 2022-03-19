@@ -56,6 +56,8 @@ int curtainctl(int flags, size_t reqc, struct curtainreq *reqv);
 #define	CURTAINREQ_ON_EXEC	(1 << 17)
 #define	CURTAINREQ_ON_BOTH	(CURTAINREQ_ON_SELF | CURTAINREQ_ON_EXEC)
 
+#define	CURTAINREQ_PAYLOAD	(1 << 24)	/* for ktrace(2) */
+
 struct curtainent_unveil {
 	int dir_fd;
 	unveil_perms uperms;

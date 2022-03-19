@@ -2706,37 +2706,13 @@ print_arg(struct syscall_arg *sc, unsigned long *args, register_t *retval,
 		if (get_struct(pid, args[sc->offset], &reqv, sizeof(reqv)) != -1) {
 			fprintf(fp, "{");
 			for (req = reqv; req < &reqv[reqc]; req++) {
-				bool handled;
-				fprintf(fp, " { ");
-				fprintf(fp, "type=%u", req->type);
-				fprintf(fp, ",level=%u", req->level);
-				fprintf(fp, ",flags=%#x", req->flags);
-				fprintf(fp, ",size=%zu", req->size);
-				fprintf(fp, ",data=");
-				handled = false;
-				switch (req->type) {
-				case CURTAINTYP_ABILITY: {
-					char buf[req->size];
-					if ((handled = get_struct(pid,
-					    (uintptr_t)req->data,
-					    buf, sizeof buf) != -1)) {
-						int *p = (void *)buf;
-						size_t c = req->size / sizeof *p;
-						fprintf(fp, "[");
-						for (size_t i = 0; i < c; i++)
-							fprintf(fp, "%s%d",
-							    i == 0 ? "" : ",",
-							    *p++);
-						fprintf(fp, "]");
-					}
-					break;
-				}
-				default:
-					break;
-				}
-				if (!handled)
-					print_pointer(fp, (uintptr_t)req->data);
-				fprintf(fp, " }");
+				char buf[req->size];
+				bool copiedin;
+				if ((copiedin = get_struct(pid,
+				    (uintptr_t)req->data, buf, sizeof(buf)) != -1))
+					req->data = buf;
+				fprintf(fp, " ");
+				sysdecode_curtainreq(fp, req, copiedin);
 			}
 			fprintf(fp, " }");
 		} else

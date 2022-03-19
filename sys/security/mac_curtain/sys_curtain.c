@@ -1,4 +1,5 @@
 #include "opt_ddb.h"
+#include "opt_ktrace.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -20,6 +21,9 @@
 #ifdef DDB
 #include <sys/vnode.h>
 #include <ddb/ddb.h>
+#endif
+#ifdef KTRACE
+#include <sys/ktrace.h>
 #endif
 
 #include <security/mac_curtain/curtain_int.h>
@@ -354,10 +358,30 @@ curtain_fill_unveil(struct curtain *ct, enum curtainreq_level lvl,
 	return (0);
 }
 
+#ifdef KTRACE
+static void
+ktrcurtainreq(const struct curtainreq *req)
+{
+	struct curtainreq *reqt;
+	reqt = malloc(sizeof *reqt + req->size, M_TEMP, M_WAITOK);
+	*reqt = *req;
+	reqt->data = NULL;
+	reqt->flags |= CURTAINREQ_PAYLOAD;
+	if (req->data != NULL)
+		memcpy(reqt + 1, req->data, req->size);
+	ktrstruct("curtainreq", reqt, sizeof *reqt + reqt->size);
+	free(reqt, M_TEMP);
+}
+#endif
+
 static int
 curtain_fill_req(struct curtain *ct, const struct curtainreq *req)
 {
 	SDT_PROBE2(curtain,, curtain_fill_req, begin, ct, req);
+#ifdef KTRACE
+	if (KTRPOINT(curthread, KTR_STRUCT))
+		ktrcurtainreq(req);
+#endif
 	switch (req->type) {
 	case CURTAINTYP_DEFAULT:
 		/* handled earlier */
@@ -483,7 +507,8 @@ curtain_fill(struct curtain *ct, struct ucred *cr,
 	for (req = reqv; req < &reqv[reqc]; req++)
 		if ((req->flags & flags_filter) != 0) {
 			if (!(req->level >= 0 && req->level < CURTAINLVL_COUNT) ||
-			    !(req->type >= CURTAINTYP_DEFAULT && req->type <= CURTAINTYP_LAST)) {
+			    !(req->type >= CURTAINTYP_DEFAULT && req->type <= CURTAINTYP_LAST) ||
+			    (req->flags & CURTAINREQ_PAYLOAD) != 0) {
 				error = EINVAL;
 				goto fail;
 			}
