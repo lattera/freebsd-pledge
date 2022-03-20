@@ -39,7 +39,7 @@ struct curtain_slot {
 };
 
 struct curtain_mode {
-	enum curtainreq_level level;
+	enum curtainreq_level level : 8, inherit_level : 8;
 	union {
 		unveil_perms uperms;
 	};
@@ -355,8 +355,8 @@ node_item_get(struct curtain_type *type, struct curtain_slot *slot,
 static void
 item_set_flags(struct curtain_item *item, int flags)
 {
-	item->override = (flags & CURTAIN_INHERIT) == 0;
-	item->mode.level = flags2level(flags);
+	item->override = (flags & CURTAIN_NOOVERRIDE) == 0;
+	item->mode.level = item->mode.inherit_level = flags2level(flags);
 }
 
 #define	KEY(m, ...) (union curtain_key){ m = __VA_ARGS__ }
@@ -376,26 +376,44 @@ item_set_flags(struct curtain_item *item, int flags)
 
 static bool
 level_mode_is_null(struct curtain_mode m)
-{ return (m.level >= CURTAINLVL_LEAST); }
+{
+	return (m.level >= CURTAINLVL_LEAST && m.inherit_level >= CURTAINLVL_LEAST);
+}
 
 static struct curtain_mode
 level_mode_merge(struct curtain_mode m1, struct curtain_mode m2)
-{ return ((struct curtain_mode){ .level = MIN(m1.level, m2.level) }); }
+{
+	return ((struct curtain_mode){
+	    .level = MIN(m1.level, m2.level),
+	    .inherit_level = MIN(m1.inherit_level, m2.inherit_level),
+	});
+}
 
 static struct curtain_mode
 level_mode_inherit(struct curtain_mode m)
-{ return (m); }
+{
+	return ((struct curtain_mode){
+	    .level = m.inherit_level,
+	    .inherit_level = m.inherit_level,
+	});
+}
 
 static struct curtain_mode
 level_mode_convert(const struct mode_type *type __unused, struct curtain_mode m)
-{ return (m); }
+{
+	return (m);
+}
 
 static enum curtainreq_level
 level_mode_level(struct curtain_mode m)
-{ return (m.level); }
+{
+	return (m.level);
+}
+
+#define	LEVEL_MODE_NULL_INIT .level = CURTAINLVL_LEAST, .inherit_level = CURTAINLVL_LEAST
 
 static const struct mode_type level_mode_type = {
-	.null = { .level = CURTAINLVL_LEAST },
+	.null = { LEVEL_MODE_NULL_INIT },
 	.is_null = level_mode_is_null,
 	.inherit = level_mode_inherit,
 	.merge = level_mode_merge,
@@ -823,7 +841,7 @@ unveil_mode_convert(const struct mode_type *type, struct curtain_mode m)
 }
 
 static const struct mode_type unveil_mode_type = {
-	.null = { .level = CURTAINLVL_LEAST, .uperms = UPERM_NONE },
+	.null = { LEVEL_MODE_NULL_INIT, .uperms = UPERM_NONE },
 	.is_null = unveil_mode_is_null,
 	.inherit = unveil_mode_inherit,
 	.convert = unveil_mode_convert,
@@ -1177,6 +1195,7 @@ curtain_path_multi(struct curtain_slot **slots, size_t nslots,
 				item = item_get(trail, slots[i], true);
 				if (item == NULL)
 					return (-1);
+				item->mode.level = flags2level(flags); /* NOTE: Not inherited. */
 				item->mode.uperms |= expand_interm_uperms(flags, interm_upermsv[i]);
 			}
 		}

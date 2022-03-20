@@ -1030,7 +1030,7 @@ static const struct config_directive directives[] = {
 };
 
 static const struct {
-	const char name[8];
+	const char name[12];
 	int flags;
 } directive_flags[] = {
 	{ "allow",	CURTAIN_ALLOW },
@@ -1040,7 +1040,7 @@ static const struct {
 	{ "deny",	CURTAIN_DENY },
 	{ "trap",	CURTAIN_TRAP },
 	{ "kill",	CURTAIN_KILL },
-	{ "inherit",	CURTAIN_INHERIT },
+	{ "nooverride",	CURTAIN_NOOVERRIDE },
 	{ "nofollow",	CURTAIN_PATH_NOFOLLOW },
 	{ "nostat",	CURTAIN_PATH_NOSTAT },
 	{ "nolist",	CURTAIN_PATH_NOLIST },

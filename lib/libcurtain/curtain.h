@@ -30,7 +30,7 @@ enum curtain_state {
 #define CURTAIN_DENY		(4 << CURTAIN_LEVEL_SHIFT)
 #define CURTAIN_TRAP		(5 << CURTAIN_LEVEL_SHIFT)
 #define CURTAIN_KILL		(6 << CURTAIN_LEVEL_SHIFT)
-#define CURTAIN_INHERIT		(1 << 16)
+#define CURTAIN_NOOVERRIDE	(1 << 16)
 #define CURTAIN_PATH_NOFOLLOW	(1 << 8)
 #define CURTAIN_PATH_NOSTAT	(1 << 9)
 #define CURTAIN_PATH_NOLIST	(1 << 10)
