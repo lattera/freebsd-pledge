@@ -219,8 +219,15 @@ unveil_track_find_mount(struct unveil_track *track, struct mount *mp)
 static inline int
 mount_dotdot_lkflags(struct mount *mp)
 {
-	return (mp != NULL && (mp->mnt_kern_flag & (MNTK_LOOKUP_SHARED | MNTK_LOOKUP_EXCL_DOTDOT)) ==
-	    MNTK_LOOKUP_SHARED ? LK_SHARED : LK_EXCLUSIVE);
+	if (mp == NULL)
+		return (LK_EXCLUSIVE);
+#ifdef MNTK_LOOKUP_EXCL_DOTDOT
+	if ((mp->mnt_kern_flag & MNTK_LOOKUP_EXCL_DOTDOT) != 0)
+		return (LK_EXCLUSIVE);
+#endif
+	if ((mp->mnt_kern_flag & MNTK_LOOKUP_SHARED) == 0)
+		return (LK_EXCLUSIVE);
+	return (LK_SHARED);
 }
 
 /*
