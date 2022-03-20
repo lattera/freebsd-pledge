@@ -1,7 +1,5 @@
 # Sample sandboxing profiles for some common applications.
 #
-# This is WIP and mostly intended for testing.
-#
 # VARIOUS NOTES:
 #
 # Some applications actually require their "unsafe" permissions (directives
@@ -11,18 +9,26 @@
 # Windows from applications that try to use client-side decorations (most Gnome
 # and XFCE applications by default) will not be movable.
 #
-# Video players are greatly slowed down under untrusted X11 mode.  Fullscreen
-# mode will not work.
+# Video players are a lot slower under untrusted X11 mode.  Fullscreen mode
+# will not work.
 #
 # Under Wayland, some programs won't work without DRM access.
 #
 # fontconfig will complain about unwritable cache directories.
 #
-# dconf and dbus will be unusable.  Unveiling their paths probably works, but
-# is probably too insecure to make the sandboxing even worth it.
+# dconf will be unusable.  Some GTK programs using dconf can be quieted with
+# environment variable GSETTINGS_BACKEND=memory, but saving settings still will
+# not work.
 #
 # pulseaudio will be unusable, but thankfully some programs just start using
 # OSS directly instead.
+#
+# Applications that try to launch other applications to open files or URLs will
+# most likely not have enough permissions for it to work right.
+#
+# dbus won't be accessible by default, but curtain(1)'s -D flag can launch an
+# isolated dbus daemon for the application.  Better desktop integration would
+# probably require some kind of restricting dbus proxy.
 
 
 [_editor]
@@ -126,6 +132,9 @@ sysctl-deny vfs.usermount [_strict]
 merge _xdg
 ability-deny prot_exec [_strict]
 sysctl-deny kern.bootfile [_strict] # kvm_open(3)
+
+[_kde]
+merge _qt
 
 [_memstat]
 sysctl hw.physmem
@@ -261,6 +270,25 @@ sysctl vm.swap_info
 sysctl vm.swap_maxpages
 sysctl hw.acpi.battery
 
+[htop]
+merge _basic
+sysctl hw.physmem
+sysctl kern.bootfile
+sysctl kern.boottime
+sysctl kern.cp_time
+sysctl kern.cp_times
+sysctl kern.devname
+sysctl kern.fscale
+sysctl kern.smp.active
+sysctl kstat.zfs.misc
+sysctl vfs.bufspace
+sysctl vm.dmmax
+sysctl vm.loadavg
+sysctl vm.stats.vm
+sysctl vm.swap_info
+~/.config/htop/ : rw +
+/usr/local/etc/htoprc
+
 [vmstat]
 merge _basic
 sysctl kern.devstat
@@ -367,6 +395,26 @@ ability posixipc
 merge _basic _xdg
 ~/.config/blender/ ~/.blender/ : rw +
 
+[krita : _editor]
+# slow in untrusted X11 mode
+merge _basic _net_misc _kde
+merge _memstat
+ability prot_exec
+ability sysvipc
+~/.cache/krita/ : rw +
+~/.local/share/krita/ : rw +
+~/.local/share/krita.log : rw
+~/.local/share/krita-sysinfo.log : rw
+~/.config/kritadisplayrc : rw
+~/.config/kritarc : rw
+
+[karbon : _editor]
+# needs dbus
+merge _basic _kde
+ability-deny mlock [_strict]
+~/.local/share/karbon/ : rw +
+~/.config/karbonrc : rw
+
 [libreoffice : _editor]
 merge _basic _java _net_client _xdg
 ability prot_exec
@@ -418,6 +466,29 @@ merge _basic
 merge _basic
 ~/.config/sxiv/				: rw +
 ~/.cache/sxiv/				: rw +
+
+[gwenview : _viewer]
+merge _basic _kde
+merge _memstat
+ability acl extattr
+~/.local/share/gwenview/ : rw +
+~/.config/gwenviewrc : rw
+
+[dia : _editor]
+merge _basic _gtk
+~/.dia/ : rw +
+
+[_mpi]
+/usr/local/mpi/ : rx
+
+[FreeCAD]
+merge _basic _qt
+merge _mpi
+merge _net_client _webkit
+merge! _pwddb
+/usr/local/FreeCAD/ : rx
+~/.FreeCAD/ : rw +
+~/.config/FreeCAD/ : rw +
 
 [hexchat]
 merge _basic _network _gtk
@@ -842,6 +913,31 @@ merge _pwddb
 /usr/src/
 /usr/obj/usr/src/			: rxw
 
+[pkg]
+merge _basic _net_client _setcred
+merge _pwddb
+merge _syslog
+/etc/pkg/
+/usr/local/etc/pkg.conf
+/var/db/pkg/
+/var/cache/pkg/
+
+[pkg.manage : pkg]
+/var/db/pkg/ : rw +
+/var/cache/pkg/ : rw +
+# NOTES:
+#
+# There are many base programs that will use files from /usr/local by default.
+# This profile does not really protect the base system from compromised
+# packages unless all of those programs are disabled, sandboxed, or modified to
+# not trust /usr/local files.
+#
+# Those paths aren't even sufficient; some packages need to modify system files
+# (e.g. to add users/groups/shells) or prepare some directories in /var, etc.
+path!! /usr/local/ : rw +
+path!! /compat/linux/ : rw +
+path!!! /boot/modules/ : rw +
+
 
 # NOTES:
 #
@@ -935,3 +1031,11 @@ merge su
 merge _setcred
 ability chroot
 
+[syslogd : _daemon]
+merge _basic _network
+/etc/syslog.{conf,d/}
+/usr/local/etc/syslog.d/
+/var/run/syslog.pid : rw
+/var/run/log{,priv} : ua
+/dev/klog
+/var/log/ : cp
