@@ -41,6 +41,7 @@ struct curtainreq {
 #define	CURTAINCTL_MAX_REQS	1024
 #define	CURTAINCTL_MAX_SIZE	(16 << 10)
 #define	CURTAINCTL_MAX_ITEMS	1024
+#define	CURTAINCTL_MAX_UNVEILS	256
 
 int curtainctl(int flags, size_t reqc, struct curtainreq *reqv);
 

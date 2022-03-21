@@ -86,25 +86,42 @@ ATF_TC_BODY(curtainctl_overflow_items, tc)
 	ATF_CHECK_ERRNO(E2BIG, curtainctl(flags, nitems(reqs), reqs) < 0);
 }
 
-#if 0
-
-ATF_TC_WITHOUT_HEAD(unveilreg_overflow);
-ATF_TC_BODY(unveilreg_overflow, tc)
+ATF_TC_WITHOUT_HEAD(curtainctl_overflow_unveils);
+ATF_TC_BODY(curtainctl_overflow_unveils, tc)
 {
-	int r, i;
-	for (i = 0, r = 0; i < 1024; i++) {
-		char path[32];
-		struct unveilreg reg = { .atfd = AT_FDCWD, .path = path };
-		ATF_CHECK(sprintf(path, "test-%u", i) > 0);
-		r = unveilreg(UNVEILREG_THIS_VERSION | UNVEILREG_REGISTER |
-		    UNVEILREG_NONDIRBYNAME, &reg);
-		if (r < 0)
-			break;
-	}
-	ATF_CHECK_ERRNO(E2BIG, r < 0);
-}
+	int abilities[] = { CURTAINABL_STDIO };
+	struct curtainent_unveil *unveils;
+	size_t unveils_count = CURTAINCTL_MAX_UNVEILS + 1, unveils_space;
+	unveils_space = (sizeof *unveils + 7 + 1) * unveils_count;
+	ATF_REQUIRE((unveils = malloc(unveils_space)) != NULL);
+	struct curtainreq reqs[] = {
+		{
+			.type = CURTAINTYP_ABILITY,
+			.flags = CURTAINREQ_ON_SELF,
+			.data = abilities,
+			.size = sizeof abilities,
+		},
+		{
+			.type = CURTAINTYP_UNVEIL,
+			.flags = CURTAINREQ_ON_SELF,
+			.data = unveils,
+			.size = unveils_space,
+		},
+	};
+	int flags = CURTAINCTL_THIS_VERSION | CURTAINCTL_REPLACE, fd;
+	ATF_REQUIRE((fd = open(".", O_RDONLY|O_DIRECTORY)) >= 0);
+	char *p = (void *)unveils;
+	for (unsigned i = 0; i < unveils_count; i++) {
+		struct curtainent_unveil *ent = (void *)p;
+		int r;
+		*ent = (struct curtainent_unveil){ .dir_fd = fd };
+		ATF_REQUIRE((r = sprintf(ent->name, "%07u", i)) == 7);
+		p += sizeof *ent + r + 1;
 
-#endif
+	}
+	ATF_CHECK_ERRNO(E2BIG, curtainctl(flags, nitems(reqs), reqs) < 0);
+	ATF_CHECK(close(fd) >= 0);
+}
 
 ATF_TP_ADD_TCS(tp)
 {
@@ -112,8 +129,6 @@ ATF_TP_ADD_TCS(tp)
 	ATF_TP_ADD_TC(tp, curtainctl_overflow_reqs);
 	ATF_TP_ADD_TC(tp, curtainctl_overflow_size);
 	ATF_TP_ADD_TC(tp, curtainctl_overflow_items);
-#if 0
-	ATF_TP_ADD_TC(tp, unveilreg_overflow);
-#endif
+	ATF_TP_ADD_TC(tp, curtainctl_overflow_unveils);
 	return (atf_no_error());
 }
