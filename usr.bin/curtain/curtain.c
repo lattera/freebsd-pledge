@@ -381,6 +381,7 @@ main(int argc, char *argv[])
 		LONGOPT_NO_TMPDIR,
 		LONGOPT_SAME_TMPDIR,
 		LONGOPT_PUBLIC_TMPDIR,
+		LONGOPT_WRITE_DBUS_ADDRESS,
 	};
 	const struct option longopts[] = {
 		{ "newpgrp", no_argument, NULL, LONGOPT_NEWPGRP },
@@ -393,6 +394,7 @@ main(int argc, char *argv[])
 		{ "no-tmpdir", no_argument, NULL, LONGOPT_NO_TMPDIR },
 		{ "same-tmpdir", no_argument, NULL, LONGOPT_SAME_TMPDIR },
 		{ "public-tmpdir", no_argument, NULL, LONGOPT_PUBLIC_TMPDIR },
+		{ "write-dbus-address", required_argument, NULL, LONGOPT_WRITE_DBUS_ADDRESS },
 		{ 0 }
 	};
 	char *sh_argv[2];
@@ -424,6 +426,8 @@ main(int argc, char *argv[])
 	char *cmd_arg0 = NULL;
 	const char *chdir_path = NULL, *chroot_path = NULL;
 	const char *setuser_name = NULL;
+	const char *write_dbus_address_path = NULL;
+	FILE *write_dbus_address_file = NULL;
 	char abspath[PATH_MAX];
 	size_t abspath_len = 0;
 	struct curtain_config *cfg;
@@ -555,6 +559,9 @@ main(int argc, char *argv[])
 		case 'D':
 			dbus = true;
 			break;
+		case LONGOPT_WRITE_DBUS_ADDRESS:
+			write_dbus_address_path = optarg;
+			break;
 		case LONGOPT_NEWPGRP:
 			new_pgrp = true;
 			break;
@@ -662,6 +669,11 @@ main(int argc, char *argv[])
 		if (r >= 0) {
 			curtain_config_tag_push(cfg, "dbus-daemon");
 			curtain_config_tag_push(cfg, "_dbus");
+			if (write_dbus_address_path != NULL) {
+				write_dbus_address_file = fopen(write_dbus_address_path, "we");
+				if (write_dbus_address_file == NULL)
+					warn("%s", write_dbus_address_path);
+			}
 		} else
 			dbus = false;
 	}
@@ -673,8 +685,13 @@ main(int argc, char *argv[])
 	if (r < 0)
 		err(EX_NOPERM, "curtain_apply");
 
-	if (dbus)
+	if (dbus) {
 		curtain_config_spawn_dbus(cfg);
+		if (write_dbus_address_file != NULL) {
+			fprintf(write_dbus_address_file, "%s\n", getenv("DBUS_SESSION_BUS_ADDRESS"));
+			fclose(write_dbus_address_file);
+		}
+	}
 
 	curtain_config_free(cfg);
 
