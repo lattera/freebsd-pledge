@@ -56,6 +56,7 @@ merge _audio
 
 [_terminal]
 merge _pty
+merge _shell
 
 
 [_x11 : _gui]
@@ -138,6 +139,7 @@ merge _qt
 
 [_memstat]
 sysctl hw.physmem
+sysctl hw.availpages
 sysctl vm.stats.vm.v_page_size
 sysctl vm.stats.vm.v_page_count
 sysctl vm.stats.vm.v_wire_count
@@ -206,13 +208,14 @@ merge _basic
 merge _spwddb
 /var/run/nologin
 /var/run/motd
+/etc/passwd
+/etc/master.passwd
 /etc/login.conf{,.db}
 /etc/login.access
 /etc/fbtab
 /etc/shells
 /etc/pam.{conf,d/}
-[_login _localbase]
-/usr/local/etc/pam.d/
+/usr/local/etc/pam.d/ [_localbase]
 
 [su : _login]
 merge _basic
@@ -1039,3 +1042,62 @@ merge _basic _network
 /var/run/log{,priv} : ua
 /dev/klog
 /var/log/ : cp
+
+[spamassassin, sa-learn]
+merge _basic _network
+/usr/local/etc/mail/spamassassin/
+/var/db/spamassassin/
+~/.spamassassin/ : rw +
+
+[sa-update]
+merge _basic _network
+merge! _unsafe_system_tmpdir
+ability mlock # gpg
+/usr/local/etc/mail/spamassassin/
+/usr/local/etc/mail/spamassassin/sa-update-keys/ : rw 0700
+/var/db/spamassassin/ : rw
+
+[spamd : _daemon]
+merge _basic _network _syslog
+merge _pwddb _setcred
+merge! _unsafe_system_tmpdir
+/usr/local/etc/mail/spamassassin/
+/var/db/spamassassin/
+/var/run/spamd/ : rw
+
+[spamc]
+merge _basic _net_client _syslog
+merge! _pwddb
+
+[clamscan]
+merge _basic
+/var/db/clamav/
+
+[clamd : _daemon]
+merge _basic
+merge _pwddb _setcred
+ability chown
+ability recvfd
+/var/run/clamav/clamd.pid : rw
+/var/log/clamav/clamd.log : pca
+/var/run/clamav/clamd.sock : ua
+/var/spool/clamav/ : rw # set "TemporaryDirectory" to this in clamd.conf
+/usr/local/etc/clamd.conf
+/var/db/clamav/
+
+[clamdscan]
+merge _basic _net_client
+ability sendfd
+/var/run/clamav/clamd.sock : v
+/usr/local/etc/clamd.conf
+
+[freshclam]
+merge _basic _net_client
+merge _pwddb _setcred
+/usr/local/etc/freshclam.conf
+/var/run/clamav/freshclam.pid : rw
+/var/db/clamav/ : rw
+/var/log/clamav/freshclam.log : pc
+/usr/local/etc/clamd.conf
+/var/run/clamav/clamd.sock : v
+
