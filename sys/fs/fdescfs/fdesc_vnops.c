@@ -61,6 +61,8 @@
 
 #include <fs/fdescfs/fdesc.h>
 
+#include <security/mac/mac_framework.h>
+
 #define	NFDCACHE 4
 #define FD_NHASH(ix) \
 	(&fdhashtbl[(ix) & fdhash])
@@ -330,6 +332,31 @@ fdesc_lookup(struct vop_lookup_args *ap)
 	 */
 	if ((error = fget(td, fd, &cap_no_rights, &fp)) != 0)
 		goto bad;
+#ifdef MAC
+	if (CRED_IN_VFS_VEILED_MODE(cnp->cn_cred) &&
+	    fp->f_type == DTYPE_VNODE) {
+		/* The above fget() will push a new current tracker entry for
+		 * the target FD's vnode (if any).
+		 *
+		 * When not in nodup mode, rewind to the entry that was current
+		 * before the fget() so that path lookup can continue with the
+		 * fdescfs vnode.  The vnode that will be returned for this
+		 * VOP_LOOKUP() is an fdesc wrapper vnode, not the target FD's
+		 * vnode.  The target FD will be dealt with AFTER path lookup
+		 * (by kern_openat()).
+		 *
+		 * Otherwise, just let it replace the current entry.  That's
+		 * the correct one to continue path lookup from since that's
+		 * the vnode that will be returned for this VOP_LOOKUP().  The
+		 * unveil_vnode_walk_component() that follows in vfs_lookup()
+		 * will just make it inherit from itself.  It is very important
+		 * that path lookup does NOT continue from the fdescfs vnode or
+		 * the target FD's vnode could inherit its permissions.
+		 */
+		if ((VFSTOFDESC(dvp->v_mount)->flags & FMNT_NODUP) == 0)
+			mac_vnode_walk_roll(cnp->cn_cred, -1);
+	}
+#endif
 
 	/* Check if we're looking up ourselves. */
 	if (VTOFDESC(dvp)->fd_ix == FD_DESC + fd) {
