@@ -541,6 +541,9 @@ kern_fcntl(struct thread *td, int fd, int cmd, intptr_t arg)
 		break;
 
 	case F_SETFD:
+		error = sysfil_check(td, SYSFIL_FDESC);
+		if (error != 0)
+			break;
 		error = EBADF;
 		FILEDESC_XLOCK(fdp);
 		fde = fdeget_noref(fdp, fd);
@@ -561,6 +564,9 @@ kern_fcntl(struct thread *td, int fd, int cmd, intptr_t arg)
 		break;
 
 	case F_SETFL:
+		error = sysfil_check(td, SYSFIL_FDESC);
+		if (error != 0)
+			break;
 		error = fget_fcntl(td, fd, &cap_fcntl_rights, F_SETFL, &fp);
 		if (error != 0)
 			break;
@@ -603,6 +609,9 @@ kern_fcntl(struct thread *td, int fd, int cmd, intptr_t arg)
 		break;
 
 	case F_SETOWN:
+		error = sysfil_check(td, SYSFIL_FDESC);
+		if (error != 0)
+			break;
 		error = fget_fcntl(td, fd, &cap_fcntl_rights, F_SETOWN, &fp);
 		if (error != 0)
 			break;
@@ -890,6 +899,9 @@ kern_fcntl(struct thread *td, int fd, int cmd, intptr_t arg)
 			break;
 		}
 #endif
+		error = sysfil_check(td, SYSFIL_FDESC);
+		if (error != 0)
+			break;
 		error = copyin((void *)arg, &kif_sz, sizeof(kif_sz));
 		if (error != 0)
 			break;
@@ -964,6 +976,9 @@ kern_dup(struct thread *td, u_int mode, int flags, int old, int new)
 		return (EBADF);
 	if (new < 0)
 		return (mode == FDDUP_FCNTL ? EINVAL : EBADF);
+	error = sysfil_check(td, SYSFIL_FDESC);
+	if (error != 0)
+		return (error);
 	maxfd = getmaxfd(td);
 	if (new >= maxfd)
 		return (mode == FDDUP_FCNTL ? EINVAL : EBADF);
@@ -2109,9 +2124,14 @@ _falloc_noinstall(struct thread *td, struct file **resultfp, u_int n)
 	int openfiles_new;
 	static struct timeval lastfail;
 	static int curfail;
+	int error;
 
 	KASSERT(resultfp != NULL, ("%s: resultfp == NULL", __func__));
 	MPASS(n > 0);
+
+	error = sysfil_check(td, SYSFIL_FDESC);
+	if (error != 0)
+		return (error);
 
 	openfiles_new = atomic_fetchadd_int(&openfiles, 1) + 1;
 	if ((openfiles_new >= maxuserfiles &&

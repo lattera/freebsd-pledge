@@ -48,8 +48,14 @@
 /etc/localtime				: r
 /etc/malloc.conf			: r
 
-ability stdio
+ability core mman fdesc pstat clock timer
+ability sighand sigmask sigwait pwait
+ability sockio
+ability getcred
+ability sysinfo
 ability vfs_read vfs_write
+
+ability cap_sysctl
 
 sysctl hw.machine{,_arch}
 sysctl kern.version
@@ -111,11 +117,11 @@ ability!! fsugid # chmod ug+s
 merge _pty
 merge _cryptodev
 ability sysvipc
-ability posixipc
+ability posixshm
 ability mlock
 ability aio
 ability sendfile
-ability cred
+ability setcred
 
 [_level5 : _level4] # curtain(1)'s default
 ability chroot
@@ -236,8 +242,8 @@ ability sendfd recvfd
 [_fdpassdir : _fdpass]
 ability passdir
 
-[_setcred]
-ability cred any_cred
+[_su]
+ability setcred any_cred
 
 [_tty]
 /dev/tty				: rma

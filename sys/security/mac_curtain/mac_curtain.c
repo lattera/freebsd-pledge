@@ -366,6 +366,17 @@ curtain_proc_check_signal(struct ucred *cr, struct proc *p, int signum)
 }
 
 static int
+curtain_proc_check_wait(struct ucred *cr, struct proc *p)
+{
+	int error;
+	if ((error = cred_ability_check(cr, CURTAINABL_PWAIT)) != 0)
+		return (error);
+	if (!barrier_visible(CRED_SLOT_BR(cr), CRED_SLOT_BR(p->p_ucred), BARRIER_PROC_SIGNAL))
+		return (ESRCH);
+	return (0);
+}
+
+static int
 curtain_proc_check_sched(struct ucred *cr, struct proc *p)
 {
 	int error;
@@ -1300,7 +1311,7 @@ curtain_generic_check_ioctl(struct ucred *cr, struct file *fp, u_long com, void 
 		return (0);
 	case TIOCGETA:
 		/* needed for isatty(3) */
-		abl = CURTAINABL_STDIO;
+		abl = CURTAINABL_CORE;
 		break;
 	case FIOSETOWN:
 		/* also checked in setown() */
@@ -1401,8 +1412,11 @@ curtain_system_check_sysctl(struct ucred *cr,
 {
 	enum curtain_action act;
 	struct sysctl_oid *p;
-	if ((oidp->oid_kind & CTLFLAG_CAPRW) != 0)
-		return (0);
+	if ((oidp->oid_kind & CTLFLAG_CAPRW) != 0) {
+		act = cred_ability_action(cr, CURTAINABL_CAP_SYSCTL);
+		if (act == CURTAIN_ALLOW)
+			return (0);
+	}
 	if (CRED_SLOT(cr) == NULL)
 		return (0);
 	for (p = oidp; p != NULL && p->oid_shadow == NULL; p = SYSCTL_PARENT(p));
@@ -1411,7 +1425,7 @@ curtain_system_check_sysctl(struct ucred *cr,
 		    (ctkey){ .sysctl = p->oid_shadow });
 	else
 		act = cred_ability_action(cr, curtain_type_fallback(CURTAIN_SYSCTL));
-	if (__predict_true(act == CURTAIN_ALLOW))
+	if (act == CURTAIN_ALLOW)
 		return (0);
 	if (act <= curtain_sysctls_log_level) {
 		char buf[256], *name;
@@ -1467,9 +1481,13 @@ curtain_priv_check(struct ucred *cr, int priv)
 	case PRIV_IPC_READ:
 	case PRIV_IPC_WRITE:
 	case PRIV_IPC_ADMIN:
+		abl = CURTAINABL_SYSVIPC;
+		break;
 	case PRIV_IPC_MSGSIZE:
+		abl = CURTAINABL_SYSVMSG;
+		break;
 	case PRIV_MQ_ADMIN:
-		abl = CURTAINABL_POSIXIPC;
+		abl = CURTAINABL_POSIXMSG;
 		break;
 	case PRIV_JAIL_ATTACH:
 	case PRIV_JAIL_SET:
@@ -1709,6 +1727,7 @@ static struct mac_policy_ops curtain_policy_ops = {
 	.mpo_cred_trim = curtain_cred_trim,
 
 	.mpo_proc_check_signal = curtain_proc_check_signal,
+	.mpo_proc_check_wait = curtain_proc_check_wait,
 	.mpo_proc_check_sched = curtain_proc_check_sched,
 	.mpo_proc_check_debug = curtain_proc_check_debug,
 

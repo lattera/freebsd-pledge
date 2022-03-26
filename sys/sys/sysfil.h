@@ -20,12 +20,12 @@
 #define	SYSFIL_NOTCAPMODE	SYSFIL_INDEX(0)
 #define	SYSFIL__UNUSED1		SYSFIL_INDEX(1)
 #define	SYSFIL__UNUSED2		SYSFIL_INDEX(2)
-#define	SYSFIL_STDIO		SYSFIL_INDEX(3)
-#define	SYSFIL_VFS_MISC		SYSFIL_INDEX(4)
-#define	SYSFIL_VFS_READ		SYSFIL_INDEX(5)
-#define	SYSFIL_VFS_WRITE	SYSFIL_INDEX(6)
-#define	SYSFIL_VFS_CREATE	SYSFIL_INDEX(7)
-#define	SYSFIL_VFS_DELETE	SYSFIL_INDEX(8)
+#define	SYSFIL_CORE		SYSFIL_INDEX(3)
+#define	SYSFIL_PATH		SYSFIL_INDEX(4)
+#define	SYSFIL_RPATH		SYSFIL_INDEX(5)
+#define	SYSFIL_WPATH		SYSFIL_INDEX(6)
+#define	SYSFIL_CPATH		SYSFIL_INDEX(7)
+#define	SYSFIL_DPATH		SYSFIL_INDEX(8)
 #define	SYSFIL_FATTR		SYSFIL_INDEX(9)
 #define	SYSFIL_FLOCK		SYSFIL_INDEX(10)
 #define	SYSFIL_TTY		SYSFIL_INDEX(11)
@@ -36,44 +36,44 @@
 #define	SYSFIL_CURTAIN		SYSFIL_INDEX(16)
 #define	SYSFIL_RLIMIT		SYSFIL_INDEX(17)
 #define	SYSFIL_SETTIME		SYSFIL_INDEX(18)
-#define	SYSFIL_CRED		SYSFIL_INDEX(19)
-#define	SYSFIL__UNUSED20	SYSFIL_INDEX(20)
+#define	SYSFIL_SETCRED		SYSFIL_INDEX(19)
+#define	SYSFIL_PWAIT		SYSFIL_INDEX(20)
 #define	SYSFIL_MLOCK		SYSFIL_INDEX(21)
 #define	SYSFIL_AIO		SYSFIL_INDEX(22)
 #define	SYSFIL_EXTATTR		SYSFIL_INDEX(23)
 #define	SYSFIL_ACL		SYSFIL_INDEX(24)
 #define	SYSFIL_CPUSET		SYSFIL_INDEX(25)
-#define	SYSFIL_SYSVIPC		SYSFIL_INDEX(26)
-#define	SYSFIL_POSIXIPC		SYSFIL_INDEX(27)
+#define	SYSFIL__UNUSED26	SYSFIL_INDEX(26)
+#define	SYSFIL__UNUSED27	SYSFIL_INDEX(27)
 #define	SYSFIL_POSIXRT		SYSFIL_INDEX(28)
 #define	SYSFIL_MAC		SYSFIL_INDEX(29)
 #define	SYSFIL_CHROOT		SYSFIL_INDEX(30)
 #define	SYSFIL_JAIL		SYSFIL_INDEX(31)
 #define	SYSFIL_SCHED		SYSFIL_INDEX(32)
-#define	SYSFIL__UNUSED33	SYSFIL_INDEX(33)
-#define	SYSFIL__UNUSED34	SYSFIL_INDEX(34)
-#define	SYSFIL__UNUSED35	SYSFIL_INDEX(35)
+#define	SYSFIL_SOCKIO		SYSFIL_INDEX(33)
+#define	SYSFIL_MMAN		SYSFIL_INDEX(34)
+#define	SYSFIL_FDESC		SYSFIL_INDEX(35)
 #define	SYSFIL_TRACE		SYSFIL_INDEX(36)
 #define	SYSFIL_KMOD		SYSFIL_INDEX(37)
-#define	SYSFIL__UNUSED38	SYSFIL_INDEX(38)
-#define	SYSFIL__UNUSED39	SYSFIL_INDEX(39)
+#define	SYSFIL_GETCRED		SYSFIL_INDEX(38)
+#define	SYSFIL_CLOCK		SYSFIL_INDEX(39)
 #define	SYSFIL_FMODE_SPECIAL	SYSFIL_INDEX(40)
-#define	SYSFIL__UNUSED41	SYSFIL_INDEX(41)
-#define	SYSFIL__UNUSED42	SYSFIL_INDEX(42)
-#define	SYSFIL__UNUSED43	SYSFIL_INDEX(43)
+#define	SYSFIL_SIGHAND		SYSFIL_INDEX(41)
+#define	SYSFIL_SIGMASK		SYSFIL_INDEX(42)
+#define	SYSFIL_SIGWAIT		SYSFIL_INDEX(43)
 #define	SYSFIL_SENDFILE		SYSFIL_INDEX(44)
 #define	SYSFIL_MOUNT		SYSFIL_INDEX(45)
 #define	SYSFIL_QUOTA		SYSFIL_INDEX(46)
 #define	SYSFIL_FH		SYSFIL_INDEX(47)
-#define	SYSFIL__UNUSED48	SYSFIL_INDEX(48)
-#define	SYSFIL__UNUSED49	SYSFIL_INDEX(49)
-#define	SYSFIL__UNUSED50	SYSFIL_INDEX(50)
-#define	SYSFIL__UNUSED51	SYSFIL_INDEX(51)
-#define	SYSFIL__UNUSED52	SYSFIL_INDEX(52)
-#define	SYSFIL__UNUSED53	SYSFIL_INDEX(53)
-#define	SYSFIL__UNUSED54	SYSFIL_INDEX(54)
-#define	SYSFIL__UNUSED55	SYSFIL_INDEX(55)
-#define	SYSFIL__UNUSED56	SYSFIL_INDEX(56)
+#define	SYSFIL_TIMER		SYSFIL_INDEX(48)
+#define	SYSFIL_SYSINFO		SYSFIL_INDEX(49)
+#define	SYSFIL_PSTAT		SYSFIL_INDEX(50)
+#define	SYSFIL_SYSVSHM		SYSFIL_INDEX(51)
+#define	SYSFIL_SYSVSEM		SYSFIL_INDEX(52)
+#define	SYSFIL_SYSVMSG		SYSFIL_INDEX(53)
+#define	SYSFIL_POSIXSHM		SYSFIL_INDEX(54)
+#define	SYSFIL_POSIXSEM		SYSFIL_INDEX(55)
+#define	SYSFIL_POSIXMSG		SYSFIL_INDEX(56)
 #define	SYSFIL_FFCLOCK		SYSFIL_INDEX(57)
 #define	SYSFIL_AUDIT		SYSFIL_INDEX(58)
 #define	SYSFIL_RFORK		SYSFIL_INDEX(59)
@@ -88,38 +88,26 @@ CTASSERT(SYSFIL_CATCHALL == SYSFIL_INDEX(SYSFILSET_VFS_VEILED_MODE_BIT));
 #endif
 
 /*
- * Some syscalls are assigned to sysfils that may seem to be less restrictive
- * than they should be.  Usually these syscalls will be doing their own
- * checking and only allow safe operations.  These aliases are used to keep
- * track of them and make it more explicit.
+ * Some syscalls are assigned sysfils that may seem to be less restrictive than
+ * they should be.  Usually these syscalls will be doing their own checking and
+ * only allow safe operations.  These aliases are used to keep track of them
+ * and make it explicit.
  */
 #ifdef _KERNEL
-/* Various operations that should always be allowed. */
+/* Very small set of operations that should always be allowed. */
 #define	SYSFIL_ALWAYS		SYSFIL_NONE
-/*
- * SYSFIL_CAPCOMPAT is for certain syscalls that are allowed under Capsicum but
- * not under OpenBSD's "stdio" pledge.  This is to get at least some basic
- * level of compatibility when attempting to run Capsicum applications with an
- * inherited curtain.
- */
-#define	SYSFIL_CAPCOMPAT	SYSFIL_STDIO
+/* Allow to enter/check capability mode and manage file descriptor rights/limits, etc. */
+#define	SYSFIL_CAPCOMPAT	SYSFIL_CORE
 /* Can do certain operations on self. */
-#define	SYSFIL_PROC_CHECKED	SYSFIL_STDIO
-#define	SYSFIL_THREAD_CHECKED	SYSFIL_ALWAYS
-#define	SYSFIL_CPUSET_CHECKED	SYSFIL_SCHED
+#define	SYSFIL_PROC_		SYSFIL_CORE
+#define	SYSFIL_THREAD_		SYSFIL_CORE
+#define	SYSFIL_CPUSET_		SYSFIL_SCHED
 /* Allow RFSPAWN with just SYSFIL_PROC. */
-#define	SYSFIL_RFORK_CHECKED	SYSFIL_PROC
+#define	SYSFIL_RFORK_		SYSFIL_PROC
 /* Creation of anonymous memory objects are allowed. */
-#define	SYSFIL_POSIXIPC_CHECKED	SYSFIL_STDIO
-/*
- * SYSFIL_CHOWN is not required for all chown(2) syscalls.  It represents the
- * ability to set the file's owner UID to something different or set its group
- * GID to something different that the process is not a member of.
- */
-#define	SYSFIL_CHOWN_CHECKED	SYSFIL_FATTR
+#define	SYSFIL_POSIXSHM_	SYSFIL_MMAN
 /* Retrieving correction delta with adjtime(2) is allowed. */
-#define	SYSFIL_SETTIME_CHECKED	SYSFIL_STDIO
-#define	SYSFIL_SCTP		SYSFIL_SOCK
+#define	SYSFIL_ADJTIME		SYSFIL_CLOCK
 #endif
 
 
@@ -130,7 +118,7 @@ CTASSERT(SYSFIL_CATCHALL == SYSFIL_INDEX(SYSFILSET_VFS_VEILED_MODE_BIT));
 static inline bool
 sysfil_match_cred(const struct ucred *cr, sysfilset_t sfs) {
 #ifndef NOSYSFIL
-	return (!(sfs & ~cr->cr_sysfilset));
+	return ((sfs & ~cr->cr_sysfilset) == 0);
 #else
 	return (true);
 #endif

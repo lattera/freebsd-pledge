@@ -65,7 +65,7 @@ ${CURTAIN_X11_SOCKET}			: v
 ${CURTAIN_X11_XAUTHORITY}		: rd
 
 [_x11_trusted]
-ability-gate sysvipc # MIT-SHM
+ability-gate sysvshm # MIT-SHM
 merge _drm_render
 
 [_x11_all]
@@ -219,14 +219,14 @@ merge _spwddb
 
 [su : _login]
 merge _basic
-merge _setcred
+merge _su
 ability audit
 ability! rsugid_exec
 merge _syslog
 
 [doas : _login]
 merge _basic
-merge _setcred
+merge _su
 ability! rsugid_exec
 merge _syslog
 /usr/local/etc/doas.conf [_localbase]
@@ -313,25 +313,25 @@ sysctl vm.swap_info
 
 [ping, ping6]
 merge _basic _network _fdpass
-ability cred
+ability setcred
 ability net_raw
 socklvl icmpv6
 
 [traceroute, traceroute6]
 merge _basic _network _fdpass
-ability cred
+ability setcred
 ability net_raw
 sysctl net.inet.ip.ttl
 sysctl net.inet6.ip6.hlim
 
 [mtr]
 merge _basic _network
-ability cred
+ability setcred
 ability net_raw
 
 [tcpdump]
 merge _basic _network
-ability cred
+ability setcred
 merge _bpf
 
 [wireshark]
@@ -361,8 +361,8 @@ merge _gtk [_gui]
 [vscode : _editor]
 # NOTE: Must be started with -w (--wait) or vscode will exit early and make
 # curtain(1) delete its temporary files (including X11 cookie file).
-merge _basic _network _fdpass _xdg
-ability posixipc prot_exec
+merge _basic _network _memstat _pty _fdpass _xdg
+ability posixshm sendfile prot_exec
 ~/.vscode-oss/ : rw +
 ~/.config/Code\ -\ OSS/ : rwu +
 
@@ -374,7 +374,7 @@ merge _basic _gtk
 # File previews won't work without access to ~/.cache/thumbnails.
 merge _basic _gtk
 merge _memstat
-ability sysvipc
+ability sysvshm
 /usr/local/etc/gimp/			: r
 ~/.config/GIMP/				: rw +
 ~/.cache/gimp/				: rw +
@@ -382,14 +382,14 @@ ability sysvipc
 [mypaint]
 merge _basic _gtk
 ability prot_exec
-ability posixipc
+ability posixshm
 ~/.cache/mypaint/ : rw +
 ~/.local/share/mypaint/ : rw +
 ~/.config/mypaint/ : rw +
 
 [inkscape : _editor]
 merge _basic _gtk
-ability posixipc
+ability posixshm
 ~/.cache/inkscape/			: rw +
 ~/.config/inkscape/			: rw +
 /usr/local/bin/inkscape			: i
@@ -403,7 +403,7 @@ merge _basic _xdg
 merge _basic _net_misc _kde
 merge _memstat
 ability prot_exec
-ability sysvipc
+ability sysvshm sysvsem
 ~/.cache/krita/ : rw +
 ~/.local/share/krita/ : rw +
 ~/.local/share/krita.log : rw
@@ -495,7 +495,7 @@ merge! _pwddb
 
 [hexchat]
 merge _basic _network _gtk
-ability cred
+ability setcred
 ~/.config/hexchat/			: rw +
 sysctl-deny machdep.tsc_freq [_strict]
 
@@ -518,7 +518,7 @@ merge _basic _network _gtk
 merge _fdpass
 merge _memstat
 merge _fontconfig
-ability posixipc prot_exec
+ability posixshm prot_exec
 sysctl-deny kern.proc.vmmap [_strict]
 
 [firefox.common]
@@ -593,7 +593,7 @@ merge _basic
 # be enabled.
 merge _basic _network _fdpassdir _gtk
 merge _memstat
-ability posixipc prot_exec sendfile
+ability posixshm prot_exec sendfile
 sysctl-deny kern.bootfile [_strict] # kvm_open(3)
 sysctl kern.ipc.shm_allow_removed
 sysctl kern.ipc.shmmax
@@ -628,7 +628,7 @@ merge _webkit
 [midori : _browser]
 merge _basic _network _gtk
 merge _webkit
-ability posixipc mlock
+ability posixshm mlock
 ./.cache/midori/ : rw +
 ./.config/midori/ : rw +
 
@@ -643,7 +643,7 @@ merge _basic _network _gtk
 merge _webkit
 ability-deny prot_exec [_strict]
 ability-deny mlock [_strict]
-ability posixipc
+ability posixshm
 ~/.config/liferea/ : rw +
 ~/.cache/liferea/ : rw +
 ~/.local/share/liferea/ : rw +
@@ -700,7 +700,7 @@ merge _qt
 
 [audacious : _player]
 merge _basic _qt
-ability posixipc
+ability posixshm
 ~/.config/audacious/			: rw +
 
 [quodlibet : _player]
@@ -721,7 +721,7 @@ merge _basic
 
 [vlc : _player]
 merge _basic _qt
-ability sysvipc
+ability sysvshm
 ability prot_exec
 ~/.config/vlc/				: rw +
 ~/.local/share/vlc/			: rw +
@@ -733,7 +733,7 @@ merge _basic _gtk
 [xterm : _terminal]
 # Dies with an X11 error when trying to select text under -X.
 merge _basic
-ability cred
+ability setcred
 
 [urxvt : _terminal]
 merge _basic
@@ -846,7 +846,7 @@ merge! _pwddb
 [eclipse]
 merge _basic _network _java _xdg
 merge! _pwddb
-ability sysvipc
+ability sysvshm
 merge! _shared_system_tmpdir
 ~/.eclipse/ : rw +
 ~/.cache/Eclipse/ : rw +
@@ -917,7 +917,7 @@ merge _pwddb
 /usr/obj/usr/src/			: rxw
 
 [pkg]
-merge _basic _net_client _setcred
+merge _basic _net_client _su
 merge _pwddb
 merge _syslog
 /etc/pkg/
@@ -959,7 +959,7 @@ merge _basic _network
 merge _login
 merge _syslog
 merge _shared_tmpdir # mail.local(8) uses /tmp directly
-merge _setcred
+merge _su
 sysctl vm.loadavg
 /etc/mail/
 /etc/aliases
@@ -973,7 +973,7 @@ merge _basic _network
 merge _login
 merge _syslog
 merge _fdpass
-merge _setcred
+merge _su
 ability chown
 /etc/aliases
 /usr/local/etc/exim/
@@ -988,7 +988,7 @@ ability chown
 merge _basic _network
 merge _login
 merge _syslog
-merge _setcred
+merge _su
 ability chown
 ability chroot
 /etc/ftpusers
@@ -1008,7 +1008,7 @@ merge _basic _network
 merge _login
 merge _syslog
 merge _fdpass
-merge _setcred
+merge _su
 ability chown
 ability extattr acl quota
 sysctl kern.corefile
@@ -1031,7 +1031,7 @@ sockaf-deny route [_strict]
 /var/db/ntpd.leap-seconds.list : rw
 [ntpd_unpriv : ntpd]
 merge su
-merge _setcred
+merge _su
 ability chroot
 
 [syslogd : _daemon]
@@ -1059,7 +1059,7 @@ ability mlock # gpg
 
 [spamd : _daemon]
 merge _basic _network _syslog
-merge _pwddb _setcred
+merge _pwddb _su
 merge! _unsafe_system_tmpdir
 /usr/local/etc/mail/spamassassin/
 /var/db/spamassassin/
@@ -1075,7 +1075,7 @@ merge _basic
 
 [clamd : _daemon]
 merge _basic
-merge _pwddb _setcred
+merge _pwddb _su
 ability chown
 ability recvfd
 /var/run/clamav/clamd.pid : rw
@@ -1093,7 +1093,7 @@ ability sendfd
 
 [freshclam]
 merge _basic _net_client
-merge _pwddb _setcred
+merge _pwddb _su
 /usr/local/etc/freshclam.conf
 /var/run/clamav/freshclam.pid : rw
 /var/db/clamav/ : rw

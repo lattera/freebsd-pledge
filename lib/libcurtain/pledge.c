@@ -26,7 +26,6 @@ __FBSDID("$FreeBSD$");
 enum promise_type {
 	PROMISE_ERROR,
 	PROMISE_TRAP,
-	PROMISE_BASIC, /* same as PROMISE_STDIO but without the unveils */
 	PROMISE_STDIO,
 	PROMISE_UNVEIL,
 	PROMISE_RPATH,
@@ -99,7 +98,6 @@ static const struct promise_name {
 } names_table[PROMISE_COUNT] = {
 	[PROMISE_ERROR] =		{ "error" },
 	[PROMISE_TRAP] =		{ "trap" },
-	[PROMISE_BASIC] =		{ "basic" },
 	[PROMISE_STDIO] =		{ "stdio" },
 	[PROMISE_UNVEIL] =		{ "unveil" },
 	[PROMISE_RPATH] =		{ "rpath" },
@@ -178,7 +176,6 @@ static const struct promise_ability {
 	enum promise_type promise;
 	enum curtain_ability ability;
 } abilities_table[] = {
-	{ PROMISE_BASIC,		CURTAINABL_STDIO },
 	{ PROMISE_STDIO,		CURTAINABL_STDIO },
 	{ PROMISE_RPATH,		CURTAINABL_VFS_READ },
 	{ PROMISE_WPATH,		CURTAINABL_VFS_WRITE },
@@ -192,7 +189,7 @@ static const struct promise_ability {
 	{ PROMISE_FATTR,		CURTAINABL_VFS_SETATTR },
 	{ PROMISE_FATTR,		CURTAINABL_CHFLAGS },
 	{ PROMISE_CHOWN,		CURTAINABL_CHOWN },
-	{ PROMISE_ID,			CURTAINABL_CRED },
+	{ PROMISE_ID,			CURTAINABL_SETCRED },
 	{ PROMISE_ID,			CURTAINABL_ANY_CRED },
 	{ PROMISE_PROC,			CURTAINABL_PROC },
 	{ PROMISE_PROC,			CURTAINABL_SCHED },

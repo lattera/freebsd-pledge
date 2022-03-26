@@ -4,4 +4,7 @@
 include /usr/local/etc/curtain.{conf,d/}
 
 # Uncomment below line to include sample application profiles.
-# include /usr/share/examples/curtain/curtain.conf.sample
+#include /usr/share/examples/curtain/curtain.conf.sample
+# Also consider unveiling it for nested invocations of curtain:
+#[curtain]
+#/usr/share/examples/curtain/curtain.conf.sample

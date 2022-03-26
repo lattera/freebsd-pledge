@@ -130,21 +130,21 @@
 2	AUE_FORK	STD|SYSFIL_PROC|CAPENABLED {
 		int fork(void);
 	}
-3	AUE_READ	STD|SYSFIL_STDIO|CAPENABLED {
+3	AUE_READ	STD|SYSFIL_CORE|CAPENABLED {
 		ssize_t read(
 		    int fd,
 		    _Out_writes_bytes_(nbyte) void *buf,
 		    size_t nbyte
 		);
 	}
-4	AUE_WRITE	STD|SYSFIL_STDIO|CAPENABLED {
+4	AUE_WRITE	STD|SYSFIL_CORE|CAPENABLED {
 		ssize_t write(
 		    int fd,
 		    _In_reads_bytes_(nbyte) const void *buf,
 		    size_t nbyte
 		);
 	}
-5	AUE_OPEN_RWTC	STD|SYSFIL_VFS_MISC {
+5	AUE_OPEN_RWTC	STD|SYSFIL_FDESC|SYSFIL_PATH {
 		int open(
 		    _In_z_ const char *path,
 		    int flags,
@@ -153,12 +153,12 @@
 	}
 ; XXX should be		{ int open(const char *path, int flags, ...); }
 ; but we're not ready for varargs.
-6	AUE_CLOSE	STD|SYSFIL_STDIO|CAPENABLED {
+6	AUE_CLOSE	STD|SYSFIL_CORE|CAPENABLED {
 		int close(
 		    int fd
 		);
 	}
-7	AUE_WAIT4	STD|SYSFIL_STDIO {
+7	AUE_WAIT4	STD|SYSFIL_PWAIT {
 		int wait4(
 		    int pid,
 		    _Out_opt_ int *status,
@@ -166,74 +166,74 @@
 		    _Out_opt_ _Contains_long_timet_ struct rusage *rusage
 		);
 	}
-8	AUE_CREAT	COMPAT|SYSFIL_VFS_WRITE {
+8	AUE_CREAT	COMPAT|SYSFIL_FDESC|SYSFIL_WPATH {
 		int creat(
 		    _In_z_ const char *path,
 		    int mode
 		);
 	}
-9	AUE_LINK	STD|SYSFIL_VFS_CREATE {
+9	AUE_LINK	STD|SYSFIL_CPATH {
 		int link(
 		    _In_z_ const char *path,
 		    _In_z_ const char *link
 		);
 	}
-10	AUE_UNLINK	STD|SYSFIL_VFS_DELETE {
+10	AUE_UNLINK	STD|SYSFIL_DPATH {
 		int unlink(
 		    _In_z_ const char *path
 		);
 	}
 11	AUE_NULL	OBSOL	execv
-12	AUE_CHDIR	STD|SYSFIL_VFS_READ {
+12	AUE_CHDIR	STD|SYSFIL_FDESC|SYSFIL_PATH {
 		int chdir(
 		    _In_z_ const char *path
 		);
 	}
-13	AUE_FCHDIR	STD|SYSFIL_VFS_MISC {
+13	AUE_FCHDIR	STD|SYSFIL_FDESC|SYSFIL_PATH {
 		int fchdir(
 		    int fd
 		);
 	}
-14	AUE_MKNOD	COMPAT11|SYSFIL_VFS_CREATE {
+14	AUE_MKNOD	COMPAT11|SYSFIL_CPATH {
 		int mknod(
 		    _In_z_ const char *path,
 		    int mode,
 		    uint32_t dev
 		);
 	}
-15	AUE_CHMOD	STD|SYSFIL_FATTR {
+15	AUE_CHMOD	STD|SYSFIL_PATH|SYSFIL_FATTR {
 		int chmod(
 		    _In_z_ const char *path,
 		    mode_t mode
 		);
 	}
-16	AUE_CHOWN	STD|SYSFIL_CHOWN_CHECKED {
+16	AUE_CHOWN	STD|SYSFIL_PATH|SYSFIL_FATTR {
 		int chown(
 		    _In_z_ const char *path,
 		    int uid,
 		    int gid
 		);
 	}
-17	AUE_NULL	STD|SYSFIL_STDIO|CAPENABLED {
+17	AUE_NULL	STD|SYSFIL_MMAN|CAPENABLED {
 		void *break(
 		    _In_ char *nsize
 		);
 	}
-18	AUE_GETFSSTAT	COMPAT4|SYSFIL_VFS_READ {
+18	AUE_GETFSSTAT	COMPAT4|SYSFIL_RPATH {
 		int getfsstat(
 		    _Out_writes_bytes_opt_(bufsize) _Contains_long_ struct ostatfs *buf,
 		    long bufsize,
 		    int mode
 		);
 	}
-19	AUE_LSEEK	COMPAT|SYSFIL_STDIO|CAPENABLED {
+19	AUE_LSEEK	COMPAT|SYSFIL_CORE|CAPENABLED {
 		long lseek(
 		    int fd,
 		    long offset,
 		    int whence
 		);
 	}
-20	AUE_GETPID	STD|SYSFIL_STDIO|CAPENABLED {
+20	AUE_GETPID	STD|SYSFIL_PSTAT|CAPENABLED {
 		pid_t getpid(void);
 	}
 21	AUE_MOUNT	STD|SYSFIL_MOUNT {
@@ -250,15 +250,15 @@
 		    int flags
 		);
 	}
-23	AUE_SETUID	STD|SYSFIL_CRED|CAPENABLED {
+23	AUE_SETUID	STD|SYSFIL_SETCRED|CAPENABLED {
 		int setuid(
 		    uid_t uid
 		);
 	}
-24	AUE_GETUID	STD|SYSFIL_STDIO|CAPENABLED {
+24	AUE_GETUID	STD|SYSFIL_GETCRED|CAPENABLED {
 		uid_t getuid(void);
 	}
-25	AUE_GETEUID	STD|SYSFIL_STDIO|CAPENABLED {
+25	AUE_GETEUID	STD|SYSFIL_GETCRED|CAPENABLED {
 		uid_t geteuid(void);
 	}
 26	AUE_PTRACE	STD|SYSFIL_TRACE {
@@ -269,21 +269,21 @@
 		    int data
 		);
 	}
-27	AUE_RECVMSG	STD|SYSFIL_STDIO|CAPENABLED {
+27	AUE_RECVMSG	STD|SYSFIL_SOCKIO|CAPENABLED {
 		ssize_t recvmsg(
 		    int s,
 		    _Inout_ _Contains_ptr_ struct msghdr *msg,
 		    int flags
 		);
 	}
-28	AUE_SENDMSG	STD|SYSFIL_STDIO|CAPENABLED {
+28	AUE_SENDMSG	STD|SYSFIL_SOCKIO|CAPENABLED {
 		ssize_t sendmsg(
 		    int s,
 		    _In_ _Contains_ptr_ const struct msghdr *msg,
 		    int flags
 		);
 	}
-29	AUE_RECVFROM	STD|SYSFIL_STDIO|CAPENABLED {
+29	AUE_RECVFROM	STD|SYSFIL_SOCKIO|CAPENABLED {
 		ssize_t recvfrom(
 		    int s,
 		    _Out_writes_bytes_(len) void *buf,
@@ -293,7 +293,7 @@
 		    _Inout_opt_ __socklen_t *fromlenaddr
 		);
 	}
-30	AUE_ACCEPT	STD|SYSFIL_SOCK|CAPENABLED {
+30	AUE_ACCEPT	STD|SYSFIL_FDESC|SYSFIL_SOCK|CAPENABLED {
 		int accept(
 		    int s,
 		    _Out_writes_bytes_opt_(*anamelen) struct sockaddr *name,
@@ -314,13 +314,13 @@
 		    _Inout_ __socklen_t *alen
 		);
 	}
-33	AUE_ACCESS	STD|SYSFIL_VFS_MISC {
+33	AUE_ACCESS	STD|SYSFIL_PATH {
 		int access(
 		    _In_z_ const char *path,
 		    int amode
 		);
 	}
-34	AUE_CHFLAGS	STD|SYSFIL_FATTR {
+34	AUE_CHFLAGS	STD|SYSFIL_PATH|SYSFIL_FATTR {
 		int chflags(
 		    _In_z_ const char *path,
 		    u_long flags
@@ -332,39 +332,39 @@
 		    u_long flags
 		);
 	}
-36	AUE_SYNC	STD|SYSFIL_VFS_WRITE|CAPENABLED {
+36	AUE_SYNC	STD|SYSFIL_WPATH|CAPENABLED {
 		int sync(void);
 	}
-37	AUE_KILL	STD|SYSFIL_PROC_CHECKED|CAPENABLED {
+37	AUE_KILL	STD|SYSFIL_PROC_|CAPENABLED {
 		int kill(
 		    int pid,
 		    int signum
 		);
 	}
-38	AUE_STAT	COMPAT|SYSFIL_VFS_READ {
+38	AUE_STAT	COMPAT|SYSFIL_RPATH {
 		int stat(
 		    _In_z_ const char *path,
 		    _Out_ _Contains_timet_ struct ostat *ub
 		);
 	}
-39	AUE_GETPPID	STD|SYSFIL_STDIO|CAPENABLED {
+39	AUE_GETPPID	STD|SYSFIL_PSTAT|CAPENABLED {
 		pid_t getppid(void);
 	}
-40	AUE_LSTAT	COMPAT|SYSFIL_VFS_READ {
+40	AUE_LSTAT	COMPAT|SYSFIL_RPATH {
 		int lstat(
 		    _In_z_ const char *path,
 		    _Out_ _Contains_timet_ struct ostat *ub
 		);
 	}
-41	AUE_DUP		STD|SYSFIL_STDIO|CAPENABLED {
+41	AUE_DUP		STD|SYSFIL_FDESC|CAPENABLED {
 		int dup(
 		    u_int fd
 		);
 	}
-42	AUE_PIPE	COMPAT10|SYSFIL_STDIO|CAPENABLED {
+42	AUE_PIPE	COMPAT10|SYSFIL_FDESC|CAPENABLED {
 		int pipe(void);
 	}
-43	AUE_GETEGID	STD|SYSFIL_STDIO|CAPENABLED {
+43	AUE_GETEGID	STD|SYSFIL_GETCRED|CAPENABLED {
 		gid_t getegid(void);
 	}
 44	AUE_PROFILE	STD|SYSFIL_TRACE|CAPENABLED {
@@ -383,17 +383,17 @@
 		    int pid
 		);
 	}
-46	AUE_SIGACTION	COMPAT|SYSFIL_STDIO|CAPENABLED {
+46	AUE_SIGACTION	COMPAT|SYSFIL_SIGHAND|CAPENABLED {
 		int sigaction(
 		    int signum,
 		    _In_opt_ _Contains_ptr_ struct osigaction *nsa,
 		    _Out_opt_ _Contains_ptr_ struct osigaction *osa
 		);
 	}
-47	AUE_GETGID	STD|SYSFIL_STDIO|CAPENABLED {
+47	AUE_GETGID	STD|SYSFIL_GETCRED|CAPENABLED {
 		gid_t getgid(void);
 	}
-48	AUE_SIGPROCMASK	COMPAT|SYSFIL_STDIO|CAPENABLED {
+48	AUE_SIGPROCMASK	COMPAT|SYSFIL_SIGMASK|CAPENABLED {
 		int sigprocmask(
 		    int how,
 		    osigset_t mask
@@ -402,13 +402,13 @@
 ; XXX note nonstandard (bogus) calling convention - the libc stub passes
 ; us the mask, not a pointer to it, and we return the old mask as the
 ; (int) return value.
-49	AUE_GETLOGIN	STD|SYSFIL_STDIO|CAPENABLED {
+49	AUE_GETLOGIN	STD|SYSFIL_GETCRED|CAPENABLED {
 		int getlogin(
 		    _Out_writes_z_(namelen) char *namebuf,
 		    u_int namelen
 		);
 	}
-50	AUE_SETLOGIN	STD|SYSFIL_CRED {
+50	AUE_SETLOGIN	STD|SYSFIL_SETCRED {
 		int setlogin(
 		    _In_z_ const char *namebuf
 		);
@@ -418,16 +418,16 @@
 		    _In_z_ const char *path
 		);
 	}
-52	AUE_SIGPENDING	COMPAT|SYSFIL_STDIO|CAPENABLED {
+52	AUE_SIGPENDING	COMPAT|SYSFIL_SIGWAIT|CAPENABLED {
 		int sigpending(void);
 	}
-53	AUE_SIGALTSTACK	STD|SYSFIL_STDIO|CAPENABLED {
+53	AUE_SIGALTSTACK	STD|SYSFIL_SIGHAND|CAPENABLED {
 		int sigaltstack(
 		    _In_opt_ _Contains_long_ptr_ const struct sigaltstack *ss,
 		    _Out_opt_ _Contains_long_ptr_ struct sigaltstack *oss
 		);
 	}
-54	AUE_IOCTL	STD|SYSFIL_STDIO|CAPENABLED {
+54	AUE_IOCTL	STD|SYSFIL_CORE|CAPENABLED {
 		int ioctl(
 		    int fd,
 		    u_long com,
@@ -444,27 +444,27 @@
 		    _In_z_ const char *path
 		);
 	}
-57	AUE_SYMLINK	STD|SYSFIL_VFS_CREATE {
+57	AUE_SYMLINK	STD|SYSFIL_CPATH {
 		int symlink(
 		    _In_z_ const char *path,
 		    _In_z_ const char *link
 		);
 	}
-58	AUE_READLINK	STD|SYSFIL_VFS_READ {
+58	AUE_READLINK	STD|SYSFIL_RPATH {
 		ssize_t readlink(
 		    _In_z_ const char *path,
 		    _Out_writes_z_(count) char *buf,
 		    size_t count
 		);
 	}
-59	AUE_EXECVE	STD|SYSFIL_EXEC {
+59	AUE_EXECVE	STD|SYSFIL_PATH|SYSFIL_EXEC {
 		int execve(
 		    _In_z_ const char *fname,
 		    _In_z_ char **argv,
 		    _In_z_ char **envv
 		);
 	}
-60	AUE_UMASK	STD|SYSFIL_STDIO|CAPENABLED {
+60	AUE_UMASK	STD|SYSFIL_FDESC|CAPENABLED {
 		mode_t umask(
 		    mode_t newmask
 		);
@@ -474,13 +474,13 @@
 		    _In_z_ const char *path
 		);
 	}
-62	AUE_FSTAT	COMPAT|SYSFIL_STDIO|CAPENABLED {
+62	AUE_FSTAT	COMPAT|SYSFIL_CORE|CAPENABLED {
 		int fstat(
 		    int fd,
 		    _Out_ _Contains_timet_ struct ostat *sb
 		);
 	}
-63	AUE_NULL	COMPAT|SYSFIL_STDIO {
+63	AUE_NULL	COMPAT|SYSFIL_SYSINFO {
 		int getkerninfo(
 		    int op,
 		    _Out_writes_bytes_opt(*size) char *where,
@@ -488,10 +488,10 @@
 		    int arg
 		);
 	}
-64	AUE_NULL	COMPAT|SYSFIL_STDIO|CAPENABLED {
+64	AUE_NULL	COMPAT|SYSFIL_SYSINFO|CAPENABLED {
 		int getpagesize(void);
 	}
-65	AUE_MSYNC	STD|SYSFIL_STDIO|CAPENABLED {
+65	AUE_MSYNC	STD|SYSFIL_MMAN|CAPENABLED {
 		int msync(
 		    _In_ void *addr,
 		    size_t len,
@@ -503,17 +503,17 @@
 	}
 67	AUE_NULL	OBSOL	vread
 68	AUE_NULL	OBSOL	vwrite
-69	AUE_SBRK	STD|SYSFIL_STDIO|CAPENABLED {
+69	AUE_SBRK	STD|SYSFIL_MMAN|CAPENABLED {
 		int sbrk(
 		    int incr
 		);
 	}
-70	AUE_SSTK	STD|SYSFIL_STDIO|CAPENABLED {
+70	AUE_SSTK	STD|SYSFIL_MMAN|CAPENABLED {
 		int sstk(
 		    int incr
 		);
 	}
-71	AUE_MMAP	COMPAT|SYSFIL_STDIO|CAPENABLED {
+71	AUE_MMAP	COMPAT|SYSFIL_MMAN|CAPENABLED {
 		void *mmap(
 		    _In_ void *addr,
 		    int len,
@@ -523,25 +523,25 @@
 		    long pos
 		);
 	}
-72	AUE_O_VADVISE	COMPAT11|SYSFIL_STDIO {
+72	AUE_O_VADVISE	COMPAT11|SYSFIL_MMAN {
 		int vadvise(
 		    int anom
 		);
 	}
-73	AUE_MUNMAP	STD|SYSFIL_STDIO|CAPENABLED {
+73	AUE_MUNMAP	STD|SYSFIL_MMAN|CAPENABLED {
 		int munmap(
 		    _In_ void *addr,
 		    size_t len
 		);
 	}
-74	AUE_MPROTECT	STD|SYSFIL_STDIO|CAPENABLED {
+74	AUE_MPROTECT	STD|SYSFIL_MMAN|CAPENABLED {
 		int mprotect(
 		    _In_ void *addr,
 		    size_t len,
 		    int prot
 		);
 	}
-75	AUE_MADVISE	STD|SYSFIL_STDIO|CAPENABLED {
+75	AUE_MADVISE	STD|SYSFIL_MMAN|CAPENABLED {
 		int madvise(
 		    _In_ void *addr,
 		    size_t len,
@@ -550,26 +550,26 @@
 	}
 76	AUE_NULL	OBSOL	vhangup
 77	AUE_NULL	OBSOL	vlimit
-78	AUE_MINCORE	STD|SYSFIL_STDIO|CAPENABLED {
+78	AUE_MINCORE	STD|SYSFIL_MMAN|CAPENABLED {
 		int mincore(
 		    _In_ const void *addr,
 		    size_t len,
 		    _Out_writes_bytes_(len/PAGE_SIZE) char *vec
 		);
 	}
-79	AUE_GETGROUPS	STD|SYSFIL_STDIO|CAPENABLED {
+79	AUE_GETGROUPS	STD|SYSFIL_GETCRED|CAPENABLED {
 		int getgroups(
 		    int gidsetsize,
 		    _Out_writes_opt_(gidsetsize) gid_t *gidset
 		);
 	}
-80	AUE_SETGROUPS	STD|SYSFIL_CRED {
+80	AUE_SETGROUPS	STD|SYSFIL_SETCRED {
 		int setgroups(
 		    int gidsetsize,
 		    _In_reads_(gidsetsize) const gid_t *gidset
 		);
 	}
-81	AUE_GETPGRP	STD|SYSFIL_STDIO|CAPENABLED {
+81	AUE_GETPGRP	STD|SYSFIL_PSTAT|CAPENABLED {
 		int getpgrp(void);
 	}
 82	AUE_SETPGRP	STD|SYSFIL_PROC {
@@ -578,14 +578,14 @@
 		    int pgid
 		);
 	}
-83	AUE_SETITIMER	STD|SYSFIL_STDIO|CAPENABLED {
+83	AUE_SETITIMER	STD|SYSFIL_TIMER|CAPENABLED {
 		int setitimer(
 		    int which,
 		    _In_ _Contains_timet_ const struct itimerval *itv,
 		    _Out_opt_ _Contains_timet_ struct itimerval *oitv
 		);
 	}
-84	AUE_WAIT4	COMPAT|SYSFIL_STDIO {
+84	AUE_WAIT4	COMPAT|SYSFIL_PWAIT {
 		int wait(void);
 	}
 85	AUE_SWAPON	STD {
@@ -593,13 +593,13 @@
 		    _In_z_ const char *name
 		);
 	}
-86	AUE_GETITIMER	STD|SYSFIL_STDIO|CAPENABLED {
+86	AUE_GETITIMER	STD|SYSFIL_TIMER|CAPENABLED {
 		int getitimer(
 		    int which,
 		    _Out_ _Contains_timet_ struct itimerval *itv
 		);
 	}
-87	AUE_SYSCTL	COMPAT|SYSFIL_STDIO|CAPENABLED {
+87	AUE_SYSCTL	COMPAT|SYSFIL_SYSINFO|CAPENABLED {
 		int gethostname(
 		    _Out_writes_z_(len) char *hostname,
 		    u_int len
@@ -611,17 +611,17 @@
 		    u_int len
 		);
 	}
-89	AUE_GETDTABLESIZE	STD|SYSFIL_STDIO|CAPENABLED {
+89	AUE_GETDTABLESIZE	STD|SYSFIL_FDESC|CAPENABLED {
 		int getdtablesize(void);
 	}
-90	AUE_DUP2	STD|SYSFIL_STDIO|CAPENABLED {
+90	AUE_DUP2	STD|SYSFIL_FDESC|CAPENABLED {
 		int dup2(
 		    u_int from,
 		    u_int to
 		);
 	}
 91	AUE_NULL	RESERVED
-92	AUE_FCNTL	STD|SYSFIL_STDIO|CAPENABLED {
+92	AUE_FCNTL	STD|SYSFIL_CORE|CAPENABLED {
 		int fcntl(
 		    int fd,
 		    int cmd,
@@ -630,7 +630,7 @@
 	}
 ; XXX should be { int fcntl(int fd, int cmd, ...); }
 ; but we're not ready for varargs.
-93	AUE_SELECT	STD|SYSFIL_STDIO|CAPENABLED {
+93	AUE_SELECT	STD|SYSFIL_CORE|CAPENABLED {
 		int select(
 		    int nd,
 		    _Inout_opt_ fd_set *in,
@@ -640,7 +640,7 @@
 		);
 	}
 94	AUE_NULL	RESERVED
-95	AUE_FSYNC	STD|SYSFIL_STDIO|CAPENABLED {
+95	AUE_FSYNC	STD|SYSFIL_CORE|CAPENABLED {
 		int fsync(
 		    int fd
 		);
@@ -652,7 +652,7 @@
 		    int prio
 		);
 	}
-97	AUE_SOCKET	STD|SYSFIL_SOCK|CAPENABLED {
+97	AUE_SOCKET	STD|SYSFIL_FDESC|SYSFIL_SOCK|CAPENABLED {
 		int socket(
 		    int domain,
 		    int type,
@@ -666,7 +666,7 @@
 		    __socklen_t namelen
 		);
 	}
-99	AUE_ACCEPT	COMPAT|SYSFIL_SOCK|CAPENABLED {
+99	AUE_ACCEPT	COMPAT|SYSFIL_FDESC|SYSFIL_SOCK|CAPENABLED {
 		int accept(
 		    int s,
 		    _Out_writes_bytes_opt_(*anamelen) struct sockaddr *name,
@@ -679,7 +679,7 @@
 		    int who
 		);
 	}
-101	AUE_SEND	COMPAT|SYSFIL_STDIO|CAPENABLED {
+101	AUE_SEND	COMPAT|SYSFIL_SOCKIO|CAPENABLED {
 		int send(
 		    int s,
 		    _In_reads_bytes_(len) const void *buf,
@@ -687,7 +687,7 @@
 		    int flags
 		);
 	}
-102	AUE_RECV	COMPAT|SYSFIL_STDIO|CAPENABLED {
+102	AUE_RECV	COMPAT|SYSFIL_SOCKIO|CAPENABLED {
 		int recv(
 		    int s,
 		    _Out_writes_bytes_(len) void *buf,
@@ -695,7 +695,7 @@
 		    int flags
 		);
 	}
-103	AUE_SIGRETURN	COMPAT|SYSFIL_STDIO|CAPENABLED {
+103	AUE_SIGRETURN	COMPAT|SYSFIL_CORE|CAPENABLED {
 		int sigreturn(
 		    _In_ struct osigcontext *sigcntxp
 		);
@@ -707,7 +707,7 @@
 		    __socklen_t namelen
 		);
 	}
-105	AUE_SETSOCKOPT	STD|SYSFIL_STDIO|CAPENABLED {
+105	AUE_SETSOCKOPT	STD|SYSFIL_SOCKIO|CAPENABLED {
 		int setsockopt(
 		    int s,
 		    int level,
@@ -723,44 +723,44 @@
 		);
 	}
 107	AUE_NULL	OBSOL	vtimes
-108	AUE_NULL	COMPAT|SYSFIL_STDIO|CAPENABLED {
+108	AUE_NULL	COMPAT|SYSFIL_SIGHAND|CAPENABLED {
 		int sigvec(
 		    int signum,
 		    _In_opt_ _Contains_ptr_ struct sigvec *nsv,
 		    _Out_opt_ _Contains_ptr_ struct sigvec *osv
 		);
 	}
-109	AUE_NULL	COMPAT|SYSFIL_STDIO|CAPENABLED {
+109	AUE_NULL	COMPAT|SYSFIL_SIGMASK|CAPENABLED {
 		int sigblock(
 		    int mask
 		);
 	}
-110	AUE_NULL	COMPAT|SYSFIL_STDIO|CAPENABLED {
+110	AUE_NULL	COMPAT|SYSFIL_SIGMASK|CAPENABLED {
 		int sigsetmask(
 		    int mask
 		);
 	}
-111	AUE_NULL	COMPAT|SYSFIL_STDIO|CAPENABLED {
+111	AUE_NULL	COMPAT|SYSFIL_SIGMASK|SYSFIL_SIGWAIT|CAPENABLED {
 		int sigsuspend(
 		    osigset_t mask
 		);
 	}
 ; XXX note nonstandard (bogus) calling convention - the libc stub passes
 ; us the mask, not a pointer to it.
-112	AUE_NULL	COMPAT|SYSFIL_STDIO|CAPENABLED {
+112	AUE_NULL	COMPAT|SYSFIL_SIGHAND|CAPENABLED {
 		int sigstack(
 		    _In_opt_ _Contains_ptr_ struct sigstack *nss,
 		    _Out_opt_ _Contains_ptr_ struct sigstack *oss
 		);
 	}
-113	AUE_RECVMSG	COMPAT|SYSFIL_STDIO|CAPENABLED {
+113	AUE_RECVMSG	COMPAT|SYSFIL_SOCKIO|CAPENABLED {
 		int recvmsg(
 		    int s,
 		    _Inout_ _Contains_ptr_ struct omsghdr *msg,
 		    int flags
 		);
 	}
-114	AUE_SENDMSG	COMPAT|SYSFIL_STDIO|CAPENABLED {
+114	AUE_SENDMSG	COMPAT|SYSFIL_SOCKIO|CAPENABLED {
 		int sendmsg(
 		    int s,
 		    _In_ _Contains_ptr_ const struct omsghdr *msg,
@@ -768,19 +768,19 @@
 		);
 	}
 115	AUE_NULL	OBSOL	vtrace
-116	AUE_GETTIMEOFDAY	STD|SYSFIL_STDIO|CAPENABLED {
+116	AUE_GETTIMEOFDAY	STD|SYSFIL_CLOCK|CAPENABLED {
 		int gettimeofday(
 		    _Out_ _Contains_long_timet_ struct timeval *tp,
 		    _Out_opt_ struct timezone *tzp
 		);
 	}
-117	AUE_GETRUSAGE	STD|SYSFIL_STDIO|CAPENABLED {
+117	AUE_GETRUSAGE	STD|SYSFIL_PSTAT|CAPENABLED {
 		int getrusage(
 		    int who,
 		    _Out_ _Contains_long_ struct rusage *rusage
 		);
 	}
-118	AUE_GETSOCKOPT	STD|SYSFIL_STDIO|CAPENABLED {
+118	AUE_GETSOCKOPT	STD|SYSFIL_SOCKIO|CAPENABLED {
 		int getsockopt(
 		    int s,
 		    int level,
@@ -790,14 +790,14 @@
 		);
 	}
 119	AUE_NULL	RESERVED
-120	AUE_READV	STD|SYSFIL_STDIO|CAPENABLED {
+120	AUE_READV	STD|SYSFIL_CORE|CAPENABLED {
 		int readv(
 		    int fd,
 		    _Inout_updates_(iovcnt) _Contains_long_ptr_ struct iovec *iovp,
 		    u_int iovcnt
 		);
 	}
-121	AUE_WRITEV	STD|SYSFIL_STDIO|CAPENABLED {
+121	AUE_WRITEV	STD|SYSFIL_CORE|CAPENABLED {
 		int writev(
 		    int fd,
 		    _In_reads_opt_(iovcnt) _Contains_long_ptr_ struct iovec *iovp,
@@ -810,7 +810,7 @@
 		    _In_opt_ const struct timezone *tzp
 		);
 	}
-123	AUE_FCHOWN	STD|SYSFIL_CHOWN_CHECKED|CAPENABLED {
+123	AUE_FCHOWN	STD|SYSFIL_FATTR|CAPENABLED {
 		int fchown(
 		    int fd,
 		    int uid,
@@ -823,7 +823,7 @@
 		    mode_t mode
 		);
 	}
-125	AUE_RECVFROM	COMPAT|SYSFIL_STDIO|CAPENABLED {
+125	AUE_RECVFROM	COMPAT|SYSFIL_SOCKIO|CAPENABLED {
 		int recvfrom(
 		    int s,
 		    _Out_writes_(len) void *buf,
@@ -833,31 +833,31 @@
 		    _Inout_ __socklen_t *fromlenaddr
 		);
 	}
-126	AUE_SETREUID	STD|SYSFIL_CRED|CAPENABLED {
+126	AUE_SETREUID	STD|SYSFIL_SETCRED|CAPENABLED {
 		int setreuid(
 		    int ruid,
 		    int euid
 		);
 	}
-127	AUE_SETREGID	STD|SYSFIL_CRED|CAPENABLED {
+127	AUE_SETREGID	STD|SYSFIL_SETCRED|CAPENABLED {
 		int setregid(
 		    int rgid,
 		    int egid
 		);
 	}
-128	AUE_RENAME	STD|SYSFIL_VFS_CREATE|SYSFIL_VFS_DELETE {
+128	AUE_RENAME	STD|SYSFIL_CPATH|SYSFIL_DPATH {
 		int rename(
 		    _In_z_ const char *from,
 		    _In_z_ const char *to
 		);
 	}
-129	AUE_TRUNCATE	COMPAT|SYSFIL_VFS_WRITE {
+129	AUE_TRUNCATE	COMPAT|SYSFIL_WPATH {
 		int truncate(
 		    _In_z_ const char *path,
 		    long length
 		);
 	}
-130	AUE_FTRUNCATE	COMPAT|SYSFIL_STDIO|CAPENABLED {
+130	AUE_FTRUNCATE	COMPAT|SYSFIL_CORE|CAPENABLED {
 		int ftruncate(
 		    int fd,
 		    long length
@@ -869,13 +869,13 @@
 		    int how
 		);
 	}
-132	AUE_MKFIFO	STD|SYSFIL_VFS_CREATE {
+132	AUE_MKFIFO	STD|SYSFIL_CPATH {
 		int mkfifo(
 		    _In_z_ const char *path,
 		    mode_t mode
 		);
 	}
-133	AUE_SENDTO	STD|SYSFIL_STDIO|CAPENABLED {
+133	AUE_SENDTO	STD|SYSFIL_SOCKIO|CAPENABLED {
 		ssize_t sendto(
 		    int s,
 		    _In_reads_bytes_(len) const void *buf,
@@ -885,13 +885,13 @@
 		    __socklen_t tolen
 		);
 	}
-134	AUE_SHUTDOWN	STD|SYSFIL_STDIO|CAPENABLED {
+134	AUE_SHUTDOWN	STD|SYSFIL_SOCKIO|CAPENABLED {
 		int shutdown(
 		    int s,
 		    int how
 		);
 	}
-135	AUE_SOCKETPAIR	STD|SYSFIL_STDIO|CAPENABLED {
+135	AUE_SOCKETPAIR	STD|SYSFIL_FDESC|CAPENABLED {
 		int socketpair(
 		    int domain,
 		    int type,
@@ -899,25 +899,25 @@
 		    _Out_writes_(2) int *rsv
 		);
 	}
-136	AUE_MKDIR	STD|SYSFIL_VFS_CREATE {
+136	AUE_MKDIR	STD|SYSFIL_CPATH {
 		int mkdir(
 		    _In_z_ const char *path,
 		    mode_t mode
 		);
 	}
-137	AUE_RMDIR	STD|SYSFIL_VFS_DELETE {
+137	AUE_RMDIR	STD|SYSFIL_DPATH {
 		int rmdir(
 		    _In_z_ const char *path
 		);
 	}
-138	AUE_UTIMES	STD|SYSFIL_FATTR {
+138	AUE_UTIMES	STD|SYSFIL_PATH|SYSFIL_FATTR {
 		int utimes(
 		    _In_z_ const char *path,
 		    _In_ _Contains_long_timet_ const struct timeval *tptr
 		);
 	}
 139	AUE_NULL	OBSOL	4.2 sigreturn
-140	AUE_ADJTIME	STD|SYSFIL_SETTIME_CHECKED {
+140	AUE_ADJTIME	STD|SYSFIL_ADJTIME {
 		int adjtime(
 		    _In_ _Contains_long_timet_ const struct timeval *delta,
 		    _Out_opt_ _Contains_long_timet_ struct timeval *olddelta
@@ -930,15 +930,15 @@
 		    _Inout_opt_ __socklen_t *alen
 		);
 	}
-142	AUE_SYSCTL	COMPAT|SYSFIL_STDIO|CAPENABLED {
+142	AUE_SYSCTL	COMPAT|SYSFIL_SYSINFO|CAPENABLED {
 		long gethostid(void);
 	}
-143	AUE_SYSCTL	COMPAT|SYSFIL_STDIO {
+143	AUE_SYSCTL	COMPAT {
 		int sethostid(
 		    long hostid
 		);
 	}
-144	AUE_GETRLIMIT	COMPAT|SYSFIL_STDIO|CAPENABLED {
+144	AUE_GETRLIMIT	COMPAT|SYSFIL_PSTAT|CAPENABLED {
 		int getrlimit(
 		    u_int which,
 		    _Out_ struct orlimit *rlp
@@ -994,7 +994,7 @@
 		    _In_ void *argp
 		);
 	}
-156	AUE_GETDIRENTRIES	COMPAT|SYSFIL_VFS_READ|CAPENABLED {
+156	AUE_GETDIRENTRIES	COMPAT|SYSFIL_RPATH|CAPENABLED {
 		int getdirentries(
 		    int fd,
 		    _Out_writes_bytes_(count) char *buf,
@@ -1002,32 +1002,32 @@
 		    _Out_ long *basep
 		);
 	}
-157	AUE_STATFS	COMPAT4|SYSFIL_VFS_READ {
+157	AUE_STATFS	COMPAT4|SYSFIL_RPATH {
 		int statfs(
 		    _In_z_ const char *path,
 		    _Out_ _Contains_long_ struct ostatfs *buf
 		);
 	}
-158	AUE_FSTATFS	COMPAT4|SYSFIL_VFS_READ|CAPENABLED {
+158	AUE_FSTATFS	COMPAT4|SYSFIL_RPATH|CAPENABLED {
 		int fstatfs(
 		    int fd,
 		    _Out_ _Contains_long_ struct ostatfs *buf
 		);
 	}
 159	AUE_NULL	RESERVED
-160	AUE_LGETFH	STD|SYSFIL_FH {
+160	AUE_LGETFH	STD|SYSFIL_PATH|SYSFIL_FH {
 		int lgetfh(
 		    _In_z_ const char *fname,
 		    _Out_ struct fhandle *fhp
 		);
 	}
-161	AUE_NFS_GETFH	STD|SYSFIL_FH {
+161	AUE_NFS_GETFH	STD|SYSFIL_PATH|SYSFIL_FH {
 		int getfh(
 		    _In_z_ const char *fname,
 		    _Out_ struct fhandle *fhp
 		);
 	}
-162	AUE_SYSCTL	COMPAT4|SYSFIL_STDIO|CAPENABLED {
+162	AUE_SYSCTL	COMPAT4|SYSFIL_SYSINFO|CAPENABLED {
 		int getdomainname(
 		    _Out_writes_z_(len) char *domainname,
 		    int len
@@ -1039,12 +1039,12 @@
 		    int len
 		);
 	}
-164	AUE_NULL	COMPAT4|SYSFIL_STDIO {
+164	AUE_NULL	COMPAT4|SYSFIL_SYSINFO {
 		int uname(
 		    _Out_ struct utsname *name
 		);
 	}
-165	AUE_SYSARCH	STD|SYSFIL_STDIO|CAPENABLED {
+165	AUE_SYSARCH	STD|SYSFIL_CORE|CAPENABLED {
 		int sysarch(
 		    int op,
 		    _In_z_ char *parms
@@ -1066,7 +1066,7 @@
 		);
 	}
 168	AUE_NULL	RESERVED
-169	AUE_SEMSYS	NOSTD|SYSFIL_SYSVIPC {
+169	AUE_SEMSYS	NOSTD|SYSFIL_SYSVSEM {
 		int semsys(
 		    int which,
 		    int a2,
@@ -1076,7 +1076,7 @@
 		);
 	}
 ; XXX should be { int semsys(int which, ...); }
-170	AUE_MSGSYS	NOSTD|SYSFIL_SYSVIPC {
+170	AUE_MSGSYS	NOSTD|SYSFIL_SYSVMSG {
 		int msgsys(
 		    int which,
 		    int a2,
@@ -1087,7 +1087,7 @@
 		);
 	}
 ; XXX should be { int msgsys(int which, ...); }
-171	AUE_SHMSYS	NOSTD|SYSFIL_SYSVIPC {
+171	AUE_SHMSYS	NOSTD|SYSFIL_SYSVSHM {
 		int shmsys(
 		    int which,
 		    int a2,
@@ -1097,7 +1097,7 @@
 	}
 ; XXX should be { int shmsys(int which, ...); }
 172	AUE_NULL	RESERVED
-173	AUE_PREAD	COMPAT6|SYSFIL_STDIO|CAPENABLED {
+173	AUE_PREAD	COMPAT6|SYSFIL_CORE|CAPENABLED {
 		ssize_t pread(
 		    int fd,
 		    _Out_writes_bytes_(nbyte) void *buf,
@@ -1106,7 +1106,7 @@
 		    off_t offset
 		);
 	}
-174	AUE_PWRITE	COMPAT6|SYSFIL_STDIO|CAPENABLED {
+174	AUE_PWRITE	COMPAT6|SYSFIL_CORE|CAPENABLED {
 		ssize_t pwrite(
 		    int fd,
 		    _In_reads_bytes_(nbyte) const void *buf,
@@ -1126,17 +1126,17 @@
 		);
 	}
 177-180	AUE_NULL	RESERVED
-181	AUE_SETGID	STD|SYSFIL_CRED|CAPENABLED {
+181	AUE_SETGID	STD|SYSFIL_SETCRED|CAPENABLED {
 		int setgid(
 		    gid_t gid
 		);
 	}
-182	AUE_SETEGID	STD|SYSFIL_CRED|CAPENABLED {
+182	AUE_SETEGID	STD|SYSFIL_SETCRED|CAPENABLED {
 		int setegid(
 		    gid_t egid
 		);
 	}
-183	AUE_SETEUID	STD|SYSFIL_CRED|CAPENABLED {
+183	AUE_SETEUID	STD|SYSFIL_SETCRED|CAPENABLED {
 		int seteuid(
 		    uid_t euid
 		);
@@ -1145,38 +1145,38 @@
 185	AUE_NULL	OBSOL	lfs_markv
 186	AUE_NULL	OBSOL	lfs_segclean
 187	AUE_NULL	OBSOL	lfs_segwait
-188	AUE_STAT	COMPAT11|SYSFIL_VFS_READ {
+188	AUE_STAT	COMPAT11|SYSFIL_RPATH {
 		int stat(
 		    _In_z_ const char *path,
 		    _Out_ _Contains_timet_ struct freebsd11_stat *ub
 		);
 	}
-189	AUE_FSTAT	COMPAT11|SYSFIL_STDIO|CAPENABLED {
+189	AUE_FSTAT	COMPAT11|SYSFIL_CORE|CAPENABLED {
 		int fstat(
 		    int fd,
 		    _Out_ _Contains_timet_ struct freebsd11_stat *sb
 		);
 	}
-190	AUE_LSTAT	COMPAT11|SYSFIL_VFS_READ {
+190	AUE_LSTAT	COMPAT11|SYSFIL_RPATH {
 		int lstat(
 		    _In_z_ const char *path,
 		    _Out_ _Contains_timet_ struct freebsd11_stat *ub
 		);
 	}
-191	AUE_PATHCONF	STD|SYSFIL_VFS_MISC {
+191	AUE_PATHCONF	STD|SYSFIL_PATH {
 		int pathconf(
 		    _In_z_ const char *path,
 		    int name
 		);
 	}
-192	AUE_FPATHCONF	STD|SYSFIL_STDIO|CAPENABLED {
+192	AUE_FPATHCONF	STD|SYSFIL_CORE|CAPENABLED {
 		int fpathconf(
 		    int fd,
 		    int name
 		);
 	}
 193	AUE_NULL	RESERVED
-194	AUE_GETRLIMIT	STD|SYSFIL_STDIO|CAPENABLED {
+194	AUE_GETRLIMIT	STD|SYSFIL_PSTAT|CAPENABLED {
 		int getrlimit(
 		    u_int which,
 		    _Out_ struct rlimit *rlp
@@ -1188,7 +1188,7 @@
 		    _In_ struct rlimit *rlp
 		);
 	}
-196	AUE_GETDIRENTRIES	COMPAT11|SYSFIL_VFS_READ|CAPENABLED {
+196	AUE_GETDIRENTRIES	COMPAT11|SYSFIL_RPATH|CAPENABLED {
 		int getdirentries(
 		    int fd,
 		    _Out_writes_bytes_(count) char *buf,
@@ -1196,7 +1196,7 @@
 		    _Out_ long *basep
 		);
 	}
-197	AUE_MMAP	COMPAT6|SYSFIL_STDIO|CAPENABLED {
+197	AUE_MMAP	COMPAT6|SYSFIL_MMAN|CAPENABLED {
 		void *mmap(
 		    _In_ void *addr,
 		    size_t len,
@@ -1213,7 +1213,7 @@
 		    ...
 		);
 	}
-199	AUE_LSEEK	COMPAT6|SYSFIL_STDIO|CAPENABLED {
+199	AUE_LSEEK	COMPAT6|SYSFIL_CORE|CAPENABLED {
 		off_t lseek(
 		    int fd,
 		    int pad,
@@ -1221,21 +1221,21 @@
 		    int whence
 		);
 	}
-200	AUE_TRUNCATE	COMPAT6|SYSFIL_VFS_WRITE {
+200	AUE_TRUNCATE	COMPAT6|SYSFIL_WPATH {
 		int truncate(
 		    _In_z_ const char *path,
 		    int pad,
 		    off_t length
 		);
 	}
-201	AUE_FTRUNCATE	COMPAT6|SYSFIL_STDIO|CAPENABLED {
+201	AUE_FTRUNCATE	COMPAT6|SYSFIL_CORE|CAPENABLED {
 		int ftruncate(
 		    int fd,
 		    int pad,
 		    off_t length
 		);
 	}
-202	AUE_SYSCTL	STD|SYSFIL_STDIO|CAPENABLED {
+202	AUE_SYSCTL	STD|SYSFIL_SYSINFO|CAPENABLED {
 		int __sysctl(
 		    _In_reads_(namelen) int *name,
 		    u_int namelen,
@@ -1257,7 +1257,7 @@
 		    size_t len
 		);
 	}
-205	AUE_UNDELETE	STD|SYSFIL_VFS_CREATE {
+205	AUE_UNDELETE	STD|SYSFIL_CPATH {
 		int undelete(
 		    _In_z_ const char *path
 		);
@@ -1268,13 +1268,13 @@
 		    _In_reads_(2) _Contains_long_timet_ const struct timeval *tptr
 		);
 	}
-207	AUE_GETPGID	STD|SYSFIL_STDIO|CAPENABLED {
+207	AUE_GETPGID	STD|SYSFIL_PSTAT|CAPENABLED {
 		int getpgid(
 		    pid_t pid
 		);
 	}
 208	AUE_NULL	RESERVED
-209	AUE_POLL	STD|SYSFIL_STDIO|CAPENABLED {
+209	AUE_POLL	STD|SYSFIL_CORE|CAPENABLED {
 		int poll(
 		    _Inout_updates_(nfds) struct pollfd *fds,
 		    u_int nfds,
@@ -1295,7 +1295,7 @@
 218	AUE_NULL	NODEF|NOTSTATIC	lkmnosys lkmnosys nosys_args int
 219	AUE_NULL	NODEF|NOTSTATIC	lkmnosys lkmnosys nosys_args int
 
-220	AUE_SEMCTL	COMPAT7|NOSTD|SYSFIL_SYSVIPC {
+220	AUE_SEMCTL	COMPAT7|NOSTD|SYSFIL_SYSVSEM {
 		int __semctl(
 		    int semid,
 		    int semnum,
@@ -1303,14 +1303,14 @@
 		    _Contains_ptr_ union semun_old *arg
 		);
 	}
-221	AUE_SEMGET	NOSTD|SYSFIL_SYSVIPC {
+221	AUE_SEMGET	NOSTD|SYSFIL_SYSVSEM {
 		int semget(
 		    key_t key,
 		    int nsems,
 		    int semflg
 		);
 	}
-222	AUE_SEMOP	NOSTD|SYSFIL_SYSVIPC {
+222	AUE_SEMOP	NOSTD|SYSFIL_SYSVSEM {
 		int semop(
 		    int semid,
 		    _In_reads_(nsops) struct sembuf *sops,
@@ -1318,20 +1318,20 @@
 		);
 	}
 223	AUE_NULL	OBSOL	semconfig
-224	AUE_MSGCTL	COMPAT7|NOSTD|SYSFIL_SYSVIPC {
+224	AUE_MSGCTL	COMPAT7|NOSTD|SYSFIL_SYSVMSG {
 		int msgctl(
 		    int msqid,
 		    int cmd,
 		    _Contains_long_ptr_timet_ struct msqid_ds_old *buf
 		);
 	}
-225	AUE_MSGGET	NOSTD|SYSFIL_SYSVIPC {
+225	AUE_MSGGET	NOSTD|SYSFIL_SYSVMSG {
 		int msgget(
 		    key_t key,
 		    int msgflg
 		);
 	}
-226	AUE_MSGSND	NOSTD|SYSFIL_SYSVIPC {
+226	AUE_MSGSND	NOSTD|SYSFIL_SYSVMSG {
 		int msgsnd(
 		    int msqid,
 		    _In_reads_bytes_(msgsz) _Contains_long_ const void *msgp,
@@ -1339,7 +1339,7 @@
 		    int msgflg
 		);
 	}
-227	AUE_MSGRCV	NOSTD|SYSFIL_SYSVIPC {
+227	AUE_MSGRCV	NOSTD|SYSFIL_SYSVMSG {
 		ssize_t msgrcv(
 		    int msqid,
 		    _Out_writes_bytes_(msgsz) _Contains_long_ void *msgp,
@@ -1348,33 +1348,33 @@
 		    int msgflg
 		);
 	}
-228	AUE_SHMAT	NOSTD|SYSFIL_SYSVIPC {
+228	AUE_SHMAT	NOSTD|SYSFIL_SYSVSHM {
 		void *shmat(
 		    int shmid,
 		    _In_ const void *shmaddr,
 		    int shmflg
 		);
 	}
-229	AUE_SHMCTL	COMPAT7|NOSTD|SYSFIL_SYSVIPC {
+229	AUE_SHMCTL	COMPAT7|NOSTD|SYSFIL_SYSVSHM {
 		int shmctl(
 		    int shmid,
 		    int cmd,
 		    _Inout_opt_ _Contains_long_ struct shmid_ds_old *buf
 		);
 	}
-230	AUE_SHMDT	NOSTD|SYSFIL_SYSVIPC {
+230	AUE_SHMDT	NOSTD|SYSFIL_SYSVSHM {
 		int shmdt(
 		    _In_ const void *shmaddr
 		);
 	}
-231	AUE_SHMGET	NOSTD|SYSFIL_SYSVIPC {
+231	AUE_SHMGET	NOSTD|SYSFIL_SYSVSHM {
 		int shmget(
 		    key_t key,
 		    size_t size,
 		    int shmflg
 		);
 	}
-232	AUE_NULL	STD|SYSFIL_STDIO|CAPENABLED {
+232	AUE_NULL	STD|SYSFIL_CLOCK|CAPENABLED {
 		int clock_gettime(
 		    clockid_t clock_id,
 		    _Out_ _Contains_long_timet_ struct timespec *tp
@@ -1386,25 +1386,25 @@
 		    _In_ _Contains_long_timet_ const struct timespec *tp
 		);
 	}
-234	AUE_NULL	STD|SYSFIL_STDIO|CAPENABLED {
+234	AUE_NULL	STD|SYSFIL_CLOCK|CAPENABLED {
 		int clock_getres(
 		    clockid_t clock_id,
 		    _Out_ _Contains_long_timet_ struct timespec *tp
 		);
 	}
-235	AUE_NULL	STD|SYSFIL_POSIXRT|CAPENABLED {
+235	AUE_NULL	STD|SYSFIL_TIMER|SYSFIL_POSIXRT|CAPENABLED {
 		int ktimer_create(
 		    clockid_t clock_id,
 		    _In_ _Contains_long_ptr_ struct sigevent *evp,
 		    _Out_ int *timerid
 		);
 	}
-236	AUE_NULL	STD|SYSFIL_POSIXRT|CAPENABLED {
+236	AUE_NULL	STD|SYSFIL_TIMER|SYSFIL_POSIXRT|CAPENABLED {
 		int ktimer_delete(
 		    int timerid
 		);
 	}
-237	AUE_NULL	STD|SYSFIL_POSIXRT|CAPENABLED {
+237	AUE_NULL	STD|SYSFIL_TIMER|SYSFIL_POSIXRT|CAPENABLED {
 		int ktimer_settime(
 		    int timerid,
 		    int flags,
@@ -1412,18 +1412,18 @@
 		    _Out_opt_ _Contains_long_timet_ struct itimerspec *ovalue
 		);
 	}
-238	AUE_NULL	STD|SYSFIL_POSIXRT|CAPENABLED {
+238	AUE_NULL	STD|SYSFIL_TIMER|SYSFIL_POSIXRT|CAPENABLED {
 		int ktimer_gettime(
 		    int timerid,
 		    _Out_ _Contains_long_timet_ struct itimerspec *value
 		);
 	}
-239	AUE_NULL	STD|SYSFIL_POSIXRT|CAPENABLED {
+239	AUE_NULL	STD|SYSFIL_TIMER|SYSFIL_POSIXRT|CAPENABLED {
 		int ktimer_getoverrun(
 		    int timerid
 		);
 	}
-240	AUE_NULL	STD|SYSFIL_STDIO|CAPENABLED {
+240	AUE_NULL	STD|SYSFIL_TIMER|CAPENABLED {
 		int nanosleep(
 		    _In_ _Contains_long_timet_ const struct timespec *rqtp,
 		    _Out_opt_ _Contains_long_timet_ struct timespec *rmtp
@@ -1444,7 +1444,7 @@
 		    _Out_ _Contains_timet_ struct ffclock_estimate *cest
 		);
 	}
-244	AUE_NULL	STD|SYSFIL_STDIO {
+244	AUE_NULL	STD|SYSFIL_TIMER {
 		int clock_nanosleep(
 		    clockid_t clock_id,
 		    int flags,
@@ -1453,7 +1453,7 @@
 		);
 	}
 245-246	AUE_NULL	RESERVED
-247	AUE_NULL	STD|SYSFIL_STDIO {
+247	AUE_NULL	STD|SYSFIL_CLOCK {
 		int clock_getcpuclockid2(
 		    id_t id,
 		    int which,
@@ -1466,23 +1466,23 @@
 		);
 	}
 249	AUE_NULL	RESERVED
-250	AUE_MINHERIT	STD|SYSFIL_STDIO|CAPENABLED {
+250	AUE_MINHERIT	STD|SYSFIL_MMAN|CAPENABLED {
 		int minherit(
 		    _In_ void *addr,
 		    size_t len,
 		    int inherit
 		);
 	}
-251	AUE_RFORK	STD|SYSFIL_RFORK_CHECKED {
+251	AUE_RFORK	STD|SYSFIL_RFORK_ {
 		int rfork(
 		    int flags
 		);
 	}
 252	AUE_POLL	OBSOL	openbsd_poll
-253	AUE_ISSETUGID	STD|SYSFIL_STDIO|CAPENABLED {
+253	AUE_ISSETUGID	STD|SYSFIL_CORE|CAPENABLED {
 		int issetugid(void);
 	}
-254	AUE_LCHOWN	STD|SYSFIL_CHOWN_CHECKED {
+254	AUE_LCHOWN	STD|SYSFIL_PATH|SYSFIL_FATTR {
 		int lchown(
 		    _In_z_ const char *path,
 		    int uid,
@@ -1508,7 +1508,7 @@
 		);
 	}
 258-271	AUE_NULL	RESERVED
-272	AUE_O_GETDENTS	COMPAT11|SYSFIL_VFS_READ|CAPENABLED {
+272	AUE_O_GETDENTS	COMPAT11|SYSFIL_RPATH|CAPENABLED {
 		int getdents(
 		    int fd,
 		    _Out_writes_bytes_(count) char *buf,
@@ -1516,40 +1516,40 @@
 		);
 	}
 273	AUE_NULL	RESERVED
-274	AUE_LCHMOD	STD|SYSFIL_FATTR {
+274	AUE_LCHMOD	STD|SYSFIL_PATH|SYSFIL_FATTR {
 		int lchmod(
 		    _In_z_ const char *path,
 		    mode_t mode
 		);
 	}
 275	AUE_NULL	OBSOL	netbsd_lchown
-276	AUE_LUTIMES	STD|SYSFIL_FATTR {
+276	AUE_LUTIMES	STD|SYSFIL_PATH|SYSFIL_FATTR {
 		int lutimes(
 		    _In_z_ const char *path,
 		    _In_ _Contains_long_timet_ const struct timeval *tptr
 		);
 	}
 277	AUE_NULL	OBSOL	netbsd_msync
-278	AUE_STAT	COMPAT11|SYSFIL_VFS_READ {
+278	AUE_STAT	COMPAT11|SYSFIL_RPATH {
 		int nstat(
 		    _In_z_ const char *path,
 		    _Out_ _Contains_long_timet_ struct nstat *ub
 		);
 	}
-279	AUE_FSTAT	COMPAT11|SYSFIL_STDIO {
+279	AUE_FSTAT	COMPAT11|SYSFIL_CORE {
 		int nfstat(
 		    int fd,
 		    _Out_ _Contains_long_timet_ struct nstat *sb
 		);
 	}
-280	AUE_LSTAT	COMPAT11|SYSFIL_VFS_READ {
+280	AUE_LSTAT	COMPAT11|SYSFIL_RPATH {
 		int nlstat(
 		    _In_z_ const char *path,
 		    _Out_ _Contains_long_timet_ struct nstat *ub
 		);
 	}
 281-288	AUE_NULL	RESERVED
-289	AUE_PREADV	STD|SYSFIL_STDIO|CAPENABLED {
+289	AUE_PREADV	STD|SYSFIL_CORE|CAPENABLED {
 		ssize_t preadv(
 		    int fd,
 		    _In_reads_(iovcnt) _Contains_long_ptr_ struct iovec *iovp,
@@ -1557,7 +1557,7 @@
 		    off_t offset
 		);
 	}
-290	AUE_PWRITEV	STD|SYSFIL_STDIO|CAPENABLED {
+290	AUE_PWRITEV	STD|SYSFIL_CORE|CAPENABLED {
 		ssize_t pwritev(
 		    int fd,
 		    _In_reads_(iovcnt) _Contains_long_ptr_ struct iovec *iovp,
@@ -1566,19 +1566,19 @@
 		);
 	}
 291-296	AUE_NULL	RESERVED
-297	AUE_FHSTATFS	COMPAT4|SYSFIL_FH {
+297	AUE_FHSTATFS	COMPAT4|SYSFIL_RPATH|SYSFIL_FH {
 		int fhstatfs(
 		    _In_ const struct fhandle *u_fhp,
 		    _Out_ _Contains_long_ struct ostatfs *buf
 		);
 	}
-298	AUE_FHOPEN	STD|SYSFIL_FH {
+298	AUE_FHOPEN	STD|SYSFIL_PATH|SYSFIL_FDESC|SYSFIL_FH {
 		int fhopen(
 		    _In_ const struct fhandle *u_fhp,
 		    int flags
 		);
 	}
-299	AUE_FHSTAT	COMPAT11|SYSFIL_FH {
+299	AUE_FHSTAT	COMPAT11|SYSFIL_RPATH|SYSFIL_FH {
 		int fhstat(
 		    _In_ const struct fhandle *u_fhp,
 		    _Out_ _Contains_long_timet_ struct freebsd11_stat *sb
@@ -1636,19 +1636,19 @@
 		    int fileid
 		);
 	}
-310	AUE_GETSID	STD|SYSFIL_STDIO|CAPENABLED {
+310	AUE_GETSID	STD|SYSFIL_PSTAT|CAPENABLED {
 		int getsid(
 		    pid_t pid
 		);
 	}
-311	AUE_SETRESUID	STD|SYSFIL_CRED|CAPENABLED {
+311	AUE_SETRESUID	STD|SYSFIL_SETCRED|CAPENABLED {
 		int setresuid(
 		    uid_t ruid,
 		    uid_t euid,
 		    uid_t suid
 		);
 	}
-312	AUE_SETRESGID	STD|SYSFIL_CRED|CAPENABLED {
+312	AUE_SETRESGID	STD|SYSFIL_SETCRED|CAPENABLED {
 		int setresgid(
 		    gid_t rgid,
 		    gid_t egid,
@@ -1697,7 +1697,7 @@
 		    _In_opt_ _Contains_ptr_ struct osigevent *sig
 		);
 	}
-321	AUE_NULL	STD|SYSFIL_STDIO|CAPENABLED {
+321	AUE_NULL	STD|SYSFIL_CORE|CAPENABLED {
 		int yield(void);
 	}
 322	AUE_NULL	OBSOL	thr_sleep
@@ -1710,50 +1710,50 @@
 325	AUE_MUNLOCKALL	STD|SYSFIL_MLOCK|CAPENABLED {
 		int munlockall(void);
 	}
-326	AUE_GETCWD	STD|SYSFIL_VFS_MISC {
+326	AUE_GETCWD	STD|SYSFIL_PATH {
 		int __getcwd(
 		    _Out_writes_z_(buflen) char *buf,
 		    size_t buflen
 		);
 	}
-327	AUE_NULL	STD|SYSFIL_POSIXRT|CAPENABLED {
+327	AUE_NULL	STD|SYSFIL_SCHED|SYSFIL_POSIXRT|CAPENABLED {
 		int sched_setparam(
 		    pid_t pid,
 		    _In_ const struct sched_param *param
 		);
 	}
-328	AUE_NULL	STD|SYSFIL_POSIXRT|CAPENABLED {
+328	AUE_NULL	STD|SYSFIL_SCHED|SYSFIL_POSIXRT|CAPENABLED {
 		int sched_getparam(
 		    pid_t pid,
 		    _Out_ struct sched_param *param
 		);
 	}
-329	AUE_NULL	STD|SYSFIL_POSIXRT|CAPENABLED {
+329	AUE_NULL	STD|SYSFIL_SCHED|SYSFIL_POSIXRT|CAPENABLED {
 		int sched_setscheduler(
 		    pid_t pid,
 		    int policy,
 		    _In_ const struct sched_param *param
 		);
 	}
-330	AUE_NULL	STD|SYSFIL_POSIXRT|CAPENABLED {
+330	AUE_NULL	STD|SYSFIL_SCHED|SYSFIL_POSIXRT|CAPENABLED {
 		int sched_getscheduler(
 		    pid_t pid
 		);
 	}
-331	AUE_NULL	STD|SYSFIL_STDIO|CAPENABLED {
+331	AUE_NULL	STD|SYSFIL_CORE|CAPENABLED {
 		int sched_yield(void);
 	}
-332	AUE_NULL	STD|SYSFIL_POSIXRT|CAPENABLED {
+332	AUE_NULL	STD|SYSFIL_SCHED|SYSFIL_POSIXRT|CAPENABLED {
 		int sched_get_priority_max(
 		    int policy
 		);
 	}
-333	AUE_NULL	STD|SYSFIL_POSIXRT|CAPENABLED {
+333	AUE_NULL	STD|SYSFIL_SCHED|SYSFIL_POSIXRT|CAPENABLED {
 		int sched_get_priority_min(
 		    int policy
 		);
 	}
-334	AUE_NULL	STD|SYSFIL_POSIXRT|CAPENABLED {
+334	AUE_NULL	STD|SYSFIL_SCHED|SYSFIL_POSIXRT|CAPENABLED {
 		int sched_rr_get_interval(
 		    pid_t pid,
 		    _Out_ _Contains_long_timet_ struct timespec *interval
@@ -1797,43 +1797,43 @@
 		    int a_followSymlinks
 		);
 	}
-340	AUE_SIGPROCMASK	STD|SYSFIL_STDIO|CAPENABLED {
+340	AUE_SIGPROCMASK	STD|SYSFIL_SIGMASK|CAPENABLED {
 		int sigprocmask(
 		    int how,
 		    _In_opt_ const sigset_t *set,
 		    _Out_opt_ sigset_t *oset
 		);
 	}
-341	AUE_SIGSUSPEND	STD|SYSFIL_STDIO|CAPENABLED {
+341	AUE_SIGSUSPEND	STD|SYSFIL_SIGMASK|SYSFIL_SIGWAIT|CAPENABLED {
 		int sigsuspend(
 		    _In_ const sigset_t *sigmask
 		);
 	}
-342	AUE_SIGACTION	COMPAT4|SYSFIL_STDIO|CAPENABLED {
+342	AUE_SIGACTION	COMPAT4|SYSFIL_SIGHAND|CAPENABLED {
 		int sigaction(
 		    int sig,
 		    _In_opt_ _Contains_ptr_ const struct sigaction *act,
 		    _Out_opt_ _Contains_ptr_ struct sigaction *oact
 		);
 	}
-343	AUE_SIGPENDING	STD|SYSFIL_STDIO|CAPENABLED {
+343	AUE_SIGPENDING	STD|SYSFIL_SIGWAIT|CAPENABLED {
 		int sigpending(
 		    _In_ sigset_t *set
 		);
 	}
-344	AUE_SIGRETURN	COMPAT4|SYSFIL_STDIO|CAPENABLED {
+344	AUE_SIGRETURN	COMPAT4|SYSFIL_CORE|CAPENABLED {
 		int sigreturn(
 		    _In_ _Contains_long_ptr_ const struct freebsd4_ucontext *sigcntxp
 		);
 	}
-345	AUE_SIGWAIT	STD|SYSFIL_STDIO|CAPENABLED {
+345	AUE_SIGWAIT	STD|SYSFIL_SIGWAIT|CAPENABLED {
 		int sigtimedwait(
 		    _In_ const sigset_t *set,
 		    _Out_opt_ _Contains_long_ptr_ struct siginfo *info,
 		    _In_opt_ _Contains_long_timet_ const struct timespec *timeout
 		);
 	}
-346	AUE_NULL	STD|SYSFIL_STDIO|CAPENABLED {
+346	AUE_NULL	STD|SYSFIL_SIGWAIT|CAPENABLED {
 		int sigwaitinfo(
 		    _In_ const sigset_t *set,
 		    _Out_opt_ _Contains_long_ptr_ struct siginfo *info
@@ -1902,7 +1902,7 @@
 		    _In_z_ const char *attrname
 		);
 	}
-356	AUE_EXTATTR_SET_FILE	STD|SYSFIL_EXTATTR {
+356	AUE_EXTATTR_SET_FILE	STD|SYSFIL_PATH|SYSFIL_FATTR|SYSFIL_EXTATTR {
 		ssize_t extattr_set_file(
 		    _In_z_ const char *path,
 		    int attrnamespace,
@@ -1911,7 +1911,7 @@
 		    size_t nbytes
 		);
 	}
-357	AUE_EXTATTR_GET_FILE	STD|SYSFIL_EXTATTR {
+357	AUE_EXTATTR_GET_FILE	STD|SYSFIL_PATH|SYSFIL_EXTATTR {
 		ssize_t extattr_get_file(
 		    _In_z_ const char *path,
 		    int attrnamespace,
@@ -1920,7 +1920,7 @@
 		    size_t nbytes
 		);
 	}
-358	AUE_EXTATTR_DELETE_FILE	STD|SYSFIL_EXTATTR {
+358	AUE_EXTATTR_DELETE_FILE	STD|SYSFIL_PATH|SYSFIL_FATTR|SYSFIL_EXTATTR {
 		int extattr_delete_file(
 		    _In_z_ const char *path,
 		    int attrnamespace,
@@ -1933,24 +1933,24 @@
 		    _In_opt_ _Contains_long_timet_ struct timespec *timeout
 		);
 	}
-360	AUE_GETRESUID	STD|SYSFIL_STDIO|CAPENABLED {
+360	AUE_GETRESUID	STD|SYSFIL_GETCRED|CAPENABLED {
 		int getresuid(
 		    _Out_opt_ uid_t *ruid,
 		    _Out_opt_ uid_t *euid,
 		    _Out_opt_ uid_t *suid
 		);
 	}
-361	AUE_GETRESGID	STD|SYSFIL_STDIO|CAPENABLED {
+361	AUE_GETRESGID	STD|SYSFIL_GETCRED|CAPENABLED {
 		int getresgid(
 		    _Out_opt_ gid_t *rgid,
 		    _Out_opt_ gid_t *egid,
 		    _Out_opt_ gid_t *sgid
 		);
 	}
-362	AUE_KQUEUE	STD|SYSFIL_STDIO|CAPENABLED {
+362	AUE_KQUEUE	STD|SYSFIL_FDESC|CAPENABLED {
 		int kqueue(void);
 	}
-363	AUE_KEVENT	COMPAT11|SYSFIL_STDIO|CAPENABLED {
+363	AUE_KEVENT	COMPAT11|SYSFIL_CORE|CAPENABLED {
 		int kevent(
 		    int fd,
 		    _In_reads_opt_(nchanges) _Contains_ptr_ const struct freebsd11_kevent *changelist,
@@ -1967,7 +1967,7 @@
 368	AUE_NULL	OBSOL	__cap_set_fd
 369	AUE_NULL	OBSOL	__cap_set_file
 370	AUE_NULL	RESERVED
-371	AUE_EXTATTR_SET_FD	STD|SYSFIL_EXTATTR|CAPENABLED {
+371	AUE_EXTATTR_SET_FD	STD|SYSFIL_EXTATTR|SYSFIL_FATTR|CAPENABLED {
 		ssize_t extattr_set_fd(
 		    int fd,
 		    int attrnamespace,
@@ -1985,20 +1985,20 @@
 		    size_t nbytes
 		);
 	}
-373	AUE_EXTATTR_DELETE_FD	STD|SYSFIL_EXTATTR|CAPENABLED {
+373	AUE_EXTATTR_DELETE_FD	STD|SYSFIL_EXTATTR|SYSFIL_FATTR|CAPENABLED {
 		int extattr_delete_fd(
 		    int fd,
 		    int attrnamespace,
 		    _In_z_ const char *attrname
 		);
 	}
-374	AUE_SETUGID	STD|SYSFIL_CRED {
+374	AUE_SETUGID	STD|SYSFIL_SETCRED {
 		int __setugid(
 		    int flag
 		);
 	}
 375	AUE_NULL	OBSOL	nfsclnt
-376	AUE_EACCESS	STD|SYSFIL_VFS_MISC {
+376	AUE_EACCESS	STD|SYSFIL_PATH {
 		int eaccess(
 		    _In_z_ const char *path,
 		    int amode
@@ -2027,12 +2027,12 @@
 381	AUE_NULL	OBSOL	kse_create
 382	AUE_NULL	OBSOL	kse_thr_interrupt
 383	AUE_NULL	OBSOL	kse_release
-384	AUE_NULL	STD|SYSFIL_MAC|CAPENABLED {
+384	AUE_NULL	STD|SYSFIL_MAC|SYSFIL_GETCRED|CAPENABLED {
 		int __mac_get_proc(
 		    _In_ _Contains_long_ptr_ struct mac *mac_p
 		);
 	}
-385	AUE_NULL	STD|SYSFIL_MAC|CAPENABLED {
+385	AUE_NULL	STD|SYSFIL_MAC|SYSFIL_SETCRED|CAPENABLED {
 		int __mac_set_proc(
 		    _In_ _Contains_long_ptr_ struct mac *mac_p
 		);
@@ -2043,19 +2043,19 @@
 		    _In_ _Contains_long_ptr_ struct mac *mac_p
 		);
 	}
-387	AUE_NULL	STD|SYSFIL_MAC {
+387	AUE_NULL	STD|SYSFIL_MAC|SYSFIL_PATH {
 		int __mac_get_file(
 		    _In_z_ const char *path_p,
 		    _In_ _Contains_long_ptr_ struct mac *mac_p
 		);
 	}
-388	AUE_NULL	STD|SYSFIL_MAC|CAPENABLED {
+388	AUE_NULL	STD|SYSFIL_MAC|SYSFIL_FATTR|CAPENABLED {
 		int __mac_set_fd(
 		    int fd,
 		    _In_ _Contains_long_ptr_ struct mac *mac_p
 		);
 	}
-389	AUE_NULL	STD|SYSFIL_MAC {
+389	AUE_NULL	STD|SYSFIL_MAC|SYSFIL_FATTR|SYSFIL_PATH {
 		int __mac_set_file(
 		    _In_z_ const char *path_p,
 		    _In_ _Contains_long_ptr_ struct mac *mac_p
@@ -2069,13 +2069,13 @@
 		    int len
 		);
 	}
-391	AUE_LCHFLAGS	STD|SYSFIL_FATTR {
+391	AUE_LCHFLAGS	STD|SYSFIL_PATH|SYSFIL_FATTR {
 		int lchflags(
 		    _In_z_ const char *path,
 		    u_long flags
 		);
 	}
-392	AUE_NULL	STD|SYSFIL_STDIO|CAPENABLED {
+392	AUE_NULL	STD|SYSFIL_CORE|CAPENABLED {
 		int uuidgen(
 		    _Out_writes_(count) struct uuid *store,
 		    int count
@@ -2099,59 +2099,59 @@
 		    _In_opt_ void *arg
 		);
 	}
-395	AUE_GETFSSTAT	COMPAT11|SYSFIL_VFS_READ {
+395	AUE_GETFSSTAT	COMPAT11|SYSFIL_RPATH {
 		int getfsstat(
 		    _Out_writes_bytes_opt_(bufsize) struct freebsd11_statfs *buf,
 		    long bufsize,
 		    int mode
 		);
 	}
-396	AUE_STATFS	COMPAT11|SYSFIL_VFS_READ {
+396	AUE_STATFS	COMPAT11|SYSFIL_RPATH {
 		int statfs(
 		    _In_z_ const char *path,
 		    _Out_ struct freebsd11_statfs *buf
 		);
 	}
-397	AUE_FSTATFS	COMPAT11|SYSFIL_VFS_READ|CAPENABLED {
+397	AUE_FSTATFS	COMPAT11|SYSFIL_RPATH|CAPENABLED {
 		int fstatfs(
 		    int fd,
 		    _Out_ struct freebsd11_statfs *buf
 		);
 	}
-398	AUE_FHSTATFS	COMPAT11|SYSFIL_FH {
+398	AUE_FHSTATFS	COMPAT11|SYSFIL_RPATH|SYSFIL_FH {
 		int fhstatfs(
 		    _In_ const struct fhandle *u_fhp,
 		    _Out_ struct freebsd11_statfs *buf
 		);
 	}
 399	AUE_NULL	RESERVED
-400	AUE_SEMCLOSE	NOSTD|SYSFIL_POSIXIPC {
+400	AUE_SEMCLOSE	NOSTD|SYSFIL_POSIXSEM {
 		int ksem_close(
 		    semid_t id
 		);
 	}
-401	AUE_SEMPOST	NOSTD|SYSFIL_POSIXIPC {
+401	AUE_SEMPOST	NOSTD|SYSFIL_POSIXSEM {
 		int ksem_post(
 		    semid_t id
 		);
 	}
-402	AUE_SEMWAIT	NOSTD|SYSFIL_POSIXIPC {
+402	AUE_SEMWAIT	NOSTD|SYSFIL_POSIXSEM {
 		int ksem_wait(
 		    semid_t id
 		);
 	}
-403	AUE_SEMTRYWAIT	NOSTD|SYSFIL_POSIXIPC {
+403	AUE_SEMTRYWAIT	NOSTD|SYSFIL_POSIXSEM {
 		int ksem_trywait(
 		    semid_t id
 		);
 	}
-404	AUE_SEMINIT	NOSTD|SYSFIL_POSIXIPC {
+404	AUE_SEMINIT	NOSTD|SYSFIL_POSIXSEM {
 		int ksem_init(
 		    _Out_ semid_t *idp,
 		    unsigned int value
 		);
 	}
-405	AUE_SEMOPEN	NOSTD|SYSFIL_POSIXIPC {
+405	AUE_SEMOPEN	NOSTD|SYSFIL_FDESC|SYSFIL_POSIXSEM {
 		int ksem_open(
 		    _Out_ semid_t *idp,
 		    _In_z_ const char *name,
@@ -2160,41 +2160,41 @@
 		    unsigned int value
 		);
 	}
-406	AUE_SEMUNLINK	NOSTD|SYSFIL_POSIXIPC {
+406	AUE_SEMUNLINK	NOSTD|SYSFIL_POSIXSEM {
 		int ksem_unlink(
 		    _In_z_ const char *name
 		);
 	}
-407	AUE_SEMGETVALUE	NOSTD|SYSFIL_POSIXIPC {
+407	AUE_SEMGETVALUE	NOSTD|SYSFIL_POSIXSEM {
 		int ksem_getvalue(
 		    semid_t id,
 		    _Out_ int *val
 		);
 	}
-408	AUE_SEMDESTROY	NOSTD|SYSFIL_POSIXIPC {
+408	AUE_SEMDESTROY	NOSTD|SYSFIL_POSIXSEM {
 		int ksem_destroy(
 		    semid_t id
 		);
 	}
-409	AUE_NULL	STD|SYSFIL_MAC {
+409	AUE_NULL	STD|SYSFIL_MAC|SYSFIL_GETCRED {
 		int __mac_get_pid(
 		    pid_t pid,
 		    _In_ _Contains_long_ptr_ struct mac *mac_p
 		);
 	}
-410	AUE_NULL	STD|SYSFIL_MAC {
+410	AUE_NULL	STD|SYSFIL_MAC|SYSFIL_PATH {
 		int __mac_get_link(
 		    _In_z_ const char *path_p,
 		    _In_ _Contains_long_ptr_ struct mac *mac_p
 		);
 	}
-411	AUE_NULL	STD|SYSFIL_MAC {
+411	AUE_NULL	STD|SYSFIL_MAC|SYSFIL_FATTR|SYSFIL_PATH {
 		int __mac_set_link(
 		    _In_z_ const char *path_p,
 		    _In_ _Contains_long_ptr_ struct mac *mac_p
 		);
 	}
-412	AUE_EXTATTR_SET_LINK	STD|SYSFIL_EXTATTR {
+412	AUE_EXTATTR_SET_LINK	STD|SYSFIL_PATH|SYSFIL_FATTR|SYSFIL_EXTATTR {
 		ssize_t extattr_set_link(
 		    _In_z_ const char *path,
 		    int attrnamespace,
@@ -2203,7 +2203,7 @@
 		    size_t nbytes
 		);
 	}
-413	AUE_EXTATTR_GET_LINK	STD|SYSFIL_EXTATTR {
+413	AUE_EXTATTR_GET_LINK	STD|SYSFIL_PATH|SYSFIL_EXTATTR {
 		ssize_t extattr_get_link(
 		    _In_z_ const char *path,
 		    int attrnamespace,
@@ -2212,14 +2212,14 @@
 		    size_t nbytes
 		);
 	}
-414	AUE_EXTATTR_DELETE_LINK	STD|SYSFIL_EXTATTR {
+414	AUE_EXTATTR_DELETE_LINK	STD|SYSFIL_PATH|SYSFIL_FATTR|SYSFIL_EXTATTR {
 		int extattr_delete_link(
 		    _In_z_ const char *path,
 		    int attrnamespace,
 		    _In_z_ const char *attrname
 		);
 	}
-415	AUE_NULL	STD|SYSFIL_MAC|SYSFIL_EXEC {
+415	AUE_NULL	STD|SYSFIL_MAC|SYSFIL_PATH|SYSFIL_EXEC {
 		int __mac_execve(
 		    _In_z_ const char *fname,
 		    _In_ char **argv,
@@ -2227,14 +2227,14 @@
 		    _In_ _Contains_long_ptr_ struct mac *mac_p
 		);
 	}
-416	AUE_SIGACTION	STD|SYSFIL_STDIO|CAPENABLED {
+416	AUE_SIGACTION	STD|SYSFIL_SIGHAND|CAPENABLED {
 		int sigaction(
 		    int sig,
 		    _In_opt_ _Contains_ptr_ const struct sigaction *act,
 		    _Out_opt_ _Contains_ptr_ struct sigaction *oact
 		);
 	}
-417	AUE_SIGRETURN	STD|SYSFIL_STDIO|CAPENABLED {
+417	AUE_SIGRETURN	STD|SYSFIL_CORE|CAPENABLED {
 		int sigreturn(
 		    _In_ _Contains_long_ptr_ const struct __ucontext *sigcntxp
 		);
@@ -2288,7 +2288,7 @@
 		    _In_ struct acl *aclp
 		);
 	}
-429	AUE_SIGWAIT	STD|SYSFIL_STDIO|CAPENABLED {
+429	AUE_SIGWAIT	STD|SYSFIL_SIGWAIT|CAPENABLED {
 		int sigwait(
 		    _In_ const sigset_t *set,
 		    _Out_ int *sig
@@ -2306,25 +2306,25 @@
 		    _Out_opt_ long *state
 		);
 	}
-432	AUE_NULL	STD|SYSFIL_THREAD_CHECKED|CAPENABLED {
+432	AUE_NULL	STD|SYSFIL_THREAD_|CAPENABLED {
 		int thr_self(
 		    _Out_ long *id
 		);
 	}
-433	AUE_THR_KILL	STD|SYSFIL_THREAD_CHECKED|CAPENABLED {
+433	AUE_THR_KILL	STD|SYSFIL_THREAD_|CAPENABLED {
 		int thr_kill(
 		    long id,
 		    int sig
 		);
 	}
 
-434	AUE_NULL	COMPAT10|SYSFIL_STDIO {
+434	AUE_NULL	COMPAT10|SYSFIL_THREAD {
 		int _umtx_lock(
 		    _Inout_ struct umtx *umtx
 		);
 	}
 
-435	AUE_NULL	COMPAT10|SYSFIL_STDIO {
+435	AUE_NULL	COMPAT10|SYSFIL_THREAD {
 		int _umtx_unlock(
 		    _Inout_ struct umtx *umtx
 		);
@@ -2343,7 +2343,7 @@
 		    size_t nbytes
 		);
 	}
-438	AUE_EXTATTR_LIST_FILE	STD|SYSFIL_EXTATTR {
+438	AUE_EXTATTR_LIST_FILE	STD|SYSFIL_PATH|SYSFIL_EXTATTR {
 		ssize_t extattr_list_file(
 		    _In_z_ const char *path,
 		    int attrnamespace,
@@ -2351,7 +2351,7 @@
 		    size_t nbytes
 		);
 	}
-439	AUE_EXTATTR_LIST_LINK	STD|SYSFIL_EXTATTR {
+439	AUE_EXTATTR_LIST_LINK	STD|SYSFIL_PATH|SYSFIL_EXTATTR {
 		ssize_t extattr_list_link(
 		    _In_z_ const char *path,
 		    int attrnamespace,
@@ -2360,7 +2360,7 @@
 		);
 	}
 440	AUE_NULL	OBSOL	kse_switchin
-441	AUE_SEMWAIT	NOSTD|SYSFIL_POSIXIPC {
+441	AUE_SEMWAIT	NOSTD|SYSFIL_POSIXSEM {
 		int ksem_timedwait(
 		    semid_t id,
 		    _In_opt_ _Contains_long_timet_ const struct timespec *abstime
@@ -2432,7 +2432,7 @@
 		    _In_z_ const char *path
 		);
 	}
-454	AUE_NULL	STD|SYSFIL_STDIO|CAPENABLED {
+454	AUE_NULL	STD|SYSFIL_THREAD|CAPENABLED {
 		int _umtx_op(
 		    _Inout_ void *obj,
 		    int op,
@@ -2447,7 +2447,7 @@
 		    int param_size
 		);
 	}
-456	AUE_NULL	STD|SYSFIL_STDIO|CAPENABLED {
+456	AUE_NULL	STD|SYSFIL_PROC_|CAPENABLED {
 		int sigqueue(
 		    pid_t pid,
 		    int signum,
@@ -2455,7 +2455,7 @@
 		);
 	}
 
-457	AUE_MQ_OPEN	NOSTD|SYSFIL_POSIXIPC {
+457	AUE_MQ_OPEN	NOSTD|SYSFIL_FDESC|SYSFIL_POSIXMSG {
 		int kmq_open(
 		    _In_z_ const char *path,
 		    int flags,
@@ -2463,14 +2463,14 @@
 		    _In_opt_ _Contains_long_ const struct mq_attr *attr
 		);
 	}
-458	AUE_MQ_SETATTR	NOSTD|SYSFIL_POSIXIPC|CAPENABLED {
+458	AUE_MQ_SETATTR	NOSTD|SYSFIL_POSIXMSG|CAPENABLED {
 		int kmq_setattr(
 		    int mqd,
 		    _In_opt_ _Contains_long_ const struct mq_attr *attr,
 		    _Out_opt_ _Contains_long_ struct mq_attr *oattr
 		);
 	}
-459	AUE_MQ_TIMEDRECEIVE	NOSTD|SYSFIL_POSIXIPC|CAPENABLED {
+459	AUE_MQ_TIMEDRECEIVE	NOSTD|SYSFIL_POSIXMSG|CAPENABLED {
 		int kmq_timedreceive(
 		    int mqd,
 		    _Out_writes_bytes_(msg_len) char *msg_ptr,
@@ -2479,7 +2479,7 @@
 		    _In_opt_ _Contains_long_timet_ const struct timespec *abs_timeout
 		);
 	}
-460	AUE_MQ_TIMEDSEND	NOSTD|SYSFIL_POSIXIPC|CAPENABLED {
+460	AUE_MQ_TIMEDSEND	NOSTD|SYSFIL_POSIXMSG|CAPENABLED {
 		int kmq_timedsend(
 		    int mqd,
 		    _In_reads_bytes_(msg_len) const char *msg_ptr,
@@ -2488,13 +2488,13 @@
 		    _In_opt_ _Contains_long_timet_ const struct timespec *abs_timeout
 		);
 	}
-461	AUE_MQ_NOTIFY	NOSTD|SYSFIL_POSIXIPC|CAPENABLED {
+461	AUE_MQ_NOTIFY	NOSTD|SYSFIL_POSIXMSG|CAPENABLED {
 		int kmq_notify(
 		    int mqd,
 		    _In_opt_ _Contains_long_ptr_ const struct sigevent *sigev
 		);
 	}
-462	AUE_MQ_UNLINK	NOSTD|SYSFIL_POSIXIPC {
+462	AUE_MQ_UNLINK	NOSTD|SYSFIL_POSIXMSG {
 		int kmq_unlink(
 		    _In_z_ const char *path
 		);
@@ -2518,7 +2518,7 @@
 		    _In_ _Contains_long_ptr_ struct aiocb *aiocbp
 		);
 	}
-466	AUE_RTPRIO	STD|SYSFIL_SCHED|CAPENABLED {
+466	AUE_RTPRIO	STD|SYSFIL_THREAD|SYSFIL_SCHED|CAPENABLED {
 		int rtprio_thread(
 		    int function,
 		    lwpid_t lwpid,
@@ -2526,13 +2526,13 @@
 		);
 	}
 467-470	AUE_NULL	RESERVED
-471	AUE_SCTP_PEELOFF	NOSTD|SYSFIL_SCTP|CAPENABLED {
+471	AUE_SCTP_PEELOFF	NOSTD|SYSFIL_FDESC|SYSFIL_SOCK|CAPENABLED {
 		int sctp_peeloff(
 		    int sd,
 		    uint32_t name
 		);
 	}
-472	AUE_SCTP_GENERIC_SENDMSG	NOSTD|SYSFIL_SCTP|CAPENABLED {
+472	AUE_SCTP_GENERIC_SENDMSG	NOSTD|SYSFIL_SOCKIO|CAPENABLED {
 		int sctp_generic_sendmsg(
 		    int sd,
 		    _In_reads_bytes_(mlen) void *msg,
@@ -2543,7 +2543,7 @@
 		    int flags
 		);
 	}
-473	AUE_SCTP_GENERIC_SENDMSG_IOV	NOSTD|SYSFIL_SCTP|CAPENABLED {
+473	AUE_SCTP_GENERIC_SENDMSG_IOV	NOSTD|SYSFIL_SOCKIO|CAPENABLED {
 		int sctp_generic_sendmsg_iov(
 		    int sd,
 		    _In_reads_(iovlen) _Contains_long_ptr_ struct iovec *iov,
@@ -2554,7 +2554,7 @@
 		    int flags
 		);
 	}
-474	AUE_SCTP_GENERIC_RECVMSG	NOSTD|SYSFIL_SCTP|CAPENABLED {
+474	AUE_SCTP_GENERIC_RECVMSG	NOSTD|SYSFIL_SOCKIO|CAPENABLED {
 		int sctp_generic_recvmsg(
 		    int sd,
 		    _In_reads_(iovlen) _Contains_long_ptr_ struct iovec *iov,
@@ -2565,7 +2565,7 @@
 		    _Out_opt_ int *msg_flags
 		);
 	}
-475	AUE_PREAD	STD|SYSFIL_STDIO|CAPENABLED {
+475	AUE_PREAD	STD|SYSFIL_CORE|CAPENABLED {
 		ssize_t pread(
 		    int fd,
 		    _Out_writes_bytes_(nbyte) void *buf,
@@ -2573,7 +2573,7 @@
 		    off_t offset
 		);
 	}
-476	AUE_PWRITE	STD|SYSFIL_STDIO|CAPENABLED {
+476	AUE_PWRITE	STD|SYSFIL_CORE|CAPENABLED {
 		ssize_t pwrite(
 		    int fd,
 		    _In_reads_bytes_(nbyte) const void *buf,
@@ -2581,7 +2581,7 @@
 		    off_t offset
 		);
 	}
-477	AUE_MMAP	STD|SYSFIL_STDIO|CAPENABLED {
+477	AUE_MMAP	STD|SYSFIL_MMAN|CAPENABLED {
 		void *mmap(
 		    _In_ void *addr,
 		    size_t len,
@@ -2591,20 +2591,20 @@
 		    off_t pos
 		);
 	}
-478	AUE_LSEEK	STD|SYSFIL_STDIO|CAPENABLED {
+478	AUE_LSEEK	STD|SYSFIL_CORE|CAPENABLED {
 		off_t lseek(
 		    int fd,
 		    off_t offset,
 		    int whence
 		);
 	}
-479	AUE_TRUNCATE	STD|SYSFIL_VFS_WRITE {
+479	AUE_TRUNCATE	STD|SYSFIL_WPATH {
 		int truncate(
 		    _In_z_ const char *path,
 		    off_t length
 		);
 	}
-480	AUE_FTRUNCATE	STD|SYSFIL_STDIO|CAPENABLED {
+480	AUE_FTRUNCATE	STD|SYSFIL_CORE|CAPENABLED {
 		int ftruncate(
 		    int fd,
 		    off_t length
@@ -2617,14 +2617,14 @@
 		    int sig
 		);
 	}
-482	AUE_SHMOPEN	COMPAT12|SYSFIL_POSIXIPC_CHECKED|CAPENABLED {
+482	AUE_SHMOPEN	COMPAT12|SYSFIL_FDESC|SYSFIL_POSIXSHM_|CAPENABLED {
 		int shm_open(
 		    _In_z_ const char *path,
 		    int flags,
 		    mode_t mode
 		);
 	}
-483	AUE_SHMUNLINK	STD|SYSFIL_POSIXIPC {
+483	AUE_SHMUNLINK	STD|SYSFIL_POSIXSHM {
 		int shm_unlink(
 		    _In_z_ const char *path
 		);
@@ -2649,7 +2649,7 @@
 		    _Out_ cpusetid_t *setid
 		);
 	}
-487	AUE_NULL	STD|SYSFIL_CPUSET_CHECKED|CAPENABLED {
+487	AUE_NULL	STD|SYSFIL_CPUSET_|CAPENABLED {
 		int cpuset_getaffinity(
 		    cpulevel_t level,
 		    cpuwhich_t which,
@@ -2658,7 +2658,7 @@
 		    _Out_ cpuset_t *mask
 		);
 	}
-488	AUE_NULL	STD|SYSFIL_CPUSET_CHECKED|CAPENABLED {
+488	AUE_NULL	STD|SYSFIL_CPUSET_|CAPENABLED {
 		int cpuset_setaffinity(
 		    cpulevel_t level,
 		    cpuwhich_t which,
@@ -2667,7 +2667,7 @@
 		    _Out_ const cpuset_t *mask
 		);
 	}
-489	AUE_FACCESSAT	STD|SYSFIL_VFS_MISC|CAPENABLED {
+489	AUE_FACCESSAT	STD|SYSFIL_PATH|CAPENABLED {
 		int faccessat(
 		    int fd,
 		    _In_z_ const char *path,
@@ -2675,7 +2675,7 @@
 		    int flag
 		);
 	}
-490	AUE_FCHMODAT	STD|SYSFIL_FATTR|CAPENABLED {
+490	AUE_FCHMODAT	STD|SYSFIL_PATH|SYSFIL_FATTR|CAPENABLED {
 		int fchmodat(
 		    int fd,
 		    _In_z_ const char *path,
@@ -2683,7 +2683,7 @@
 		    int flag
 		);
 	}
-491	AUE_FCHOWNAT	STD|SYSFIL_CHOWN_CHECKED|CAPENABLED {
+491	AUE_FCHOWNAT	STD|SYSFIL_PATH|SYSFIL_FATTR|CAPENABLED {
 		int fchownat(
 		    int fd,
 		    _In_z_ const char *path,
@@ -2699,7 +2699,7 @@
 		    _In_ char **envv
 		);
 	}
-493	AUE_FSTATAT	COMPAT11|SYSFIL_VFS_READ|CAPENABLED {
+493	AUE_FSTATAT	COMPAT11|SYSFIL_RPATH|CAPENABLED {
 		int fstatat(
 		    int fd,
 		    _In_z_ const char *path,
@@ -2707,14 +2707,14 @@
 		    int flag
 		);
 	}
-494	AUE_FUTIMESAT	STD|SYSFIL_FATTR|CAPENABLED {
+494	AUE_FUTIMESAT	STD|SYSFIL_PATH|SYSFIL_FATTR|CAPENABLED {
 		int futimesat(
 		    int fd,
 		    _In_z_ const char *path,
 		    _In_reads_(2) _Contains_long_timet_ const struct timeval *times
 		);
 	}
-495	AUE_LINKAT	STD|SYSFIL_VFS_CREATE|CAPENABLED {
+495	AUE_LINKAT	STD|SYSFIL_CPATH|CAPENABLED {
 		int linkat(
 		    int fd1,
 		    _In_z_ const char *path1,
@@ -2723,21 +2723,21 @@
 		    int flag
 		);
 	}
-496	AUE_MKDIRAT	STD|SYSFIL_VFS_CREATE|CAPENABLED {
+496	AUE_MKDIRAT	STD|SYSFIL_CPATH|CAPENABLED {
 		int mkdirat(
 		    int fd,
 		    _In_z_ const char *path,
 		    mode_t mode
 		);
 	}
-497	AUE_MKFIFOAT	STD|SYSFIL_VFS_CREATE|CAPENABLED {
+497	AUE_MKFIFOAT	STD|SYSFIL_CPATH|CAPENABLED {
 		int mkfifoat(
 		    int fd,
 		    _In_z_ const char *path,
 		    mode_t mode
 		);
 	}
-498	AUE_MKNODAT	COMPAT11|SYSFIL_VFS_CREATE|CAPENABLED {
+498	AUE_MKNODAT	COMPAT11|SYSFIL_CPATH|CAPENABLED {
 		int mknodat(
 		    int fd,
 		    _In_z_ const char *path,
@@ -2746,7 +2746,7 @@
 		);
 	}
 ; XXX: see the comment for open
-499	AUE_OPENAT_RWTC	STD|SYSFIL_VFS_MISC|CAPENABLED {
+499	AUE_OPENAT_RWTC	STD|SYSFIL_FDESC|SYSFIL_PATH|CAPENABLED {
 		int openat(
 		    int fd,
 		    _In_z_ const char *path,
@@ -2754,7 +2754,7 @@
 		    mode_t mode
 		);
 	}
-500	AUE_READLINKAT	STD|SYSFIL_VFS_READ|CAPENABLED {
+500	AUE_READLINKAT	STD|SYSFIL_RPATH|CAPENABLED {
 		ssize_t readlinkat(
 		    int fd,
 		    _In_z_ const char *path,
@@ -2762,7 +2762,7 @@
 		    size_t bufsize
 		);
 	}
-501	AUE_RENAMEAT	STD|SYSFIL_VFS_CREATE|SYSFIL_VFS_DELETE|CAPENABLED {
+501	AUE_RENAMEAT	STD|SYSFIL_CPATH|SYSFIL_DPATH|CAPENABLED {
 		int renameat(
 		    int oldfd,
 		    _In_z_ const char *old,
@@ -2770,21 +2770,21 @@
 		    _In_z_ const char *new
 		);
 	}
-502	AUE_SYMLINKAT	STD|SYSFIL_VFS_CREATE|CAPENABLED {
+502	AUE_SYMLINKAT	STD|SYSFIL_CPATH|CAPENABLED {
 		int symlinkat(
 		    _In_z_ const char *path1,
 		    int fd,
 		    _In_z_ const char *path2
 		);
 	}
-503	AUE_UNLINKAT	STD|SYSFIL_VFS_DELETE|CAPENABLED {
+503	AUE_UNLINKAT	STD|SYSFIL_DPATH|CAPENABLED {
 		int unlinkat(
 		    int fd,
 		    _In_z_ const char *path,
 		    int flag
 		);
 	}
-504	AUE_POSIX_OPENPT	STD|SYSFIL_TTY {
+504	AUE_POSIX_OPENPT	STD|SYSFIL_FDESC|SYSFIL_TTY {
 		int posix_openpt(
 		    int flags
 		);
@@ -2814,12 +2814,12 @@
 		    int jid
 		);
 	}
-509	AUE_CLOSEFROM	COMPAT12|SYSFIL_STDIO|CAPENABLED {
+509	AUE_CLOSEFROM	COMPAT12|SYSFIL_FDESC|CAPENABLED {
 		int closefrom(
 		    int lowfd
 		);
 	}
-510	AUE_SEMCTL	NOSTD|SYSFIL_SYSVIPC {
+510	AUE_SEMCTL	NOSTD|SYSFIL_SYSVSEM {
 		int __semctl(
 		    int semid,
 		    int semnum,
@@ -2827,21 +2827,21 @@
 		    _Inout_ _Contains_ptr_ union semun *arg
 		);
 	}
-511	AUE_MSGCTL	NOSTD|SYSFIL_SYSVIPC {
+511	AUE_MSGCTL	NOSTD|SYSFIL_SYSVMSG {
 		int msgctl(
 		    int msqid,
 		    int cmd,
 		    _Inout_opt_ _Contains_long_ptr_ struct msqid_ds *buf
 		);
 	}
-512	AUE_SHMCTL	NOSTD|SYSFIL_SYSVIPC {
+512	AUE_SHMCTL	NOSTD|SYSFIL_SYSVSHM {
 		int shmctl(
 		    int shmid,
 		    int cmd,
 		    _Inout_opt_ _Contains_long_ struct shmid_ds *buf
 		);
 	}
-513	AUE_LPATHCONF	STD|SYSFIL_VFS_MISC {
+513	AUE_LPATHCONF	STD|SYSFIL_PATH {
 		int lpathconf(
 		    _In_z_ const char *path,
 		    int name
@@ -2855,7 +2855,7 @@
 		    _Out_ cap_rights_t *rightsp
 		);
 	}
-516	AUE_CAP_ENTER	STD|SYSFIL_ALWAYS|CAPENABLED {
+516	AUE_CAP_ENTER	STD|SYSFIL_CAPCOMPAT|CAPENABLED {
 		int cap_enter(void);
 	}
 517	AUE_CAP_GETMODE	STD|SYSFIL_CAPCOMPAT|CAPENABLED {
@@ -2863,7 +2863,7 @@
 		    _Out_ u_int *modep
 		);
 	}
-518	AUE_PDFORK	STD|SYSFIL_PROC|CAPENABLED {
+518	AUE_PDFORK	STD|SYSFIL_FDESC|SYSFIL_PROC|CAPENABLED {
 		int pdfork(
 		    _Out_ int *fdp,
 		    int flags
@@ -2875,14 +2875,14 @@
 		    int signum
 		);
 	}
-520	AUE_PDGETPID	STD|SYSFIL_STDIO|CAPENABLED {
+520	AUE_PDGETPID	STD|SYSFIL_PWAIT|CAPENABLED {
 		int pdgetpid(
 		    int fd,
 		    _Out_ pid_t *pidp
 		);
 	}
 521	AUE_NULL	RESERVED
-522	AUE_SELECT	STD|SYSFIL_STDIO|CAPENABLED {
+522	AUE_SELECT	STD|SYSFIL_CORE|CAPENABLED {
 		int pselect(
 		    int nd,
 		    _Inout_opt_ fd_set *in,
@@ -2892,13 +2892,13 @@
 		    _In_opt_ const sigset_t *sm
 		);
 	}
-523	AUE_GETLOGINCLASS	STD|SYSFIL_STDIO|CAPENABLED {
+523	AUE_GETLOGINCLASS	STD|SYSFIL_GETCRED|CAPENABLED {
 		int getloginclass(
 		    _Out_writes_z_(namelen) char *namebuf,
 		    size_t namelen
 		);
 	}
-524	AUE_SETLOGINCLASS	STD|SYSFIL_CRED {
+524	AUE_SETLOGINCLASS	STD|SYSFIL_SETCRED {
 		int setloginclass(
 		    _In_z_ const char *namebuf
 		);
@@ -2943,14 +2943,14 @@
 		    size_t outbuflen
 		);
 	}
-530	AUE_POSIX_FALLOCATE	STD|SYSFIL_STDIO|CAPENABLED {
+530	AUE_POSIX_FALLOCATE	STD|SYSFIL_CORE|CAPENABLED {
 		int posix_fallocate(
 		    int fd,
 		    off_t offset,
 		    off_t len
 		);
 	}
-531	AUE_POSIX_FADVISE	STD|SYSFIL_STDIO {
+531	AUE_POSIX_FADVISE	STD|SYSFIL_CORE {
 		int posix_fadvise(
 		    int fd,
 		    off_t offset,
@@ -2958,7 +2958,7 @@
 		    int advice
 		);
 	}
-532	AUE_WAIT6	STD|SYSFIL_STDIO {
+532	AUE_WAIT6	STD|SYSFIL_PWAIT {
 		int wait6(
 		    idtype_t idtype,
 		    id_t id,
@@ -3016,7 +3016,7 @@
 		    __socklen_t namelen
 		);
 	}
-540	AUE_CHFLAGSAT	STD|SYSFIL_FATTR|CAPENABLED {
+540	AUE_CHFLAGSAT	STD|SYSFIL_PATH|SYSFIL_FATTR|CAPENABLED {
 		int chflagsat(
 		    int fd,
 		    _In_z_ const char *path,
@@ -3024,7 +3024,7 @@
 		    int atflag
 		);
 	}
-541	AUE_ACCEPT	STD|SYSFIL_SOCK|CAPENABLED {
+541	AUE_ACCEPT	STD|SYSFIL_FDESC|SYSFIL_SOCK|CAPENABLED {
 		int accept4(
 		    int s,
 		    _Out_writes_bytes_opt_(*anamelen) struct sockaddr *name,
@@ -3032,7 +3032,7 @@
 		    int flags
 		);
 	}
-542	AUE_PIPE	STD|SYSFIL_STDIO|CAPENABLED {
+542	AUE_PIPE	STD|SYSFIL_FDESC|CAPENABLED {
 		int pipe2(
 		    _Out_writes_(2) int *fildes,
 		    int flags
@@ -3051,7 +3051,7 @@
 		    _In_opt_ void *data
 		);
 	}
-545	AUE_POLL	STD|SYSFIL_STDIO|CAPENABLED {
+545	AUE_POLL	STD|SYSFIL_CORE|CAPENABLED {
 		int ppoll(
 		    _Inout_updates_(nfds) struct pollfd *fds,
 		    u_int nfds,
@@ -3065,7 +3065,7 @@
 		    _In_reads_(2) _Contains_long_timet_ const struct timespec *times
 		);
 	}
-547	AUE_FUTIMESAT	STD|SYSFIL_FATTR|CAPENABLED {
+547	AUE_FUTIMESAT	STD|SYSFIL_PATH|SYSFIL_FATTR|CAPENABLED {
 		int utimensat(
 		    int fd,
 		    _In_z_ const char *path,
@@ -3075,18 +3075,18 @@
 	}
 548	AUE_NULL	OBSOL	numa_getaffinity
 549	AUE_NULL	OBSOL	numa_setaffinity
-550	AUE_FSYNC	STD|SYSFIL_STDIO|CAPENABLED {
+550	AUE_FSYNC	STD|SYSFIL_CORE|CAPENABLED {
 		int fdatasync(
 		    int fd
 		);
 	}
-551	AUE_FSTAT	STD|SYSFIL_STDIO|CAPENABLED {
+551	AUE_FSTAT	STD|SYSFIL_CORE|CAPENABLED {
 		int fstat(
 		    int fd,
 		    _Out_ _Contains_long_timet_ struct stat *sb
 		);
 	}
-552	AUE_FSTATAT	STD|SYSFIL_VFS_READ|CAPENABLED {
+552	AUE_FSTATAT	STD|SYSFIL_RPATH|CAPENABLED {
 		int fstatat(
 		    int fd,
 		    _In_z_ const char *path,
@@ -3094,13 +3094,13 @@
 		    int flag
 		);
 	}
-553	AUE_FHSTAT	STD|SYSFIL_FH {
+553	AUE_FHSTAT	STD|SYSFIL_RPATH|SYSFIL_FH {
 		int fhstat(
 		    _In_ const struct fhandle *u_fhp,
 		    _Out_ _Contains_long_timet_ struct stat *sb
 		);
 	}
-554	AUE_GETDIRENTRIES STD|SYSFIL_VFS_READ|CAPENABLED {
+554	AUE_GETDIRENTRIES STD|SYSFIL_RPATH|CAPENABLED {
 		ssize_t getdirentries(
 		    int fd,
 		    _Out_writes_bytes_(count) char *buf,
@@ -3108,32 +3108,32 @@
 		    _Out_ off_t *basep
 		);
 	}
-555	AUE_STATFS	STD|SYSFIL_VFS_READ {
+555	AUE_STATFS	STD|SYSFIL_RPATH {
 		int statfs(
 		    _In_z_ const char *path,
 		    _Out_ struct statfs *buf
 		);
 	}
-556	AUE_FSTATFS	STD|SYSFIL_VFS_READ|CAPENABLED {
+556	AUE_FSTATFS	STD|SYSFIL_RPATH|CAPENABLED {
 		int fstatfs(
 		    int fd,
 		    _Out_ struct statfs *buf
 		);
 	}
-557	AUE_GETFSSTAT	STD|SYSFIL_VFS_READ {
+557	AUE_GETFSSTAT	STD|SYSFIL_RPATH {
 		int getfsstat(
 		    _Out_writes_bytes_opt_(bufsize) struct statfs *buf,
 		    long bufsize,
 		    int mode
 		);
 	}
-558	AUE_FHSTATFS	STD|SYSFIL_FH {
+558	AUE_FHSTATFS	STD|SYSFIL_RPATH|SYSFIL_FH {
 		int fhstatfs(
 		    _In_ const struct fhandle *u_fhp,
 		    _Out_ struct statfs *buf
 		);
 	}
-559	AUE_MKNODAT	STD|SYSFIL_VFS_CREATE|CAPENABLED {
+559	AUE_MKNODAT	STD|SYSFIL_CPATH|CAPENABLED {
 		int mknodat(
 		    int fd,
 		    _In_z_ const char *path,
@@ -3141,7 +3141,7 @@
 		    dev_t dev
 		);
 	}
-560	AUE_KEVENT	STD|SYSFIL_STDIO|CAPENABLED {
+560	AUE_KEVENT	STD|SYSFIL_CORE|CAPENABLED {
 		int kevent(
 		    int fd,
 		    _In_reads_opt_(nchanges) _Contains_ptr_ const struct kevent *changelist,
@@ -3151,7 +3151,7 @@
 		    _In_opt_ _Contains_long_timet_ const struct timespec *timeout
 		);
 	}
-561	AUE_NULL	STD|SYSFIL_CPUSET_CHECKED|CAPENABLED {
+561	AUE_NULL	STD|SYSFIL_CPUSET_|CAPENABLED {
 		int cpuset_getdomain(
 		    cpulevel_t level,
 		    cpuwhich_t which,
@@ -3161,7 +3161,7 @@
 		    _Out_ int *policy
 		);
 	}
-562	AUE_NULL	STD|SYSFIL_CPUSET_CHECKED|CAPENABLED {
+562	AUE_NULL	STD|SYSFIL_CPUSET_|CAPENABLED {
 		int cpuset_setdomain(
 		    cpulevel_t level,
 		    cpuwhich_t which,
@@ -3171,14 +3171,14 @@
 		    int policy
 		);
 	}
-563	AUE_NULL	STD|SYSFIL_STDIO|CAPENABLED {
+563	AUE_NULL	STD|SYSFIL_CORE|CAPENABLED {
 		int getrandom(
 		    _Out_writes_bytes_(buflen) void *buf,
 		    size_t buflen,
 		    unsigned int flags
 		);
 	}
-564	AUE_NULL	STD|SYSFIL_FH {
+564	AUE_NULL	STD|SYSFIL_PATH|SYSFIL_FH {
 		int getfhat(
 		    int fd,
 		    _In_z_ char *path,
@@ -3186,27 +3186,27 @@
 		    int flags
 		);
 	}
-565	AUE_NULL	STD|SYSFIL_FH {
+565	AUE_NULL	STD|SYSFIL_CPATH|SYSFIL_FH {
 		int fhlink(
 		    _In_ struct fhandle *fhp,
 		    _In_z_ const char *to
 		);
 	}
-566	AUE_NULL	STD|SYSFIL_FH {
+566	AUE_NULL	STD|SYSFIL_CPATH|SYSFIL_FH {
 		int fhlinkat(
 		    _In_ struct fhandle *fhp,
 		    int tofd,
 		    _In_z_ const char *to,
 		);
 	}
-567	AUE_NULL	STD|SYSFIL_FH {
+567	AUE_NULL	STD|SYSFIL_RPATH|SYSFIL_FH {
 		int fhreadlink(
 		    _In_ struct fhandle *fhp,
 		    _Out_writes_(bufsize) char *buf,
 		    size_t bufsize
 		);
 	}
-568	AUE_UNLINKAT	STD|SYSFIL_VFS_DELETE|CAPENABLED {
+568	AUE_UNLINKAT	STD|SYSFIL_DPATH|CAPENABLED {
 		int funlinkat(
 		    int dfd,
 		    _In_z_ const char *path,
@@ -3214,7 +3214,7 @@
 		    int flag
 		);
 	}
-569	AUE_NULL	STD|SYSFIL_STDIO|CAPENABLED {
+569	AUE_NULL	STD|SYSFIL_CORE|CAPENABLED {
 		ssize_t copy_file_range(
 		    int infd,
 		    _Inout_opt_ off_t *inoffp,
@@ -3224,7 +3224,7 @@
 		    unsigned int flags
 		);
 	}
-570	AUE_SYSCTL	STD|SYSFIL_STDIO|CAPENABLED {
+570	AUE_SYSCTL	STD|SYSFIL_SYSINFO|CAPENABLED {
 		int __sysctlbyname(
 		    _In_reads_(namelen) const char *name,
 		    size_t namelen,
@@ -3234,7 +3234,7 @@
 		    size_t newlen
 		);
 	}
-571	AUE_SHMOPEN	STD|SYSFIL_POSIXIPC_CHECKED|CAPENABLED {
+571	AUE_SHMOPEN	STD|SYSFIL_FDESC|SYSFIL_POSIXSHM_|CAPENABLED {
 		int shm_open2(
 		    _In_z_ const char *path,
 		    int flags,
@@ -3243,20 +3243,20 @@
 		    _In_z_ const char *name
 		);
 	}
-572	AUE_SHMRENAME	STD|SYSFIL_POSIXIPC {
+572	AUE_SHMRENAME	STD|SYSFIL_POSIXSHM {
 		int shm_rename(
 		    _In_z_ const char *path_from,
 		    _In_z_ const char *path_to,
 		    int flags
 		);
 	}
-573	AUE_NULL	STD|SYSFIL_STDIO|CAPENABLED {
+573	AUE_NULL	STD|SYSFIL_SIGMASK|CAPENABLED {
 		int sigfastblock(
 		    int cmd,
 		    _Inout_opt_ uint32_t *ptr
 		);
 	}
-574	AUE_REALPATHAT	STD|SYSFIL_STDIO {
+574	AUE_REALPATHAT	STD|SYSFIL_PATH {
 		int __realpathat(
 		    int fd,
 		    _In_z_ const char *path,
@@ -3265,7 +3265,7 @@
 		    int flags
 		);
 	}
-575	AUE_CLOSERANGE	STD|SYSFIL_STDIO|CAPENABLED {
+575	AUE_CLOSERANGE	STD|SYSFIL_FDESC|CAPENABLED {
 		int close_range(
 		    u_int lowfd,
 		    u_int highfd,
@@ -3279,7 +3279,7 @@
 		    _In_z_ const char *path
 		);
 	}
-577	AUE_SPECIALFD	STD|SYSFIL_STDIO|CAPENABLED {
+577	AUE_SPECIALFD	STD|SYSFIL_FDESC|CAPENABLED {
 		int __specialfd(
 		    int type,
 		    _In_reads_bytes_(len) const void *req,
@@ -3296,7 +3296,7 @@
 		    _Inout_ _Contains_long_ptr_ struct aiocb *aiocbp
 		);
 	}
-580	AUE_FSPACECTL	STD|SYSFIL_STDIO|CAPENABLED {
+580	AUE_FSPACECTL	STD|SYSFIL_CORE|CAPENABLED {
 		int fspacectl(
 		    int fd,
 		    int cmd,
@@ -3305,7 +3305,7 @@
 		    _Out_opt_ struct spacectl_range *rmsr,
 		);
 	}
-581	AUE_NULL	STD|CAPENABLED {
+581	AUE_NULL	STD|SYSFIL_SCHED|CAPENABLED {
 		int sched_getcpu(void);
 	}
 

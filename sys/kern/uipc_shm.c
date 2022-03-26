@@ -1082,7 +1082,7 @@ kern_shm_open2(struct thread *td, const char *userpath, int flags, mode_t mode,
 		if (IN_CAPABILITY_MODE(td))
 			return (ECAPMODE);
 #endif
-		error = sysfil_check(td, SYSFIL_POSIXIPC);
+		error = sysfil_check(td, SYSFIL_POSIXSHM);
 		if (error)
 			return (error);
 	}
