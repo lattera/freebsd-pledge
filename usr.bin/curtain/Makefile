@@ -8,4 +8,9 @@ SRCS=		curtain.c
 LIBADD=		curtain util
 MAN=
 
+.if ${MK_EXAMPLES} != "no"
+FILESDIR=	${SHAREDIR}/examples/curtain
+FILES=		home-sandbox.sh xdg-sandbox.sh
+.endif
+
 .include <bsd.prog.mk>

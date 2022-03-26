@@ -58,6 +58,16 @@ eputenv(char *string)
 	return (r);
 }
 
+static int
+eunsetenv(char *string)
+{
+	int r;
+	r = unsetenv(string);
+	if (r < 0)
+		err(EX_OSERR, "unsetenv");
+	return (r);
+}
+
 
 static struct termios tty_saved_termios;
 static bool tty_made_raw;
@@ -376,6 +386,9 @@ main(int argc, char *argv[])
 		LONGOPT_CHDIR,
 		LONGOPT_CHROOT,
 		LONGOPT_UNENFORCED,
+		LONGOPT_SETENV,
+		LONGOPT_UNSETENV,
+		LONGOPT_KEEPENV,
 		LONGOPT_SETUSER,
 		LONGOPT_NO_TTY,
 		LONGOPT_NO_TMPDIR,
@@ -389,6 +402,9 @@ main(int argc, char *argv[])
 		{ "chdir", required_argument, NULL, LONGOPT_CHDIR },
 		{ "chroot", required_argument, NULL, LONGOPT_CHROOT },
 		{ "unenforced", no_argument, NULL, LONGOPT_UNENFORCED },
+		{ "setenv", required_argument, NULL, LONGOPT_SETENV },
+		{ "unsetenv", required_argument, NULL, LONGOPT_UNSETENV },
+		{ "keepenv", required_argument, NULL, LONGOPT_KEEPENV },
 		{ "setuser", required_argument, NULL, LONGOPT_SETUSER },
 		{ "no-tty", no_argument, NULL, LONGOPT_NO_TTY },
 		{ "no-tmpdir", no_argument, NULL, LONGOPT_NO_TMPDIR },
@@ -428,6 +444,7 @@ main(int argc, char *argv[])
 	const char *setuser_name = NULL;
 	const char *write_dbus_address_path = NULL;
 	FILE *write_dbus_address_file = NULL;
+	char *setenv_base[argc], **setenv_fill = setenv_base;
 	char abspath[PATH_MAX];
 	size_t abspath_len = 0;
 	struct curtain_config *cfg;
@@ -574,6 +591,20 @@ main(int argc, char *argv[])
 		case LONGOPT_CHROOT:
 			chroot_path = optarg;
 			break;
+		case LONGOPT_SETENV:
+		case LONGOPT_UNSETENV:
+			*setenv_fill++ = optarg;
+			break;
+		case LONGOPT_KEEPENV: {
+			char *p;
+			if ((p = getenv(optarg)) != NULL) {
+				r = asprintf(&p, "%s=%s", optarg, p);
+				if (r < 0)
+					err(EX_TEMPFAIL, "asprintf");
+				*setenv_fill++ = p;
+			}
+			break;
+		}
 		case LONGOPT_SETUSER:
 			user_ctx = true;
 			setuser_name = optarg;
@@ -787,6 +818,11 @@ main(int argc, char *argv[])
 		}
 	}
 
+	for (char **setenv_iter = setenv_base; setenv_iter < setenv_fill; setenv_iter++)
+		if (strchr(*setenv_iter, '=') != 0)
+			eputenv(*setenv_iter);
+		else
+			eunsetenv(*setenv_iter);
 	while (argc != 0 && strchr(*argv, '=') != NULL) {
 		eputenv(*argv);
 		argc--, argv++;
