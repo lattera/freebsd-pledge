@@ -23,6 +23,7 @@
 #include <sys/sysent.h>
 #include <sys/syscall.h>
 #include <sys/fnv_hash.h>
+#include <sys/sysfil.h>
 
 #include <security/mac_curtain/curtain_int.h>
 #include <security/mac_curtain/unveil.h>
@@ -441,20 +442,23 @@ unveil_find_cover(struct ucred *cr, struct curtain *ct, struct vnode *dp,
 }
 
 
-static bool
-curtain_device_unveil_bypass(struct ucred *cr, struct cdev *dev)
-{
-	return (dev->si_cred != NULL && curtain_cred_visible(cr, dev->si_cred, BARRIER_DEVICE));
-}
-
 static unveil_perms
-unveil_special_exemptions(struct ucred *cr, struct vnode *vp, unveil_perms uperms)
+unveil_devfs_bypass(struct ucred *cr, struct vnode *vp, unveil_perms uperms)
 {
+	struct cdev *dev;
 	unveil_perms add_uperms = UPERM_NONE;
-	if (uperms_contains(uperms, UPERM_DEVFS)) {
-		if (vp != NULL && vp->v_type == VCHR && vp->v_rdev != NULL &&
-		    curtain_device_unveil_bypass(cr, vp->v_rdev))
+	if (uperms_contains(uperms, UPERM_DEVFS) &&
+	    vp != NULL && vp->v_type == VCHR && (dev = vp->v_rdev) != NULL) {
+		if (dev->si_cred != NULL && curtain_cred_visible(cr, dev->si_cred, BARRIER_DEVICE))
 			add_uperms |= UPERM_READ | UPERM_WRITE | UPERM_SETATTR;
+		else if (cr == curthread->td_ucred && sysfil_match_cred(cr, SYSFIL_TTY) &&
+		    dev->si_devsw != NULL && (dev->si_devsw->d_flags & D_TTY) != 0) {
+			struct proc *p = curproc;
+			PROC_LOCK(p);
+			if ((p->p_flag & P_CONTROLT) != 0 && p->p_session->s_ttyvp == vp)
+				add_uperms |= UPERM_READ | UPERM_WRITE;
+			PROC_UNLOCK(p);
+		}
 	}
 	if (add_uperms != UPERM_NONE)
 		uperms = uperms_expand(add_uperms | uperms);
@@ -690,7 +694,7 @@ unveil_vnode_walk_component(struct ucred *cr,
 	}
 
 	if (vp != NULL) {
-		uperms = unveil_special_exemptions(cr, vp, uperms);
+		uperms = unveil_devfs_bypass(cr, vp, uperms);
 		entry = unveil_track_fill(track, vp);
 		entry->uncharted = uncharted;
 		entry->uperms = uperms;
