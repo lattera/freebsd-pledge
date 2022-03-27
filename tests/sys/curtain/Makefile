@@ -13,8 +13,7 @@ ATF_TESTS_SH+=		curtain_various
 
 LIBADD=		curtain
 
-ATF_TESTS_C+=	pledge_super_basic
-ATF_TESTS_C+=	pledge_stdio_basic
+ATF_TESTS_C+=	pledge_stdio
 ATF_TESTS_C+=	pledge_paths
 ATF_TESTS_C+=	pledge_drop
 ATF_TESTS_C+=	pledge_capsicum

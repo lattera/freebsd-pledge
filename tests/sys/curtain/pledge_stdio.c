@@ -12,6 +12,13 @@
  * cause any pledge violations.
  */
 
+ATF_TC_WITHOUT_HEAD(super_basic);
+ATF_TC_BODY(super_basic, tc)
+{
+	ATF_REQUIRE(pledge("stdio", "stdio") >= 0);
+	ATF_CHECK(puts("ok!") >= 0);
+}
+
 ATF_TC_WITHOUT_HEAD(misc_syscalls);
 ATF_TC_BODY(misc_syscalls, tc)
 {
@@ -177,6 +184,7 @@ ATF_TC_BODY(localtime, tc)
 
 ATF_TP_ADD_TCS(tp)
 {
+	ATF_TP_ADD_TC(tp, super_basic);
 	ATF_TP_ADD_TC(tp, misc_syscalls);
 	ATF_TP_ADD_TC(tp, id_syscalls);
 	ATF_TP_ADD_TC(tp, mmap_anon);
