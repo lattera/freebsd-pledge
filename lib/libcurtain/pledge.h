@@ -6,5 +6,6 @@ int	unveil(const char *, const char *);
 int	unveil_freeze(void);
 int	unveil_self(const char *, const char *);
 int	unveil_exec(const char *, const char *);
+void	pledge_end(void);
 
 #endif /* !_PLEDGE_H_ */

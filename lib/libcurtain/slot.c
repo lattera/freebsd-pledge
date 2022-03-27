@@ -216,14 +216,20 @@ node_drop(struct curtain_node *node)
 	if (node->type->cleanup)
 		node->type->cleanup(node);
 	node_remove(node);
+	node->type->nodes_count--;
 	free(node);
 }
 
 static void
 node_trim(struct curtain_node *node)
 {
-	if (node->children == NULL && node->items == NULL)
+	if (node->children == NULL && node->items == NULL) {
+		struct curtain_node *parent;
+		parent = node->parent;
 		node_drop(node);
+		if (parent != NULL)
+			node_trim(parent);
+	}
 }
 
 void
@@ -242,8 +248,10 @@ curtain_drop(struct curtain_slot *slot)
 		    *item_link != item;
 		    item_link = &(*item_link)->node_next);
 		*item_link = item->node_next;
-		node_trim(item->node);
+		item->node->items_count--;
+		item->node->type->items_count--;
 		slot->items = item->slot_next;
+		node_trim(item->node);
 		free(item);
 	}
 	free(slot);
@@ -477,7 +485,7 @@ static struct curtain_node *
 ability_fallback_helper(struct curtain_node *node)
 {
 	enum curtain_ability ability = node->type->fallback_ability;
-	assert(ability != 0);
+	assert(CURTAINABL_USER_VALID(ability));
 	return (node_get(&abilities_type, KEY(.ability, ability), true));
 }
 
@@ -485,6 +493,7 @@ int
 curtain_ability(struct curtain_slot *slot, enum curtain_ability ability, int flags)
 {
 	struct curtain_item *item;
+	assert(CURTAINABL_USER_VALID(ability));
 	item = node_item_get(&abilities_type, slot, KEY(.ability, ability), true);
 	if (item == NULL)
 		return (-1);
@@ -883,11 +892,15 @@ unveil_ent_fill(void *dest,
 	return ((char *)fill + size);
 }
 
+static struct curtain_node *unveil_root_node;
+
 static void
 unveil_node_cleanup(struct curtain_node *node)
 {
 	if (node->key.unveil.opened && node->key.unveil.fd >= 0)
 		close(node->key.unveil.fd);
+	if (node == unveil_root_node)
+		unveil_root_node = NULL;
 }
 
 static struct curtain_type unveils_type = {
@@ -932,8 +945,6 @@ curtain_parse_unveil_perms(unveil_perms *uperms_ret, const char *s)
 	return (r);
 }
 
-
-static struct curtain_node *unveil_root_node;
 
 static struct curtain_node *
 unveil_node_get(struct curtain_node *parent, const char *name)
@@ -1097,6 +1108,7 @@ unveil_path_1(struct curtain_node **trail, bool nofollow, bool last,
 			if (r < 0) {
 				if (errno == ENOENT && !*next && last)
 					break;
+				node_trim(node);
 				return (r);
 			}
 		}
@@ -1105,13 +1117,16 @@ unveil_path_1(struct curtain_node **trail, bool nofollow, bool last,
 			struct curtain_node *target_node;
 			if (node->key.unveil.resolving) {
 				errno = ELOOP;
+				node_trim(node);
 				return (-1);
 			}
 			node->key.unveil.resolving = true;
 			target_node = symlink[0] == '/' ? unveil_root_node : parent_node;
 			r = unveil_path_1(trail, false, !*next, symlink, &target_node);
-			if (r < 0)
+			if (r < 0) {
+				node_trim(node);
 				return (r);
+			}
 			node->key.unveil.resolving = false;
 			node = target_node;
 		}

@@ -943,3 +943,33 @@ unveil_freeze(void)
 	                         has_customs_on[CURTAIN_ON_EXEC];
 	return (do_unveil(do_on, NULL, UPERM_NONE));
 }
+
+
+static void
+reset_slot(struct curtain_slot **slot)
+{
+	if (*slot != NULL) {
+		curtain_drop(*slot);
+		*slot = NULL;
+	}
+}
+
+void
+pledge_end()
+{
+	reset_slot(&always_slot);
+	reset_slot(&unveil_traverse_slot);
+	for (enum curtain_on on = 0; on < CURTAIN_ON_COUNT; on++) {
+		has_pledges_on[on] = has_customs_on[on] = false;
+		for (enum promise_type i = 0; i < PROMISE_COUNT; i++)
+			promise_slots_needed_on[on][i] =
+			    promise_unveil_slots_needed_on[on][i] = false;
+		reset_slot(&root_slot_on[on]);
+		reset_slot(&custom_slot_on[on]);
+	}
+	for (enum promise_type i = 0; i < PROMISE_COUNT; i++) {
+		reset_slot(&promise_slots[i]);
+		reset_slot(&promise_unveil_slots[i]);
+	}
+}
+
