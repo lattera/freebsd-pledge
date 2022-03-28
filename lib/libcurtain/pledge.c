@@ -90,6 +90,7 @@ enum promise_type {
 	PROMISE_ANY_SOCKOPT,
 	PROMISE_ANY_SYSCTL,
 	PROMISE_AUDIO,
+	PROMISE_DRM,
 	PROMISE_COUNT /* must be last */
 } __packed;
 
@@ -161,6 +162,7 @@ static const struct promise_name {
 	[PROMISE_ANY_SOCKOPT] =		{ "any_sockopt" },
 	[PROMISE_ANY_SYSCTL] =		{ "any_sysctl" },
 	[PROMISE_AUDIO] =		{ "audio" },
+	[PROMISE_DRM] =			{ "drm" },
 };
 
 static const enum promise_type depends_table[][2] = {
@@ -238,6 +240,12 @@ static const struct promise_ability {
 	{ PROMISE_ANY_IOCTL,		CURTAINABL_ANY_IOCTL },
 	{ PROMISE_ANY_SOCKOPT,		CURTAINABL_ANY_SOCKOPT },
 	{ PROMISE_ANY_SYSCTL,		CURTAINABL_ANY_SYSCTL },
+	/*
+	 * XXX Only the safe DRM "render node" ioctls should be allowed, but
+	 * those are defined in localbase header files that might not be
+	 * available when this library is built...
+	 */
+	{ PROMISE_DRM,			CURTAINABL_ANY_IOCTL },
 };
 
 static const struct promise_ioctl {
@@ -376,6 +384,9 @@ static const struct promise_sysctl {
 	{ PROMISE_VMINFO,	"kern.lastpid" },
 	{ PROMISE_VMINFO,	"kstat.zfs.misc" },
 	{ PROMISE_VMINFO,	"vfs.bufspace" },
+	{ PROMISE_DRM,		"kern.devname" },
+	{ PROMISE_DRM,		"dev.drm" },
+	{ PROMISE_DRM,		"hw.dri" },
 };
 
 static const char *const root_path = "/";
@@ -432,9 +443,12 @@ static const struct promise_unveil {
 	{ _PATH_ETC "/ssl/private/", N,			PROMISE_SSL },
 	{ _PATH_LOCALBASE "/etc/ssl/", R,		PROMISE_SSL },
 	{ _PATH_LOCALBASE "/etc/ssl/private/", N,	PROMISE_SSL },
-	{ _PATH_DEV "/sndstat", R|W,                    PROMISE_AUDIO },
-	{ _PATH_DEV "/mixer", R|W,                      PROMISE_AUDIO },
-	{ _PATH_DEV "/dsp", R|W,                        PROMISE_AUDIO },
+	{ _PATH_DEV "/sndstat", R|W,			PROMISE_AUDIO },
+	{ _PATH_DEV "/mixer", R|W,			PROMISE_AUDIO },
+	{ _PATH_DEV "/dsp", R|W,			PROMISE_AUDIO },
+	{ _PATH_DEV "/drm", R|W,			PROMISE_DRM },
+	{ _PATH_DEV "/dri", R|W,			PROMISE_DRM },
+	{ _PATH_DEV "/pci", R,				PROMISE_DRM },
 	{ tmp_path, T,					PROMISE_TMPPATH },
 #undef	T
 #undef	A
