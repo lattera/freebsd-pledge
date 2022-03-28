@@ -283,6 +283,44 @@ reunveil_inheritance_body() {
 			\( -r a/b/c/d/f -a -w a/b/c/d/f -a ! -x a/b/c/d/f \)
 }
 
+atf_test_case path_inheritance
+path_inheritance_body() {
+	atf_check mkdir secret dev data
+	for d in . secret dev data
+	do
+		atf_check mkdir "$d/d"
+		atf_check touch "$d/f"
+		atf_check chmod +x "$d/f"
+	done
+	atf_check curtain -p .:rw -p ./secret: -p ./dev:rwx -p ./data:r test \
+		\( -r . -a -w . -a -x . \) -a \
+		\( -r d -a -w d -a -x d \) -a \
+		\( -r f -a -w f -a ! -x f \) -a \
+		\( ! -r secret -a ! -w secret -a ! -x secret \) -a \
+		\( ! -r secret/d -a ! -w secret/d -a ! -x secret/d \) -a \
+		\( ! -r secret/f -a ! -w secret/f -a ! -x secret/f \) -a \
+		\( -r dev -a -w dev -a -x dev \) -a \
+		\( -r dev/d -a -w dev/d -a -x dev/d \) -a \
+		\( -r dev/f -a -w dev/f -a -x dev/f \) -a \
+		\( -r data -a ! -w data -a -x data \) -a \
+		\( -r data/d -a ! -w data/d -a -x data/d \) -a \
+		\( -r data/f -a ! -w data/f -a ! -x data/f \)
+	atf_check curtain -t curtain -p .:rw -p ./secret: -p ./dev:rwx -p ./data:r \
+		curtain -p .:r -p ./dev:rx -p ./data:rw test \
+			\( -r . -a ! -w . -a -x . \) -a \
+			\( -r d -a ! -w d -a -x d \) -a \
+			\( -r f -a ! -w f -a ! -x f \) -a \
+			\( ! -r secret -a ! -w secret -a ! -x secret \) -a \
+			\( ! -r secret/d -a ! -w secret/d -a ! -x secret/d \) -a \
+			\( ! -r secret/f -a ! -w secret/f -a ! -x secret/f \) -a \
+			\( -r dev -a ! -w dev -a -x dev \) -a \
+			\( -r dev/d -a ! -w dev/d -a -x dev/d \) -a \
+			\( -r dev/f -a ! -w dev/f -a -x dev/f \) -a \
+			\( -r data -a ! -w data -a -x data \) -a \
+			\( -r data/d -a ! -w data/d -a -x data/d \) -a \
+			\( -r data/f -a ! -w data/f -a ! -x data/f \)
+}
+
 atf_test_case chflags
 chflags_body() {
 	atf_check touch f
@@ -547,6 +585,7 @@ atf_init_test_cases() {
 	atf_add_test_case extattrs
 	atf_add_test_case unveil_dotdot
 	atf_add_test_case reunveil_inheritance
+	atf_add_test_case path_inheritance
 	atf_add_test_case chflags
 	atf_add_test_case chflags_system
 	atf_add_test_case filtered_ls
