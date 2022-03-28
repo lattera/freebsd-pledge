@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/mman.h>
+#include <sys/utsname.h>
 #include <time.h>
 #include <atf-c.h>
 #include <pledge.h>
@@ -182,6 +183,20 @@ ATF_TC_BODY(localtime, tc)
 	atf_utils_wait(pid, 0, buf, "");
 }
 
+ATF_TC_WITHOUT_HEAD(uname);
+ATF_TC_BODY(uname, tc)
+{
+	struct utsname uname0, uname1;
+	ATF_REQUIRE(uname(&uname0) >= 0);
+	ATF_REQUIRE(pledge("stdio", "") >= 0);
+	ATF_REQUIRE(uname(&uname1) >= 0);
+	ATF_CHECK(strcmp(uname0.sysname, uname1.sysname) == 0);
+	ATF_CHECK(strcmp(uname0.nodename, uname1.nodename) == 0);
+	ATF_CHECK(strcmp(uname0.release, uname1.release) == 0);
+	ATF_CHECK(strcmp(uname0.version, uname1.version) == 0);
+	ATF_CHECK(strcmp(uname0.machine, uname1.machine) == 0);
+}
+
 ATF_TP_ADD_TCS(tp)
 {
 	ATF_TP_ADD_TC(tp, super_basic);
@@ -193,5 +208,6 @@ ATF_TP_ADD_TCS(tp)
 	ATF_TP_ADD_TC(tp, pipe_fork);
 	ATF_TP_ADD_TC(tp, isatty);
 	ATF_TP_ADD_TC(tp, localtime);
+	ATF_TP_ADD_TC(tp, uname);
 	return (atf_no_error());
 }
