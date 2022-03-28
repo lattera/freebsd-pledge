@@ -122,6 +122,8 @@ ability mlock
 ability aio
 ability sendfile
 ability setcred
+ability reap
+ability aslr
 
 [_level5 : _level4] # curtain(1)'s default
 ability chroot
@@ -132,11 +134,9 @@ ability! sysflags
 [_level6 : _level5]
 merge _tmpdir_exec
 ability prot_exec
-ability aslr
 
 [_level7 : _level6]
 merge _fdpassdir
-ability reap
 ability rfork
 ability cpuset
 ability getquota
