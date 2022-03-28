@@ -397,6 +397,24 @@ main(int argc, char *argv[])
 		LONGOPT_WRITE_DBUS_ADDRESS,
 	};
 	const struct option longopts[] = {
+		{ "directive", required_argument, NULL, 'd' },
+		{ "verbose", no_argument, NULL, 'v' },
+		{ "no-fork", no_argument, NULL, 'f' },
+		{ "kill", no_argument, NULL, 'k' },
+		{ "apptag", no_argument, NULL, 'a' },
+		{ "unsafe", no_argument, NULL, '!' },
+		{ "tag", required_argument, NULL, 't' },
+		{ "unveil", required_argument, NULL, 'u' },
+		{ "path", required_argument, NULL, 'p' },
+		{ "shell", no_argument, NULL, 's' },
+		{ "session", no_argument, NULL, 'S' },
+		{ "login-shell", no_argument, NULL, 'l' },
+		{ "no-vis", no_argument, NULL, 'R' },
+		{ "no-pty", no_argument, NULL, 'T' },
+		{ "x11", no_argument, NULL, 'X' },
+		{ "trusted-x11", no_argument, NULL, 'Y' },
+		{ "wayland", no_argument, NULL, 'W' },
+		{ "dummy-dbus", no_argument, NULL, 'D' },
 		{ "newpgrp", no_argument, NULL, LONGOPT_NEWPGRP },
 		{ "newsid", no_argument, NULL, LONGOPT_NEWSID },
 		{ "chdir", required_argument, NULL, LONGOPT_CHDIR },
@@ -478,9 +496,6 @@ main(int argc, char *argv[])
 			break;
 		case 'k':
 			signaling = true;
-			break;
-		case 'g':
-			new_pgrp = true;
 			break;
 		case 'n':
 			no_network = true;
