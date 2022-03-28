@@ -100,12 +100,12 @@ expand_percent(struct pathexp *a, const char *p, char *e, size_t depth)
 			return (r);
 		break;
 	case '%':
-		  if (q == a->exp_end)
-			  return (toobig(a));
-		  *e++ = '%';
-		  break;
+		if (q == a->exp_end)
+			return (toobig(a));
+		*e++ = '%';
+		break;
 	default:
-		  return (error(a, "unexpected percent specifier"));
+		return (error(a, "unexpected percent specifier"));
 	}
 	return (expand(a, q, e, depth));
 }
@@ -140,9 +140,9 @@ expand_homedir(struct pathexp *a, const char *p, char *e, size_t depth)
 		}
 		*t++ = '\0';
 		pw = getpwnam(name);
-		home = pw ? pw->pw_dir : NULL;
+		home = pw != NULL ? pw->pw_dir : NULL;
 	}
-	if (home) {
+	if (home != NULL) {
 		size_t len;
 		len = strlen(home);
 		if ((size_t)(a->exp_end - e) < len)
@@ -192,10 +192,10 @@ expand_envvar(struct pathexp *a, const char *p, char *e, size_t depth)
 		} else if (p[-1] == ':')
 			return (error(a, "unexpected colon"));
 		p = skip(p);
-		if (!p || *p++ != '}')
+		if (p == NULL || *p++ != '}')
 			return (error(a, "expected closing brace for variable"));
 	}
-	if (value) {
+	if (value != NULL) {
 		size_t len;
 		len = strlen(value);
 		if (len == 0 && !a->tolerate_empty_vars)
@@ -210,63 +210,63 @@ expand_envvar(struct pathexp *a, const char *p, char *e, size_t depth)
 }
 
 static int
-expand(struct pathexp *a, const char *pat, char *exp, size_t depth)
+expand(struct pathexp *a, const char *p, char *e, size_t depth)
 {
-	while (*pat) {
-		switch (*pat) {
+	while (*p) {
+		switch (*p) {
 		case '{': {
 			int r, m;
-			pat++;
+			p++;
 			m = 0;
 			do {
-				r = expand(a, pat, exp, depth + 1);
+				r = expand(a, p, e, depth + 1);
 				if (r < 0)
 					return (r);
 				if (r > m)
 					m = r;
-				pat = skip(pat);
-				if (!pat)
+				p = skip(p);
+				if (p == NULL)
 					goto unterm;
-			} while (*pat++ == ',');
+			} while (*p++ == ',');
 			return (m);
 		}
 		case '}':
-			if (!depth--)
+			if (depth-- == 0)
 				return (error(a, "unexpected closing brace"));
-			pat++;
+			p++;
 			break;
 		case ',':
-			if (!depth)
+			if (depth == 0)
 				goto literal;
 			depth--;
 			do {
-				pat = skip(pat);
-				if (!pat)
+				p = skip(p);
+				if (p == NULL)
 					goto unterm;
-			} while (*pat++ == ',');
+			} while (*p++ == ',');
 			break;
 		case '~':
-			return (expand_homedir(a, ++pat, exp, depth));
+			return (expand_homedir(a, ++p, e, depth));
 		case '$':
-			return (expand_envvar(a, ++pat, exp, depth));
+			return (expand_envvar(a, ++p, e, depth));
 		case '%':
-			return (expand_percent(a, ++pat, exp, depth));
+			return (expand_percent(a, ++p, e, depth));
 		case '\\':
-			if (!*++pat)
+			if (!*++p)
 				break;
 			/* FALLTHROUGH */
 		default:
-literal:		if (exp == a->exp_end)
+literal:		if (e == a->exp_end)
 				return (toobig(a));
-			*exp++ = *pat++;
+			*e++ = *p++;
 			break;
 		}
 	}
-	if (depth)
+	if (depth != 0)
 unterm:		return (error(a, "unterminated brace"));
-	if (exp == a->exp_end)
+	if (e == a->exp_end)
 		return (toobig(a));
-	*exp = '\0';
+	*e = '\0';
 	return (a->callback(a->callback_data, a->exp_base));
 }
 
@@ -282,7 +282,7 @@ pathexp(const char *pat, char *exp, size_t exp_size,
 	};
 	int r;
 	r = expand(&a, pat, exp, 0);
-	if (err)
+	if (err != NULL)
 		*err = a.error;
 	return (r);
 }
