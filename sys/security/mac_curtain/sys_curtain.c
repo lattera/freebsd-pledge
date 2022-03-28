@@ -53,6 +53,7 @@ typedef union curtain_key ctkey;
 
 
 static bool __read_mostly curtainctl_enabled = true;
+static bool __read_mostly curtainctl_unknown_version_enosys = false;
 static curtain_index curtain_max_items_per_curtain = CURTAINCTL_MAX_ITEMS;
 enum curtain_action __read_mostly curtain_log_level = CURTAIN_TRAP;
 enum curtain_action __read_mostly curtain_sysctls_log_level = CURTAIN_TRAP;
@@ -71,6 +72,10 @@ SYSCTL_NODE(_security_curtain, OID_AUTO, stats,
 SYSCTL_BOOL(_security_curtain, OID_AUTO, enabled,
     CTLFLAG_RW, &curtainctl_enabled, 0,
     "Allow curtainctl(2) usage");
+
+SYSCTL_BOOL(_security_curtain, OID_AUTO, unknown_version_enosys,
+    CTLFLAG_RW, &curtainctl_unknown_version_enosys, 0,
+    "curtainctl(2) returns ENOSYS for unknown API versions");
 
 static int
 sysctl_curtain_log_level(SYSCTL_HANDLER_ARGS)
@@ -321,7 +326,7 @@ curtain_fill_unveil(struct curtain *ct, enum curtainreq_level lvl,
 	struct vnode *vp;
 	struct curtain_item *item;
 	char *name_end;
-	size_t name_size, space;
+	size_t name_len, name_size, space;
 	bool inserted, has_name;
 	int error;
 
@@ -329,8 +334,10 @@ curtain_fill_unveil(struct curtain *ct, enum curtainreq_level lvl,
 	name_end = memchr(ent->name, '\0', end - ent->name);
 	if (name_end == NULL)
 		return (EINVAL);
-	name_size = name_end - ent->name + 1;
-	has_name = name_size > 1;
+	name_size = (name_len = name_end - ent->name) + 1;
+	has_name = name_len > 0;
+	if (name_len > NAME_MAX)
+		return (ENAMETOOLONG);
 
 	error = getvnode_path(curthread, ent->dir_fd, &cap_no_rights, &fp);
 	if (error != 0)
@@ -354,7 +361,7 @@ curtain_fill_unveil(struct curtain *ct, enum curtainreq_level lvl,
 		uv = malloc(sizeof *uv + name_size, M_CURTAIN_UNVEIL, M_WAITOK);
 		*uv = (struct curtain_unveil){ .vp = vp, .hash = vp->v_nchash };
 		if (has_name) {
-			uv->name_len = name_size - 1;
+			uv->name_len = name_len;
 			memcpy(uv->name, ent->name, name_size);
 			uv->hash = fnv_32_buf(uv->name, uv->name_len, uv->hash);
 		}
@@ -708,7 +715,7 @@ sys_curtainctl(struct thread *td, struct curtainctl_args *uap)
 	int flags, error;
 	flags = uap->flags;
 	if ((flags & CURTAINCTL_VER_MASK) != CURTAINCTL_THIS_VERSION)
-		return (EINVAL);
+		return (curtainctl_unknown_version_enosys ? ENOSYS : EOPNOTSUPP);
 	reqc = uap->reqc;
 	if (reqc > CURTAINCTL_MAX_REQS)
 		return (E2BIG);
