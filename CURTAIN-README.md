@@ -63,3 +63,14 @@ For example, after uncommenting the include line, launch Firefox sandboxed:
 ```
 curtain -Xa firefox
 ```
+
+A good way to add extra permissions to its profile is to put them in the user's
+~/.curtain.conf.  For example, to give it access to ~/Downloads:
+```
+[firefox]
+~/Downloads/ : rw +
+```
+
+Set sysctl(8) `security.curtain.log_level=deny` to get kernel log messages
+whenever the curtain module denies permissions.
+
