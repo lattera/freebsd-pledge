@@ -354,6 +354,31 @@ ioctls mdctl
 merge _basic
 ioctls disk_basic
 
+[_any_tty]
+/dev/pts/ : rw
+#/dev/ttyv{0,1,2,3,4,5,6,7,8,9,a,b} : rw
+#/dev/ttyu{0,1,2,3} : rw
+
+[_tty_alt]
+# For programs that need to access their controlling TTY through the
+# device-specific path (e.g. /dev/pts/*, /dev/ttyv*, etc).
+merge _tty
+/dev/ : D
+
+[gpg-agent]
+merge _basic
+# gpg2 seems to always spawn gpg-agent and delegate running pinentry to it.
+# pinentry then has to be able to access gpg's tty or X/Wayland session.
+# gpg-agent should be started separately with the permissions to do so.
+merge _any_tty
+~/.gnupg/ : rua 0700
+
+[gpg2]
+merge _basic _tty_alt
+ability mlock
+sysctl kern.devname
+~/.gnupg/ : rwv 0700
+
 [emacs : _editor]
 merge _basic _network
 # NOTE: Sometimes crashes with untrusted X11.
