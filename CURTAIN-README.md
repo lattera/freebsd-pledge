@@ -71,6 +71,6 @@ A good way to add extra permissions to its profile is to put them in the user's
 ~/Downloads/ : rw +
 ```
 
-Set sysctl(8) `security.curtain.log_level=deny` to get kernel log messages
+Set `sysctl security.curtain.log_level=deny` to get kernel log messages
 whenever the curtain module denies permissions.
 
