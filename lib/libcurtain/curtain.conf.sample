@@ -1142,3 +1142,12 @@ merge _pwddb _su
 /usr/local/etc/clamd.conf
 /var/run/clamav/clamd.sock : v
 
+[redis : _daemon]
+merge _basic _network _syslog
+#merge _syslog
+/usr/local/etc/redis.conf
+/var/run/redis/redis.pid : rw
+/var/run/redis/redis.sock : ua
+/var/log/redis/redis.log : cp
+/var/db/redis/ : rw
+
