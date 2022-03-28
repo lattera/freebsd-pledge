@@ -889,20 +889,31 @@ merge _basic _network _pty _gtk
 ${CCACHE_DIR-/var/cache/ccache}/ : rw
 
 [_ruby_gems]
-$GEM_HOME/
+$GEM_HOME/ : rx
 
-[_ruby_gems_manage]
+[_ruby_gems.manage]
 merge _build
-$GEM_HOME/ : rwx +
+$GEM_HOME/ : rwx
+$GEM_SPEC_CACHE/ : rw
+path!! ~/.local/share/gem/specs/ : rw +
 
 [_python_pip]
-$PYTHONUSERBASE/
+$PYTHONUSERBASE/ : rx
 
-[_python_pip_manage]
+[_python_pip.manage]
 merge _build
-ability chflags
-$PYTHONUSERBASE/ : rwx +
-#~/.cache/pip/ : rw + # sharing probably unsafe
+$PYTHONUSERBASE/ : rwx
+path!! ~/.cache/pip/ : rw +
+
+[node]
+merge _basic
+ability prot_exec
+
+[_nodejs_npm.manage]
+merge node
+~/.npmrc
+~/.npm-init.js
+path!! ~/.npm/ : rw +
 
 
 [_ports_build]
