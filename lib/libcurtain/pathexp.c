@@ -81,6 +81,7 @@ static int
 expand_percent(struct pathexp *a, const char *p, char *e, size_t depth)
 {
 	const char *q;
+	char *d;
 	bool alt;
 	int r;
 	q = p;
@@ -98,6 +99,15 @@ expand_percent(struct pathexp *a, const char *p, char *e, size_t depth)
 		    (unsigned long)(alt ? getgid() : getegid()));
 		if (r < 0)
 			return (r);
+		break;
+	case 'h':
+		r = gethostname(e, a->exp_end - e);
+		if (r < 0)
+			return (error(a, strerror(errno)));
+		if (alt && (d = strchr(e, '.')) != NULL)
+			e = d;
+		else
+			e += strlen(e);
 		break;
 	case '%':
 		if (q == a->exp_end)
