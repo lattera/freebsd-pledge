@@ -107,6 +107,11 @@ merge _audio
 /usr/local/etc/alsa/
 ~/.asoundrc
 
+[_pulse]
+/usr/local/etc/pulse/
+${PULSE_RUNTIME_PATH-~/.config/pulse}/
+${PULSE_RUNTIME_PATH-~/.config/pulse}/%h-runtime/native : v
+
 [_xdg]
 ~/.config/user-dirs.{dirs,locale}
 
