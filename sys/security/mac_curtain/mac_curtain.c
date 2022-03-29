@@ -201,6 +201,7 @@ cred_key_failed(const struct ucred *cr, enum curtain_type type, union curtain_ke
 		case PRIV_VFS_EXCEEDQUOTA:
 		case PRIV_VFS_SYSFLAGS:
 		case PRIV_NETINET_REUSEPORT:
+		case PRIV_NETINET_IPSEC:
 			noise = true;
 			break;
 		default:
