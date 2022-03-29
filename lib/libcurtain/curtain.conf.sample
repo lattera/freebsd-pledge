@@ -101,6 +101,9 @@ ability! any_ioctl # XXX
 # Needs platform-dependent ioctls from libdrm.
 # See /usr/share/examples/curtain/make-drm-render-conf.c
 
+[_casper]
+merge _proc _fdpass
+
 [_alsa]
 merge _audio
 /usr/local/etc/asound.conf
@@ -317,13 +320,13 @@ sysctl vm.swap_info
 
 
 [ping, ping6]
-merge _basic _network _fdpass
+merge _crude _casper _net_client
 ability setcred
 ability net_raw
 socklvl icmpv6
 
 [traceroute, traceroute6]
-merge _basic _network _fdpass
+merge _crude _casper _network _tty
 ability setcred
 ability net_raw
 sysctl net.inet.ip.ttl
@@ -335,12 +338,12 @@ ability setcred
 ability net_raw
 
 [tcpdump]
-merge _basic _network
+merge _crude _net_client
 ability setcred
 merge _bpf
 
 [wireshark]
-merge _basic _network _gtk
+merge _basic _net_client _gtk
 merge _bpf
 ~/.config/wireshark/			: rw +
 ability-deny prot_exec [_strict]
@@ -708,7 +711,7 @@ merge _basic _network
 ~/irclogs/ : rcp +
 
 [qbittorrent : _p2p]
-merge _basic _network _qt
+merge _crude _ps _network _qt
 # NOTE: Best to disable the tray icon feature under -X.
 ~/.local/share/qBittorrent/		: rw +
 ~/.config/qBittorrent/			: rw +
@@ -740,13 +743,13 @@ ability prot_exec
 ~/.cache/quodlibet/ : rw +
 
 [mpv : _player]
-merge _basic
+merge _crude _tty
 ~/.config/mpv/ ~/.mpv/			: rw +
 ability-deny prot_exec [_strict]
-ioctl-deny 0x40087603 [_strict] # XXX
+ioctl-deny 0x40087603 [_strict] # XXX VT_GETMODE
 
 [mplayer : _player]
-merge _basic
+merge _crude _tty
 ~/.mplayer/				: rw +
 
 [vlc : _player]
@@ -755,6 +758,7 @@ ability sysvshm
 ability prot_exec
 ~/.config/vlc/				: rw +
 ~/.local/share/vlc/			: rw +
+ioctl-deny 0x40046402 [_strict] # XXX some non-render DRM ioctl
 
 [HandBrake]
 merge _basic _gtk
@@ -857,7 +861,7 @@ merge _basic _network
 ~/.cache/yt-dlp/ : rw +
 
 [curl]
-merge _basic _network
+merge _crude _network
 ~/.curlrc
 
 [_java]
