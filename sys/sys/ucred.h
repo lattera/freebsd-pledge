@@ -40,6 +40,7 @@
 #include <sys/_mutex.h>
 #endif
 #include <bsm/audit.h>
+#include <sys/_sysfil.h>
 
 struct loginclass;
 
@@ -58,7 +59,9 @@ struct loginclass;
  *
  * See "Credential management" comment in kern_prot.c for more information.
  */
+
 #if defined(_KERNEL) || defined(_WANT_UCRED)
+
 struct ucred {
 	struct mtx cr_mtx;
 	u_int	cr_ref;			/* (c) reference count */
@@ -75,16 +78,34 @@ struct ucred {
 	struct uidinfo	*cr_ruidinfo;	/* per ruid resource consumption */
 	struct prison	*cr_prison;	/* jail(2) */
 	struct loginclass	*cr_loginclass; /* login class */
-	u_int		cr_flags;	/* credential flags */
-	void 		*cr_pspare2[2];	/* general use 2 */
+#ifndef NOSYSFIL
+	sysfilset_t	cr_sysfilset;
+#endif
+	void		*cr_pspare2[2];	/* general use 2 */
 #define	cr_endcopy	cr_label
 	struct label	*cr_label;	/* MAC label */
 	gid_t	*cr_groups;		/* groups */
 	int	cr_agroups;		/* Available groups */
 	gid_t   cr_smallgroups[XU_NGROUPS];	/* storage for small groups */
 };
+
 #define	NOCRED	((struct ucred *)0)	/* no credential available */
 #define	FSCRED	((struct ucred *)-1)	/* filesystem credential */
+
+
+#ifdef NOSYSFIL
+#define	CRED_IN_RESTRICTED_MODE(cr) 0
+#define	CRED_IN_CAPABILITY_MODE(cr) 0
+#define	CRED_IN_VFS_VEILED_MODE(cr) 0
+#else
+#define	CRED_IN_RESTRICTED_MODE(cr) \
+	SYSFILSET_IS_RESTRICTED((cr)->cr_sysfilset)
+#define	CRED_IN_CAPABILITY_MODE(cr) \
+	SYSFILSET_IN_CAPABILITY_MODE((cr)->cr_sysfilset)
+#define	CRED_IN_VFS_VEILED_MODE(cr) \
+	SYSFILSET_IN_VFS_VEILED_MODE((cr)->cr_sysfilset)
+#endif
+
 #endif /* _KERNEL || _WANT_UCRED */
 
 /*

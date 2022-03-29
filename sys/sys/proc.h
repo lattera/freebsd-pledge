@@ -69,6 +69,7 @@
 #endif
 #include <sys/ucontext.h>
 #include <sys/ucred.h>
+#include <sys/_sysfil.h>
 #include <sys/types.h>
 #include <sys/_domainset.h>
 
@@ -388,6 +389,9 @@ struct thread {
 	off_t		td_ktr_io_lim;	/* (k) limit for ktrace file size */
 #ifdef EPOCH_TRACE
 	SLIST_HEAD(, epoch_tracker) td_epochs;
+#endif
+#ifndef NOUNVEIL
+	struct unveil_track *td_unveil_track; /* (a) */
 #endif
 };
 
@@ -744,6 +748,10 @@ struct proc {
 	LIST_HEAD(, proc) p_orphans;	/* (e) Pointer to list of orphans. */
 
 	TAILQ_HEAD(, kq_timer_cb_data)	p_kqtim_stop;	/* (c) */
+
+#ifndef NOUNVEIL
+	struct unveil_cache *p_unveil_cache;	/* (c) */
+#endif
 };
 
 #define	p_session	p_pgrp->pg_session
@@ -854,6 +862,16 @@ struct proc {
 						   list */
 #define	P_TREE_REAPER		0x00000004	/* Reaper of subtree */
 #define	P_TREE_GRPEXITED	0x00000008	/* exit1() done with job ctl */
+
+/*
+ * The general notion of a process being "restricted" is used for checks that
+ * should be done for both Capsicum and pledge().
+ */
+#define	PROC_IN_RESTRICTED_MODE(p)	CRED_IN_RESTRICTED_MODE((p)->p_ucred)
+#define	PROC_IN_CAPABILITY_MODE(p)	CRED_IN_CAPABILITY_MODE((p)->p_ucred)
+
+#define	IN_RESTRICTED_MODE(td)		CRED_IN_RESTRICTED_MODE((td)->td_ucred)
+#define	IN_CAPABILITY_MODE(td)		CRED_IN_CAPABILITY_MODE((td)->td_ucred)
 
 /*
  * These were process status values (p_stat), now they are only used in

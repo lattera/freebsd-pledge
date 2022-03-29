@@ -55,6 +55,7 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
 #include <sys/capsicum.h>
+#include <sys/sysfil.h>
 #include <sys/conf.h>
 #include <sys/fcntl.h>
 #include <sys/file.h>
@@ -594,18 +595,23 @@ shm_close(struct file *fp, struct thread *td)
 static int
 shm_copyin_path(struct thread *td, const char *userpath_in, char **path_out) {
 	int error;
-	char *path;
+	char *path, *path_prefix;
 	const char *pr_path;
-	size_t pr_pathlen;
 
 	path = malloc(MAXPATHLEN, M_SHMFD, M_WAITOK);
 	pr_path = td->td_ucred->cr_prison->pr_path;
 
 	/* Construct a full pathname for jailed callers. */
-	pr_pathlen = strcmp(pr_path, "/") ==
-	    0 ? 0 : strlcpy(path, pr_path, MAXPATHLEN);
-	error = copyinstr(userpath_in, path + pr_pathlen,
-	    MAXPATHLEN - pr_pathlen, NULL);
+	path_prefix = strcmp(pr_path, "/") == 0 ?
+	    path : path + strlcpy(path, pr_path, MAXPATHLEN);
+#ifdef MAC
+	error = mac_generic_ipc_name_prefix(td->td_ucred,
+	    &path_prefix, path + MAXPATHLEN);
+	if (error)
+		goto out;
+#endif
+	error = copyinstr(userpath_in, path_prefix,
+	    path + MAXPATHLEN - path_prefix, NULL);
 	if (error != 0)
 		goto out;
 
@@ -615,7 +621,7 @@ shm_copyin_path(struct thread *td, const char *userpath_in, char **path_out) {
 #endif
 
 	/* Require paths to start with a '/' character. */
-	if (path[pr_pathlen] != '/') {
+	if (*path_prefix != '/') {
 		error = EINVAL;
 		goto out;
 	}
@@ -1068,13 +1074,18 @@ kern_shm_open2(struct thread *td, const char *userpath, int flags, mode_t mode,
 	if ((shmflags & SHM_ALLOW_SEALING) != 0)
 		initial_seals &= ~F_SEAL_SEAL;
 
+	if (userpath != SHM_ANON) {
 #ifdef CAPABILITY_MODE
-	/*
-	 * shm_open(2) is only allowed for anonymous objects.
-	 */
-	if (IN_CAPABILITY_MODE(td) && (userpath != SHM_ANON))
-		return (ECAPMODE);
+		/*
+		 * shm_open(2) is only allowed for anonymous objects.
+		 */
+		if (IN_CAPABILITY_MODE(td))
+			return (ECAPMODE);
 #endif
+		error = sysfil_check(td, SYSFIL_POSIXSHM);
+		if (error)
+			return (error);
+	}
 
 	AUDIT_ARG_FFLAGS(flags);
 	AUDIT_ARG_MODE(mode);

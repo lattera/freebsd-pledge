@@ -1,0 +1,1157 @@
+# Sample sandboxing profiles for some common applications.
+#
+# VARIOUS NOTES:
+#
+# Some applications actually require their "unsafe" permissions (directives
+# suffixed with "!"), while some of them just work better with them.
+#
+# Menus and windows often have a thick black border in untrusted X11 mode.
+# Windows from applications that try to use client-side decorations (most Gnome
+# and XFCE applications by default) will not be movable.
+#
+# Video players are a lot slower under untrusted X11 mode.  Fullscreen mode
+# will not work.
+#
+# Under Wayland, some programs won't work without DRM access.
+#
+# fontconfig will complain about unwritable cache directories.
+#
+# dconf will be unusable.  Some GTK programs using dconf can be quieted with
+# environment variable GSETTINGS_BACKEND=memory, but saving settings still will
+# not work.
+#
+# pulseaudio will be unusable, but thankfully some programs just start using
+# OSS directly instead.
+#
+# Applications that try to launch other applications to open files or URLs will
+# most likely not have enough permissions for it to work right.
+#
+# dbus won't be accessible by default, but curtain(1)'s -D flag can launch an
+# isolated dbus daemon for the application.  Better desktop integration would
+# probably require some kind of restricting dbus proxy.
+
+
+[_editor]
+#~/Documents/				: rw
+#~/Templates/				: rw
+
+[_browser]
+merge _audio
+#~/Downloads/				: rw
+
+[_p2p]
+#~/Downloads/				: rw
+
+[_player]
+merge _audio
+#~/Music/				: r
+#~/Videos/				: r
+
+[_viewer]
+#~/Pictures/				: r
+
+[_game]
+merge _audio
+# TODO: joysticks/gamepads
+
+[_terminal]
+merge _pty
+merge _shell
+
+
+[_x11 : _gui]
+merge _unix_client
+${CURTAIN_X11_SOCKET}			: v
+${CURTAIN_X11_XAUTHORITY}		: rd
+
+[_x11_trusted]
+ability-gate sysvshm # MIT-SHM
+merge _drm_render
+
+[_x11_all]
+${XAUTHORITY-~/.Xauthority}
+/tmp/.X11-unix/ : u
+
+[_wayland : _gui]
+merge _drm_render
+${CURTAIN_WAYLAND_SOCKET}		: v
+
+[dbus-daemon]
+merge _basic
+merge _pwddb
+${CURTAIN_DBUS_SOCKET}			: ua
+/usr/local/etc/dbus-1/			: r
+
+[_dbus]
+${CURTAIN_DBUS_SOCKET}			: v
+
+[_drm_base]
+/dev/drm/				: rm
+/dev/dri/				: rm
+/dev/pci				: r
+sysctl kern.devname
+sysctl dev.drm
+sysctl hw.dri
+priv-deny driver [_strict]
+merge _fdpass
+~/.drirc
+[_drm_full : _drm_base]
+ability! any_ioctl # XXX
+[_drm_render]
+# Needs platform-dependent ioctls from libdrm.
+# See /usr/share/examples/curtain/make-drm-render-conf.c
+
+[_casper]
+merge _proc _fdpass
+
+[_alsa]
+merge _audio
+/usr/local/etc/asound.conf
+/usr/local/etc/alsa/
+~/.asoundrc
+
+[_pulse]
+/usr/local/etc/pulse/
+${PULSE_RUNTIME_PATH-~/.config/pulse}/
+${PULSE_RUNTIME_PATH-~/.config/pulse}/%h-runtime/native : v
+
+[_xdg]
+~/.config/user-dirs.{dirs,locale}
+
+[_fontconfig]
+~/.config/fontconfig/			: r
+~/.fontconfig/				: r
+~/.fonts.conf				: r
+~/.fonts.conf.d/			: r
+~/.local/share/fonts/			: r
+~/.fonts/				: r
+/usr/local/etc/fonts/			: r
+/var/db/fontconfig/			: r
+
+[_gui]
+merge _fontconfig
+
+[_gtk]
+merge _xdg
+# Seems like GTK-2 also will use this file.
+~/.config/gtk-3.0/bookmarks
+sysctl-deny vfs.usermount [_strict]
+
+[_qt]
+merge _xdg
+ability-deny prot_exec [_strict]
+sysctl-deny kern.bootfile [_strict] # kvm_open(3)
+
+[_kde]
+merge _qt
+
+[_memstat]
+sysctl hw.physmem
+sysctl hw.availpages
+sysctl vm.stats.vm.v_page_size
+sysctl vm.stats.vm.v_page_count
+sysctl vm.stats.vm.v_wire_count
+sysctl vm.stats.vm.v_active_count
+sysctl vm.stats.vm.v_inactive_count
+sysctl vm.stats.vm.v_laundry_count
+sysctl vm.stats.vm.v_cache_count
+sysctl vm.stats.vm.v_free_count
+sysctl kstat.zfs.misc.arcstats.size
+sysctl vm.vmtotal
+
+
+[_misc_shell_utils]
+#merge curtain
+
+[_shell]
+merge _misc_shell_utils
+
+[sh, ksh, ksh93, mksh, oksh, dash, bash, zsh : _bourne]
+
+[_bourne]
+merge _basic
+
+[_shell _bourne]
+${ENV}					: r
+
+[_login_shell _bourne]
+/etc/profile				: r
+/usr/local/etc/profile			: r
+
+[_shell bash]
+~/.bashrc				: r
+
+[_login_shell bash]
+~/.bash_profile				: r
+~/.bash_logout				: r
+
+[_shell zsh]
+/usr/local/etc/zshenv			: r
+/usr/local/etc/zshrc			: r
+${ZDOTDIR:-~/}/.zshenv			: r
+${ZDOTDIR:-~/}/.zshrc			: r
+
+[_login_shell zsh]
+/usr/local/etc/zprofile			: r
+/usr/local/etc/zlogin			: r
+/usr/local/etc/zlogout			: r
+${ZDOTDIR:-~/}/.zprofile		: r
+${ZDOTDIR:-~/}/.zlogin			: r
+${ZDOTDIR:-~/}/.zlogout			: r
+
+[csh, tcsh : _csh]
+
+[_csh]
+merge _basic
+
+[_shell _csh]
+/etc/csh.cshrc				: r
+~/.{t,}cshrc				: r
+
+[_login_shell _csh]
+/etc/csh.log{in,out}			: r
+~/.log{in,out}				: r
+
+[_login]
+merge _spwddb
+/var/run/nologin
+/var/run/motd
+/etc/passwd
+/etc/master.passwd
+/etc/login.conf{,.db}
+/etc/login.access
+/etc/fbtab
+/etc/shells
+/etc/pam.{conf,d/}
+/usr/local/etc/pam.d/ [_localbase]
+
+[su : _login]
+merge _basic
+merge _su
+ability audit
+ability! rsugid_exec
+merge _syslog
+
+[doas : _login]
+merge _basic
+merge _su
+ability! rsugid_exec
+merge _syslog
+/usr/local/etc/doas.conf [_localbase]
+
+
+[vi : _editor]
+merge _basic
+~/.{n,}exrc				: r
+/etc/vi.exrc				: r
+# recovery handling needs to be able to read the user database
+merge! _pwddb
+path! /var/tmp/vi.recover/		: rw
+
+
+[git]
+merge _basic _network
+~/.gitconfig				: r
+
+
+[ps]
+merge _crude _tty _ps
+sysctl kern.ccpu
+sysctl kern.bootfile
+sysctl kern.fscale
+sysctl kern.devname
+
+[top]
+merge _basic
+sysctl kern.bootfile
+sysctl kern.boottime
+sysctl kern.ccpu
+sysctl kern.cp_time
+sysctl kern.cp_times
+sysctl kern.lastpid
+sysctl kern.smp.active
+sysctl kstat.zfs
+sysctl vfs.zfs
+sysctl vfs.bufspace
+sysctl vm.dmmax
+sysctl vm.loadavg
+sysctl vm.nswapdev
+sysctl vm.stats.vm
+sysctl vm.swap_info
+sysctl vm.swap_maxpages
+sysctl hw.acpi.battery
+
+[htop]
+merge _basic
+sysctl hw.physmem
+sysctl kern.bootfile
+sysctl kern.boottime
+sysctl kern.cp_time
+sysctl kern.cp_times
+sysctl kern.devname
+sysctl kern.fscale
+sysctl kern.smp.active
+sysctl kstat.zfs.misc
+sysctl vfs.bufspace
+sysctl vm.dmmax
+sysctl vm.loadavg
+sysctl vm.stats.vm
+sysctl vm.swap_info
+~/.config/htop/ : rw +
+/usr/local/etc/htoprc
+
+[vmstat]
+merge _basic
+sysctl kern.devstat
+sysctl kern.clockrate
+sysctl kern.cp_time kern.cp_times
+sysctl vm.stats
+sysctl vm.vmtotal
+sysctl hw.intrnames hw.intrcnt
+sysctl kern.malloc_count vm.malloc kern.malloc_stats
+sysctl vm.objects
+sysctl vfs.cache.nchstats
+sysctl vm.zone_count vm.zone_stats
+
+[swapinfo]
+merge _basic
+sysctl kern.devname
+sysctl vm.swap_info
+
+
+[ping, ping6]
+merge _crude _casper _net_client
+ability setcred
+ability net_raw
+socklvl icmpv6
+
+[traceroute, traceroute6]
+merge _crude _casper _network _tty
+ability setcred
+ability net_raw
+sysctl net.inet.ip.ttl
+sysctl net.inet6.ip6.hlim
+
+[mtr]
+merge _basic _network
+ability setcred
+ability net_raw
+
+[tcpdump]
+merge _crude _net_client
+ability setcred
+merge _bpf
+
+[wireshark]
+merge _basic _net_client _gtk
+merge _bpf
+~/.config/wireshark/			: rw +
+ability-deny prot_exec [_strict]
+
+[mdconfig]
+merge _basic
+ability kmod
+ioctls mdctl
+
+[newfs]
+merge _basic
+ioctls disk_basic
+
+[_any_tty]
+/dev/pts/ : rw
+#/dev/ttyv{0,1,2,3,4,5,6,7,8,9,a,b} : rw
+#/dev/ttyu{0,1,2,3} : rw
+
+[_tty_alt]
+# For programs that need to access their controlling TTY through the
+# device-specific path (e.g. /dev/pts/*, /dev/ttyv*, etc).
+merge _tty
+/dev/ : D
+
+[gpg-agent]
+merge _basic
+# gpg2 seems to always spawn gpg-agent and delegate running pinentry to it.
+# pinentry then has to be able to access gpg's tty or X/Wayland session.
+# gpg-agent should be started separately with the permissions to do so.
+merge _any_tty
+~/.gnupg/ : rua 0700
+
+[gpg2]
+merge _basic _tty_alt
+ability mlock
+sysctl kern.devname
+~/.gnupg/ : rwv 0700
+
+[emacs : _editor]
+merge _basic _network
+# NOTE: Sometimes crashes with untrusted X11.
+merge! _pwddb
+~/.emacs.el				: rw
+~/.emacs				: rw
+~/.emacs.d/ ~/.config/emacs/		: rw +
+merge _gtk [_gui]
+
+[vscode : _editor]
+# NOTE: Must be started with -w (--wait) or vscode will exit early and make
+# curtain(1) delete its temporary files (including X11 cookie file).
+merge _basic _network _memstat _pty _fdpass _xdg
+ability posixshm sendfile prot_exec
+~/.vscode-oss/ : rw +
+~/.config/Code\ -\ OSS/ : rwu +
+
+[abiword : _editor]
+merge _basic _gtk
+~/.config/abiword/			: rw +
+
+[gimp : _editor]
+# File previews won't work without access to ~/.cache/thumbnails.
+merge _basic _gtk
+merge _memstat
+ability sysvshm
+/usr/local/etc/gimp/			: r
+~/.config/GIMP/				: rw +
+~/.cache/gimp/				: rw +
+
+[mypaint]
+merge _basic _gtk
+ability prot_exec
+ability posixshm
+~/.cache/mypaint/ : rw +
+~/.local/share/mypaint/ : rw +
+~/.config/mypaint/ : rw +
+
+[inkscape : _editor]
+merge _basic _gtk
+ability posixshm
+~/.cache/inkscape/			: rw +
+~/.config/inkscape/			: rw +
+/usr/local/bin/inkscape			: i
+
+[blender : _editor]
+merge _basic _xdg
+~/.config/blender/ ~/.blender/ : rw +
+
+[krita : _editor]
+# slow in untrusted X11 mode
+merge _basic _net_misc _kde
+merge _memstat
+ability prot_exec
+ability sysvshm sysvsem
+~/.cache/krita/ : rw +
+~/.local/share/krita/ : rw +
+~/.local/share/krita.log : rw
+~/.local/share/krita-sysinfo.log : rw
+~/.config/kritadisplayrc : rw
+~/.config/kritarc : rw
+
+[karbon : _editor]
+# needs dbus
+merge _basic _kde
+ability-deny mlock [_strict]
+~/.local/share/karbon/ : rw +
+~/.config/karbonrc : rw
+
+[libreoffice : _editor]
+merge _basic _java _net_client _xdg
+ability prot_exec
+ability acl # ls(1)
+merge! _pwddb
+# LibreOffice ignores $TMPDIR for some things.
+merge!! _unsafe_system_tmpdir
+~/.config/libreoffice/			: rw +
+
+[xpdf : _viewer]
+merge _basic _qt
+/usr/local/etc/papersize		: r
+/usr/local/etc/xpdfrc			: r
+~/.xpdfrc				: rw
+
+[gv : _viewer]
+merge _basic
+merge! _shared_system_tmpdir
+~/.gv					: r
+
+[epdfview : _viewer]
+merge _basic _gtk
+~/.config/epdfview/			: rw +
+
+[okular : _viewer]
+merge _basic _qt
+merge _memstat
+~/.config/okularrc			: rw +
+~/.local/share/okular/			: rw +
+
+[geeqie : _viewer]
+merge _basic _gtk
+~/.config/geeqie/			: rw +
+~/.local/share/geeqie/			: rw +
+~/.cache/geeqie/			: rw +
+
+[shotwell : _viewer]
+merge _basic _gtk
+# Has trouble saving its configs.
+~/.shotwell/				: rw +
+~/.local/share/shotwell/		: rw +
+~/.cache/shotwell/			: rw +
+
+[gpicview : _viewer]
+merge _basic
+~/.config/gpicview/			: rw +
+
+[sxiv : _viewer]
+merge _basic
+~/.config/sxiv/				: rw +
+~/.cache/sxiv/				: rw +
+
+[gwenview : _viewer]
+merge _basic _kde
+merge _memstat
+ability acl extattr
+~/.local/share/gwenview/ : rw +
+~/.config/gwenviewrc : rw
+
+[dia : _editor]
+merge _basic _gtk
+~/.dia/ : rw +
+
+[_mpi]
+/usr/local/mpi/ : rx
+
+[FreeCAD]
+merge _basic _qt
+merge _mpi
+merge _net_client _webkit
+merge! _pwddb
+/usr/local/FreeCAD/ : rx
+~/.FreeCAD/ : rw +
+~/.config/FreeCAD/ : rw +
+
+[hexchat]
+merge _basic _network _gtk
+ability setcred
+~/.config/hexchat/			: rw +
+sysctl-deny machdep.tsc_freq [_strict]
+
+[pidgin]
+merge _basic _network _gtk
+~/.purple/				: rw +
+
+[filezilla]
+merge _basic _network _xdg
+merge putty
+~/.cache/filezilla/ : rw +
+~/.config/filezilla/ : rw +
+~/.putty/ : rw +
+
+[putty]
+merge _basic _network _gtk
+~/.putty/ : rw +
+
+[_gecko]
+merge _fdpass
+merge _memstat
+merge _fontconfig
+ability posixshm prot_exec
+sysctl-deny kern.proc.vmmap [_strict]
+
+[firefox.common]
+
+[firefox.base : _browser]
+# NOTES:
+# - Sometimes crash due to X11 errors with -X.  Works better under -Y/-W.
+# - Run with GDK_BACKEND=wayland for -W.  When giving it DRM access, it
+#   sometimes doesn't activate until the second start.
+# - For some reason the "Save Page As..." file browsing dialog won't show up
+#   unless the ~/Download (or XDG alternative) directory already exists.
+merge _basic _network _gtk
+merge firefox.common
+merge _gecko
+~/.mozilla/firefox/installs.ini
+~/.mozilla/firefox/profiles.ini
+
+[firefox : firefox.base]
+# Gives access to ALL profiles.
+~/.mozilla/firefox/			: rw +
+~/.cache/mozilla/firefox/		: rw +
+
+# Isolated processes sandboxing with freebsd_simple_sandbox().
+
+[firefox.simple : firefox.common]
+ability-deny any_sysctl # XXX
+merge _strict
+
+[firefox.default : firefox.simple]
+merge firefox
+merge curtain
+merge _x11_trusted
+
+[firefox.content : firefox.simple]
+# XXX The separate GPU process doesn't seem to be used on FreeBSD.  Even if
+# giving DRM access to the content processes, WebGL won't work because they
+# attempt to reconnect to the X server for some reason.
+merge _basic _net_client
+merge _gecko
+
+[firefox.socket : firefox.simple]
+merge _basic _net_client
+
+[firefox.gpu : firefox.simple]
+merge _basic
+merge _drm_render
+
+[firefox.rdd : firefox.simple]
+merge _basic
+
+# If you have multiple profiles, you can run them in separate sandboxes.  See
+# the sample firefox-profile1.desktop file in /usr/share/examples/curtain/.
+# Create a copy of this file and a new section like the one below for each
+# profile and update the profile names and paths.
+#
+# Copying the .desktop files to ~/.local/share/applications/ might be enough to
+# make them available in your window manager's menu.
+#
+# Which profile a window belongs to will probably be hard to tell unless you
+# change something in the profile to make it distinctive somehow.
+#
+# NOTE: You can create new profiles in Firefox by entering "about:profiles" in
+# the address bar.
+#
+#[firefox-profile1 : firefox.base]
+#~/.mozilla/firefox/XXXXXXXX.profile1/		: rw +
+#~/.cache/mozilla/firefox/XXXXXXXX.profile1/	: rw +
+
+[chrome : _browser]
+# NOTE: When running chromium as an "untrusted" X11 client (curtain -X), the
+# setting "Use system title bar and borders" in the "Appearance" section must
+# be enabled.
+merge _basic _network _fdpassdir _gtk
+merge _memstat
+ability posixshm prot_exec sendfile
+sysctl-deny kern.bootfile [_strict] # kvm_open(3)
+sysctl kern.ipc.shm_allow_removed
+sysctl kern.ipc.shmmax
+~/.config/chromium/			: rw +
+~/.cache/chromium/			: rw +
+
+[thunderbird]
+merge _basic _network _gtk
+merge _gecko
+~/.thunderbird/				: rw +
+~/.cache/thunderbird/			: rw +
+
+[_webkit]
+merge _fdpass
+merge _memstat
+merge _alsa [_audio]
+ability prot_exec
+sysctl-deny kern.bootfile [_strict] # kvm_open(3)
+
+[falkon : _browser]
+merge _basic _network _qt
+merge _webkit
+~/.config/falkon/			: rw +
+~/.cache/falkon/			: rw +
+
+[otter-browser : _browser]
+merge _basic _network _qt
+merge _webkit
+~/.config/otter/			: rw +
+~/.cache/Otter/				: rw +
+
+[midori : _browser]
+merge _basic _network _gtk
+merge _webkit
+ability posixshm mlock
+./.cache/midori/ : rw +
+./.config/midori/ : rw +
+
+[dooble : _browser]
+merge _basic _network _qt
+merge _webkit
+ability mlock
+~/.dooble/ : rw +
+
+[liferea]
+merge _basic _network _gtk
+merge _webkit
+ability-deny prot_exec [_strict]
+ability-deny mlock [_strict]
+ability posixshm
+~/.config/liferea/ : rw +
+~/.cache/liferea/ : rw +
+~/.local/share/liferea/ : rw +
+
+[evolution : _mua]
+merge _basic _network _gtk
+~/.cache/evolution/ : rw +
+~/.config/evolution/ : rw +
+~/.local/share/evolution/ : rw +
+
+[sylpheed : _mua]
+merge _basic _network _gtk
+~/.sylpheed-2.0/ : rw +
+
+[claws-mail : _mua]
+merge _basic _network _gtk
+~/.claws-mail/ : rw +
+~/.cache/claws-mail/ : rwu +
+#~/Mail/ : rw +
+
+[rssguard]
+merge _basic _network _fdpass _qt
+merge _webkit
+~/.cache/RSS\ Guard/ : rw +
+~/.config/RSS\ Guard\ 4/ : rw +
+~/.local/share/RSS\ Guard/ + rw +
+
+[irssi : _irc]
+# NOTE: Irssi supports Capsicum, can be enabled with "/capsicum".
+merge _basic _network
+~/.irssi/ : rw +
+~/irclogs/ : rcp +
+
+[qbittorrent : _p2p]
+merge _crude _ps _network _qt
+# NOTE: Best to disable the tray icon feature under -X.
+~/.local/share/qBittorrent/		: rw +
+~/.config/qBittorrent/			: rw +
+~/.cache/qBittorrent/			: rw +
+sysctl-deny hw.physmem [_strict]
+
+[deluge : _p2p]
+merge _basic _network _gtk
+ability prot_exec
+~/.config/deluge/			: rwu +
+
+[transmission-gui : _p2p]
+merge _basic _network
+~/.config/transmission/ : rw +
+[transmission-gtk : transmission-gui]
+merge _gtk
+[transmission-qt : transmission-gui]
+merge _qt
+
+[audacious : _player]
+merge _basic _qt
+ability posixshm
+~/.config/audacious/			: rw +
+
+[quodlibet : _player]
+merge _basic
+ability prot_exec
+~/.quodlibet/ : rw +
+~/.cache/quodlibet/ : rw +
+
+[mpv : _player]
+merge _crude _tty
+~/.config/mpv/ ~/.mpv/			: rw +
+ability-deny prot_exec [_strict]
+ioctl-deny 0x40087603 [_strict] # XXX VT_GETMODE
+
+[mplayer : _player]
+merge _crude _tty
+~/.mplayer/				: rw +
+
+[vlc : _player]
+merge _basic _qt
+ability sysvshm
+ability prot_exec
+~/.config/vlc/				: rw +
+~/.local/share/vlc/			: rw +
+ioctl-deny 0x40046402 [_strict] # XXX some non-render DRM ioctl
+
+[HandBrake]
+merge _basic _gtk
+~/.config/ghb/ : rw +
+
+[xterm : _terminal]
+# Dies with an X11 error when trying to select text under -X.
+merge _basic
+ability setcred
+
+[urxvt : _terminal]
+merge _basic
+
+[st : _terminal]
+merge _basic
+merge! _pwddb
+
+[qterminal : _terminal]
+merge _basic _qt
+
+[dolphin-emu : _game]
+# Needs trusted X11.
+merge _basic _qt
+ability prot_exec posixipc
+~/.cache/dolphin-emu/ : rw +
+~/.local/share/dolphin-emu/ : rw +
+~/.config/dolphin-emu/ : rw +
+
+[citra, citra-qt : _game]
+merge _basic _network
+merge _qt [citra-qt]
+ability prot_exec posixipc
+~/.local/share/citra-emu/ : rw +
+~/.config/citra-emu/ : rw +
+
+[arx : _game]
+merge _basic _xdg
+ability prot_exec
+~/.config/arx/ : rw +
+~/.local/share/arx/ : rw +
+
+[wine, winecfg]
+# NOTES:
+#
+# 1) wine will sometimes busy-loop trying to write some ~/.local files after
+# installing an application.  Unticking the "Manage file associations" checkbox
+# in the "Desktop Integration" tab of winecfg seems to help with that but
+# doesn't completely stop it.
+#
+# 2) The 32-bits fontconfig wine uses for WoW64 won't be able to use the host's
+# 64-bits system font cache, greatly slowing down wine's startup.  The 32-bits
+# cache files can be pre-generated for the current user with this command:
+#     LD_32_LIBRARY_PATH=~/.i386-wine-pkg/usr/local/lib ~/.i386-wine-pkg/usr/local/bin/fc-cache
+#
+# 3) wine will by default symlink its Windows "My Documents" folder to the
+# user's UNIX home directory (and then symlink many other "My" folders to "My
+# Documents").  Look in ~/.wine/drive_c/users/$USER/ and point "My Documents"
+# to something usable.  Can also be changed in winecfg.
+#
+# 4) wine needs procfs(5) mounted.
+#
+# 5) Games most likely will need "trusted" X11 access and DRM access.
+merge _basic _network
+merge _fdpassdir
+merge _compat32
+merge _audio
+ability prot_exec
+/tmp/.wine-%u/ : rwu 0700
+/proc/ : r
+~/.wine/ : rw +
+~/.i386-wine-pkg/ : rx
+~/.cache/fontconfig/ : r
+
+[lynx : _browser]
+merge _basic _network
+/usr/local/etc/lynx.{cfg,lss}
+~/.lynxrc : rw
+~/.lynxsig
+~/.lynx_cookies : rw
+
+[links : _browser]
+merge _basic _network
+~/.links/ : rw +
+
+[lyx : _editor]
+merge _basic
+merge! _pwddb
+~/.lyx/ : rw +
+
+[youtube-dl]
+merge _basic _network
+/usr/local/etc/youtube-dl.conf
+~/.config/youtube-dl/
+~/.cache/youtube-dl/ : rw +
+
+[yt-dlp]
+merge _basic _network
+/usr/local/etc/yt-dlp.conf
+~/.config/yt-dlp/
+~/.cache/yt-dlp/ : rw +
+
+[curl]
+merge _crude _network
+~/.curlrc
+
+[_java]
+ability prot_exec aslr
+merge _memstat
+/usr/local/etc/javavms
+/usr/local/openjdk{8,11,12,13,14,15,16,17}/ : rx
+
+[jedit : _editor]
+# Seems to require trusted X11.
+merge _basic _network _xdg
+merge _java
+merge! _pwddb
+~/.jedit/ : rw +
+
+[eclipse]
+merge _basic _network _java _xdg
+merge! _pwddb
+ability sysvshm
+merge! _shared_system_tmpdir
+~/.eclipse/ : rw +
+~/.cache/Eclipse/ : rw +
+#~/workspace/ : rw +
+
+[clementine-player : _player]
+merge _basic _qt
+ability prot_exec
+~/.cache/Clementine/ : rw +
+~/.config/Clementine/ : rw +
+
+[strawberry : _player]
+merge _basic _qt
+ability prot_exec
+~/.cache/strawberry/ : rw +
+~/.local/share/strawberry/ : rw +
+~/.config/strawberry/ : rw +
+
+[deadbeef : _player]
+merge _basic _gtk
+~/.config/deadbeef/ : rwu +
+
+[geany : _editor]
+merge _basic _network _pty _gtk
+~/.config/geany/ : rw +
+~/.cache/geany/ : rwu +
+
+
+[_build]
+/etc/make.conf
+/usr/include/
+/usr/local/include/ [_localbase]
+
+[_ccache]
+${CCACHE_DIR-/var/cache/ccache}/ : rw
+
+[_ruby_gems]
+$GEM_HOME/ : rx
+
+[_ruby_gems.manage]
+merge _build
+$GEM_HOME/ : rwx
+$GEM_SPEC_CACHE/ : rw
+path!! ~/.local/share/gem/specs/ : rw +
+
+[_python_pip]
+$PYTHONUSERBASE/ : rx
+
+[_python_pip.manage]
+merge _build
+$PYTHONUSERBASE/ : rwx
+path!! ~/.cache/pip/ : rw +
+
+[node]
+merge _basic
+ability prot_exec
+
+[_nodejs_npm.manage]
+merge node
+~/.npmrc
+~/.npm-init.js
+path!! ~/.npm/ : rw +
+
+
+[_ports_build]
+merge _build
+merge _pwddb
+/usr/ports/
+/usr/obj/usr/ports/			: rxw
+/var/db/ports/				: rw
+/usr/local/include/ [_localbase]
+
+[_src_build]
+merge _build
+merge _pwddb
+/etc/src.conf
+/etc/src-env.conf
+/usr/src/
+/usr/obj/usr/src/			: rxw
+
+[pkg]
+merge _basic _net_client _su
+merge _pwddb
+merge _syslog
+/etc/pkg/
+/usr/local/etc/pkg.conf
+/var/db/pkg/
+/var/cache/pkg/
+
+[pkg.manage : pkg]
+/var/db/pkg/ : rw +
+/var/cache/pkg/ : rw +
+# NOTES:
+#
+# There are many base programs that will use files from /usr/local by default.
+# This profile does not really protect the base system from compromised
+# packages unless all of those programs are disabled, sandboxed, or modified to
+# not trust /usr/local files.
+#
+# Those paths aren't even sufficient; some packages need to modify system files
+# (e.g. to add users/groups/shells) or prepare some directories in /var, etc.
+path!! /usr/local/ : rw +
+path!! /compat/linux/ : rw +
+path!!! /boot/modules/ : rw +
+
+
+# NOTES:
+#
+# Daemons that background themselves probably should be run under `curtain -f`.
+#
+# XXX Just running the daemon's main process under curtain might not be enough.
+# - setuid binaries probably should be disabled (or be made to run under
+#   curtain somehow).
+# - The daemon should not ever be run unsandboxed using the same files
+#   as the sandboxed daemon.
+# - Daemon control/monitoring commands may be unsafe to run unsandboxed.
+# - rc.d and periodic scripts should be audited for safety.
+
+[sendmail : _daemon]
+merge _basic _network
+merge _login
+merge _syslog
+merge _shared_tmpdir # mail.local(8) uses /tmp directly
+merge _su
+sysctl vm.loadavg
+/etc/mail/
+/etc/aliases
+/var/run/sendmail.pid : rw
+/var/spool/{client,}mqueue/ : rw
+/var/mail/ : rw
+#~user/.forward
+
+[exim : _daemon]
+merge _basic _network
+merge _login
+merge _syslog
+merge _fdpass
+merge _su
+ability chown
+/etc/aliases
+/usr/local/etc/exim/
+/var/run/ : b
+/var/run/exim.pid : rw
+/var/spool/exim/ : rwu
+/var/log/exim/ : rw
+/var/mail/ : rw
+#~user/.forward
+
+[ftpd : _daemon]
+merge _basic _network
+merge _login
+merge _syslog
+merge _su
+ability chown
+ability chroot
+/etc/ftpusers
+/etc/ftpchroot
+/etc/ftphosts
+/etc/ftpwelcome
+/etc/ftpmotd
+/var/run/ : b # pidfile(3)
+/var/run/ftpd.pid : rw
+/var/log/ftpd : rw
+~ftp/
+#~user/ : rw
+
+[samba : _daemon]
+merge _basic _network
+# NOTE: Needs `curtain -f`, will access the TMPDIR under different UIDs.
+merge _login
+merge _syslog
+merge _fdpass
+merge _su
+ability chown
+ability extattr acl quota
+sysctl kern.corefile
+/usr/local/etc/smb4.conf
+/var/db/samba4/ : rwu 0755
+/var/run/samba4/ : rwu 0755
+/var/log/samba4/ : rw 0755
+#/stuff/ : rw
+#~user/ : rw
+
+[ntpd]
+merge _basic _network
+merge _syslog
+merge _pwddb
+ability settime
+sockaf-deny route [_strict]
+/etc/ntp.conf
+/etc/ntp/
+/var/db/ntp/ : rw
+/var/db/ntpd.leap-seconds.list : rw
+[ntpd_unpriv : ntpd]
+merge su
+merge _su
+ability chroot
+
+[syslogd : _daemon]
+merge _basic _network
+/etc/syslog.{conf,d/}
+/usr/local/etc/syslog.d/
+/var/run/syslog.pid : rw
+/var/run/log{,priv} : ua
+/dev/klog
+/var/log/ : cp
+
+[spamassassin, sa-learn]
+merge _basic _network
+/usr/local/etc/mail/spamassassin/
+/var/db/spamassassin/
+~/.spamassassin/ : rw +
+
+[sa-update]
+merge _basic _network
+merge! _unsafe_system_tmpdir
+ability mlock # gpg
+/usr/local/etc/mail/spamassassin/
+/usr/local/etc/mail/spamassassin/sa-update-keys/ : rw 0700
+/var/db/spamassassin/ : rw
+
+[spamd : _daemon]
+merge _basic _network _syslog
+merge _pwddb _su
+merge! _unsafe_system_tmpdir
+/usr/local/etc/mail/spamassassin/
+/var/db/spamassassin/
+/var/run/spamd/ : rw
+
+[spamc]
+merge _basic _net_client _syslog
+merge! _pwddb
+
+[clamscan]
+merge _basic
+/var/db/clamav/
+
+[clamd : _daemon]
+merge _basic
+merge _pwddb _su
+ability chown
+ability recvfd
+/var/run/clamav/clamd.pid : rw
+/var/log/clamav/clamd.log : pca
+/var/run/clamav/clamd.sock : ua
+/var/spool/clamav/ : rw # set "TemporaryDirectory" to this in clamd.conf
+/usr/local/etc/clamd.conf
+/var/db/clamav/
+
+[clamdscan]
+merge _basic _net_client
+ability sendfd
+/var/run/clamav/clamd.sock : v
+/usr/local/etc/clamd.conf
+
+[freshclam]
+merge _basic _net_client
+merge _pwddb _su
+/usr/local/etc/freshclam.conf
+/var/run/clamav/freshclam.pid : rw
+/var/db/clamav/ : rw
+/var/log/clamav/freshclam.log : pc
+/usr/local/etc/clamd.conf
+/var/run/clamav/clamd.sock : v
+
+[redis : _daemon]
+merge _basic _network _syslog
+#merge _syslog
+/usr/local/etc/redis.conf
+/var/run/redis/redis.pid : rw
+/var/run/redis/redis.sock : ua
+/var/log/redis/redis.log : cp
+/var/db/redis/ : rw
+

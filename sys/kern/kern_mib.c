@@ -693,6 +693,9 @@ SYSCTL_INT(_debug_sizeof, OID_AUTO, vnode, CTLFLAG_RD,
 SYSCTL_INT(_debug_sizeof, OID_AUTO, proc, CTLFLAG_RD,
     SYSCTL_NULL_INT_PTR, sizeof(struct proc), "sizeof(struct proc)");
 
+SYSCTL_INT(_debug_sizeof, OID_AUTO, ucred, CTLFLAG_RD,
+    SYSCTL_NULL_INT_PTR, sizeof(struct ucred), "sizeof(struct ucred)");
+
 static int
 sysctl_kern_pid_max(SYSCTL_HANDLER_ARGS)
 {

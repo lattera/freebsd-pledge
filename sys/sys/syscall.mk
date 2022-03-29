@@ -111,6 +111,7 @@ MIASM =  \
 	getfh.o \
 	sysarch.o \
 	rtprio.o \
+	curtainctl.o \
 	semsys.o \
 	msgsys.o \
 	shmsys.o \

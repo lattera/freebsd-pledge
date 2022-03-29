@@ -420,8 +420,6 @@ __END_DECLS
 
 #include <sys/systm.h>
 
-#define IN_CAPABILITY_MODE(td) (((td)->td_ucred->cr_flags & CRED_FLAG_CAPMODE) != 0)
-
 struct filedesc;
 struct filedescent;
 

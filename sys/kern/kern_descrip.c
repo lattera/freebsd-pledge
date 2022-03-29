@@ -79,6 +79,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/unistd.h>
 #include <sys/user.h>
 #include <sys/vnode.h>
+#include <sys/sysfil.h>
 #include <sys/ktrace.h>
 
 #include <net/vnet.h>
@@ -540,6 +541,9 @@ kern_fcntl(struct thread *td, int fd, int cmd, intptr_t arg)
 		break;
 
 	case F_SETFD:
+		error = sysfil_check(td, SYSFIL_FDESC);
+		if (error != 0)
+			break;
 		error = EBADF;
 		FILEDESC_XLOCK(fdp);
 		fde = fdeget_noref(fdp, fd);
@@ -560,6 +564,9 @@ kern_fcntl(struct thread *td, int fd, int cmd, intptr_t arg)
 		break;
 
 	case F_SETFL:
+		error = sysfil_check(td, SYSFIL_FDESC);
+		if (error != 0)
+			break;
 		error = fget_fcntl(td, fd, &cap_fcntl_rights, F_SETFL, &fp);
 		if (error != 0)
 			break;
@@ -602,6 +609,9 @@ kern_fcntl(struct thread *td, int fd, int cmd, intptr_t arg)
 		break;
 
 	case F_SETOWN:
+		error = sysfil_check(td, SYSFIL_FDESC);
+		if (error != 0)
+			break;
 		error = fget_fcntl(td, fd, &cap_fcntl_rights, F_SETOWN, &fp);
 		if (error != 0)
 			break;
@@ -629,6 +639,9 @@ kern_fcntl(struct thread *td, int fd, int cmd, intptr_t arg)
 			break;
 		}
 
+		error = sysfil_check(td, SYSFIL_FLOCK);
+		if (error != 0)
+			break;
 		error = fget_unlocked(td, fd, &cap_flock_rights, &fp);
 		if (error != 0)
 			break;
@@ -734,6 +747,9 @@ kern_fcntl(struct thread *td, int fd, int cmd, intptr_t arg)
 		break;
 
 	case F_GETLK:
+		error = sysfil_check(td, SYSFIL_FLOCK);
+		if (error != 0)
+			break;
 		error = fget_unlocked(td, fd, &cap_flock_rights, &fp);
 		if (error != 0)
 			break;
@@ -768,6 +784,9 @@ kern_fcntl(struct thread *td, int fd, int cmd, intptr_t arg)
 		break;
 
 	case F_ADD_SEALS:
+		error = sysfil_check(td, SYSFIL_FLOCK);
+		if (error != 0)
+			break;
 		error = fget_unlocked(td, fd, &cap_no_rights, &fp);
 		if (error != 0)
 			break;
@@ -776,6 +795,9 @@ kern_fcntl(struct thread *td, int fd, int cmd, intptr_t arg)
 		break;
 
 	case F_GET_SEALS:
+		error = sysfil_check(td, SYSFIL_FLOCK);
+		if (error != 0)
+			break;
 		error = fget_unlocked(td, fd, &cap_no_rights, &fp);
 		if (error != 0)
 			break;
@@ -877,6 +899,9 @@ kern_fcntl(struct thread *td, int fd, int cmd, intptr_t arg)
 			break;
 		}
 #endif
+		error = sysfil_check(td, SYSFIL_FDESC);
+		if (error != 0)
+			break;
 		error = copyin((void *)arg, &kif_sz, sizeof(kif_sz));
 		if (error != 0)
 			break;
@@ -951,6 +976,9 @@ kern_dup(struct thread *td, u_int mode, int flags, int old, int new)
 		return (EBADF);
 	if (new < 0)
 		return (mode == FDDUP_FCNTL ? EINVAL : EBADF);
+	error = sysfil_check(td, SYSFIL_FDESC);
+	if (error != 0)
+		return (error);
 	maxfd = getmaxfd(td);
 	if (new >= maxfd)
 		return (mode == FDDUP_FCNTL ? EINVAL : EBADF);
@@ -1193,6 +1221,10 @@ fsetown(pid_t pgid, struct sigio **sigiop)
 	struct pgrp *pgrp;
 	struct sigio *osigio, *sigio;
 	int ret;
+
+	ret = sysfil_check(curthread, SYSFIL_PROC);
+	if (ret)
+		return (ret);
 
 	if (pgid == 0) {
 		funsetown(sigiop);
@@ -2092,9 +2124,14 @@ _falloc_noinstall(struct thread *td, struct file **resultfp, u_int n)
 	int openfiles_new;
 	static struct timeval lastfail;
 	static int curfail;
+	int error;
 
 	KASSERT(resultfp != NULL, ("%s: resultfp == NULL", __func__));
 	MPASS(n > 0);
+
+	error = sysfil_check(td, SYSFIL_FDESC);
+	if (error != 0)
+		return (error);
 
 	openfiles_new = atomic_fetchadd_int(&openfiles, 1) + 1;
 	if ((openfiles_new >= maxuserfiles &&
@@ -2858,6 +2895,15 @@ finit_vnode(struct file *fp, u_int flag, void *data, struct fileops *ops)
 	    data, ops);
 }
 
+static inline void
+_fget_unveil(struct thread *td, struct filedesc *fdp, struct file *fp)
+{
+#ifdef MAC
+	if (CRED_IN_VFS_VEILED_MODE(td->td_ucred))
+		mac_vnode_walk_start_file(td->td_ucred, fp);
+#endif
+}
+
 int
 fget_cap_noref(struct filedesc *fdp, int fd, cap_rights_t *needrightsp,
     struct file **fpp, struct filecaps *havecapsp)
@@ -2884,6 +2930,7 @@ fget_cap_noref(struct filedesc *fdp, int fd, cap_rights_t *needrightsp,
 		filecaps_copy(&fde->fde_caps, havecapsp, true);
 
 	*fpp = fde->fde_file;
+	_fget_unveil(curthread, fdp, *fpp);
 
 	error = 0;
 out:
@@ -2920,6 +2967,7 @@ fget_cap(struct thread *td, int fd, cap_rights_t *needrightsp,
 	}
 
 	*fpp = fp;
+	_fget_unveil(td, fdp, fp);
 	return (0);
 
 get_locked:
@@ -3169,6 +3217,7 @@ fget_unlocked(struct thread *td, int fd, cap_rights_t *needrightsp,
 #endif
 	const struct fdescenttbl *fdt;
 	struct file *fp;
+	int error;
 #ifdef CAPABILITIES
 	seqc_t seq;
 	const cap_rights_t *haverights;
@@ -3209,13 +3258,18 @@ fget_unlocked(struct thread *td, int fd, cap_rights_t *needrightsp,
 	if (__predict_false(fp != fdt->fdt_ofiles[fd].fde_file))
 #endif
 		goto out_fdrop;
-	*fpp = fp;
-	return (0);
+	goto out_success;
 out_fdrop:
 	fdrop(fp, td);
 out_fallback:
 	*fpp = NULL;
-	return (fget_unlocked_seq(td, fd, needrightsp, fpp, NULL));
+	error = fget_unlocked_seq(td, fd, needrightsp, fpp, NULL);
+	if (error)
+		return (error);
+out_success:
+	*fpp = fp;
+	_fget_unveil(curthread, fdp, fp);
+	return (0);
 }
 
 /*
@@ -3255,6 +3309,7 @@ fget_only_user(struct filedesc *fdp, int fd, cap_rights_t *needrightsp,
 	if (__predict_false(error != 0))
 		return (error);
 	*fpp = fp;
+	_fget_unveil(curthread, fdp, fp);
 	return (0);
 }
 #else
@@ -3276,6 +3331,7 @@ fget_only_user(struct filedesc *fdp, int fd, cap_rights_t *needrightsp,
 
 	MPASS(refcount_load(&fp->f_count) > 0);
 	*fpp = fp;
+	_fget_unveil(curthread, fdp, fp);
 	return (0);
 }
 #endif
@@ -3387,6 +3443,7 @@ fget_mmap(struct thread *td, int fd, cap_rights_t *rightsp, vm_prot_t *maxprotp,
 	if (maxprotp != NULL)
 		*maxprotp = cap_rights_to_vmprot(&fdrights);
 	*fpp = fp;
+	_fget_unveil(td, fdp, fp);
 	return (0);
 #endif
 }
@@ -3433,6 +3490,7 @@ fget_fcntl(struct thread *td, int fd, cap_rights_t *rightsp, int needfcntl,
 		return (error);
 	}
 	*fpp = fp;
+	_fget_unveil(td, fdp, fp);
 	return (0);
 #endif
 }

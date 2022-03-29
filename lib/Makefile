@@ -46,6 +46,7 @@ SUBDIR=	${SUBDIR_BOOTSTRAP} \
 	libcasper \
 	libcompat \
 	libcrypt \
+	libcurtain \
 	libdevctl \
 	libdevinfo \
 	libdevstat \

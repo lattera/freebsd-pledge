@@ -177,7 +177,7 @@ sysarch(struct thread *td, struct sysarch_args *uap)
 	 * explicitly indicate whether or not the operation is safe to
 	 * perform in capability mode.
 	 */
-	if (IN_CAPABILITY_MODE(td)) {
+	if (IN_RESTRICTED_MODE(td)) {
 		switch (uap->op) {
 		case ARM_SYNC_ICACHE:
 		case ARM_DRAIN_WRITEBUF:

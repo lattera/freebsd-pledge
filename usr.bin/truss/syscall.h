@@ -91,6 +91,8 @@ enum Argtype {
 	Atfd,
 	Atflags,
 	CapFcntlRights,
+	Curtainctl,
+	CurtainctlFlags,
 	Closerangeflags,
 	Extattrnamespace,
 	Fadvice,

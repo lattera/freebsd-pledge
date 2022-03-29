@@ -301,11 +301,13 @@ msginit()
 		osd_free_reserved(rsv);
 	sx_sunlock(&allprison_lock);
 
-	error = syscall_helper_register(msg_syscalls, SY_THR_STATIC_KLD);
+	error = syscall_helper_register(msg_syscalls,
+	    SY_THR_STATIC_KLD | SY_HLP_PRESERVE_SYFLAGS);
 	if (error != 0)
 		return (error);
 #ifdef COMPAT_FREEBSD32
-	error = syscall32_helper_register(msg32_syscalls, SY_THR_STATIC_KLD);
+	error = syscall32_helper_register(msg32_syscalls,
+	    SY_THR_STATIC_KLD | SY_HLP_PRESERVE_SYFLAGS);
 	if (error != 0)
 		return (error);
 #endif
@@ -740,6 +742,8 @@ sys_msgget(struct thread *td, struct msgget_args *uap)
 		msqkptr->u.msg_rtime = 0;
 		msqkptr->u.msg_ctime = time_second;
 #ifdef MAC
+		if (!msqkptr->label) /* deal with late loaded MAC modules */
+			mac_sysvmsq_init(msqkptr);
 		mac_sysvmsq_create(cred, msqkptr);
 #endif
 		AUDIT_ARG_SVIPC_PERM(&msqkptr->u.msg_perm);

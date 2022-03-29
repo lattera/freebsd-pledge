@@ -77,6 +77,7 @@ __FBSDID("$FreeBSD$");
 #endif
 
 #include <security/audit/audit.h>
+#include <security/mac/mac_framework.h>
 
 /*
  * The following macro defines how many bytes will be allocated from
@@ -771,6 +772,11 @@ kern_ioctl(struct thread *td, int fd, u_long com, caddr_t data)
 		fp = NULL;
 		goto out;
 	}
+#endif
+#ifdef MAC
+	error = mac_generic_check_ioctl(td->td_ucred, fp, com, data);
+	if (error)
+		goto out;
 #endif
 	if ((fp->f_flag & (FREAD | FWRITE)) == 0) {
 		error = EBADF;

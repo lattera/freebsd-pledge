@@ -35,6 +35,7 @@
 #define	_SYS_SYSENT_H_
 
 #include <bsm/audit.h>
+#include <sys/sysfil.h>
 
 struct rlimit;
 struct sysent;
@@ -68,18 +69,19 @@ struct sysent {			/* system call table */
 	sy_call_t *sy_call;	/* implementing function */
 	systrace_args_func_t sy_systrace_args_func;
 				/* optional argument conversion function. */
+	sysfilset_t sy_flags;	/* Syscall filter bitmap. */
 	u_int8_t sy_narg;	/* number of arguments */
-	u_int8_t sy_flags;	/* General flags for system calls. */
 	au_event_t sy_auevent;	/* audit event associated with syscall */
 	u_int32_t sy_entry;	/* DTrace entry ID for systrace. */
 	u_int32_t sy_return;	/* DTrace return ID for systrace. */
 	u_int32_t sy_thrcnt;
 };
 
-/*
- * A system call is permitted in capability mode.
- */
-#define	SYF_CAPENABLED	0x00000001
+#define	SYF_CAPENABLED		1	/* permitted in capability mode */
+#define	SYF_SYSFILS(sfs)	~(sfs)
+#ifdef _KERNEL
+CTASSERT((sysfilset_t)SYF_CAPENABLED == SYSFIL_NOTCAPMODE);
+#endif
 
 #define	SY_THR_FLAGMASK	0x7
 #define	SY_THR_STATIC	0x1
@@ -299,6 +301,9 @@ struct syscall_helper_data {
 #define SYSCALL_INIT_LAST {					\
     .syscall_no = NO_SYSCALL					\
 }
+
+#define	SY_HLP_STATIC			SY_THR_STATIC
+#define	SY_HLP_PRESERVE_SYFLAGS		0x10000
 
 int	syscall_module_handler(struct module *mod, int what, void *arg);
 int	syscall_helper_register(struct syscall_helper_data *sd, int flags);

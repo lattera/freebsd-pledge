@@ -76,6 +76,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/jail.h>
 #include <sys/syscallsubr.h>
 #include <sys/sysctl.h>
+#include <sys/sysfil.h>
 #ifdef KTRACE
 #include <sys/ktrace.h>
 #endif
@@ -1164,6 +1165,8 @@ kern_openat(struct thread *td, int fd, const char *path, enum uio_seg pathseg,
 	/* Set the flags early so the finit in devfs can pick them up. */
 	fp->f_flag = flags & FMASK;
 	cmode = ((mode & ~pdp->pd_cmask) & ALLPERMS) & ~S_ISTXT;
+	if (sysfil_probe(td, SYSFIL_FMODE_SPECIAL) != 0)
+		cmode &= ACCESSPERMS;
 	NDINIT_ATRIGHTS(&nd, LOOKUP, FOLLOW | AUDITVNODE1, pathseg, path, fd,
 	    &rights);
 	td->td_dupfd = -1;		/* XXX check for fdopen */
@@ -2868,6 +2871,8 @@ setfmode(struct thread *td, struct ucred *cred, struct vnode *vp, int mode)
 	vn_lock(vp, LK_EXCLUSIVE | LK_RETRY);
 	VATTR_NULL(&vattr);
 	vattr.va_mode = mode & ALLPERMS;
+	if (sysfil_probe(td, SYSFIL_FMODE_SPECIAL) != 0)
+		vattr.va_mode &= ACCESSPERMS;
 #ifdef MAC
 	error = mac_vnode_check_setmode(cred, vp, vattr.va_mode);
 	if (error == 0)
@@ -4206,7 +4211,14 @@ unionread:
 	loff = auio.uio_offset = foffset;
 #ifdef MAC
 	error = mac_vnode_check_readdir(td->td_ucred, vp);
-	if (error == 0)
+	if (error != 0) {
+		VOP_UNLOCK(vp);
+		goto fail;
+	}
+	if (CRED_IN_VFS_VEILED_MODE(td->td_ucred))
+		error = mac_vnode_readdir_filtered(td->td_ucred, fp->f_cred,
+		    vp, &auio);
+	else
 #endif
 		error = VOP_READDIR(vp, &auio, fp->f_cred, &eofflag, NULL,
 		    NULL);
@@ -4613,7 +4625,7 @@ kern_fhopen(struct thread *td, const struct fhandle *u_fhp, int flags)
 #ifdef INVARIANTS
 	td->td_dupfd = -1;
 #endif
-	error = vn_open_vnode(vp, fmode, td->td_ucred, td, fp);
+	error = vn_open_vnode(vp, fmode, 0, td->td_ucred, td, fp);
 	if (error != 0) {
 		KASSERT(fp->f_ops == &badfileops,
 		    ("VOP_OPEN in fhopen() set f_ops"));

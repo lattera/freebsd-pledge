@@ -569,8 +569,7 @@ kern_socketpair(struct thread *td, int domain, int type, int protocol,
 		fflag |= FNONBLOCK;
 	}
 #ifdef MAC
-	/* We might want to have a separate check for socket pairs. */
-	error = mac_socket_check_create(td->td_ucred, domain, type,
+	error = mac_socket_check_create_pair(td->td_ucred, domain, type,
 	    protocol);
 	if (error != 0)
 		return (error);
@@ -1265,7 +1264,11 @@ kern_setsockopt(struct thread *td, int s, int level, int name, const void *val,
 	    &fp, NULL, NULL);
 	if (error == 0) {
 		so = fp->f_data;
-		error = sosetopt(so, &sopt);
+#ifdef MAC
+		error = mac_socket_check_setsockopt(td->td_ucred, so, &sopt);
+#endif
+		if (error == 0)
+			error = sosetopt(so, &sopt);
 		fdrop(fp, td);
 	}
 	return(error);
@@ -1330,8 +1333,13 @@ kern_getsockopt(struct thread *td, int s, int level, int name, void *val,
 	    &fp, NULL, NULL);
 	if (error == 0) {
 		so = fp->f_data;
-		error = sogetopt(so, &sopt);
-		*valsize = sopt.sopt_valsize;
+#ifdef MAC
+		error = mac_socket_check_getsockopt(td->td_ucred, so, &sopt);
+#endif
+		if (error == 0) {
+			error = sogetopt(so, &sopt);
+			*valsize = sopt.sopt_valsize;
+		}
 		fdrop(fp, td);
 	}
 	return (error);

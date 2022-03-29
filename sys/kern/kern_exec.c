@@ -39,6 +39,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/acct.h>
 #include <sys/asan.h>
 #include <sys/capsicum.h>
+#include <sys/sysfil.h>
 #include <sys/compressor.h>
 #include <sys/eventhandler.h>
 #include <sys/exec.h>
@@ -446,6 +447,9 @@ do_execve(struct thread *td, struct image_args *args, struct mac *mac_p,
 	orig_fctl0 = p->p_fctl0;
 	orig_brandinfo = p->p_elf_brandinfo;
 
+	error = sysfil_check(td, SYSFIL_EXEC);
+	if (error)
+		goto exec_fail;
 #ifdef MAC
 	error = mac_execve_enter(imgp, mac_p);
 	if (error)
@@ -585,7 +589,12 @@ interpret:
 
 	if (credential_changing &&
 #ifdef CAPABILITY_MODE
-	    ((oldcred->cr_flags & CRED_FLAG_CAPMODE) == 0) &&
+	    !CRED_IN_CAPABILITY_MODE(oldcred) &&
+#endif
+#ifdef MAC
+	    mac_proc_check_exec_sugid(oldcred, p) == 0 &&
+#else
+	    !CRED_IN_RESTRICTED_MODE(oldcred) &&
 #endif
 	    (imgp->vp->v_mount->mnt_flag & MNT_NOSUID) == 0 &&
 	    (p->p_flag & P_TRACED) == 0) {
@@ -630,6 +639,7 @@ interpret:
 			change_svgid(imgp->newcred, imgp->newcred->cr_gid);
 		}
 	}
+
 	/* The new credentials are installed into the process later. */
 
 	/*
@@ -659,6 +669,12 @@ interpret:
 			error = ENOEXEC;
 		goto exec_fail_dealloc;
 	}
+
+#ifdef MAC
+	error = mac_execve_check_imgp(imgp);
+	if (error)
+		goto exec_fail_dealloc;
+#endif
 
 	/*
 	 * Special interpreter operation, cleanup and loop up to try to
@@ -770,6 +786,14 @@ interpret:
 		sigacts_copy(newsigacts, oldsigacts);
 	}
 
+	if ((imgp->sysent->sv_setid_allowed != NULL &&
+	    !(*imgp->sysent->sv_setid_allowed)(td, imgp)) ||
+	    (p->p_flag2 & P2_NO_NEW_PRIVS) != 0)
+		execve_nosetid(imgp);
+#ifdef MAC
+	mac_execve_alter(imgp);
+#endif
+
 	vn_lock(imgp->vp, LK_SHARED | LK_RETRY);
 
 	PROC_LOCK(p);
@@ -808,11 +832,6 @@ interpret:
 		/* STOPs are no longer ignored, arrange for AST */
 		signotify(td);
 	}
-
-	if ((imgp->sysent->sv_setid_allowed != NULL &&
-	    !(*imgp->sysent->sv_setid_allowed)(td, imgp)) ||
-	    (p->p_flag2 & P2_NO_NEW_PRIVS) != 0)
-		execve_nosetid(imgp);
 
 	/*
 	 * Implement image setuid/setgid installation.

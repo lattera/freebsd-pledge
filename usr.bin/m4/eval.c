@@ -56,6 +56,7 @@ __FBSDID("$FreeBSD$");
 #include <stddef.h>
 #include <string.h>
 #include <fcntl.h>
+#include <paths.h>
 #include "mdef.h"
 #include "stdd.h"
 #include "extern.h"
@@ -831,8 +832,6 @@ dom4wrap(const char *text)
 static void
 dodiv(int n)
 {
-	int fd;
-
 	oindex = n;
 	if (n >= maxout) {
 		if (mimic_gnu)
@@ -844,12 +843,13 @@ dodiv(int n)
 	if (n < 0)
 		n = 0;		       /* bitbucket */
 	if (outfile[n] == NULL) {
-		char fname[] = _PATH_DIVNAME;
-
-		if ((fd = mkstemp(fname)) == -1 ||
-		    unlink(fname) == -1 ||
-		    (outfile[n] = fdopen(fd, "w+")) == NULL)
-			err(1, "%s: cannot divert", fname);
+		if (n == 0) {
+			if ((outfile[n] = fopen(_PATH_DEVNULL, "w")) == NULL)
+				err(1, "cannot divert to %s", _PATH_DEVNULL);
+		} else {
+			if ((outfile[n] = tmpfile()) == NULL)
+				err(1, "cannot divert to temporary file");
+		}
 	}
 	active = outfile[n];
 }

@@ -216,6 +216,7 @@ SUBDIR=	\
 	lpt \
 	mac_biba \
 	mac_bsdextended \
+	${_mac_curtain} \
 	mac_ifoff \
 	mac_lomac \
 	mac_mls \
@@ -745,6 +746,10 @@ _p2sb=		p2sb
 _vmm=		vmm
 .endif
 .endif
+.endif
+
+.if empty(KERN_OPTS:MNOSYSFIL)
+_mac_curtain=	mac_curtain
 .endif
 
 .if ${MACHINE_CPUARCH} == "i386"

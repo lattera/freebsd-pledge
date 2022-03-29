@@ -144,7 +144,7 @@ int pselect(int, fd_set *, fd_set *, fd_set *, const struct timespec *,
 #endif
 
 #ifndef HAVE_PLEDGE
-int pledge(const char *promises, const char *paths[]);
+int pledge(const char *promises, const char *execpromises);
 #endif
 
 /* bsd-err.h */

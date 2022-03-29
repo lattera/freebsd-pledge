@@ -326,6 +326,12 @@ namei_setup(struct nameidata *ndp, struct vnode **dpp, struct pwd **pwdp)
 		}
 	}
 #endif
+#ifdef MAC
+	if ((cnp->cn_flags & NOMACCHECK) == 0 &&
+	    CRED_IN_VFS_VEILED_MODE(cnp->cn_cred))
+		ndp->ni_lcf |= NI_LCF_MACWALK_ACTIVE;
+#endif
+
 	error = 0;
 
 	/*
@@ -382,6 +388,10 @@ namei_setup(struct nameidata *ndp, struct vnode **dpp, struct pwd **pwdp)
 
 					if ((dfp->f_flag & FSEARCH) != 0)
 						cnp->cn_flags |= NOEXECCHECK;
+#ifdef MAC
+					/* Reuse fget_cap()'s tracker slot. */
+					ndp->ni_lcf |= NI_LCF_MACWALK_NOROLL;
+#endif
 				}
 				fdrop(dfp, td);
 			}
@@ -531,7 +541,7 @@ namei_follow_link(struct nameidata *ndp)
 	}
 #ifdef MAC
 	if ((cnp->cn_flags & NOMACCHECK) == 0) {
-		error = mac_vnode_check_readlink(td->td_ucred, ndp->ni_vp);
+		error = mac_vnode_check_readlink(cnp->cn_cred, ndp->ni_vp);
 		if (error != 0)
 			goto out;
 	}
@@ -718,14 +728,24 @@ namei(struct nameidata *ndp)
 	/*
 	 * Locked lookup.
 	 */
+#ifdef MAC
+	if (ndp->ni_lcf & NI_LCF_MACWALK_ACTIVE) {
+		if (!(ndp->ni_lcf & NI_LCF_MACWALK_NOROLL))
+			mac_vnode_walk_roll(cnp->cn_cred, 1);
+		error = mac_vnode_walk_start(cnp->cn_cred, dp);
+		if (error != 0) {
+			mac_vnode_walk_roll(cnp->cn_cred, -1);
+			return (error);
+		}
+	}
+#endif
 	for (;;) {
 		ndp->ni_startdir = dp;
 		error = vfs_lookup(ndp);
 		if (error != 0)
 			goto out;
-
 		/*
-		 * If not a symbolic link, we're done.
+		 * If not a (followed) symbolic link, we're done.
 		 */
 		if ((cnp->cn_flags & ISSYMLINK) == 0) {
 			SDT_PROBE4(vfs, namei, lookup, return, error,
@@ -736,24 +756,53 @@ namei(struct nameidata *ndp)
 				cnp->cn_flags |= HASBUF;
 			nameicap_cleanup(ndp);
 			pwd_drop(pwd);
-			if (error == 0)
-				NDVALIDATE(ndp);
+			NDVALIDATE(ndp);
+#ifdef MAC
+			if (ndp->ni_lcf & NI_LCF_MACWALK_ACTIVE) {
+				error = mac_vnode_walk_finish(
+				    cnp->cn_cred, ndp->ni_dvp, ndp->ni_vp);
+				if (error != 0) {
+					/*
+					 * The lookup() call was successful
+					 * (and was not a symlink special case).
+					 */
+					mac_vnode_walk_roll(cnp->cn_cred, -1);
+					NDFREE(ndp, 0);
+				}
+			}
+#endif
 			return (error);
 		}
 		error = namei_follow_link(ndp);
 		if (error != 0)
 			break;
-		vput(ndp->ni_vp);
 		dp = ndp->ni_dvp;
 		/*
 		 * Check if root directory should replace current directory.
 		 */
 		cnp->cn_nameptr = cnp->cn_pnbuf;
 		if (*(cnp->cn_nameptr) == '/') {
+			vput(ndp->ni_vp);
 			vrele(dp);
 			error = namei_handle_root(ndp, &dp);
 			if (error != 0)
 				goto out;
+#ifdef MAC
+			if (ndp->ni_lcf & NI_LCF_MACWALK_ACTIVE) {
+				/* Absolute path, restart walk. */
+				error = mac_vnode_walk_start(cnp->cn_cred, dp);
+				if (error != 0)
+					goto out;
+			}
+#endif
+		} else {
+#ifdef MAC
+			/* Resume walk from containing directory. */
+			if (ndp->ni_lcf & NI_LCF_MACWALK_ACTIVE)
+				mac_vnode_walk_backtrack(cnp->cn_cred,
+				    ndp->ni_vp, dp);
+#endif
+			vput(ndp->ni_vp);
 		}
 	}
 	vput(ndp->ni_vp);
@@ -765,6 +814,12 @@ out:
 	namei_cleanup_cnp(cnp);
 	nameicap_cleanup(ndp);
 	pwd_drop(pwd);
+#ifdef MAC
+	if (ndp->ni_lcf & NI_LCF_MACWALK_ACTIVE) {
+		error = mac_vnode_walk_fixup_errno(cnp->cn_cred, error);
+		mac_vnode_walk_roll(cnp->cn_cred, -1);
+	}
+#endif
 	return (error);
 }
 
@@ -952,15 +1007,14 @@ vfs_lookup(struct nameidata *ndp)
 	int rdonly;			/* lookup read-only flag bit */
 	int error = 0;
 	int dpunlocked = 0;		/* dp has already been unlocked */
+	int ni_dvp_unlocked = 0;	/* ni_dvp already unlocked/released */
 	int relookup = 0;		/* do not consume the path component */
 	struct componentname *cnp = &ndp->ni_cnd;
 	int lkflags_save;
-	int ni_dvp_unlocked;
 
 	/*
 	 * Setup: break out flag bits into variables.
 	 */
-	ni_dvp_unlocked = 0;
 	wantparent = cnp->cn_flags & (LOCKPARENT | WANTPARENT);
 	KASSERT(cnp->cn_nameiop == LOOKUP || wantparent,
 	    ("CREATE, DELETE, RENAME require LOCKPARENT or WANTPARENT."));
@@ -1165,6 +1219,10 @@ dirloop:
 			}
 			tdp = dp;
 			dp = dp->v_mount->mnt_vnodecovered;
+#ifdef MAC
+			if (ndp->ni_lcf & NI_LCF_MACWALK_ACTIVE)
+				mac_vnode_walk_replace(cnp->cn_cred, tdp, dp);
+#endif
 			VREF(dp);
 			vput(tdp);
 			vn_lock(dp,
@@ -1186,9 +1244,11 @@ dirloop:
 	 */
 unionlookup:
 #ifdef MAC
-	error = mac_vnode_check_lookup(cnp->cn_cred, dp, cnp);
-	if (__predict_false(error))
-		goto bad;
+	if ((cnp->cn_flags & NOMACCHECK) == 0) {
+		error = mac_vnode_check_lookup(cnp->cn_cred, dp, cnp);
+		if (__predict_false(error))
+			goto bad;
+	}
 #endif
 	ndp->ni_dvp = dp;
 	ndp->ni_vp = NULL;
@@ -1228,6 +1288,10 @@ unionlookup:
 		    (dp->v_mount->mnt_flag & MNT_UNION)) {
 			tdp = dp;
 			dp = dp->v_mount->mnt_vnodecovered;
+#ifdef MAC
+			if (ndp->ni_lcf & NI_LCF_MACWALK_ACTIVE)
+				mac_vnode_walk_replace(cnp->cn_cred, tdp, dp);
+#endif
 			VREF(dp);
 			vput(tdp);
 			vn_lock(dp,
@@ -1263,6 +1327,10 @@ unionlookup:
 			error = ENOENT;
 			goto bad;
 		}
+#ifdef MAC
+		if (ndp->ni_lcf & NI_LCF_MACWALK_ACTIVE)
+			mac_vnode_walk_component(cnp->cn_cred, dp, cnp, NULL);
+#endif
 		if ((cnp->cn_flags & LOCKPARENT) == 0)
 			VOP_UNLOCK(dp);
 		/*
@@ -1309,6 +1377,11 @@ good:
 		}
 		ndp->ni_vp = dp = tdp;
 	}
+
+#ifdef MAC
+	if (ndp->ni_lcf & NI_LCF_MACWALK_ACTIVE)
+		mac_vnode_walk_component(cnp->cn_cred, ndp->ni_dvp, cnp, ndp->ni_vp);
+#endif
 
 	/*
 	 * Check for symbolic link
@@ -1828,7 +1901,7 @@ kern_alternate_path(const char *prefix, const char *path, enum uio_seg pathseg,
 		 * root directory and never finding it, because "/" resolves
 		 * to the emulation root directory. This is expensive :-(
 		 */
-		NDINIT(&ndroot, LOOKUP, FOLLOW, UIO_SYSSPACE, prefix);
+		NDINIT(&ndroot, LOOKUP, FOLLOW|NOMACCHECK, UIO_SYSSPACE, prefix);
 
 		/* We shouldn't ever get an error from this namei(). */
 		error = namei(&ndroot);

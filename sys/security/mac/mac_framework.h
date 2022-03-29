@@ -59,6 +59,8 @@ struct bpf_d;
 struct cdev;
 struct componentname;
 struct devfs_dirent;
+struct dirent;
+struct file;
 struct ifnet;
 struct ifreq;
 struct image_params;
@@ -79,6 +81,7 @@ struct shmfd;
 struct shmid_kernel;
 struct sockaddr;
 struct socket;
+struct sockopt;
 struct sysctl_oid;
 struct sysctl_req;
 struct pipepair;
@@ -91,6 +94,8 @@ struct vop_setlabel_args;
 
 #include <sys/acl.h>			/* XXX acl_type_t */
 #include <sys/types.h>			/* accmode_t */
+#include <vm/vm.h>			/* vm_prot_t */
+#include <sys/_sysfil.h>		/* sysfilset_t */
 
 /*
  * Entry points to the TrustedBSD MAC Framework from the remainder of the
@@ -182,6 +187,8 @@ int	mac_ifnet_ioctl_get(struct ucred *cred, struct ifreq *ifr,
 	    struct ifnet *ifp);
 int	mac_ifnet_ioctl_set(struct ucred *cred, struct ifreq *ifr,
 	    struct ifnet *ifp);
+
+int	mac_net_check_fibnum(struct ucred *cred, int fibnum);
 
 int	mac_inpcb_check_deliver(struct inpcb *inp, struct mbuf *m);
 int	mac_inpcb_check_visible(struct ucred *cred, struct inpcb *inp);
@@ -354,6 +361,8 @@ void	mac_execve_exit(struct image_params *imgp);
 void	mac_execve_interpreter_enter(struct vnode *interpvp,
 	    struct label **interplabel);
 void	mac_execve_interpreter_exit(struct label *interpvplabel);
+int	mac_execve_check_imgp(struct image_params *imgp);
+void	mac_execve_alter(struct image_params *imgp);
 
 int	mac_socket_check_accept(struct ucred *cred, struct socket *so);
 int	mac_socket_check_bind(struct ucred *cred, struct socket *so,
@@ -362,6 +371,8 @@ int	mac_socket_check_connect(struct ucred *cred, struct socket *so,
 	    struct sockaddr *sa);
 int	mac_socket_check_create(struct ucred *cred, int domain, int type,
 	    int proto);
+int	mac_socket_check_create_pair(struct ucred *cred, int domain, int type,
+	    int proto);
 int	mac_socket_check_deliver(struct socket *so, struct mbuf *m);
 int	mac_socket_check_listen(struct ucred *cred, struct socket *so);
 int	mac_socket_check_poll(struct ucred *cred, struct socket *so);
@@ -369,6 +380,10 @@ int	mac_socket_check_receive(struct ucred *cred, struct socket *so);
 int	mac_socket_check_send(struct ucred *cred, struct socket *so);
 int	mac_socket_check_stat(struct ucred *cred, struct socket *so);
 int	mac_socket_check_visible(struct ucred *cred, struct socket *so);
+int	mac_socket_check_setsockopt(struct ucred *cred, struct socket *so,
+	    struct sockopt *opt);
+int	mac_socket_check_getsockopt(struct ucred *cred, struct socket *so,
+	    struct sockopt *opt);
 void	mac_socket_create_mbuf(struct socket *so, struct mbuf *m);
 void	mac_socket_create(struct ucred *cred, struct socket *so);
 void	mac_socket_destroy(struct socket *);
@@ -684,5 +699,48 @@ void	mac_vnode_relabel(struct ucred *cred, struct vnode *vp,
  * their existing EA implementation.
  */
 int	vop_stdsetlabel_ea(struct vop_setlabel_args *ap);
+
+int	mac_vnode_readdir_filtered(struct ucred *active_ucred,
+	    struct ucred *file_cred, struct vnode *vp, struct uio *uio);
+
+void	mac_vnode_walk_roll(struct ucred *cred, int offset);
+void	mac_vnode_walk_annotate_file(struct ucred *cred,
+	    struct file *fp, struct vnode *vp);
+int	mac_vnode_walk_start_file(struct ucred *cred, struct file *fp);
+int	mac_vnode_walk_start(struct ucred *cred, struct vnode *vp);
+void	mac_vnode_walk_component(struct ucred *cred,
+	    struct vnode *dvp, struct componentname *cnp, struct vnode *vp);
+void	mac_vnode_walk_backtrack(struct ucred *cred,
+	    struct vnode *from_vp, struct vnode *to_vp);
+void	mac_vnode_walk_replace(struct ucred *cred,
+	    struct vnode *from_vp, struct vnode *to_vp);
+void	mac_vnode_walk_created(struct ucred *cred,
+	    struct vnode *dvp, struct vnode *vp);
+int	mac_vnode_walk_finish(struct ucred *cred,
+	    struct vnode *dvp, struct vnode *vp);
+int	mac_vnode_walk_fixup_errno(struct ucred *cred, int error);
+bool	mac_vnode_walk_dirent_visible(struct ucred *cred,
+	    struct vnode *vp, struct dirent *dp);
+
+
+void	mac_cred_trim(struct ucred *cred);
+
+int	mac_generic_check_ioctl(struct ucred *cred, struct file *fp,
+	    unsigned long cmd, void *data);
+int	mac_generic_check_vm_prot(struct ucred *cred, struct file *fp,
+	    vm_prot_t prot);
+int	mac_generic_ipc_name_prefix(struct ucred *cred, char **prefix, char *end);
+int	mac_generic_check_sendfd(struct ucred *cred, struct thread *td,
+	    struct file *fp);
+int	mac_generic_check_recvfd(struct ucred *cred, struct thread *td,
+	    struct file *fp);
+
+extern sysfilset_t mac_sysfils_preserve;
+
+int	mac_sysfil_check(struct ucred *cred, sysfilset_t sfs);
+
+int	mac_proc_check_exec_sugid(struct ucred *cred, struct proc *p);
+int	mac_proc_check_procctl(struct ucred *cred, struct proc *p,
+	    int com, void *data);
 
 #endif /* !_SECURITY_MAC_MAC_FRAMEWORK_H_ */

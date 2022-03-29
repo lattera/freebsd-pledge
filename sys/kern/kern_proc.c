@@ -279,6 +279,9 @@ proc_init(void *mem, int size, int flags)
 	EVENTHANDLER_DIRECT_INVOKE(process_init, p);
 	p->p_stats = pstats_alloc();
 	p->p_pgrp = NULL;
+#ifndef NOUNVEIL /* XXX */
+	p->p_unveil_cache = NULL;
+#endif
 	return (0);
 }
 
@@ -1076,8 +1079,10 @@ fill_kinfo_proc_only(struct proc *p, struct kinfo_proc *kp)
 		kp->ki_ruid = cred->cr_ruid;
 		kp->ki_svuid = cred->cr_svuid;
 		kp->ki_cr_flags = 0;
-		if (cred->cr_flags & CRED_FLAG_CAPMODE)
+		if (CRED_IN_CAPABILITY_MODE(cred))
 			kp->ki_cr_flags |= KI_CRF_CAPABILITY_MODE;
+		if (CRED_IN_RESTRICTED_MODE(cred))
+			kp->ki_cr_flags |= KI_CRF_RESTRICTED_MODE;
 		/* XXX bde doesn't like KI_NGROUPS */
 		if (cred->cr_ngroups > KI_NGROUPS) {
 			kp->ki_ngroups = KI_NGROUPS;

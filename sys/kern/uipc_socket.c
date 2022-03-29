@@ -144,6 +144,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/uio.h>
 #include <sys/un.h>
 #include <sys/unpcb.h>
+#include <sys/ucred.h>
 #include <sys/jail.h>
 #include <sys/syslog.h>
 #include <netinet/in.h>
@@ -3149,6 +3150,12 @@ sosetopt(struct socket *so, struct sockopt *sopt)
 				error = EINVAL;
 				goto bad;
 			}
+#ifdef MAC
+			error = mac_net_check_fibnum(sopt->sopt_td->td_ucred,
+			    optval);
+			if (error)
+				goto bad;
+#endif
 			if (((so->so_proto->pr_domain->dom_family == PF_INET) ||
 			   (so->so_proto->pr_domain->dom_family == PF_INET6) ||
 			   (so->so_proto->pr_domain->dom_family == PF_ROUTE)))

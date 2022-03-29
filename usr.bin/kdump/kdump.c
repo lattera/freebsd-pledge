@@ -2016,6 +2016,10 @@ ktrstruct(char *buf, size_t buflen)
 		if (datalen != ss.ss_len)
 			goto invalid;
 		ktrsockaddr((struct sockaddr *)&ss);
+	} else if (strcmp(name, "curtainreq") == 0) {
+		printf("struct curtainreq ");
+		sysdecode_curtainreq(stdout, (struct curtainreq *)data, true);
+		printf("\n");
 	} else {
 		printf("unknown structure\n");
 	}

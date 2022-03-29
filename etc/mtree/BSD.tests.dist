@@ -736,6 +736,8 @@
                 ..
             ..
         ..
+        curtain
+        ..
         devrandom
         ..
         dtrace

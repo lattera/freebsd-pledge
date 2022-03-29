@@ -2038,6 +2038,15 @@ unp_externalize(struct mbuf *control, struct mbuf **controlp, int flags)
 				goto next;
 			fdep = data;
 
+#ifdef MAC
+			for (i = 0; i < newfds; i++) {
+				error = mac_generic_check_recvfd(td->td_ucred,
+				    td, fdep[i]->fde_file);
+				if (error)
+					break;
+			}
+#endif
+
 			/* If we're not outputting the descriptors free them. */
 			if (error || controlp == NULL) {
 				unp_freerights(fdep, newfds);
@@ -2273,6 +2282,14 @@ unp_internalize(struct mbuf **controlp, struct thread *td)
 					error = EOPNOTSUPP;
 					goto out;
 				}
+#ifdef MAC
+				error = mac_generic_check_sendfd(td->td_ucred,
+				    td, fp);
+				if (error) {
+					FILEDESC_SUNLOCK(fdesc);
+					goto out;
+				}
+#endif
 			}
 
 			/*

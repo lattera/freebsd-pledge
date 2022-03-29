@@ -56,6 +56,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/sched.h>
 #include <sys/sx.h>
 #include <sys/syscallsubr.h>
+#include <sys/sysfil.h>
 #include <sys/sysctl.h>
 #include <sys/sysent.h>
 #include <sys/time.h>
@@ -663,6 +664,9 @@ kern_proc_setrlimit(struct thread *td, struct proc *p, u_int which,
 
 	if (which >= RLIM_NLIMITS)
 		return (EINVAL);
+
+	if ((error = sysfil_check(td, SYSFIL_RLIMIT)) != 0)
+		return (error);
 
 	/*
 	 * Preserve historical bugs by treating negative limits as unsigned.

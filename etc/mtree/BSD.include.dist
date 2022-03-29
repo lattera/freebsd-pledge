@@ -306,6 +306,8 @@
         ..
         mac_bsdextended
         ..
+        mac_curtain
+        ..
         mac_lomac
         ..
         mac_mls

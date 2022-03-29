@@ -1060,6 +1060,7 @@ process_syscall_def = function(line)
 	local sysstart, sysend, flags, funcname, sysflags
 	local thr_flag, syscallret
 	local orig = line
+	local sysfils_list = {}
 	flags = 0
 	thr_flag = "SY_THR_STATIC"
 
@@ -1094,10 +1095,17 @@ process_syscall_def = function(line)
 
 	-- Split flags
 	for flag in allflags:gmatch("([^|]+)") do
-		if known_flags[flag] == nil then
-			abort(1, "Unknown flag " .. flag .. " for " ..  sysnum)
+		if flag:match("^SYSFIL_") then
+			sysfils_list[#sysfils_list + 1] = flag
+		else
+			if known_flags[flag] == nil then
+				abort(1, "Unknown flag " .. flag .. " for " ..  sysnum)
+			end
+			flags = flags | known_flags[flag]
 		end
-		flags = flags | known_flags[flag]
+	end
+	if #sysfils_list == 0 then
+		sysfils_list[#sysfils_list + 1] = "SYSFIL_CATCHALL"
 	end
 
 	if (flags & get_mask({"RESERVED", "UNIMPL"})) == 0 and sysnum == nil then
@@ -1213,8 +1221,6 @@ process_syscall_def = function(line)
 		funcomment = funcname
 	end
 
-	sysflags = "0"
-
 	-- NODEF events do not get audited
 	if flags & known_flags['NODEF'] ~= 0 then
 		auditev = 'AUE_NULL'
@@ -1223,11 +1229,13 @@ process_syscall_def = function(line)
 	-- If applicable; strip the ABI prefix from the name
 	local stripped_name = strip_abi_prefix(funcname)
 
-	if flags & known_flags['CAPENABLED'] ~= 0 or
+	if not (flags & known_flags['CAPENABLED'] ~= 0 or
 	    config["capenabled"][funcname] ~= nil or
-	    config["capenabled"][stripped_name] ~= nil then
-		sysflags = "SYF_CAPENABLED"
+	    config["capenabled"][stripped_name] ~= nil) then
+		sysfils_list[#sysfils_list + 1] = "SYSFIL_NOTCAPMODE"
 	end
+
+	local sysflags = "SYF_SYSFILS(" .. (table.concat(sysfils_list, " | ")) .. ")"
 
 	local funcargs = {}
 	local changes_abi = false

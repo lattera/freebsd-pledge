@@ -616,6 +616,7 @@ typedef void vop_getpages_iodone_t(void *, vm_page_t *, int, int);
 #define	VN_OPEN_NOCAPCHECK	0x00000002
 #define	VN_OPEN_NAMECACHE	0x00000004
 #define	VN_OPEN_INVFS		0x00000008
+#define	VN_OPEN_NOMACCHECK	0x00000010
 
 /* copy_file_range kernel flags */
 #define	COPY_FILE_RANGE_KFLAGS		0xff000000
@@ -767,8 +768,8 @@ void	vn_lock_pair(struct vnode *vp1, bool vp1_locked, struct vnode *vp2,
 int	vn_open(struct nameidata *ndp, int *flagp, int cmode, struct file *fp);
 int	vn_open_cred(struct nameidata *ndp, int *flagp, int cmode,
 	    u_int vn_open_flags, struct ucred *cred, struct file *fp);
-int	vn_open_vnode(struct vnode *vp, int fmode, struct ucred *cred,
-	    struct thread *td, struct file *fp);
+int	vn_open_vnode(struct vnode *vp, int fmode, u_int vn_open_flags,
+	    struct ucred *cred, struct thread *td, struct file *fp);
 void	vn_pages_remove(struct vnode *vp, vm_pindex_t start, vm_pindex_t end);
 void	vn_pages_remove_valid(struct vnode *vp, vm_pindex_t start,
 	    vm_pindex_t end);

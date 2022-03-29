@@ -418,6 +418,7 @@ struct sigaction {
 					/* message on an empty message queue. */
 #define	SI_KERNEL	0x10006
 #define	SI_LWP		0x10007		/* Signal sent by thr_kill */
+#define	SI_RESTRICTED	0x10008		/* Signal sent due to sysfil violation */
 #endif
 #if __BSD_VISIBLE
 #define	SI_UNDEFINED	0

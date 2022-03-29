@@ -64,6 +64,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/file.h>
 #include <sys/namei.h>
 #include <sys/sysctl.h>
+#include <sys/sysfil.h>
 
 #include <vm/vm.h>
 #include <vm/pmap.h>
@@ -199,6 +200,34 @@ mac_execve_interpreter_exit(struct label *interpvplabel)
 
 	if (interpvplabel != NULL)
 		mac_vnode_label_free(interpvplabel);
+}
+
+int
+mac_execve_check_imgp(struct image_params *imgp)
+{
+	int error;
+
+	MAC_POLICY_CHECK(proc_exec_check, imgp);
+
+	return (error);
+}
+
+void
+mac_execve_alter(struct image_params *imgp)
+{
+	struct ucred *oldcred;
+	bool result;
+
+	oldcred = imgp->proc->p_ucred;
+	result = false;
+	MAC_POLICY_BOOLEAN(proc_exec_will_alter, ||, imgp->proc, oldcred);
+
+	if (!result)
+		return;
+
+	if (!imgp->newcred)
+		imgp->newcred = crdup(oldcred);
+	MAC_POLICY_PERFORM(proc_exec_alter, imgp->proc, imgp->newcred);
 }
 
 /*
@@ -431,3 +460,108 @@ mac_proc_check_wait(struct ucred *cred, struct proc *p)
 
 	return (error);
 }
+
+MAC_CHECK_PROBE_DEFINE4(generic_check_ioctl, "struct ucred *",
+    "struct file *", "unsigned long", "void *");
+
+int
+mac_generic_check_ioctl(struct ucred *cred, struct file *fp,
+    u_long cmd, void *data)
+{
+	int error;
+
+	MAC_POLICY_CHECK_NOSLEEP(generic_check_ioctl, cred, fp, cmd, data);
+	MAC_CHECK_PROBE4(generic_check_ioctl, error, cred, fp, cmd, data);
+
+	return (error);
+}
+
+MAC_CHECK_PROBE_DEFINE3(generic_check_vm_prot, "struct ucred *",
+    "struct file *", "vm_prot_t");
+
+int
+mac_generic_check_vm_prot(struct ucred *cred, struct file *fp, vm_prot_t prot)
+{
+	int error;
+
+	MAC_POLICY_CHECK(generic_check_vm_prot, cred, fp, prot);
+	MAC_CHECK_PROBE3(generic_check_vm_prot, error, cred, fp, prot);
+
+	return (error);
+}
+
+int
+mac_generic_ipc_name_prefix(struct ucred *cred, char **prefix, char *end)
+{
+	int error;
+
+	MAC_POLICY_CHECK(generic_ipc_name_prefix, cred, prefix, end);
+
+	return (error);
+}
+
+int
+mac_generic_check_sendfd(struct ucred *cred, struct thread *td, struct file *fp)
+{
+	int error;
+
+	MAC_POLICY_CHECK(generic_check_sendfd, cred, td, fp);
+
+	return (error);
+}
+
+int
+mac_generic_check_recvfd(struct ucred *cred, struct thread *td, struct file *fp)
+{
+	int error;
+
+	MAC_POLICY_CHECK(generic_check_recvfd, cred, td, fp);
+
+	return (error);
+}
+
+void
+mac_cred_trim(struct ucred *cred)
+{
+	MAC_POLICY_PERFORM_NOSLEEP(cred_trim, cred);
+}
+
+
+sysfilset_t mac_sysfils_preserve = SYSFIL_NOTCAPMODE;
+
+int
+mac_sysfil_check(struct ucred *cred, sysfilset_t sfs)
+{
+	int error;
+
+	MAC_POLICY_CHECK_NOSLEEP(sysfil_check, cred, sfs);
+
+	/*
+	 * The ucred's sysfils are checked by sysfil_cred_check(), but check it
+	 * here too incase mac_sysfil_check() is called directly.
+	 */
+	error = mac_error_select(error, sysfil_probe_cred(cred, sfs));
+
+	return (error);
+}
+
+int
+mac_proc_check_exec_sugid(struct ucred *cred, struct proc *p)
+{
+	int error;
+
+	MAC_POLICY_CHECK(proc_check_exec_sugid, cred, p);
+
+	return (error);
+}
+
+int
+mac_proc_check_procctl(struct ucred *cred, struct proc *p, int com, void *data)
+{
+	int error;
+
+	MAC_POLICY_CHECK_NOSLEEP(proc_check_procctl, cred, p, com, data);
+
+	return (error);
+}
+

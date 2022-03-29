@@ -65,6 +65,8 @@
  */
 #include <sys/acl.h>	/* XXX acl_type_t */
 #include <sys/types.h>	/* XXX accmode_t */
+#include <vm/vm.h>	/* vm_prot_t */
+#include <sys/_sysfil.h>		/* sysfilset_t */
 
 struct acl;
 struct auditinfo;
@@ -73,6 +75,8 @@ struct bpf_d;
 struct cdev;
 struct componentname;
 struct devfs_dirent;
+struct dirent;
+struct file;
 struct ifnet;
 struct image_params;
 struct inpcb;
@@ -93,6 +97,7 @@ struct shmfd;
 struct shmid_kernel;
 struct sockaddr;
 struct socket;
+struct sockopt;
 struct sysctl_oid;
 struct sysctl_req;
 struct thread;
@@ -209,6 +214,8 @@ typedef int	(*mpo_ifnet_internalize_label_t)(struct label *label,
 		    char *element_name, char *element_data, int *claimed);
 typedef void	(*mpo_ifnet_relabel_t)(struct ucred *cred, struct ifnet *ifp,
 		    struct label *ifplabel, struct label *newlabel);
+
+typedef int	(*mpo_net_check_fibnum_t)(struct ucred *cred, int fibnum);
 
 typedef int	(*mpo_inpcb_check_deliver_t)(struct inpcb *inp,
 		    struct label *inplabel, struct mbuf *m,
@@ -426,6 +433,9 @@ typedef int	(*mpo_socket_check_stat_t)(struct ucred *cred,
 		    struct socket *so, struct label *solabel);
 typedef int	(*mpo_socket_check_visible_t)(struct ucred *cred,
 		    struct socket *so, struct label *solabel);
+typedef int	(*mpo_socket_check_sockopt_t)(struct ucred *cred,
+		    struct socket *so, struct label *solabel,
+		    struct sockopt *sopt);
 typedef void	(*mpo_socket_copy_label_t)(struct label *src,
 		    struct label *dest);
 typedef void	(*mpo_socket_create_t)(struct ucred *cred, struct socket *so,
@@ -670,6 +680,54 @@ typedef int	(*mpo_vnode_setlabel_extattr_t)(struct ucred *cred,
 		    struct vnode *vp, struct label *vplabel,
 		    struct label *intlabel);
 
+typedef void	(*mpo_vnode_walk_roll_t)(struct ucred *cred, int offset);
+typedef void	(*mpo_vnode_walk_annotate_file_t)(struct ucred *cred,
+		    struct file *fp, struct vnode *vp);
+typedef int	(*mpo_vnode_walk_start_file_t)(struct ucred *cred,
+		    struct file *fp);
+typedef int	(*mpo_vnode_walk_start_t)(struct ucred *cred, struct vnode *vp);
+typedef void	(*mpo_vnode_walk_component_t)(struct ucred *cred,
+		    struct vnode *dvp, struct componentname *cnp,
+		    struct vnode *vp);
+typedef void	(*mpo_vnode_walk_backtrack_t)(struct ucred *cred,
+		    struct vnode *from_vp, struct vnode *to_vp);
+typedef void	(*mpo_vnode_walk_replace_t)(struct ucred *cred,
+		    struct vnode *from_vp, struct vnode *to_vp);
+typedef void	(*mpo_vnode_walk_created_t)(struct ucred *cred,
+		    struct vnode *dvp, struct vnode *vp);
+typedef int	(*mpo_vnode_walk_finish_t)(struct ucred *cred,
+		    struct vnode *dvp, struct vnode *vp);
+typedef int	(*mpo_vnode_walk_fixup_errno_t)(struct ucred *cred, int error);
+typedef bool	(*mpo_vnode_walk_dirent_visible_t)(struct ucred *cred,
+		    struct vnode *vp, struct dirent *dp);
+
+typedef int	(*mpo_generic_check_ioctl_t)(struct ucred *cred,
+		    struct file *file,
+		    unsigned long cmd, void *data);
+typedef int	(*mpo_generic_check_vm_prot_t)(struct ucred *cred,
+		    struct file *file, vm_prot_t prot);
+
+typedef int	(*mpo_generic_ipc_name_prefix_t)(struct ucred *cred,
+		    char **prefix, char *end);
+
+typedef void	(*mpo_cred_trim_t)(struct ucred *cred);
+
+typedef int	(*mpo_sysfil_check_t)(struct ucred *cred, sysfilset_t sfs);
+
+typedef int	(*mpo_proc_check_exec_sugid_t)(struct ucred *cred,
+		    struct proc *);
+typedef int	(*mpo_proc_exec_check_t)(struct image_params *imgp);
+typedef bool	(*mpo_proc_exec_will_alter_t)(struct proc *p, struct ucred *cred);
+typedef void	(*mpo_proc_exec_alter_t)(struct proc *p, struct ucred *cred);
+
+typedef int	(*mpo_proc_check_procctl_t)(struct ucred *cred,
+		    struct proc *proc, int com, void *data);
+
+typedef int	(*mpo_generic_check_sendfd_t)(struct ucred *cred,
+		    struct thread *td, struct file *fp);
+typedef int	(*mpo_generic_check_recvfd_t)(struct ucred *cred,
+		    struct thread *td, struct file *fp);
+
 struct mac_policy_ops {
 	/*
 	 * Policy module operations.
@@ -738,6 +796,8 @@ struct mac_policy_ops {
 	mpo_ifnet_init_label_t			mpo_ifnet_init_label;
 	mpo_ifnet_internalize_label_t		mpo_ifnet_internalize_label;
 	mpo_ifnet_relabel_t			mpo_ifnet_relabel;
+
+	mpo_net_check_fibnum_t			mpo_net_check_fibnum;
 
 	mpo_inpcb_check_deliver_t		mpo_inpcb_check_deliver;
 	mpo_inpcb_check_visible_t		mpo_inpcb_check_visible;
@@ -843,6 +903,7 @@ struct mac_policy_ops {
 	mpo_socket_check_bind_t			mpo_socket_check_bind;
 	mpo_socket_check_connect_t		mpo_socket_check_connect;
 	mpo_socket_check_create_t		mpo_socket_check_create;
+	mpo_socket_check_create_t		mpo_socket_check_create_pair;
 	mpo_socket_check_deliver_t		mpo_socket_check_deliver;
 	mpo_socket_check_listen_t		mpo_socket_check_listen;
 	mpo_socket_check_poll_t			mpo_socket_check_poll;
@@ -851,6 +912,8 @@ struct mac_policy_ops {
 	mpo_socket_check_send_t			mpo_socket_check_send;
 	mpo_socket_check_stat_t			mpo_socket_check_stat;
 	mpo_socket_check_visible_t		mpo_socket_check_visible;
+	mpo_socket_check_sockopt_t		mpo_socket_check_setsockopt;
+	mpo_socket_check_sockopt_t		mpo_socket_check_getsockopt;
 	mpo_socket_copy_label_t			mpo_socket_copy_label;
 	mpo_socket_create_t			mpo_socket_create;
 	mpo_socket_create_mbuf_t		mpo_socket_create_mbuf;
@@ -962,6 +1025,33 @@ struct mac_policy_ops {
 	mpo_vnode_internalize_label_t		mpo_vnode_internalize_label;
 	mpo_vnode_relabel_t			mpo_vnode_relabel;
 	mpo_vnode_setlabel_extattr_t		mpo_vnode_setlabel_extattr;
+
+	mpo_vnode_walk_roll_t			mpo_vnode_walk_roll;
+	mpo_vnode_walk_annotate_file_t		mpo_vnode_walk_annotate_file;
+	mpo_vnode_walk_start_file_t		mpo_vnode_walk_start_file;
+	mpo_vnode_walk_start_t			mpo_vnode_walk_start;
+	mpo_vnode_walk_component_t		mpo_vnode_walk_component;
+	mpo_vnode_walk_backtrack_t		mpo_vnode_walk_backtrack;
+	mpo_vnode_walk_replace_t		mpo_vnode_walk_replace;
+	mpo_vnode_walk_created_t		mpo_vnode_walk_created;
+	mpo_vnode_walk_finish_t			mpo_vnode_walk_finish;
+	mpo_vnode_walk_fixup_errno_t		mpo_vnode_walk_fixup_errno;
+	mpo_vnode_walk_dirent_visible_t		mpo_vnode_walk_dirent_visible;
+
+	mpo_generic_check_ioctl_t		mpo_generic_check_ioctl;
+	mpo_generic_check_vm_prot_t		mpo_generic_check_vm_prot;
+	mpo_generic_ipc_name_prefix_t		mpo_generic_ipc_name_prefix;
+	mpo_generic_check_sendfd_t		mpo_generic_check_sendfd;
+	mpo_generic_check_recvfd_t		mpo_generic_check_recvfd;
+
+	mpo_cred_trim_t				mpo_cred_trim;
+	mpo_sysfil_check_t			mpo_sysfil_check;
+
+	mpo_proc_check_exec_sugid_t		mpo_proc_check_exec_sugid;
+	mpo_proc_exec_check_t			mpo_proc_exec_check;
+	mpo_proc_exec_will_alter_t		mpo_proc_exec_will_alter;
+	mpo_proc_exec_alter_t			mpo_proc_exec_alter;
+	mpo_proc_check_procctl_t		mpo_proc_check_procctl;
 };
 
 /*

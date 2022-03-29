@@ -95,6 +95,10 @@
 #define	VN_OPEN_INVFS	0x0
 #endif
 
+#ifndef VN_OPEN_NOMACCHECK
+#define	VN_OPEN_NOMACCHECK	0x0
+#endif
+
 VFS_SMR_DECLARE;
 
 #if __FreeBSD_version >= 1300047
@@ -5346,12 +5350,14 @@ zfs_getextattr_dir(struct vop_getextattr_args *ap, const char *attrname)
 
 	flags = FREAD;
 #if __FreeBSD_version < 1400043
-	NDINIT_ATVP(&nd, LOOKUP, NOFOLLOW, UIO_SYSSPACE, attrname,
+	NDINIT_ATVP(&nd, LOOKUP, NOFOLLOW | NOMACCHECK, UIO_SYSSPACE, attrname,
 	    xvp, td);
 #else
-	NDINIT_ATVP(&nd, LOOKUP, NOFOLLOW, UIO_SYSSPACE, attrname, xvp);
+	NDINIT_ATVP(&nd, LOOKUP, NOFOLLOW | NOMACCHECK, UIO_SYSSPACE, attrname,
+	    xvp);
 #endif
-	error = vn_open_cred(&nd, &flags, 0, VN_OPEN_INVFS, ap->a_cred, NULL);
+	error = vn_open_cred(&nd, &flags, 0, VN_OPEN_INVFS | VN_OPEN_NOMACCHECK,
+	    ap->a_cred, NULL);
 	vp = nd.ni_vp;
 	NDFREE_PNBUF(&nd);
 	if (error != 0)
@@ -5490,10 +5496,10 @@ zfs_deleteextattr_dir(struct vop_deleteextattr_args *ap, const char *attrname)
 		return (error);
 
 #if __FreeBSD_version < 1400043
-	NDINIT_ATVP(&nd, DELETE, NOFOLLOW | LOCKPARENT | LOCKLEAF,
+	NDINIT_ATVP(&nd, DELETE, NOFOLLOW | LOCKPARENT | LOCKLEAF | NOMACCHECK,
 	    UIO_SYSSPACE, attrname, xvp, ap->a_td);
 #else
-	NDINIT_ATVP(&nd, DELETE, NOFOLLOW | LOCKPARENT | LOCKLEAF,
+	NDINIT_ATVP(&nd, DELETE, NOFOLLOW | LOCKPARENT | LOCKLEAF | NOMACCHECK,
 	    UIO_SYSSPACE, attrname, xvp);
 #endif
 	error = namei(&nd);
@@ -5636,12 +5642,14 @@ zfs_setextattr_dir(struct vop_setextattr_args *ap, const char *attrname)
 
 	flags = FFLAGS(O_WRONLY | O_CREAT);
 #if __FreeBSD_version < 1400043
-	NDINIT_ATVP(&nd, LOOKUP, NOFOLLOW, UIO_SYSSPACE, attrname, xvp, td);
+	NDINIT_ATVP(&nd, LOOKUP, NOFOLLOW | NOMACCHECK, UIO_SYSSPACE, attrname,
+	    xvp, td);
 #else
-	NDINIT_ATVP(&nd, LOOKUP, NOFOLLOW, UIO_SYSSPACE, attrname, xvp);
+	NDINIT_ATVP(&nd, LOOKUP, NOFOLLOW | NOMACCHECK, UIO_SYSSPACE, attrname,
+	    xvp);
 #endif
-	error = vn_open_cred(&nd, &flags, 0600, VN_OPEN_INVFS, ap->a_cred,
-	    NULL);
+	error = vn_open_cred(&nd, &flags, 0600, VN_OPEN_INVFS |
+	    VN_OPEN_NOMACCHECK, ap->a_cred, NULL);
 	vp = nd.ni_vp;
 	NDFREE_PNBUF(&nd);
 	if (error != 0)
@@ -5822,10 +5830,10 @@ zfs_listextattr_dir(struct vop_listextattr_args *ap, const char *attrprefix)
 	}
 
 #if __FreeBSD_version < 1400043
-	NDINIT_ATVP(&nd, LOOKUP, NOFOLLOW | LOCKLEAF | LOCKSHARED,
+	NDINIT_ATVP(&nd, LOOKUP, NOFOLLOW | LOCKLEAF | LOCKSHARED | NOMACCHECK,
 	    UIO_SYSSPACE, ".", xvp, td);
 #else
-	NDINIT_ATVP(&nd, LOOKUP, NOFOLLOW | LOCKLEAF | LOCKSHARED,
+	NDINIT_ATVP(&nd, LOOKUP, NOFOLLOW | LOCKLEAF | LOCKSHARED | NOMACCHECK,
 	    UIO_SYSSPACE, ".", xvp);
 #endif
 	error = namei(&nd);

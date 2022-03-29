@@ -79,6 +79,8 @@ __FBSDID("$FreeBSD$");
 #include <unistd.h>
 #include <vis.h>
 
+#include <sys/curtainctl.h>
+
 #include "truss.h"
 #include "extern.h"
 #include "syscall.h"
@@ -206,6 +208,8 @@ static const struct syscall_decode decoded_syscalls[] = {
 	{ .name = "connectat", .ret_type = 1, .nargs = 4,
 	  .args = { { Atfd, 0 }, { Int, 1 }, { Sockaddr | IN, 2 },
 		    { Int, 3 } } },
+	{ .name = "curtainctl", .ret_type = 1, .nargs = 3,
+	  .args = { { CurtainctlFlags | IN, 0 }, { Sizet, 1 }, { Curtainctl, 2 } } },
 	{ .name = "dup", .ret_type = 1, .nargs = 1,
 	  .args = { { Int, 0 } } },
 	{ .name = "dup2", .ret_type = 1, .nargs = 2,
@@ -2689,6 +2693,30 @@ print_arg(struct syscall_arg *sc, syscallarg_t *args, syscallarg_t *retval,
 		fprintf(fp, ",%u,", msghdr.msg_controllen);
 		print_mask_arg(sysdecode_msg_flags, fp, msghdr.msg_flags);
 		fputs("}", fp);
+		break;
+	}
+
+	case CurtainctlFlags:
+		print_mask_arg(sysdecode_curtainctlflags, fp, args[sc->offset]);
+		break;
+
+	case Curtainctl: {
+		size_t reqc = args[sc->offset - 1];
+		struct curtainreq reqv[reqc], *req;
+		if (get_struct(pid, args[sc->offset], &reqv, sizeof(reqv)) != -1) {
+			fprintf(fp, "{");
+			for (req = reqv; req < &reqv[reqc]; req++) {
+				char buf[req->size];
+				bool copiedin;
+				if ((copiedin = get_struct(pid,
+				    (uintptr_t)req->data, buf, sizeof(buf)) != -1))
+					req->data = buf;
+				fprintf(fp, " ");
+				sysdecode_curtainreq(fp, req, copiedin);
+			}
+			fprintf(fp, " }");
+		} else
+			print_pointer(fp, args[sc->offset]);
 		break;
 	}
 

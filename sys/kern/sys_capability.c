@@ -79,6 +79,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/ucred.h>
 #include <sys/uio.h>
 #include <sys/ktrace.h>
+#include <sys/sysfil.h>
 
 #include <security/audit/audit.h>
 
@@ -87,7 +88,7 @@ __FBSDID("$FreeBSD$");
 
 bool __read_frequently trap_enotcap;
 SYSCTL_BOOL(_kern, OID_AUTO, trap_enotcap, CTLFLAG_RWTUN, &trap_enotcap, 0,
-    "Deliver SIGTRAP on ENOTCAPABLE");
+    "Deliver SIGTRAP on ENOTCAPABLE/ECAPMODE");
 
 #ifdef CAPABILITY_MODE
 
@@ -111,8 +112,14 @@ sys_cap_enter(struct thread *td, struct cap_enter_args *uap)
 	p = td->td_proc;
 	PROC_LOCK(p);
 	oldcred = crcopysafe(p, newcred);
-	newcred->cr_flags |= CRED_FLAG_CAPMODE;
+	newcred->cr_sysfilset &= ~SYSFIL_NOTCAPMODE;
+	MPASS(CRED_IN_CAPABILITY_MODE(newcred));
+	MPASS(CRED_IN_RESTRICTED_MODE(newcred));
 	proc_set_cred(p, newcred);
+	if (!PROC_IN_RESTRICTED_MODE(p))
+		panic("PROC_IN_RESTRICTED_MODE() bogus");
+	if (!PROC_IN_CAPABILITY_MODE(p))
+		panic("PROC_IN_CAPABILITY_MODE() bogus");
 	PROC_UNLOCK(p);
 	crfree(oldcred);
 	return (0);

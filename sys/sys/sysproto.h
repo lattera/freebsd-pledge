@@ -500,6 +500,11 @@ struct rtprio_args {
 	char pid_l_[PADL_(pid_t)]; pid_t pid; char pid_r_[PADR_(pid_t)];
 	char rtp_l_[PADL_(struct rtprio *)]; struct rtprio * rtp; char rtp_r_[PADR_(struct rtprio *)];
 };
+struct curtainctl_args {
+	char flags_l_[PADL_(int)]; int flags; char flags_r_[PADR_(int)];
+	char reqc_l_[PADL_(size_t)]; size_t reqc; char reqc_r_[PADR_(size_t)];
+	char reqv_l_[PADL_(struct curtainreq *)]; struct curtainreq * reqv; char reqv_r_[PADR_(struct curtainreq *)];
+};
 struct semsys_args {
 	char which_l_[PADL_(int)]; int which; char which_r_[PADR_(int)];
 	char a2_l_[PADL_(int)]; int a2; char a2_r_[PADR_(int)];
@@ -1960,6 +1965,7 @@ int	sys_lgetfh(struct thread *, struct lgetfh_args *);
 int	sys_getfh(struct thread *, struct getfh_args *);
 int	sysarch(struct thread *, struct sysarch_args *);
 int	sys_rtprio(struct thread *, struct rtprio_args *);
+int	sys_curtainctl(struct thread *, struct curtainctl_args *);
 int	sys_semsys(struct thread *, struct semsys_args *);
 int	sys_msgsys(struct thread *, struct msgsys_args *);
 int	sys_shmsys(struct thread *, struct shmsys_args *);
@@ -2892,6 +2898,7 @@ int	freebsd13_swapoff(struct thread *, struct freebsd13_swapoff_args *);
 #define	SYS_AUE_freebsd4_uname	AUE_NULL
 #define	SYS_AUE_sysarch	AUE_SYSARCH
 #define	SYS_AUE_rtprio	AUE_RTPRIO
+#define	SYS_AUE_curtainctl	AUE_CURTAINCTL
 #define	SYS_AUE_semsys	AUE_SEMSYS
 #define	SYS_AUE_msgsys	AUE_MSGSYS
 #define	SYS_AUE_shmsys	AUE_SHMSYS

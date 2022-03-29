@@ -664,6 +664,9 @@
 #define	AUE_AIO_READV		43268	/* FreeBSD-specific. */
 #define	AUE_FSPACECTL		43269	/* FreeBSD-specific. */
 
+/* XXX temporary values to avoid conflicts with new syscalls */
+#define	AUE_CURTAINCTL		50000	/* FreeBSD-specific. */
+
 /*
  * Darwin BSM uses a number of AUE_O_* definitions, which are aliased to the
  * normal Solaris BSM identifiers.  _O_ refers to it being an old, or compat

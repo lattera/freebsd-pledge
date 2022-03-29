@@ -1,0 +1,16 @@
+[Desktop Entry]
+# NOTE: partly copied from /usr/local/share/applications/firefox.desktop
+Version=1.0
+Type=Application
+Name=Firefox [Profile1]
+Keywords=Internet;WWW;Browser;Web;Explorer
+Type=Application
+Categories=GNOME;GTK;Network;WebBrowser;
+MimeType=text/html;text/xml;application/xhtml+xml;application/xml;application/rss+xml;application/rdf+xml;image/gif;image/jpeg;image/png;x-scheme-handler/http;x-scheme-handler/https;x-scheme-handler/ftp;x-scheme-handler/chrome;video/webm;application/x-xpinstall;
+Icon=firefox
+Terminal=false
+StartupNotify=true
+Exec=curtain -X -t firefox-profile1 firefox -P profile1 --class Firefox-Profile1 %U
+# Giving each profile a separate window class should allow the window manager
+# to group windows from separate profiles separately.
+StartupWMClass=Firefox-Profile1

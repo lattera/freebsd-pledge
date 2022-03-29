@@ -1,0 +1,358 @@
+# Sections can be introduced with square brackets.  All following lines until
+# the next section will only apply when all of the section's tags are enabled.
+#
+#  	[first_tag second_tag ...]
+#
+# Tags should generally be named after applications or libraries.  curtain(1)
+# will enable tags named after the executed program when given the "-a" flag.
+# By convention, a name is prefixed with "_" to indicate that it is not named
+# after an application.
+#
+# One or more tags to enable can be specified following a colon. This is
+# equivalent to the "merge" directive.
+#
+# 	[some_app _something : some_other_app _some_unveils]
+#
+# There are directives to specify permission to use abilities, sysctls, ioctls,
+# privileges, etc, and to specify filesystem path unveils, include other
+# configuration files, etc.  Lines that look like a path will be interpreted as
+# if they were an argument to the "path" directive.
+#
+# Path patterns support brace expansion, tilde expansion and environment
+# variable expansion similar to shells.  Permissions are specified following a
+# colon and default to read-only access.  An octal or symbolic creation mode
+# can follow which will be used to create the file (or directory if the path
+# ends with "/") if it does not exist.
+#
+# Note that the "w" permission allows writes, file attribute changes and
+# files/directories creations/deletions.  It does not allow creating or
+# connecting to local-domain sockets.  This is different from unveil(3)
+# permission strings!  The "m" permission only allows writes to existing files
+# and no attribute changes.  The "c"/"d" permissions allow file/directory
+# creation/deletion.  The "a" permission allows attribute changes.
+#
+# Note that curtain(1) will generally run applications with the equivalent of a
+# very permissive pledge(3) with regard to filesystem access, so restricting
+# unveil permissions is more important than for pledged applications.
+
+[_stdio]
+
+/dev/null				: rm
+/dev/stdin				: r
+/dev/std{out,err}			: rm
+/dev/fd/				: rm
+/dev/full				: rm
+/dev/zero				: rm
+/dev/{u,}random				: r
+
+/etc/localtime				: r
+/etc/malloc.conf			: r
+
+ability core mman fdesc pstat clock timer
+ability sighand sigmask sigwait pwait
+ability sockio
+ability getcred
+ability sysinfo
+ability vfs_read vfs_write
+
+ability cap_sysctl
+
+sysctl hw.machine{,_arch}
+sysctl kern.version
+sysctl vm.overcommit
+sysctl hw.availpages
+sysctl kern.iov_max
+
+sysctl kern.proc.{args,pathname}
+
+sysctl security.curtain.curtained{,_exec}
+
+[_crude : _stdio]
+
+ability thread
+ability rlimit
+ability posixrt
+ability sched
+ability prot_exec_loose
+ability curtain
+
+merge _vfs
+merge _libs
+merge _share
+merge _localbase
+
+[_basic : _crude] # base for many application profiles
+
+merge _tty
+merge _proc
+merge _ps
+merge _unix
+merge _exec
+merge _cmds
+
+
+# Permission tower used by curtain(1)'s -0 to -9 options.
+# Probably should not be used for application profiles.
+
+[_level0]
+
+[_level1 : _level0]
+merge _crude
+
+[_level2 : _level1]
+merge _basic
+merge _network
+
+[_level3 : _level2]
+merge _fdpass
+ability acl
+ability mac
+ability extattr
+ability chflags
+# May allow privilege escalations if untrusted processes have access to paths
+# writable by the sandboxed process.
+ability!! fsugid # chmod ug+s
+
+[_level4 : _level3]
+merge _pty
+merge _cryptodev
+ability sysvipc
+ability posixshm
+ability mlock
+ability aio
+ability sendfile
+ability setcred
+ability reap
+ability aslr
+
+[_level5 : _level4] # curtain(1)'s default
+ability chroot
+ability chown
+ability any_cred
+ability! sysflags
+
+[_level6 : _level5]
+merge _tmpdir_exec
+ability prot_exec
+
+[_level7 : _level6]
+merge _fdpassdir
+ability rfork
+ability cpuset
+ability getquota
+# NOTE: Privileges to manipulate modules are still denied, this is for programs
+# that need to inspect what modules are loaded.
+ability kmod
+
+[_level8 : _level7]
+merge _debug
+ability! trace
+
+[_level9 : _level8]
+merge _pwddb
+merge _syslog
+ability any_ioctl
+ability any_sysctl
+
+
+[_vfs]
+ability vfs_read vfs_write vfs_create vfs_delete vfs_unbind vfs_fifo vfs_setattr
+ability flock fattr fmode_special
+
+[_proc]
+ability proc
+[_ps]
+ability ps
+sysctl kern.pid_max
+sysctl kern.proc.{all,{proc,gid,pgrp,rgid,sid,tty,uid,ruid,pid}{,_td}}
+sysctl kern.proc.args
+sysctl kern.proc.pathname
+sysctl kern.proc.groups
+sysctl kern.proc.rlimit
+sysctl kern.proc.umask
+sysctl kern.proc.osrel
+
+[_debug]
+ability debug
+[_debug _ps]
+sysctl kern.proc.{env,auxv}
+sysctl kern.proc.sv_name
+sysctl kern.proc.vmmap
+sysctl kern.proc.kstack
+sysctl kern.proc.ps_strings
+sysctl kern.proc.sigtramp
+sysctl kern.proc.sigfastblk
+sysctl kern.proc.vm_layout
+
+[_localbase]
+sysctl user.localbase
+
+[_rtld]
+/etc/libmap.conf			: r
+/var/run/ld-elf.so.hints		: r
+/libexec/ld-elf.so.1			: rx
+/etc/libmap32.conf			: r	[_compat32]
+/usr/local/etc/libmap.d/		: r 	[_localbase]
+
+[_exec : _libs]
+ability exec
+
+[_libs : _rtld]
+/usr/libdata/				: r
+{,/usr}/lib/				: rx
+/usr/lib32/				: rx	[_compat32]
+[_libs _localbase]
+/usr/local/libdata/			: r
+/usr/local/lib/				: rx
+/usr/local/llvm{9,10,11,12,13,14}/lib/	: rx
+/usr/local/lib32/			: rx	[_compat32]
+
+[_cmds : _exec]
+{,/usr}/libexec/			: rx
+{,/usr}/{bin,sbin}/			: rx
+/usr/bin32/				: rx	[_compat32]
+[_cmds _localbase]
+/usr/local/libexec/			: rx
+/usr/local/{bin,sbin}/			: rx
+/usr/local/bin32/			: rx	[_compat32]
+
+[_share]
+/usr/share/				: r
+/usr/local/man/				: r	[_localbase]
+# NOTE: Some packages install executables in /usr/local/share.
+/usr/local/share/			: rx	[_localbase]
+
+[_sock]
+ability sock
+# XXX Socket options should be more restricted.
+socklvl socket
+
+[_unix_base]
+merge _sock
+sockaf unix
+socklvl local
+[_unix_client : _unix_base]
+ability vfs_connect
+[_unix_server : _unix_base]
+ability vfs_bind
+[_unix : _unix_client _unix_server]
+
+[_fdpass : _unix]
+ability sendfd recvfd
+[_fdpassdir : _fdpass]
+ability passdir
+
+[_su]
+ability setcred any_cred
+
+[_tty]
+/dev/tty				: rma
+/etc/termcap				: r
+ability tty
+ioctls tty_basic
+
+[_pty : _tty]
+# NOTE: The /dev/pts directory doesn't exist until a PTY is created.
+/dev/					: D
+ioctls tty_pts
+
+[_cryptodev]
+/dev/crypto				: rm
+ioctls cryptodev
+
+[curtain]
+# Let nested curtain sandboxes find their settings.
+/etc/defaults/curtain.conf		: r
+/etc/curtain.{conf,d/}			: r
+~/.curtain.{conf,d/}			: r
+/usr/local/etc/curtain.{conf,d/}	: r	[_localbase]
+merge _pty					[_tty]
+
+[_separate_tmpdir]
+${TMPDIR}/				: rwu
+[_separate_tmpdir]
+${TMPDIR}/				: s	[_tmpdir_shellexec]
+${TMPDIR}/				: x	[_tmpdir_exec]
+
+[_shared_tmpdir]
+# Sharing $TMPDIR is risky even with just the "t" permission (which disallows
+# many operations like listing files (which should protect files with
+# unpredictable names), accessing subdirectories, creating/connecting to local
+# domain sockets, creating hard/soft links, etc), but any use of regular files
+# with known names will probably be insecure.
+${TMPDIR:-/tmp}/			: t
+# Block access to some known file names that might allow privilege escalation,
+# but this cannot be a complete list...
+${TMPDIR:-/tmp}/krb5cc_%u		:
+
+[_shared_system_tmpdir, _unsafe_system_tmpdir]
+/tmp/					: t [_shared_system_tmpdir]
+/tmp/					: rwxu [_unsafe_system_tmpdir]
+# Do our best to prevent easy escapes, but this is extremely risky nonetheless!
+/tmp/tmux-%#u				:
+/tmp/krb5cc_%u				:
+
+[_pwddb]
+/etc/nsswitch.conf			: r
+/etc/pwd.db				: r
+/etc/group				: r
+
+[_spwddb : _pwddb]
+/etc/spwd.db				: r
+
+[_ssl]
+/etc/ssl/				: r
+/etc/ssl/private/			:
+/usr/local/etc/ssl/			: r	[_localbase]
+/usr/local/etc/ssl/private/		:	[_localbase]
+
+[_net_base]
+merge _sock
+ioctls net_basic
+
+[_net_inet : _net_base]
+sockaf inet inet6
+# XXX Socket options should be more restricted.
+socklvl ip ipv6
+socklvl tcp udp
+sysctl net.inet6.ip6.addrctlpolicy
+
+[_net_route]
+sysctl net.routetable
+ioctls net_route
+
+[_net_resolv]
+/etc/nsswitch.conf			: r
+/etc/resolv.conf			: r
+/etc/hosts				: r
+/etc/services				: r
+/etc/protocols				: r
+/var/db/services.db			: r
+
+[_network : _net_client _net_server]
+[_net_client : _net_misc]
+ability net_client
+[_net_server : _net_misc]
+ability net_server
+[_net_misc : _net_base]
+merge _net_inet
+merge _net_route
+merge _net_resolv
+merge _ssl
+
+[_syslog]
+/var/run/log : v
+/var/run/logpriv : v
+
+[_bpf]
+ioctls bpf
+/dev/bpf				: rm
+
+[_audio]
+ioctls oss
+/dev/sndstat				: r
+/dev/dsp				: rm
+/dev/dsp{0,1,2,3}			: rm
+/dev/mixer				: rm
+sysctl hw.snd.default_unit
+

@@ -60,6 +60,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/systm.h>
 #include <sys/vnode.h>
 #include <sys/mount.h>
+#include <sys/dirent.h>
 #include <sys/file.h>
 #include <sys/namei.h>
 #include <sys/sdt.h>
@@ -1079,6 +1080,208 @@ vn_setlabel(struct vnode *vp, struct label *intlabel, struct ucred *cred)
 
 	return (0);
 }
+
+
+bool
+mac_vnode_walk_dirent_visible(struct ucred *cred, struct vnode *vp,
+    struct dirent *dp)
+{
+	bool result;
+
+	ASSERT_VOP_LOCKED(vp, "mac_vnode_walk_dirent_visible");
+
+	result = true;
+	MAC_POLICY_BOOLEAN(vnode_walk_dirent_visible, &&, cred, vp, dp);
+
+	return (result);
+}
+
+int
+mac_vnode_readdir_filtered(struct ucred *active_cred, struct ucred *file_cred,
+    struct vnode *dvp, struct uio *ruio)
+{
+	struct mount *mp;
+	struct vattr va;
+	void *buf;
+	size_t buf_size;
+	bool last_read;
+	int error, eofflag;
+
+	ASSERT_VOP_LOCKED(dvp, "mac_vnode_readdir_filtered");
+	MPASS(ruio->uio_rw == UIO_READ);
+
+	if (!CRED_IN_VFS_VEILED_MODE(active_cred) ||
+	    mac_vnode_walk_dirent_visible(active_cred, dvp, NULL))
+		return (VOP_READDIR(dvp, ruio, file_cred, &eofflag, NULL, NULL));
+
+	error = VOP_GETATTR(dvp, &va, file_cred);
+	if (error)
+		return (error);
+	buf_size = MIN(ruio->uio_resid, MAX(DEV_BSIZE, va.va_blocksize));
+	buf = malloc(buf_size, M_TEMP, M_WAITOK);
+
+	/* The vnode_walk_dirent_visible handlers may use VOP_LOOKUP(). */
+	if ((mp = dvp->v_mount) && !(mp->mnt_kern_flag & MNTK_LOOKUP_SHARED) &&
+	    VOP_ISLOCKED(dvp) == LK_SHARED)
+		vn_lock(dvp, LK_UPGRADE | LK_RETRY);
+
+	last_read = false;
+	do {
+		struct iovec iov;
+		struct uio uio;
+		char *pos, *end;
+		iov.iov_base = buf;
+		iov.iov_len = buf_size;
+		uio.uio_iov = &iov;
+		uio.uio_iovcnt = 1;
+		uio.uio_offset = ruio->uio_offset;
+		uio.uio_resid = buf_size;
+		uio.uio_segflg = UIO_SYSSPACE;
+		uio.uio_rw = UIO_READ;
+		uio.uio_td = ruio->uio_td;
+		error = VOP_READDIR(dvp, &uio, file_cred, &eofflag, NULL, NULL);
+		if (error)
+			goto out;
+		end = (pos = buf) + (buf_size - uio.uio_resid);
+		if (pos == end) /* EOF */
+			goto out;
+		while (pos < end) {
+			struct dirent *dp = (void *)pos;
+			if (__offsetof(struct dirent, d_name) > end - pos ||
+			    dp->d_reclen > end - pos) { /* partial entry */
+				if (pos == buf) {
+					error = EINVAL;
+					goto out; /* it'll never fit... */
+				}
+				break; /* try again with empty buffer */
+			}
+			if (dp->d_fileno != 0 &&
+			    mac_vnode_walk_dirent_visible(active_cred, dvp, dp)) {
+				/* Visible entry, append to return buffer. */
+				if (ruio->uio_resid < dp->d_reclen)
+					goto out; /* returned all we can */
+				error = uiomove(dp, dp->d_reclen, ruio);
+				if (error)
+					goto out;
+			}
+			pos += dp->d_reclen;
+			/*
+			 * The NFS client (and maybe others?) sets d_off to 0.
+			 */
+			if (dp->d_off != 0) {
+				ruio->uio_offset = dp->d_off;
+			} else {
+				/*
+				 * Don't do another VOP_READDIR() unless the
+				 * return buffer has enough room for everything
+				 * we could potentially get or we'd have no way
+				 * to resume from where we left off.
+				 *
+				 * The caller may get a (very) short read, but
+				 * not a zero read (since our buffer cannot be
+				 * larger than the return buffer, the return
+				 * buffer necessarily must have been filled).
+				 *
+				 * Hopefully VOP_READDIR() never returns an
+				 * incomplete entry at the end of the buffer...
+				 */
+				last_read = ruio->uio_resid < buf_size;
+				ruio->uio_offset = uio.uio_offset;
+			}
+		}
+	} while (!last_read);
+out:
+	free(buf, M_TEMP);
+	return (error);
+}
+
+
+void
+mac_vnode_walk_roll(struct ucred *cred, int offset)
+{
+
+	MAC_POLICY_PERFORM(vnode_walk_roll, cred, offset);
+}
+
+void
+mac_vnode_walk_annotate_file(struct ucred *cred, struct file *fp, struct vnode *vp)
+{
+
+	MAC_POLICY_PERFORM(vnode_walk_annotate_file, cred, fp, vp);
+}
+
+int
+mac_vnode_walk_start_file(struct ucred *cred, struct file *fp)
+{
+	int error;
+
+	MAC_POLICY_CHECK(vnode_walk_start_file, cred, fp);
+
+	return (error);
+}
+
+int
+mac_vnode_walk_start(struct ucred *cred, struct vnode *vp)
+{
+	int error;
+
+	MAC_POLICY_CHECK(vnode_walk_start, cred, vp);
+
+	return (error);
+}
+
+void
+mac_vnode_walk_component(struct ucred *cred,
+    struct vnode *dvp, struct componentname *cnp, struct vnode *vp)
+{
+
+	MAC_POLICY_PERFORM(vnode_walk_component, cred, dvp, cnp, vp);
+}
+
+void
+mac_vnode_walk_backtrack(struct ucred *cred,
+    struct vnode *from_vp, struct vnode *to_vp)
+{
+
+	MAC_POLICY_PERFORM(vnode_walk_backtrack, cred, from_vp, to_vp);
+}
+
+void
+mac_vnode_walk_replace(struct ucred *cred,
+    struct vnode *from_vp, struct vnode *to_vp)
+{
+
+	MAC_POLICY_PERFORM(vnode_walk_replace, cred, from_vp, to_vp);
+}
+
+void
+mac_vnode_walk_created(struct ucred *cred,
+    struct vnode *dvp, struct vnode *vp)
+{
+
+	MAC_POLICY_PERFORM(vnode_walk_created, cred, dvp, vp);
+}
+
+int
+mac_vnode_walk_finish(struct ucred *cred, struct vnode *dvp, struct vnode *vp)
+{
+	int error;
+
+	MAC_POLICY_CHECK(vnode_walk_finish, cred, dvp, vp);
+
+	return (error);
+}
+
+int
+mac_vnode_walk_fixup_errno(struct ucred *cred, int error1)
+{
+	int error;
+
+	MAC_POLICY_CHECK(vnode_walk_fixup_errno, cred, error1);
+
+	return (error);
+}
+
 
 #ifdef DEBUG_VFS_LOCKS
 void

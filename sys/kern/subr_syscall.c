@@ -46,6 +46,7 @@
 __FBSDID("$FreeBSD$");
 
 #include <sys/capsicum.h>
+#include <sys/sysfil.h>
 #include <sys/ktr.h>
 #include <sys/vmmeter.h>
 #ifdef KTRACE
@@ -117,15 +118,25 @@ syscallenter(struct thread *td)
 		}
 	}
 
+#ifndef NOSYSFIL
+	if (__predict_false(!sysfil_match_cred(td->td_ucred, ~se->sy_flags))) {
 #ifdef CAPABILITY_MODE
-	/*
-	 * In capability mode, we only allow access to system calls
-	 * flagged with SYF_CAPENABLED.
-	 */
-	if (__predict_false(IN_CAPABILITY_MODE(td) &&
-	    (se->sy_flags & SYF_CAPENABLED) == 0)) {
-		td->td_errno = error = ECAPMODE;
-		goto retval;
+		/*
+		 * In capability mode, we only allow access to system calls
+		 * flagged with SYF_CAPENABLED.
+		 */
+		if (__predict_false(IN_CAPABILITY_MODE(td) &&
+		    (se->sy_flags & SYF_CAPENABLED) == 0)) {
+			td->td_errno = error = ECAPMODE;
+			goto retval;
+		}
+#endif
+		error = sysfil_check_cred(td->td_ucred, ~se->sy_flags);
+		KASSERT(error != 0, ("sysfil checks inconsistent"));
+		if (error != 0) {
+			td->td_errno = error;
+			goto retval;
+		}
 	}
 #endif
 
@@ -212,7 +223,6 @@ syscallret(struct thread *td)
 {
 	struct proc *p;
 	struct syscall_args *sa;
-	ksiginfo_t ksi;
 	int traced;
 
 	KASSERT(td->td_errno != ERELOOKUP,
@@ -220,18 +230,38 @@ syscallret(struct thread *td)
 
 	p = td->td_proc;
 	sa = &td->td_sa;
-	if (__predict_false(td->td_errno == ENOTCAPABLE ||
-	    td->td_errno == ECAPMODE)) {
-		if ((trap_enotcap ||
-		    (p->p_flag2 & P2_TRAPCAP) != 0) && IN_CAPABILITY_MODE(td)) {
+
+#ifndef NOSYSFIL
+	/* Handle special errnos that should trigger signals. */
+	if (__predict_false(td->td_errno != 0)) {
+		ksiginfo_t ksi;
+		switch (td->td_errno) {
+		case ENOTCAPABLE:
+		case ECAPMODE:
+			if (!IN_CAPABILITY_MODE(td) ||
+			    !(trap_enotcap || (p->p_flag2 & P2_TRAPCAP) != 0))
+				break;
 			ksiginfo_init_trap(&ksi);
 			ksi.ksi_signo = SIGTRAP;
 			ksi.ksi_errno = td->td_errno;
 			ksi.ksi_code = TRAP_CAP;
 			ksi.ksi_info.si_syscall = sa->original_code;
 			trapsignal(td, &ksi);
+			break;
+		case ESYSFILTRAP:
+		case ESYSFILKILL:
+			ksiginfo_init_trap(&ksi);
+			ksi.ksi_signo = td->td_errno == ESYSFILTRAP ?
+			    SIGTRAP : SIGKILL;
+			ksi.ksi_code = SI_RESTRICTED;
+			ksi.ksi_info.si_syscall = sa->original_code;
+			td->td_errno = EPERM;
+			ksi.ksi_errno = td->td_errno;
+			trapsignal(td, &ksi);
+			break;
 		}
 	}
+#endif
 
 	/*
 	 * Handle reschedule and other end-of-syscall issues

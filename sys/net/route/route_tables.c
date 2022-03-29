@@ -50,10 +50,13 @@ __FBSDID("$FreeBSD$");
 #include <sys/sx.h>
 #include <sys/domain.h>
 #include <sys/sysproto.h>
+#include <sys/sockopt.h>
 
 #include <net/vnet.h>
 #include <net/route.h>
 #include <net/route/route_var.h>
+
+#include <security/mac/mac_framework.h>
 
 /* Kernel config default option. */
 #ifdef ROUTETABLES
@@ -151,6 +154,12 @@ int
 sys_setfib(struct thread *td, struct setfib_args *uap)
 {
 	int error = 0;
+
+#ifdef MAC
+	error = mac_net_check_fibnum(td->td_ucred, uap->fibnum);
+	if (error)
+		return (error);
+#endif
 
 	CURVNET_SET(TD_TO_VNET(td));
 	if (uap->fibnum >= 0 && uap->fibnum < V_rt_numfibs)

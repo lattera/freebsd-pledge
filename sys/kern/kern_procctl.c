@@ -49,6 +49,8 @@ __FBSDID("$FreeBSD$");
 #include <vm/vm_map.h>
 #include <vm/vm_extern.h>
 
+#include <security/mac/mac_framework.h>
+
 static int
 protect_setchild(struct thread *td, struct proc *p, int flags)
 {
@@ -904,6 +906,12 @@ kern_procctl_single(struct thread *td, struct proc *p, int com, void *data)
 {
 
 	PROC_LOCK_ASSERT(p, MA_OWNED);
+#ifdef MAC
+	int error;
+	error = mac_proc_check_procctl(td->td_ucred, p, com, data);
+	if (error)
+		return (error);
+#endif
 	return (procctl_cmds_info[com].exec(td, p, data));
 }
 

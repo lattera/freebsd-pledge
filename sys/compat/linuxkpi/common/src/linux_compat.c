@@ -1754,7 +1754,7 @@ linux_file_stat(struct file *fp, struct stat *sb, struct ucred *active_cred)
 	vp = filp->f_vnode;
 
 	vn_lock(vp, LK_SHARED | LK_RETRY);
-	error = VOP_STAT(vp, sb, curthread->td_ucred, NOCRED);
+	error = VOP_STAT(vp, sb, curthread->td_ucred, fp->f_cred);
 	VOP_UNLOCK(vp);
 
 	return (error);

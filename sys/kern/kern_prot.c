@@ -73,6 +73,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/socketvar.h>
 #include <sys/syscallsubr.h>
 #include <sys/sysctl.h>
+#include <sys/sysfil.h>
 
 #ifdef REGRESSION
 FEATURE(regression,
@@ -1867,6 +1868,7 @@ static struct ucred *
 crunuse(struct thread *td)
 {
 	struct ucred *cr, *crold;
+	bool trim __unused;
 
 	MPASS(td->td_realucred == td->td_ucred);
 	cr = td->td_realucred;
@@ -1880,12 +1882,18 @@ crunuse(struct thread *td)
 		KASSERT(cr->cr_ref > 0, ("%s: ref %d not > 0 on cred %p",
 		    __func__, cr->cr_ref, cr));
 		crold = cr;
+		trim = true;
 	} else {
 		cr->cr_ref--;
 		crold = NULL;
+		trim = false;
 	}
 	mtx_unlock(&cr->cr_mtx);
 	td->td_realucred = NULL;
+#ifdef MAC
+	if (trim)
+		mac_cred_trim(cr);
+#endif
 	return (crold);
 }
 
@@ -1909,6 +1917,9 @@ crunusebatch(struct ucred *cr, int users, int ref)
 	    __func__, cr->cr_ref, cr));
 	if (cr->cr_ref > 0) {
 		mtx_unlock(&cr->cr_mtx);
+#ifdef MAC
+		mac_cred_trim(cr);
+#endif
 		return;
 	}
 	crfree_final(cr);
@@ -2000,6 +2011,9 @@ crget(void)
 #endif
 #ifdef MAC
 	mac_cred_init(cr);
+#endif
+#ifndef NOSYSFIL
+	sysfil_cred_init(cr);
 #endif
 	cr->cr_groups = cr->cr_smallgroups;
 	cr->cr_agroups =

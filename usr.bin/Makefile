@@ -30,6 +30,7 @@ SUBDIR=	alias \
 	cpuset \
 	csplit \
 	ctlstat \
+	curtain \
 	cut \
 	diff \
 	dirname \
@@ -39,6 +40,7 @@ SUBDIR=	alias \
 	enigma \
 	env \
 	etdump \
+	execpledge \
 	expand \
 	false \
 	fetch \

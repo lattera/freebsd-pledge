@@ -140,7 +140,7 @@ int	cache_fplookup(struct nameidata *ndp, enum cache_fpl_status *status,
 #define	NAMEI_DBG_HADSTARTDIR	0x0004
 
 /*
- * namei operational modifier flags, stored in ni_cnd.flags
+ * namei operational modifier flags, stored in ni_cnd.cn_flags
  */
 #define	NC_NOMAKEENTRY	0x0001	/* name must not be added to cache */
 #define	NC_KEEPPOSENTRY	0x0002	/* don't evict a positive entry */
@@ -213,6 +213,8 @@ int	cache_fplookup(struct nameidata *ndp, enum cache_fpl_status *status,
  */
 #define	NI_LCF_STRICTRELATIVE	0x0001	/* relative lookup only */
 #define	NI_LCF_CAP_DOTDOT	0x0002	/* ".." in strictrelative case */
+#define	NI_LCF_MACWALK_ACTIVE	0x0010	/* calling vnode MAC walk functions */
+#define	NI_LCF_MACWALK_NOROLL	0x0020	/* don't need to roll tracker forward */
 
 /*
  * Initialization of a nameidata structure.
